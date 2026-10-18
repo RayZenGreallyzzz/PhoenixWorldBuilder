@@ -1,0 +1,10 @@
+const assert=require('assert'),fs=require('fs'),vm=require('vm'),path=require('path');
+const THREE=global.THREE=require(path.join(__dirname,'../app/src/main/assets/js/three.min.js'));
+const code=fs.readFileSync(path.join(__dirname,'../app/src/main/assets/js/world.js'),'utf8');
+vm.runInThisContext(code+'\nglobal.WorldBuilder=WorldBuilder');
+const w=Object.create(WorldBuilder.prototype);w.mode='playbuild';w.player=new THREE.Group();w.player.position.set(0,.85,0);w.objects=[];w.keys={};w.joy={x:0,y:-1};w.playerSpeed=2;w.yaw=0;w.invertJoystickX=false;w.invertJoystickY=false;w.avatarFacingOffset=Math.PI;w.running=false;w.heightAt=()=>0;w.movementBlocked=()=>false;w.supportHeight=()=>0;w.setAvatarMotion=()=>{};w.camera=new THREE.PerspectiveCamera();w.target=new THREE.Vector3();w.pitch=.34;w.distance=5.2;
+w.updatePlayer(.25);assert(w.player.position.z<-.45,'Joystick forward should move towards camera forward');
+w.joy={x:1,y:0};const before=w.player.position.x;w.updatePlayer(.25);assert(w.player.position.x>before+.4,'Joystick right should move to screen right');
+w.updateCamera();assert(w.camera.position.z>w.player.position.z,'Camera should remain behind avatar');
+w.invertJoystickY=true;w.joy={x:0,y:-1};const z=w.player.position.z;w.updatePlayer(.25);assert(w.player.position.z>z,'Y inversion must reverse movement');
+console.log('Third-person joystick axes, inversion and chase camera OK');

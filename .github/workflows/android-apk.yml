@@ -51,6 +51,7 @@ jobs:
           node tests/test-zip.cjs
           node tests/test-build-physics.cjs
           node tests/test-avatar.cjs
+          node tests/test-game-input.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4
