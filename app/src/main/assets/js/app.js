@@ -11,7 +11,7 @@ function groupType(name){const s=name.toLowerCase();if(/двер|door|ворот
 async function openDB(){return await new Promise((resolve,reject)=>{const request=indexedDB.open('phoenix_world_builder_v1',3);request.onupgradeneeded=()=>{const db=request.result;for(const store of ['assets','textures','projects','bindings'])if(!db.objectStoreNames.contains(store))db.createObjectStore(store);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
 function dbOp(store,key,value){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,value===undefined?'readonly':'readwrite');const req=value===undefined?tx.objectStore(store).get(key):tx.objectStore(store).put(value,key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function dbKeys(store){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,'readonly');const r=tx.objectStore(store).getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function cacheFromDB(id){if(w.assetCache.has(id))return w.assetCache.get(id);const row=await dbOp('assets',id);if(!row)return null;try{const parsed=await GLB.load(row.bytes);await bindImportedMaterials(id,parsed.root);w.assetCache.set(id,parsed.root);if(parsed.triangles>150000)toast('Модель тяжёлая: '+Math.round(parsed.triangles)+' треугольников');return parsed.root}catch(e){toast('Модель не открыта: '+e.message);throw e}}
+async function cacheFromDB(id){if(w.assetCache.has(id))return w.assetCache.get(id);const row=await dbOp('assets',id);if(!row)return null;try{const parsed=await GLB.load(row.bytes);await bindImportedMaterials(id,parsed.root);w.assetCache.set(id,parsed.root);w.assetAnimations.set(id,parsed.animations||[]);if(parsed.triangles>150000)toast('Модель тяжёлая: '+Math.round(parsed.triangles)+' треугольников');return parsed.root}catch(e){toast('Модель не открыта: '+e.message);throw e}}
 async function bindImportedMaterials(id,root){if(!localStore)return;const binding=await dbOp('bindings',id);if(!binding?.slots?.length)return;
  const maps=new Map();for(const slot of binding.slots){if(!slot.texture)continue;
   if(!maps.has(slot.texture))try{maps.set(slot.texture,await loadTexture(slot.texture))}catch(e){console.warn('Missing texture',slot.texture,e)}
@@ -42,6 +42,7 @@ function setupPicker(){const search=document.createElement('input');search.id='a
  $('levelDown').onclick=()=>{w.floorLevel=Math.max(0,w.floorLevel-1);$('levelValue').textContent=w.floorLevel+1};$('levelUp').onclick=()=>{w.floorLevel=Math.min(20,w.floorLevel+1);$('levelValue').textContent=w.floorLevel+1};
  $('textureSelect').onchange=async e=>{if(!w.selected)return toast('Сначала выбери объект');let id=e.target.value;try{if(id)await loadTexture(id);w.remember();w.selected.data.texture=id||null;applyEntry(w.selected);w.onChanged();toast(id?'Текстура применена':'Текстура снята')}catch(err){toast('Ошибка текстуры: '+err.message)}};
  $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.setScalar(scale);w.onChanged()};
+ $('avatarAnimation').onchange=e=>{w.avatarAnimationOverride=e.target.value||null;w.avatarMotionState='';w.setAvatarMotion(false,true)};
  $('customColor').onchange=e=>updateStyle('color',e.target.value);$('walkSpeed').oninput=e=>{w.playerSpeed=+e.target.value;$('walkSpeedValue').textContent=(+e.target.value).toFixed(1)};
  function swatches(where,colors,fn){let root=$(where);for(const color of colors){const b=document.createElement('button');b.className='swatch';b.style.background=color;b.title=color;b.onclick=()=>{root.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');fn(color)};root.append(b)}}
  swatches('materialColors',COLORS,c=>updateStyle('color',c));swatches('terrainColors',TERRAIN_COLORS,c=>{w.terrainPaint=c;toast('Цвет земли выбран')});
@@ -77,7 +78,19 @@ function wireButtons(){
  $('sceneExposure').oninput=e=>{const exp=+e.target.value/100;w.renderer.toneMappingExposure=exp;$('exposureValue').textContent=e.target.value+'%';try{localStorage.setItem('phoenix_scene_exposure',e.target.value)}catch(_){}};$('renderScale').onchange=e=>{w.setQuality(+e.target.value,$('shadows').checked);toast('Разрешение '+Math.round(+e.target.value*100)+'%')};$('shadows').onchange=e=>{w.setQuality(w.renderScale,e.target.checked);toast(e.target.checked?'Тени включены':'Тени выключены')};
  $('fileAssets').onchange=async e=>{let files=[...e.target.files];e.target.value='';if(!files.length)return;toast('Загружаю файлы…');let n=0;for(const f of files){try{if(/\.zip$/i.test(f.name)){n+=await importZip(f)}else if(/\.glb$/i.test(f.name)){let id='glb:'+f.name.toLowerCase();await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));n++}else toast('GLTF с внешними данными пока не поддерживается');}catch(err){toast('Ошибка импорта: '+err.message);console.error(err)}}renderLibrary();renderTextureOptions();toast('Загружено моделей: '+n)};
  $('fileProject').onchange=async e=>{let f=e.target.files?.[0];e.target.value='';if(!f)return;try{if(f.name.toLowerCase().endsWith('.zip')){await importZip(f,true)}else{const project=JSON.parse(await f.text());await restoreProject(project)}$('modal').classList.add('hidden');toast('Проект открыт')}catch(err){toast('Ошибка проекта: '+err.message);console.error(err)}};
- $('fileAvatar').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{const id='avatar:'+f.name.toLowerCase();await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));await cacheFromDB(id);await w.setAvatar(id);toast('Персонаж загружен только для прогулки')}catch(err){toast(err.message)}};
+ $('fileAvatar').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;
+  try{
+   const id='avatar:'+f.name.toLowerCase()+':'+f.size;
+   await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));
+   w.assetCache.delete(id);w.assetAnimations.delete(id);
+   await cacheFromDB(id);
+   const info=await w.setAvatar(id);
+   const sel=$('avatarAnimation');sel.innerHTML='<option value="">Автоматически: покой / ходьба / бег</option>';
+   for(const name of info.animations){const opt=document.createElement('option');opt.value=name;opt.textContent=name;sel.append(opt)}
+   $('avatarInfo').textContent=(info.rigged?'Скелет найден':'Без скелета')+' · Анимаций: '+info.animations.length;
+   toast('Персонаж загружен: '+info.animations.length+' анимаций');
+  }catch(err){console.error(err);toast('Ошибка персонажа: '+err.message)}
+ };
  $('fileTexture').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{const id='tex:'+f.name.toLowerCase();await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');await loadTexture(id);renderTextureOptions();$('textureSelect').value=id;if(w.selected){w.remember();w.selected.data.texture=id;applyEntry(w.selected);w.onChanged();toast('Текстура установлена')}else toast('Текстура добавлена. Выбери объект для применения')}catch(err){toast('Текстура не открыта: '+err.message)}};
 }
 async function importZip(file,isProject=false){const entries=await ZipUtils.extract(file),glbs=[],textureKeys=[],keys=Object.keys(entries);let project=null;let manifest=null;let materialMap=null;let savedBindings=null;

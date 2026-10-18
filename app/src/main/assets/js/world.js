@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.mode='build';this.placement=null;this.placementRotation=0;this.selected=null;this.ghost=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.placement=null;this.placementRotation=0;this.selected=null;this.ghost=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -29,8 +29,66 @@ class WorldBuilder{
   mk(new THREE.BoxGeometry(.22,.69,.25),dark,-.17,-.45,0);mk(new THREE.BoxGeometry(.22,.69,.25),dark,.17,-.45,0);
   mk(new THREE.BoxGeometry(.15,.65,.22),skin,-.43,.43,0);mk(new THREE.BoxGeometry(.15,.65,.22),skin,.43,.43,0);
  }
- async setAvatar(id){this.setupDefaultPlayer();const root=await this.getAsset(id);if(!root)return;this.player.clear();let clone=root.clone(true);this.player.add(clone);const b=new THREE.Box3().setFromObject(clone),s=b.getSize(new THREE.Vector3());let scale=1.8/(s.y||1);clone.scale.setScalar(scale);b.setFromObject(clone);clone.position.y=-b.min.y-.88;this.player.userData.avatar=id;}
- clearAvatar(){this.player.userData.avatar=null;this.setupDefaultPlayer();}
+ async setAvatar(id){
+  const root=await this.getAsset(id);if(!root)throw new Error('Персонаж не найден в памяти');
+  const clone=THREE.SkeletonUtils?.clone?THREE.SkeletonUtils.clone(root):root.clone(true);
+  clone.updateMatrixWorld(true);
+  const bounds=new THREE.Box3().setFromObject(clone),size=bounds.getSize(new THREE.Vector3());
+  if(!Number.isFinite(size.y)||size.y<.001)throw new Error('В GLB нет видимой геометрии персонажа');
+  if(this.avatarMixer)this.avatarMixer.stopAllAction();
+  this.player.clear();this.player.add(clone);
+  const scale=THREE.MathUtils.clamp(1.8/size.y,.001,100);
+  clone.scale.setScalar(scale);clone.updateMatrixWorld(true);
+  const scaledBounds=new THREE.Box3().setFromObject(clone);
+  clone.position.y+=-scaledBounds.min.y-.85;
+  // glTF animation tracks sometimes target source-node UUIDs instead of names.
+  const srcNodes=[],dstNodes=[];root.traverse(o=>srcNodes.push(o));clone.traverse(o=>dstNodes.push(o));
+  const idMap=new Map(srcNodes.map((node,i)=>[node.uuid,dstNodes[i]?.uuid]));
+  const clips=(this.assetAnimations.get(id)||[]).map(clip=>{
+   const copy=clip.clone();
+   for(const track of copy.tracks){
+    const dot=track.name.indexOf('.');if(dot<=0)continue;
+    const target=track.name.slice(0,dot);
+    if(idMap.has(target))track.name=idMap.get(target)+track.name.slice(dot);
+   }
+   return copy;
+  });
+  this.avatarClips=clips;this.avatarActions={};this.avatarMixer=clips.length?new THREE.AnimationMixer(clone):null;
+  for(const clip of clips)this.avatarActions[clip.name]=this.avatarMixer.clipAction(clip);
+  this.avatarAnimationOverride=null;this.avatarMotionState='';
+  this.player.userData.avatar=id;
+  this.setAvatarMotion(false,true);
+  let rigged=false;clone.traverse(o=>{if(o.isSkinnedMesh)rigged=true});
+  return {rigged,animations:clips.map(c=>c.name)};
+ }
+ clearAvatar(){
+  if(this.avatarMixer)this.avatarMixer.stopAllAction();
+  this.avatarMixer=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;
+  this.player.userData.avatar=null;this.setupDefaultPlayer();
+ }
+ setAvatarMotion(moving,force=false){
+  if(!this.avatarMixer||!this.avatarClips.length)return;
+  const run=moving&&this.running;
+  const state=this.avatarAnimationOverride||(!moving?'idle':run?'run':'walk');
+  if(this.avatarMotionState===state&&!force)return;
+  const clips=this.avatarClips;
+  const find=rx=>clips.find(c=>rx.test(c.name.toLowerCase()));
+  let desired=this.avatarAnimationOverride?clips.find(c=>c.name===this.avatarAnimationOverride):
+   state==='idle'?find(/idle|stand|rest|breath|wait|покой|ожидан/):
+   state==='run'?find(/run|sprint|бег/)||find(/walk|move|ход/):
+   find(/walk|move|ход/)||find(/run|бег/);
+  if(!desired&&state==='idle')desired=clips[0];
+  if(!desired&&moving)desired=clips[0];
+  if(!desired)return;
+  const next=this.avatarActions[desired.name];
+  if(!next)return;
+  for(const [name,action] of Object.entries(this.avatarActions)){
+   if(name!==desired.name&&action.isRunning())action.fadeOut(.18);
+  }
+  if(!next.isRunning()){next.reset().fadeIn(.18).play();}
+  next.timeScale=run&&!/run|sprint|бег/i.test(desired.name)?1.6:1;
+  this.avatarMotionState=state;
+ }
  heightAt(x,z){const arr=this.terrain.geometry.attributes.position;const divisions=64,seg=2;let fx=Math.max(0,Math.min(63.999,(x+64)/seg)),fz=Math.max(0,Math.min(63.999,(z+64)/seg));let ix=Math.floor(fx), iz=Math.floor(fz),dx=fx-ix,dz=fz-iz;const get=(i,j)=>arr.getZ(j*65+i);let h0=get(ix,iz)*(1-dx)+get(ix+1,iz)*dx,h1=get(ix,iz+1)*(1-dx)+get(ix+1,iz+1)*dx;return h0*(1-dz)+h1*dz;}
  sculpt(x,z,amount=1){const pos=this.terrain.geometry.attributes.position,col=this.terrain.geometry.attributes.color,rad=this.brushSize,paint=new THREE.Color(this.terrainPaint);
   for(let j=0;j<65;j++)for(let i=0;i<65;i++){
@@ -144,6 +202,8 @@ class WorldBuilder{
    if(!this.movementBlocked(this.player.position,next,this.player.position.y-.85)){
     this.player.position.x=next.x;this.player.position.z=next.z;
    }this.player.rotation.y=Math.atan2(-d.x,-d.z);}
-  this.player.position.y=THREE.MathUtils.lerp(this.player.position.y,this.supportHeight(this.player.position.x,this.player.position.z,this.player.position.y-.85)+.85,Math.min(1,dt*14));}
- animate=(time)=>{requestAnimationFrame(this.animate);if(time-this.tLast<1000/this.fpsLimit)return;let dt=Math.min(.08,(time-this.tLast)/1000||.02);this.tLast=time;this.updatePlayer(dt);this.updateCamera();this.updateGameGhost();if(this.selected&&this.highlight.visible)this.highlight.setFromObject(this.selected.mesh);this.renderer.render(this.scene,this.camera);this.frames++;this.fps=this.fps*.85+(1/Math.max(dt,.001))*.15;};
+  this.player.position.y=THREE.MathUtils.lerp(this.player.position.y,this.supportHeight(this.player.position.x,this.player.position.z,this.player.position.y-.85)+.85,Math.min(1,dt*14));
+  this.setAvatarMotion(v.length()>.05);
+ }
+ animate=(time)=>{requestAnimationFrame(this.animate);if(time-this.tLast<1000/this.fpsLimit)return;let dt=Math.min(.08,(time-this.tLast)/1000||.02);this.tLast=time;this.updatePlayer(dt);if(this.avatarMixer)this.avatarMixer.update(dt);this.updateCamera();this.updateGameGhost();if(this.selected&&this.highlight.visible)this.highlight.setFromObject(this.selected.mesh);this.renderer.render(this.scene,this.camera);this.frames++;this.fps=this.fps*.85+(1/Math.max(dt,.001))*.15;};
 }

@@ -1,12 +1,28 @@
-/* Minimal offline glTF 2.0 binary importer for building assets. Supports triangles,
- * materials, embedded textures, mesh transforms and primitive instancing.
- * Does not support skins, Draco, meshopt or animations (avatar fallback remains usable). */
+/* Offline GLB 2.0 importer. Use official Three.js GLTFLoader (rigging, animation,
+ * PBR and embedded textures), retaining the lightweight decoder for test fallback. */
 const GLB = (()=>{
  const td=new TextDecoder(); const typeCount={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT4:16};
  const typeCtor={5120:Int8Array,5121:Uint8Array,5122:Int16Array,5123:Uint16Array,5125:Uint32Array,5126:Float32Array};
  const typeSize={5120:1,5121:1,5122:2,5123:2,5125:4,5126:4};
  async function load(input){
-  let ab=input instanceof ArrayBuffer?input:await input.arrayBuffer();const dv=new DataView(ab);
+  let ab;
+  if(input instanceof ArrayBuffer)ab=input;
+  else if(ArrayBuffer.isView(input))ab=input.buffer.slice(input.byteOffset,input.byteOffset+input.byteLength);
+  else if(input&&typeof input.arrayBuffer==='function')ab=await input.arrayBuffer();
+  else throw new TypeError('GLB: ожидается файл, ArrayBuffer или Uint8Array');
+  if(typeof THREE.GLTFLoader==='function'){
+   const gltf=await new Promise((resolve,reject)=>{
+    try{new THREE.GLTFLoader().parse(ab,'',resolve,reject)}catch(err){reject(err)}
+   });
+   const root=gltf.scene||gltf.scenes?.[0];
+   if(!root)throw new Error('GLB не содержит 3D-сцену');
+   let triangles=0;
+   root.traverse(o=>{if(o.isMesh&&o.geometry){
+    let g=o.geometry;triangles+=(g.index?g.index.count:g.attributes.position?.count||0)/3;
+   }});
+   return {root,animations:gltf.animations||[],triangles,json:gltf.parser?.json||null};
+  }
+  const dv=new DataView(ab);
   if(dv.getUint32(0,true)!==0x46546c67)throw Error('Нужен GLB 2.0');
   if(dv.getUint32(4,true)!==2)throw Error('Неподдерживаемая версия GLB');
   let len=dv.getUint32(8,true), off=12, json=null,bin=null;
@@ -80,7 +96,7 @@ const GLB = (()=>{
   for(const i of (scene?.nodes||defs.map((_,i)=>i).filter(i=>!defs.some(n=>(n.children||[]).includes(i)))))if(made[i])root.add(made[i]);
   root.updateMatrixWorld(true);
   const bounds=new THREE.Box3().setFromObject(root);if(!bounds.isEmpty())root.userData.originalBounds={min:bounds.min.toArray(),max:bounds.max.toArray()};
-  return {root,json,triangles:gm.reduce((a,g)=>a+g.children.reduce((s,m)=>s+(m.geometry.index?m.geometry.index.count:m.geometry.attributes.position.count)/3,0),0)};
+  return {root,json,animations:[],triangles:gm.reduce((a,g)=>a+g.children.reduce((s,m)=>s+(m.geometry.index?m.geometry.index.count:m.geometry.attributes.position.count)/3,0),0)};
  }
  return {load};
 })();
