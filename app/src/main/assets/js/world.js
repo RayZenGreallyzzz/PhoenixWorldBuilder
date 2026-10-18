@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.selected=null;this.ghost=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.selected=null;this.ghost=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -67,17 +67,18 @@ class WorldBuilder{
   this.avatarOriginalFitSize=Math.max(size.y,size.x/1.6,size.z/1.6);
   this.avatarSourceDimensions={width:size.x,height:size.y,depth:size.z};
   this.avatarOriginalBounds={min:bounds.min.clone(),max:bounds.max.clone()};
+  this.avatarGroundTimer=0;this.avatarGroundOffset=0;
   this.setAvatarHeight(this.avatarHeight);
   let rigged=false;clone.traverse(o=>{if(o.isSkinnedMesh)rigged=true});
   return {rigged,animations:clips.map(c=>c.name),originalSize:{width:size.x,height:size.y,depth:size.z},fitSize:this.avatarOriginalFitSize};
  }
- measureAvatarPoseBounds(sceneRoot){
+ measureAvatarPoseBounds(sceneRoot,limit=3500){
   this.player.updateWorldMatrix(true,true);
   const toPlayer=new THREE.Matrix4().copy(this.player.matrixWorld).invert();
   const result=new THREE.Box3().makeEmpty(),point=new THREE.Vector3(),v=new THREE.Vector3(),temp=new THREE.Vector3();
   sceneRoot.traverse(mesh=>{
    if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
-   const attr=mesh.geometry.attributes.position, count=attr.count,step=Math.max(1,Math.floor(count/3500));
+   const attr=mesh.geometry.attributes.position, count=attr.count,step=Math.max(1,Math.floor(count/limit));
    const indices=mesh.geometry.attributes.skinIndex,weights=mesh.geometry.attributes.skinWeight;
    const skin=mesh.isSkinnedMesh&&mesh.skeleton&&indices&&weights;
    const matrices=skin?mesh.skeleton.bones.map((bone,i)=>
@@ -127,13 +128,28 @@ class WorldBuilder{
   if(!this.avatarModel||!this.avatarOriginalHeight||!this.avatarOriginalBounds)return;
   const s=this.avatarHeight/(this.avatarOriginalFitSize||this.avatarOriginalHeight),b=this.avatarOriginalBounds;
   this.avatarModel.scale.setScalar(s);
-  this.avatarModel.position.set(-(b.min.x+b.max.x)*s*.5,-b.min.y*s-.85,-(b.min.z+b.max.z)*s*.5);
+  this.avatarModel.position.set(-(b.min.x+b.max.x)*s*.5,-b.min.y*s-.85+this.avatarGroundOffset,-(b.min.z+b.max.z)*s*.5);
   this.avatarModel.updateMatrixWorld(true);
  }
  clearAvatar(){
   if(this.avatarMixer)this.avatarMixer.stopAllAction();
-  this.avatarMixer=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;
+  this.avatarMixer=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundOffset=0;this.avatarGroundTimer=0;
   this.player.userData.avatar=null;this.setupDefaultPlayer();
+ }
+ setAvatarGroundOffset(offset){
+  const next=THREE.MathUtils.clamp(Number(offset)||0,-1,1);
+  if(!this.avatarModel){this.avatarGroundOffset=next;return next}
+  this.avatarModel.position.y+=next-this.avatarGroundOffset;
+  this.avatarGroundOffset=next;return next;
+ }
+ syncAvatarGround(dt){
+  if(!this.avatarSource||!this.avatarModel||this.mode==='build')return;
+  this.avatarGroundTimer+=dt;if(this.avatarGroundTimer<.2)return;
+  this.avatarGroundTimer=0;
+  const bounds=this.measureAvatarPoseBounds(this.avatarSource,420);
+  if(bounds.isEmpty()||!Number.isFinite(bounds.min.y))return;
+  const diff=-.85+this.avatarGroundOffset-bounds.min.y;
+  if(Math.abs(diff)>.015)this.avatarModel.position.y+=THREE.MathUtils.clamp(diff,-.35,.35)*.65;
  }
  toggleAvatarAnimations(){
   this.avatarAnimationsEnabled=!this.avatarAnimationsEnabled;
@@ -196,7 +212,7 @@ class WorldBuilder{
    this.moveTarget=null;this.onChanged();return;
   }
   const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.currentPaint;
-  const rec=this.instantiate(this.placement,{id:this.nextId++,pos:[x,y,z],rot:this.placementRotation||0,scale:this.placementScale,color,roughness:.85,metalness:0,door:false,open:false});
+  const rec=this.instantiate(this.placement,{id:this.nextId++,pos:[x,y,z],rot:this.placementRotation||0,scale:this.placementScale,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
   this.select(rec);this.onChanged();return rec;
  }
  instantiate(kind,data){let obj=this.makeBuiltin(kind); if(!obj){const cache=this.assetCache.get(kind);if(!cache)throw Error('Сначала импортируй '+kind);obj=cache.clone(true)}
@@ -301,5 +317,5 @@ class WorldBuilder{
   this.player.position.y=THREE.MathUtils.lerp(this.player.position.y,this.supportHeight(this.player.position.x,this.player.position.z,this.player.position.y-.85)+.85,Math.min(1,dt*14));
   this.setAvatarMotion(v.length()>.05);
  }
- animate=(time)=>{requestAnimationFrame(this.animate);if(time-this.tLast<1000/this.fpsLimit)return;let dt=Math.min(.08,(time-this.tLast)/1000||.02);this.tLast=time;this.updatePlayer(dt);if(this.avatarMixer&&this.avatarAnimationsEnabled)this.avatarMixer.update(dt);this.updateCamera();this.updateGameGhost();if(this.selected&&this.highlight.visible)this.highlight.setFromObject(this.selected.mesh);this.renderer.render(this.scene,this.camera);this.frames++;this.fps=this.fps*.85+(1/Math.max(dt,.001))*.15;};
+ animate=(time)=>{requestAnimationFrame(this.animate);if(time-this.tLast<1000/this.fpsLimit)return;let dt=Math.min(.08,(time-this.tLast)/1000||.02);this.tLast=time;this.updatePlayer(dt);if(this.avatarMixer&&this.avatarAnimationsEnabled)this.avatarMixer.update(dt);this.syncAvatarGround(dt);this.updateCamera();this.updateGameGhost();if(this.selected&&this.highlight.visible)this.highlight.setFromObject(this.selected.mesh);this.renderer.render(this.scene,this.camera);this.frames++;this.fps=this.fps*.85+(1/Math.max(dt,.001))*.15;};
 }
