@@ -3,9 +3,9 @@ class WorldBuilder{
  constructor(canvas){
   this.canvas=canvas;this.renderer=new THREE.WebGLRenderer({canvas,antialias:false,alpha:false,powerPreference:'low-power'});
   this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1));this.renderer.outputEncoding=THREE.sRGBEncoding;
-  this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.25;
+  this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=0.80;
   this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#8ba8b9');this.scene.fog=new THREE.Fog('#8ba8b9',75,190);
-  this.scene.add(new THREE.HemisphereLight('#efffff','#5f6753',1.65));this.sun=new THREE.DirectionalLight('#ffe8c5',1.15);this.sun.position.set(30,58,20);this.scene.add(this.sun);
+  this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
   this.objects=[];this.nextId=1;this.assetCache=new Map();this.mode='build';this.placement=null;this.selected=null;this.ghost=null;this.moveTarget=null;
