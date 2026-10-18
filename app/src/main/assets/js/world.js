@@ -87,8 +87,9 @@ class WorldBuilder{
     if(skin){
      v.set(0,0,0);let total=0;
      for(let k=0;k<4;k++){
-      const weight=weights.getComponent(i,k);if(weight<=0)continue;
-      const matrix=matrices[indices.getComponent(i,k)];if(!matrix)continue;
+      const axis=['getX','getY','getZ','getW'][k];
+      const weight=weights[axis](i);if(weight<=0)continue;
+      const matrix=matrices[indices[axis](i)];if(!matrix)continue;
       v.add(temp.copy(point).applyMatrix4(matrix).multiplyScalar(weight));total+=weight;
      }
      if(total<=0)v.copy(point).applyMatrix4(mesh.matrixWorld);
