@@ -7,7 +7,7 @@ geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(Array.from({length:
 geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(Array.from({length:n},()=>[1,0,0,0]).flat(),4));
 const bone=new THREE.Bone();armature.add(bone);
 const mesh=new THREE.SkinnedMesh(geo,new THREE.MeshBasicMaterial());
-mesh.bind(new THREE.Skeleton([bone],[new THREE.Matrix4().makeScale(100,100,100)]));armature.add(mesh);
+mesh.bind(new THREE.Skeleton([bone],[new THREE.Matrix4().makeScale(100,100,100)]),new THREE.Matrix4());armature.add(mesh);
 const w=Object.create(WorldBuilder.prototype);w.player=new THREE.Group();w.player.position.set(2,.85,3);w.player.add(root);
 const naive=new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()).y;
 const actual=w.measureAvatarPoseBounds(root).getSize(new THREE.Vector3()).y;
