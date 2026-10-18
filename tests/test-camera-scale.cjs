@@ -1,0 +1,13 @@
+const assert=require('assert'),fs=require('fs'),vm=require('vm'),path=require('path');
+const dir=path.join(__dirname,'../app/src/main/assets/js'),THREE=global.THREE=require(path.join(dir,'three.min.js'));
+vm.runInThisContext(fs.readFileSync(path.join(dir,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
+const w=Object.create(WorldBuilder.prototype);w.player=new THREE.Group();w.player.position.set(0,.85,0);
+w.avatarOriginalHeight=1000;w.avatarOriginalBounds={min:new THREE.Vector3(-25,0,-6),max:new THREE.Vector3(25,1000,6)};
+w.avatarModel=new THREE.Group();w.player.add(w.avatarModel);
+w.setAvatarHeight(1.8);assert(Math.abs(w.avatarModel.scale.y-.0018)<1e-9);
+w.setAvatarHeight(.01);assert.equal(w.avatarHeight,.01);assert(Math.abs(w.avatarModel.scale.x-.00001)<1e-9);
+w.setAvatarHeight(2);assert(Math.abs(w.avatarModel.scale.y-.002)<1e-9);
+w.setAvatarHeight(-100);assert.equal(w.avatarHeight,.01);
+const source=fs.readFileSync(path.join(dir,'app.js'),'utf8');
+assert(source.includes("w.yaw+=(w.invertCameraX?1:-1)*dx*.006"));
+console.log('Camera swipe and 1cm-20m avatar scale OK');

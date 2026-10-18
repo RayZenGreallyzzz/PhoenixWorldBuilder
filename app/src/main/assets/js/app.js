@@ -42,7 +42,15 @@ function setupPicker(){const search=document.createElement('input');search.id='a
  $('levelDown').onclick=()=>{w.floorLevel=Math.max(0,w.floorLevel-1);$('levelValue').textContent=w.floorLevel+1};$('levelUp').onclick=()=>{w.floorLevel=Math.min(20,w.floorLevel+1);$('levelValue').textContent=w.floorLevel+1};
  $('textureSelect').onchange=async e=>{if(!w.selected)return toast('Сначала выбери объект');let id=e.target.value;try{if(id)await loadTexture(id);w.remember();w.selected.data.texture=id||null;applyEntry(w.selected);w.onChanged();toast(id?'Текстура применена':'Текстура снята')}catch(err){toast('Ошибка текстуры: '+err.message)}};
  $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.setScalar(scale);w.onChanged()};
- $('avatarHeight').oninput=e=>{const n=Number(e.target.value)/100;$('avatarHeightValue').textContent=n.toFixed(2)+' м';$('avatarQuickValue').textContent=n.toFixed(2)+' м';w.setAvatarHeight(n)};
+ function updateAvatarSize(meters){
+ w.setAvatarHeight(meters);
+ const value=w.avatarHeight.toFixed(2);
+ $('avatarHeightValue').textContent=value+' м';$('avatarQuickValue').textContent=value+' м';
+ $('avatarHeight').value=String(Math.round(w.avatarHeight*100));
+ $('avatarHeightExact').value=value;
+}
+$('avatarHeight').oninput=e=>updateAvatarSize(Number(e.target.value)/100);
+$('avatarHeightExact').onchange=e=>updateAvatarSize(Number(e.target.value));
  $('avatarAnimation').onchange=e=>{w.avatarAnimationOverride=e.target.value||null;w.avatarMotionState='';w.setAvatarMotion(false,true)};
  $('customColor').onchange=e=>updateStyle('color',e.target.value);$('walkSpeed').oninput=e=>{w.playerSpeed=+e.target.value;$('walkSpeedValue').textContent=(+e.target.value).toFixed(1)};
  function swatches(where,colors,fn){let root=$(where);for(const color of colors){const b=document.createElement('button');b.className='swatch';b.style.background=color;b.title=color;b.onclick=()=>{root.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');fn(color)};root.append(b)}}
@@ -63,7 +71,11 @@ function wireButtons(){
  $('btnBuildCatalog').onclick=()=>{document.body.classList.toggle('catalogOpen');if(document.body.classList.contains('catalogOpen'))renderLibrary()};
  $('btnBuildRotate').onclick=()=>toast('Поворот: '+w.rotatePlacement()+'°');
  $('btnBuildPlace').onclick=()=>{if(!w.placement)return toast('Выбери модуль в каталоге');w.placeAt(w.forwardPlacementPoint());saveSoon();toast('Установлено')};
- $('btnGameWalk').onclick=()=>{w.setPlacement(null);toast('Осматривай постройку, или выбери деталь в каталоге')};$('btnGameAvatar').onclick=()=>$('fileAvatar').click();$('btnGameRun').onclick=()=>{w.running=!w.running;$('btnGameRun').textContent='🏃 Бег: '+(w.running?'вкл.':'выкл.')};const sizeAdjust=step=>{w.setAvatarHeight(Math.round((w.avatarHeight+step)*20)/20);$('avatarQuickValue').textContent=w.avatarHeight.toFixed(2)+' м';$('avatarHeightValue').textContent=w.avatarHeight.toFixed(2)+' м';$('avatarHeight').value=Math.round(w.avatarHeight*100)};$('btnAvatarSmaller').onclick=()=>sizeAdjust(-.1);$('btnAvatarTaller').onclick=()=>sizeAdjust(.1);$('btnGameExit').onclick=()=>setMode('build');
+ $('btnGameWalk').onclick=()=>{w.setPlacement(null);toast('Осматривай постройку, или выбери деталь в каталоге')};$('btnGameAvatar').onclick=()=>$('fileAvatar').click();$('btnGameRun').onclick=()=>{w.running=!w.running;$('btnGameRun').textContent='🏃 Бег: '+(w.running?'вкл.':'выкл.')};const sizeFactor=factor=>updateAvatarSize(Math.max(.01,Math.round(w.avatarHeight*factor*1000)/1000));
+ $('btnAvatarSmaller').onclick=()=>sizeFactor(.5);
+ $('btnAvatarTaller').onclick=()=>sizeFactor(2);
+ $('btnAvatarTiny').onclick=()=>sizeFactor(.1);
+ $('btnAvatarHuge').onclick=()=>sizeFactor(10);$('btnGameExit').onclick=()=>setMode('build');
  $('btnImport').onclick=$('importAssets').onclick=()=>$('fileAssets').click();$('btnTexture').onclick=()=>$('fileTexture').click();$('btnAvatar').onclick=()=>$('fileAvatar').click();
  $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{w.placement=null;w.moveTarget=null;if(w.ghost)w.ghost.removeFromParent();w.ghost=null;$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
  for(const action of ['Rotate','Copy','Move','Delete'])$('btn'+action).onclick=()=>{if(!w.action(action.toLowerCase()))toast('Сначала выбери объект');else toast({Rotate:'Поворот 90°',Copy:'Создана копия',Move:'Выбери новое место',Delete:'Удалено'}[action])};
@@ -76,7 +88,7 @@ function wireButtons(){
  $('saveWorld').onclick=async()=>{await saveLocal(true);$('modal').classList.add('hidden')};$('loadWorld').onclick=()=>$('fileProject').click();
  $('exportHouse').onclick=()=>exportHouse();$('exportJson').onclick=()=>exportJson();$('exportPack').onclick=()=>exportPack();$('exportGlb').onclick=()=>exportGlb();
  $('settingsBtn').onclick=()=>$('settings').classList.toggle('hidden');$('fpsLimit').onchange=e=>{w.fpsLimit=+e.target.value;toast('Ограничение '+e.target.value+' FPS')};
- $('sceneExposure').oninput=e=>{const exp=+e.target.value/100;w.renderer.toneMappingExposure=exp;$('exposureValue').textContent=e.target.value+'%';try{localStorage.setItem('phoenix_scene_exposure',e.target.value)}catch(_){}};$('renderScale').onchange=e=>{w.setQuality(+e.target.value,$('shadows').checked);toast('Разрешение '+Math.round(+e.target.value*100)+'%')};$('invertJoystickX').onchange=e=>{w.invertJoystickX=e.target.checked;try{localStorage.setItem('pwb_joy_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickY').onchange=e=>{w.invertJoystickY=e.target.checked;try{localStorage.setItem('pwb_joy_y',e.target.checked?'1':'0')}catch(_){}};$('avatarFacing').onchange=e=>{w.avatarFacingOffset=Number(e.target.value)*Math.PI/180;try{localStorage.setItem('pwb_avatar_forward',e.target.value)}catch(_){}};$('shadows').onchange=e=>{w.setQuality(w.renderScale,e.target.checked);toast(e.target.checked?'Тени включены':'Тени выключены')};
+ $('sceneExposure').oninput=e=>{const exp=+e.target.value/100;w.renderer.toneMappingExposure=exp;$('exposureValue').textContent=e.target.value+'%';try{localStorage.setItem('phoenix_scene_exposure',e.target.value)}catch(_){}};$('renderScale').onchange=e=>{w.setQuality(+e.target.value,$('shadows').checked);toast('Разрешение '+Math.round(+e.target.value*100)+'%')};$('invertCameraX').onchange=e=>{w.invertCameraX=e.target.checked;try{localStorage.setItem('pwb_camera_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickX').onchange=e=>{w.invertJoystickX=e.target.checked;try{localStorage.setItem('pwb_joy_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickY').onchange=e=>{w.invertJoystickY=e.target.checked;try{localStorage.setItem('pwb_joy_y',e.target.checked?'1':'0')}catch(_){}};$('avatarFacing').onchange=e=>{w.avatarFacingOffset=Number(e.target.value)*Math.PI/180;try{localStorage.setItem('pwb_avatar_forward',e.target.value)}catch(_){}};$('shadows').onchange=e=>{w.setQuality(w.renderScale,e.target.checked);toast(e.target.checked?'Тени включены':'Тени выключены')};
  $('fileAssets').onchange=async e=>{let files=[...e.target.files];e.target.value='';if(!files.length)return;toast('Загружаю файлы…');let n=0;for(const f of files){try{if(/\.zip$/i.test(f.name)){n+=await importZip(f)}else if(/\.glb$/i.test(f.name)){let id='glb:'+f.name.toLowerCase();await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));n++}else toast('GLTF с внешними данными пока не поддерживается');}catch(err){toast('Ошибка импорта: '+err.message);console.error(err)}}renderLibrary();renderTextureOptions();toast('Загружено моделей: '+n)};
  $('fileProject').onchange=async e=>{let f=e.target.files?.[0];e.target.value='';if(!f)return;try{if(f.name.toLowerCase().endsWith('.zip')){await importZip(f,true)}else{const project=JSON.parse(await f.text());await restoreProject(project)}$('modal').classList.add('hidden');toast('Проект открыт')}catch(err){toast('Ошибка проекта: '+err.message);console.error(err)}};
  $('fileAvatar').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;
@@ -85,7 +97,7 @@ function wireButtons(){
    await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));
    w.assetCache.delete(id);w.assetAnimations.delete(id);
    await cacheFromDB(id);
-   const info=await w.setAvatar(id);
+   const info=await w.setAvatar(id);updateAvatarSize(w.avatarHeight);
    const sel=$('avatarAnimation');sel.innerHTML='<option value="">Автоматически: покой / ходьба / бег</option>';
    for(const name of info.animations){const opt=document.createElement('option');opt.value=name;opt.textContent=name;sel.append(opt)}
    $('avatarInfo').textContent=(info.rigged?'Скелет найден':'Без скелета')+' · Анимаций: '+info.animations.length;
@@ -148,7 +160,7 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>7)down.drag=true;
   if(w.mode==='terrain'){const p=w.hit(e.clientX,e.clientY);if(p&&performance.now()-brushLast>32){if(!strokePrepared){w.remember();strokePrepared=true;}w.sculpt(p.x,p.z,.8);brushLast=performance.now()}return;}
   if((w.mode==='build'||w.mode==='style')&&(w.placement||w.moveTarget)){const p=w.hit(e.clientX,e.clientY);if(p)w.updateGhost(p);return;}
-  if(down.drag){w.yaw+=dx*.006;w.pitch=THREE.MathUtils.clamp(w.pitch+dy*.005,.12,1.32);}
+  if(down.drag){w.yaw+=(w.invertCameraX?1:-1)*dx*.006;w.pitch=THREE.MathUtils.clamp(w.pitch+dy*.005,.12,1.32);}
  });
  canvas.addEventListener('pointerup',e=>{const point=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(pointers.size!==0){lastTouch=null;return;}lastTouch=null;if(!down)return;
   const dist=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(w.mode==='terrain'){down=null;saveSoon();return;}
@@ -170,6 +182,6 @@ async function init(){setupPicker();wireButtons();attachTouches();const exit=doc
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name})}renderTextureOptions();
   const autosave=await dbOp('projects','autosave');if(autosave){isLoading=true;await restoreProject(autosave);isLoading=false;toast('Карта восстановлена из памяти')}else toast('Редактор готов. Выбери деталь и коснись земли');renderLibrary();
  }catch(err){isLoading=false;toast('Хранилище недоступно: '+err.message);console.error(err)}
- try{w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');document.addEventListener('visibilitychange',()=>{if(document.hidden)saveLocal()});setInterval(()=>{$('fps').textContent=Math.round(w.fps)+' FPS'},1000);
+ try{w.invertCameraX=localStorage.getItem('pwb_camera_x')==='1';$('invertCameraX').checked=w.invertCameraX;w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');document.addEventListener('visibilitychange',()=>{if(document.hidden)saveLocal()});setInterval(()=>{$('fps').textContent=Math.round(w.fps)+' FPS'},1000);
 }
 init();

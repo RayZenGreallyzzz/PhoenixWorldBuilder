@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementRotation=0;this.selected=null;this.ghost=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalBounds=null;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementRotation=0;this.selected=null;this.ghost=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -36,11 +36,14 @@ class WorldBuilder{
   const bounds=new THREE.Box3().setFromObject(clone),size=bounds.getSize(new THREE.Vector3());
   if(!Number.isFinite(size.y)||size.y<.001)throw new Error('В GLB нет видимой геометрии персонажа');
   if(this.avatarMixer)this.avatarMixer.stopAllAction();
-  this.player.clear();this.player.add(clone);
-  this.avatarModel=clone;const scale=THREE.MathUtils.clamp(this.avatarHeight/size.y,.001,100);
-  clone.scale.setScalar(scale);clone.updateMatrixWorld(true);
-  const scaledBounds=new THREE.Box3().setFromObject(clone);
-  clone.position.y+=-scaledBounds.min.y-.85;
+  // Keep avatar scaling outside animated GLB nodes, whose animation
+  // tracks may override the scene root's scale.
+  this.player.clear();
+  const wrapper=new THREE.Group();wrapper.name='AvatarScaleWrapper';
+  wrapper.add(clone);this.player.add(wrapper);
+  this.avatarModel=wrapper;this.avatarOriginalHeight=size.y;
+  this.avatarOriginalBounds={min:bounds.min.clone(),max:bounds.max.clone()};
+  this.setAvatarHeight(this.avatarHeight);
   // glTF animation tracks sometimes target source-node UUIDs instead of names.
   const srcNodes=[],dstNodes=[];root.traverse(o=>srcNodes.push(o));clone.traverse(o=>dstNodes.push(o));
   const idMap=new Map(srcNodes.map((node,i)=>[node.uuid,dstNodes[i]?.uuid]));
@@ -61,10 +64,17 @@ class WorldBuilder{
   let rigged=false;clone.traverse(o=>{if(o.isSkinnedMesh)rigged=true});
   return {rigged,animations:clips.map(c=>c.name)};
  }
- setAvatarHeight(meters){this.avatarHeight=THREE.MathUtils.clamp(Number(meters)||1.8,.5,10);if(!this.avatarModel)return;const model=this.avatarModel;const bounds=new THREE.Box3().setFromObject(model),height=bounds.getSize(new THREE.Vector3()).y;if(height>.0001){model.scale.multiplyScalar(this.avatarHeight/height);model.updateMatrixWorld(true);const next=new THREE.Box3().setFromObject(model);model.position.y+=-next.min.y-.85;}}
+ setAvatarHeight(meters){
+  const n=Number(meters);this.avatarHeight=THREE.MathUtils.clamp(Number.isFinite(n)?n:1.8,.01,20);
+  if(!this.avatarModel||!this.avatarOriginalHeight||!this.avatarOriginalBounds)return;
+  const s=this.avatarHeight/this.avatarOriginalHeight,b=this.avatarOriginalBounds;
+  this.avatarModel.scale.setScalar(s);
+  this.avatarModel.position.set(-(b.min.x+b.max.x)*s*.5,-b.min.y*s-.85,-(b.min.z+b.max.z)*s*.5);
+  this.avatarModel.updateMatrixWorld(true);
+ }
  clearAvatar(){
   if(this.avatarMixer)this.avatarMixer.stopAllAction();
-  this.avatarMixer=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;
+  this.avatarMixer=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalBounds=null;
   this.player.userData.avatar=null;this.setupDefaultPlayer();
  }
  setAvatarMotion(moving,force=false){
