@@ -4,7 +4,7 @@ const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок 
 const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
-const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',savedMeta=new Map(),textureMeta=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
+const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
 let statusMessage='';
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
@@ -18,7 +18,7 @@ function groupType(name){
  if(/пол|floor|foundation|фундамент|плит|основан|platform/.test(s))return 'foundation';
  return 'prop';
 }
-async function openDB(){return await new Promise((resolve,reject)=>{const request=indexedDB.open('phoenix_world_builder_v1',4);request.onupgradeneeded=()=>{const db=request.result;for(const store of ['assets','textures','projects','bindings','categories'])if(!db.objectStoreNames.contains(store))db.createObjectStore(store);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+async function openDB(){return await new Promise((resolve,reject)=>{const request=indexedDB.open('phoenix_world_builder_v1',5);request.onupgradeneeded=()=>{const db=request.result;for(const store of ['assets','textures','projects','bindings','categories','previews','catalog'])if(!db.objectStoreNames.contains(store))db.createObjectStore(store);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
 function dbOp(store,key,value){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,value===undefined?'readonly':'readwrite');const req=value===undefined?tx.objectStore(store).get(key):tx.objectStore(store).put(value,key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function dbKeys(store){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,'readonly');const r=tx.objectStore(store).getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function cacheFromDB(id){if(w.assetCache.has(id))return w.assetCache.get(id);const row=await dbOp('assets',id);if(!row)return null;try{const parsed=await GLB.load(row.bytes);await bindImportedMaterials(id,parsed.root);w.assetCache.set(id,parsed.root);w.assetAnimations.set(id,parsed.animations||[]);if(parsed.triangles>150000)toast('Модель тяжёлая: '+Math.round(parsed.triangles)+' треугольников');return parsed.root}catch(e){toast('Модель не открыта: '+e.message);throw e}}
@@ -31,9 +31,14 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
  });
 }
 w.getAsset=cacheFromDB;
-async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{name,category:savedMeta.get(id)?.category});}
+async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),name});}
 async function rememberTexture(id,name,bytes,mime='image/png'){await dbOp('textures',id,{name,bytes,mime});textureMeta.set(id,{name});}
 async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
+async function updateCatalog(id,patch){
+ catalogMeta[id]={...(catalogMeta[id]||{}),...patch};
+ const m=savedMeta.get(id);if(m)Object.assign(m,patch);
+ try{if(localStore)await dbOp('catalog','metadata',catalogMeta)}catch(e){toast('Не удалось сохранить название: '+e.message)}
+}
 async function chooseAsset(id){
  try{
   const root=await cacheFromDB(id);if(!root)return toast('Файл не найден');
@@ -43,44 +48,157 @@ async function chooseAsset(id){
   toast('Выбрано: '+fmtName(meta?.name||id));
  }catch(e){console.error(e);toast('Не удалось выбрать модель: '+e.message)}
 }
+
+const GALLERY_SIZE=20;
 function makeAssetButton(id,title,kind,category){
- const wrap=document.createElement('div');wrap.className='assetGroup';
- const b=document.createElement('button');b.className='asset';if(w.placement===id)b.classList.add('active');
+ const wrapper=document.createElement('div');wrapper.className='assetGroup';
+ const meta=savedMeta.get(id)||{};
+ const b=document.createElement('button');b.className='asset';
+ if(w.placement===id)b.classList.add('active');
+ const img=document.createElement('img');img.className='assetImage unloaded';
+ img.alt='3D-превью: '+title;
+ img.dataset.previewId=id;img.dataset.builtin=kind==='builtin'?'1':'0';
  const strong=document.createElement('b');strong.textContent=title;
- const small=document.createElement('small');small.textContent=kind==='builtin'?'Встроенная деталь':'GLB из памяти';
- b.append(strong,small);
- b.onclick=()=>{
+ const small=document.createElement('small');
+ small.textContent=kind==='builtin'?'Встроенная деталь':[(meta.library||'Импортированный GLB'),(meta.sourceId?'ID '+meta.sourceId:'')].filter(Boolean).join(' · ');
+ const materials=document.createElement('span');materials.className='materialStatus';
+ if(kind==='builtin')materials.textContent='Цвет можно изменить';
+ else if(meta.materialTotal!==undefined){
+  materials.textContent='Материалы: '+(meta.materialLinked||0)+'/'+meta.materialTotal;
+  if(!meta.materialLinked)materials.classList.add('missing');
+ }else{
+  materials.textContent='Текстуры: проверяю…';
+  dbOp('bindings',id).then(row=>{
+   if(!materials.isConnected)return;
+   const total=row?.slots?.length||0,found=row?.slots?.filter(s=>s.texture).length||0;
+   materials.textContent=total?'Текстуры: '+found+'/'+total:'Без привязки материалов';
+   if(!found)materials.classList.add('missing');
+  }).catch(()=>{materials.textContent='Без информации о текстурах'});
+ }
+ b.append(img,strong,small,materials);
+ b.onclick=async()=>{
   if(kind==='builtin'){w.setPlacement(id,category);w.select(null);toast('Выбрано: '+title)}
-  else chooseAsset(id);
+  else await chooseAsset(id);
   if(w.mode==='playbuild')document.body.classList.remove('catalogOpen');
   renderLibrary();
  };
- wrap.append(b);
+ wrapper.append(b);
  if(kind!=='builtin'){
+  const controls=document.createElement('div');controls.className='assetControls';
   const selector=document.createElement('select');selector.className='assetCategory';
   for(const [key,label] of CATEGORIES){const opt=document.createElement('option');opt.value=key;opt.textContent=label;selector.append(opt)}
-  selector.value=category;
-  selector.title='Категория этой модели';
+  selector.value=category;selector.title='Категория модуля';
   selector.onchange=async event=>{
-   const type=event.target.value,meta=savedMeta.get(id);
-   if(!meta)return;
-   meta.category=type;
+   const type=event.target.value;
+   await updateCatalog(id,{category:type,manualCategory:true});
+   try{await dbOp('categories',id,type)}catch(e){}
    if(w.placement===id)w.placementCategory=type;
-   try{await dbOp('categories',id,type)}catch(err){toast('Не удалось сохранить категорию')}
-   renderLibrary();toast('Модель перенесена в «'+CATEGORIES.find(v=>v[0]===type)?.[1]+'»');
+   renderLibrary();toast('Категория изменена');
   };
-  wrap.append(selector);
+  const edit=document.createElement('button');edit.textContent='✎';edit.title='Исправить название';
+  edit.onclick=()=>{
+   const input=document.createElement('input');input.className='assetRename';
+   input.value=meta.displayName||fmtName(meta.name||id);
+   wrapper.append(input);input.focus();input.select();edit.disabled=true;
+   let saved=false;
+   const commit=async(save)=>{
+    if(saved)return;saved=true;edit.disabled=false;
+    if(save&&input.value.trim())await updateCatalog(id,{displayName:input.value.trim()});
+    renderLibrary();
+   };
+   input.onkeydown=e=>{if(e.key==='Enter')commit(true);else if(e.key==='Escape')commit(false)};
+   input.onblur=()=>commit(true);
+  };
+  controls.append(selector,edit);wrapper.append(controls);
  }
- return wrap;
+ return wrapper;
 }
-function renderTextureOptions(){const el=$('textureSelect'),current=el.value;el.innerHTML='<option value="">Без дополнительной текстуры</option>';for(const [id,meta] of textureMeta){const option=document.createElement('option');option.value=id;option.textContent=meta.name;el.append(option)}el.value=current;}
-function renderLibrary(){const el=$('assetList');el.innerHTML='';const f=currentFilter,q=$('assetSearch')?.value.trim().toLowerCase()||'';
- for(const [id,name,cat] of BUILTINS)if((f==='all'||f===cat)&&(!q||name.toLowerCase().includes(q)))el.append(makeAssetButton(id,name,'builtin',cat));
- let count=0,total=0;for(const [id,meta] of savedMeta){let name=meta.name,cat=meta.category||groupType(name);if((f!=='all'&&f!==cat)||(q&&!name.toLowerCase().includes(q)))continue;total++;if(count++>=90)continue;el.append(makeAssetButton(id,fmtName(name),'asset',cat))}
- if(total>90){let notice=document.createElement('small');notice.textContent=`Показаны первые 90 из ${total}. Используй поиск.`;notice.className='note';el.append(notice)}
+function renderTextureOptions(){
+ const el=$('textureSelect'),current=el.value;
+ el.innerHTML='<option value="">Без дополнительной текстуры</option>';
+ for(const [id,meta] of textureMeta){
+  const option=document.createElement('option');option.value=id;option.textContent=meta.name;el.append(option)
+ }el.value=current;
 }
-function setupPicker(){const search=document.createElement('input');search.id='assetSearch';search.placeholder='Поиск по названию или ID';search.style.cssText='background:#203442;color:#fff;border:1px solid #486373;border-radius:7px;padding:10px;width:100%;margin-bottom:8px;font-size:12px';$('assetList').before(search);search.oninput=renderLibrary;
- $all('.pill').forEach(b=>b.onclick=()=>{$all('.pill').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentFilter=b.dataset.filter;renderLibrary()});
+async function showTextureImage(img,id){
+ if(!img.isConnected||!localStore)return;
+ const row=await dbOp('textures',id);if(!row||!img.isConnected)return;
+ const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime||'image/jpeg'}));
+ img.onload=()=>URL.revokeObjectURL(url);
+ img.onerror=()=>URL.revokeObjectURL(url);
+ img.src=url;
+}
+function selectTexture(id){
+ return (async()=>{
+  const tex=await loadTexture(id);
+  if(!tex){toast('Не удалось открыть текстуру');return}
+  w.textureId=id;
+  if(w.selected){
+   w.remember();w.selected.data.texture=id;applyEntry(w.selected);w.onChanged();
+  }
+  if(w.ghost)w.ghost.traverse(obj=>{
+   if(!obj.isMesh)return;
+   for(const mat of(Array.isArray(obj.material)?obj.material:[obj.material])){
+    mat.map=tex;if(mat.color)mat.color.set('#ffffff');mat.needsUpdate=true;
+   }
+  });
+  toast('Текстура выбрана: '+(textureMeta.get(id)?.name||id));
+  renderLibrary();
+ })().catch(e=>toast('Ошибка текстуры: '+e.message));
+}
+function renderLibrary(){
+ const el=$('assetList');el.innerHTML='';
+ const isTexture=catalogMode==='textures';
+ $('categoryFilters').classList.toggle('hidden',isTexture);
+ $('btnCatalogModels').classList.toggle('active',!isTexture);
+ $('btnCatalogTextures').classList.toggle('active',isTexture);
+ const q=$('assetSearch')?.value.trim().toLowerCase()||'';
+ const items=[];
+ if(isTexture){
+  for(const [id,meta] of textureMeta){
+   if(q&&!meta.name.toLowerCase().includes(q))continue;
+   items.push([id,meta]);
+  }
+ }else{
+  for(const [id,name,category] of BUILTINS){
+   if((currentFilter!=='all'&&currentFilter!==category)||(q&&!name.toLowerCase().includes(q)))continue;
+   items.push({id,name,kind:'builtin',category});
+  }
+  for(const [id,meta] of savedMeta){
+   const name=meta.displayName||fmtName(meta.name);
+   const category=meta.category||groupType(meta.name);
+   if((currentFilter!=='all'&&currentFilter!==category)||(q&&!(name+' '+meta.name+' '+(meta.sourceId||'')).toLowerCase().includes(q)))continue;
+   items.push({id,name,kind:'asset',category});
+  }
+ }
+ const pages=Math.max(1,Math.ceil(items.length/GALLERY_SIZE));
+ catalogPage=Math.min(Math.max(0,catalogPage),pages-1);
+ $('galleryStatus').textContent='Стр. '+(catalogPage+1)+'/'+pages+' · '+items.length;
+ $('galleryPrev').disabled=catalogPage===0;
+ $('galleryNext').disabled=catalogPage>=pages-1;
+ $('galleryHint').textContent=isTexture?'Нажми на изображение, чтобы назначить покрытие выбранной детали или использовать его для новых.':'Картинки показывают реальную геометрию GLB. Неверное название исправь кнопкой ✎; материалы без привязки отмечены отдельно.';
+ const page=items.slice(catalogPage*GALLERY_SIZE,(catalogPage+1)*GALLERY_SIZE);
+ if(isTexture){
+  for(const [id,meta] of page){
+   const card=document.createElement('button');card.className='textureCard';
+   if(w.textureId===id)card.classList.add('active');
+   const image=document.createElement('img');image.className='textureImage';image.alt=meta.name;
+   const title=document.createElement('b');title.textContent=meta.name;
+   card.append(image,title);card.onclick=()=>selectTexture(id);
+   el.append(card);showTextureImage(image,id).catch(console.warn);
+  }
+ }else{
+  for(const item of page)el.append(makeAssetButton(item.id,item.name,item.kind,item.category));
+  if(localStore&&typeof CatalogPreview!=='undefined')
+   CatalogPreview.observeCards(el,(id,builtin)=>builtin?w.makeBuiltin(id):cacheFromDB(id),dbOp,dbOp);
+ }
+}
+function setupPicker(){
+ $('btnCatalogModels').onclick=()=>{catalogMode='models';catalogPage=0;renderLibrary()};
+ $('btnCatalogTextures').onclick=()=>{catalogMode='textures';catalogPage=0;renderLibrary()};
+ $('galleryPrev').onclick=()=>{catalogPage=Math.max(0,catalogPage-1);renderLibrary();$('buildPanel').scrollTop=0};
+ $('galleryNext').onclick=()=>{catalogPage++;renderLibrary();$('buildPanel').scrollTop=0};const search=document.createElement('input');search.id='assetSearch';search.placeholder='Поиск по названию или ID';search.style.cssText='background:#203442;color:#fff;border:1px solid #486373;border-radius:7px;padding:10px;width:100%;margin-bottom:8px;font-size:12px';$('assetList').before(search);search.oninput=()=>{catalogPage=0;renderLibrary()};
+ $all('.pill').forEach(b=>b.onclick=()=>{$all('.pill').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentFilter=b.dataset.filter;catalogPage=0;renderLibrary()});
  $all('.tab').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
  $all('[data-brush]').forEach(b=>b.onclick=()=>{$all('[data-brush]').forEach(t=>t.classList.remove('active'));b.classList.add('active');w.brush=b.dataset.brush});
  $('brushSize').oninput=e=>{w.brushSize=+e.target.value;$('brushSizeValue').textContent=e.target.value};$('brushPower').oninput=e=>{w.brushPower=+e.target.value/100;$('brushPowerValue').textContent=e.target.value+'%'};
