@@ -8,7 +8,7 @@ const SceneExporter=(()=>{
   cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
   const blob=await new Promise(resolve=>cv.toBlob(resolve,'image/png'));return blob?new Uint8Array(await blob.arrayBuffer()):null;
  }
- async function build(world){
+ async function build(world,options={}){
   const gltf={asset:{version:'2.0',generator:'Phoenix World Builder'},scene:0,scenes:[{nodes:[]}],nodes:[],meshes:[],materials:[],accessors:[],bufferViews:[],buffers:[{byteLength:0}],images:[],textures:[],samplers:[{magFilter:9729,minFilter:9987,wrapS:10497,wrapT:10497}]};
   const binary=[],matIdx=new Map(),texIdx=new Map();let offset=0;
   function data(arr,target){const bytes=arr instanceof Uint8Array?arr:new Uint8Array(arr.buffer,arr.byteOffset,arr.byteLength);const padded=new Uint8Array(align(bytes.length));padded.set(bytes);const index=gltf.bufferViews.length;gltf.bufferViews.push({buffer:0,byteOffset:offset,byteLength:bytes.length,...(target?{target}:{})});binary.push(padded);offset+=padded.length;return index}
@@ -21,14 +21,19 @@ const SceneExporter=(()=>{
    let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:a<1?'BLEND':'OPAQUE'};
    if(m.map){let textureIndex=texIdx.get(m.map);if(textureIndex===undefined){const image=await encodeTexture(m.map);if(image){const imageIndex=gltf.images.length;gltf.images.push({bufferView:data(image),mimeType:'image/png'});textureIndex=gltf.textures.length;gltf.textures.push({source:imageIndex,sampler:0});texIdx.set(m.map,textureIndex)}}if(textureIndex!==undefined)md.pbrMetallicRoughness.baseColorTexture={index:textureIndex};}
    let idx=gltf.materials.length;gltf.materials.push(md);matIdx.set(m,idx);return idx;}
-  const models=[world.terrain,...world.objects.map(o=>o.mesh)];
+  const models=options.houseOnly?world.objects.map(o=>o.mesh):[world.terrain,...world.objects.map(o=>o.mesh)];
+  const assembledBounds=new THREE.Box3();for(const obj of models){obj.updateMatrixWorld(true);assembledBounds.expandByObject(obj)}
+  const shift=options.houseOnly&&!assembledBounds.isEmpty()
+    ?new THREE.Vector3(-((assembledBounds.min.x+assembledBounds.max.x)/2),-assembledBounds.min.y,-((assembledBounds.min.z+assembledBounds.max.z)/2))
+    :new THREE.Vector3();
+  if(options.houseOnly&&!models.length)throw Error('Сначала построй дом');
   for(const root of models){root.updateMatrixWorld(true);const meshes=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)meshes.push(o)});
    for(const mesh of meshes){let geom=mesh.geometry;if(geom.index&&geom.index.count>700000)continue;const pos=geom.getAttribute('position');if(!pos||pos.count<3)continue;
     const attributes={POSITION:access(new Float32Array(pos.array),0,'VEC3')};let norm=geom.getAttribute('normal'),uv=geom.getAttribute('uv'),col=geom.getAttribute('color');
     if(norm)attributes.NORMAL=access(new Float32Array(norm.array),0,'VEC3');if(uv)attributes.TEXCOORD_0=access(new Float32Array(uv.array),0,'VEC2');if(col&&col.itemSize===3)attributes.COLOR_0=access(new Float32Array(col.array),0,'VEC3');
     const prim={attributes,mode:4,material:await material(mesh.material)};
     if(geom.index){let indices=geom.index.array;prim.indices=access(indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),1,'SCALAR');}
-    let mi=gltf.meshes.length;gltf.meshes.push({name:mesh.name||'Деталь',primitives:[prim]});let ni=gltf.nodes.length;gltf.nodes.push({mesh:mi,name:mesh.name||root.name||'Объект',matrix:mesh.matrixWorld.toArray()});gltf.scenes[0].nodes.push(ni);
+    let mi=gltf.meshes.length;gltf.meshes.push({name:mesh.name||'Деталь',primitives:[prim]});let ni=gltf.nodes.length;gltf.nodes.push({mesh:mi,name:mesh.name||root.name||'Объект',matrix:new THREE.Matrix4().makeTranslation(shift.x,shift.y,shift.z).multiply(mesh.matrixWorld).toArray()});gltf.scenes[0].nodes.push(ni);
    }
   }
   gltf.buffers[0].byteLength=offset;
