@@ -1,13 +1,14 @@
 /* Smart placement for user-imported floors. Three.js r140; offline. */
 const BuildSnap=(()=>{
  const clamp=THREE.MathUtils.clamp;
+ const boundsCache=new WeakMap();
  const structural=(cat)=>cat==='foundation'||cat==='ceiling';
  const edgable=(cat,kind)=>{
   if(['wall','door','stairs','railing'].includes(cat))return true;
   return /(?:rail|railing|fence|balustrade|перил|огражд|забор)/i.test(String(kind));
  };
  const attrBounds=(root)=>{
-  if(root.userData._buildSnapBounds)return root.userData._buildSnapBounds.clone();
+  if(boundsCache.has(root))return boundsCache.get(root).clone();
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert();
   const result=new THREE.Box3().makeEmpty(),m=new THREE.Matrix4(),p=new THREE.Vector3();
@@ -21,7 +22,7 @@ const BuildSnap=(()=>{
     p.set(x,y,z).applyMatrix4(m);result.expandByPoint(p);
    }
   });
-  if(!result.isEmpty())root.userData._buildSnapBounds=result.clone();
+  if(!result.isEmpty())boundsCache.set(root,result.clone());
   return result;
  };
  const worldPoint=(root,x,y,z)=>new THREE.Vector3(x,y,z).applyMatrix4(root.matrixWorld);
