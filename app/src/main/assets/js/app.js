@@ -204,6 +204,17 @@ function renderLibrary(){
    CatalogPreview.observeCards(el,(id,builtin)=>builtin?w.makeBuiltin(id):cacheFromDB(id),dbOp,dbOp);
  }
 }
+function refreshConstructionUI(){
+ const height=(w.storeyHeight||2.6).toFixed(2);
+ $('storeyHeightInput').value=height;$('buildStoreyHeight').value=height;
+ $('levelValue').textContent=(w.floorLevel||0)+1;
+ $('buildLevelValue').textContent=(w.floorLevel||0)+1;
+ $('placementLiftValue').textContent=Math.round((w.placementLift||0)*100)+' см';
+ $('btnSnapToggle').textContent=w.smartSnap!==false?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
+ $('btnSnapToggle').setAttribute('aria-pressed',String(w.smartSnap!==false));
+ $('btnOverheadCenter').textContent=w.centerOverhead?'⌂ Центрировать крышу: вкл.':'⌂ Центрировать крышу: выкл.';
+ $('btnOverheadCenter').setAttribute('aria-pressed',String(!!w.centerOverhead));
+}
 function setupPicker(){
  $('btnCatalogModels').onclick=()=>{catalogMode='models';catalogPage=0;renderLibrary()};
  $('btnCatalogTextures').onclick=()=>{catalogMode='textures';catalogPage=0;renderLibrary()};
@@ -218,10 +229,17 @@ function setupPicker(){
  const changeLevel=dir=>{
   const level=w.changeFloor(dir);
   $('levelValue').textContent=level;$('buildLevelValue').textContent=level;
-  toast('Этаж '+level+' · высота '+(w.floorLevel*2.6).toFixed(1)+' м');
+  toast('Этаж '+level+' · базовая отметка '+(w.floorLevel*(w.storeyHeight||2.6)).toFixed(2)+' м');
  };
  $('levelDown').onclick=()=>changeLevel(-1);$('levelUp').onclick=()=>changeLevel(1);
  $('btnBuildLevelDown').onclick=()=>changeLevel(-1);$('btnBuildLevelUp').onclick=()=>changeLevel(1);
+ const changeHeight=e=>{
+  const h=w.setStoreyHeight(e.target.value);
+  refreshConstructionUI();
+  toast('Высота этажа: '+h.toFixed(2)+' м. Существующие детали не перемещены.');
+ };
+ $('storeyHeightInput').onchange=changeHeight;
+ $('buildStoreyHeight').onchange=changeHeight;
  $('textureSelect').onchange=async e=>{if(!w.selected)return toast('Сначала выбери объект');let id=e.target.value;try{if(id)await loadTexture(id);w.remember();w.selected.data.texture=id||null;applyEntry(w.selected);w.onChanged();toast(id?'Текстура применена':'Текстура снята')}catch(err){toast('Ошибка текстуры: '+err.message)}};
  $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.setScalar(scale);w.onChanged()};
  function updateAvatarSize(meters){
@@ -265,10 +283,21 @@ function wireButtons(){
  };
  $('btnShiftLeft').onclick=()=>moveEdge(-.25);
  $('btnShiftRight').onclick=()=>moveEdge(.25);
+ const heightStep=delta=>{
+  const amount=w.setPlacementLift((w.placementLift||0)+delta);
+  refreshConstructionUI();
+  toast('Смещение детали по высоте: '+Math.round(amount*100)+' см');
+ };
+ $('btnLiftDown').onclick=()=>heightStep(-.1);
+ $('btnLiftUp').onclick=()=>heightStep(.1);
+ $('btnOverheadCenter').onclick=()=>{
+  const centered=w.toggleOverheadCenter();refreshConstructionUI();
+  toast(centered?'Крыша и потолок центрируются над выбранным полом':'Свободное положение крыши и потолка');
+ };
  w.onSnapChanged=result=>{
   const el=$('snapStatus');if(!el)return;
   el.textContent=result.snapped?
-   (result.edge?'✓ Привязано к краю пола':'✓ Установлено на GLB-пол'):
+   (result.overhead?'✓ Опирается на верх стен или перекрытия':result.edge?'✓ Привязано к краю пола':'✓ Установлено на GLB-пол'):
    (w.smartSnap?'Подойди ближе к краю пола':'Свободная установка');
   el.classList.toggle('snapped',!!result.snapped);
  };
@@ -387,7 +416,7 @@ async function loadDependencies(project){const need=new Set(project.objects.map(
  for(const id of need)if(!w.assetCache.has(id))try{await cacheFromDB(id)}catch(e){console.warn(id,e)};
  const tex=new Set(project.objects.map(o=>o.texture).filter(Boolean));for(const id of tex)try{await loadTexture(id)}catch(e){};
 }
-async function restoreProject(project){await loadDependencies(project);await w.restore(project);if(project.camera){w.yaw=project.camera.yaw??.65;w.pitch=project.camera.pitch??.55;w.distance=project.camera.distance??26;w.target.fromArray(project.camera.target||[0,2,0])}w.undo=[];}
+async function restoreProject(project){await loadDependencies(project);await w.restore(project);refreshConstructionUI();if(project.camera){w.yaw=project.camera.yaw??.65;w.pitch=project.camera.pitch??.55;w.distance=project.camera.distance??26;w.target.fromArray(project.camera.target||[0,2,0])}w.undo=[];}
 function projectData(){return {...w.snapshot(),camera:{yaw:w.yaw,pitch:w.pitch,distance:w.distance,target:w.target.toArray()},editor:'Phoenix World Builder',format:'PhoenixMap 1.0'}}
 async function saveLocal(notify=false){if(isLoading)return;try{await dbOp('projects','autosave',projectData());if(notify)toast('Карта сохранена на планшете')}catch(err){toast('Не удалось сохранить: '+err.message)}}
 function b64(bytes){let result='';for(let i=0;i<bytes.length;i+=16384)result+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(result)}
@@ -429,7 +458,7 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
  stick.addEventListener('pointerdown',e=>{e.preventDefault();stick.setPointerCapture(e.pointerId);update(e)});stick.addEventListener('pointermove',e=>{if(stick.hasPointerCapture(e.pointerId))update(e)});const reset=()=>{w.joy={x:0,y:0};knob.style.transform='translate(0,0)'};stick.addEventListener('pointerup',reset);stick.addEventListener('pointercancel',reset);
 }
 let saveHandle=0;function saveSoon(){clearTimeout(saveHandle);saveHandle=setTimeout(()=>saveLocal(),1500)}
-async function init(){setupPicker();wireButtons();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
+async function init(){setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
  w.onSelected=e=>{if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
