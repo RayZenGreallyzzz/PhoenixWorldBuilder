@@ -176,7 +176,8 @@ const BuildSnap=(()=>{
    const edge=nearestEdge(s,p);
    const eligible=aligned?edge.distance<=3.5:inside;
    if(!eligible)continue;
-   const grade=(aligned?edge.distance:Math.abs(s.top-p.y)*.06)+delta*.3;
+   const grade=(aligned?edge.distance:Math.abs(s.top-p.y)*.06)+delta*.3-
+    (storyOf(entry)===w.floorLevel?10:0);
    support.push({entry,s,edge,grade});
   }
   support.sort((a,b)=>a.grade-b.grade);
