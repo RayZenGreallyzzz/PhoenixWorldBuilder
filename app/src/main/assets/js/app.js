@@ -33,7 +33,7 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
 w.getAsset=cacheFromDB;
 async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),...(catalogMeta[id]||{}),name});}
 async function rememberTexture(id,name,bytes,mime='image/png',sourcePath=''){await dbOp('textures',id,{name,bytes,mime,sourcePath});textureMeta.set(id,{name,sourcePath});}
-async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
+async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
 async function updateCatalog(id,patch){
  catalogMeta[id]={...(catalogMeta[id]||{}),...patch};
  const m=savedMeta.get(id);if(m)Object.assign(m,patch);
@@ -71,8 +71,17 @@ function makeAssetButton(id,title,kind,category){
   dbOp('bindings',id).then(row=>{
    if(!materials.isConnected)return;
    const total=row?.slots?.length||0,found=row?.slots?.filter(s=>s.texture).length||0;
-   materials.textContent=total?'Текстуры: '+found+'/'+total:'Без привязки материалов';
-   if(!found)materials.classList.add('missing');
+   materials.textContent=total?'Текстуры: '+found+'/'+total:'Проверяю встроенные…';
+   if(!total){
+    const check=()=>{
+     const model=w.assetCache.get(id);if(!model)return false;
+     let all=0,textured=0;
+     model.traverse(obj=>{if(obj.isMesh)for(const mat of(Array.isArray(obj.material)?obj.material:[obj.material])){all++;if(mat?.map)textured++;}});
+     materials.textContent=textured?'В GLB: '+textured+'/'+all+' текстур':'Нет назначенных изображений';
+     if(!textured)materials.classList.add('missing');return true;
+    };
+    if(!check())img.addEventListener('load',check,{once:true});
+   }else if(!found)materials.classList.add('missing');
   }).catch(()=>{materials.textContent='Без информации о текстурах'});
  }
  b.append(img,strong,small,materials);
