@@ -22,3 +22,33 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 .buildNote{display:block;color:#9fbcb7;font-size:10px;line-height:1.4;margin:5px 0 8px}
 @media(max-width:840px){#gameBuildHud{max-width:29vw;width:185px;bottom:12px;gap:3px}#gameBuildHud>button{min-height:30px;padding:4px 6px;font-size:10px}#gameBuildHud .hudRow button{min-height:30px}#gameBuildHud .hudControl,#avatarQuickSize{padding:3px}}
 @media(max-height:620px){#gameBuildHud{gap:2px}#gameBuildHud>button{min-height:26px;padding:3px 6px}#gameBuildHud .hudRow button{min-height:27px}#gameBuildHud .hudControl>span{margin-bottom:1px}}
+
+/* Visual catalogue, lazily generated GLB previews and original texture swatches. */
+.galleryTabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.galleryTabs button{min-height:37px;font-size:12px}
+.galleryTabs button.active{background:#246653;border-color:#5bddbd}
+.assetlist{grid-template-columns:1fr 1fr;gap:8px}
+.assetGroup{background:#1e3442;border:1px solid #3c5862;border-radius:10px;padding:5px;overflow:hidden}
+.assetGroup .asset{display:flex;flex-direction:column;align-items:stretch;min-width:0;padding:4px;min-height:128px;gap:4px}
+.assetGroup .asset b{font-size:11px;line-height:1.25;word-break:break-word;white-space:normal}
+.assetGroup .asset small{font-size:9px;line-height:1.25;overflow-wrap:anywhere}
+.assetImage{display:block;width:100%;height:85px;object-fit:contain;background:#304650;border-radius:7px;color:#a4bfc2;text-align:center}
+.assetImage.unloaded{opacity:.65}
+.previewFallback{display:flex;height:85px;justify-content:center;align-items:center;background:#304650;border-radius:7px;font-size:30px;color:#bce3d6}
+.assetControls{display:grid;grid-template-columns:1fr auto;gap:3px;margin-top:3px}
+.assetControls button{padding:3px 7px;min-width:30px;min-height:30px;font-size:13px}
+.assetControls select{width:100%;min-width:0}
+.assetRename{width:100%;font-size:11px;border-radius:5px;padding:5px;background:#122833;color:#fff;border:1px solid #64bdad;touch-action:manipulation}
+.materialStatus{font-size:9px;color:#b7d9d0}
+.materialStatus.missing{color:#f1c287}
+#galleryPages{display:flex;align-items:center;justify-content:center;gap:9px;margin:12px 0 5px;font-size:11px;color:#dbf0e8}
+#galleryPages button{min-height:34px;min-width:45px}
+#galleryPages button:disabled{opacity:.35}
+.textureCard{display:flex;flex-direction:column;padding:6px;gap:5px;border:1px solid #476471;background:#1c3440;color:#edf5f5;border-radius:10px;min-width:0;min-height:128px}
+.textureCard.active{border:2px solid #56dfb5}
+.textureCard .textureImage{display:block;aspect-ratio:1.55;object-fit:cover;width:100%;background:#3b4b54;border-radius:6px}
+.textureCard b{font-size:10px;line-height:1.3;overflow-wrap:anywhere}
+#avatarQuickSize .footRow{display:flex;gap:4px;justify-content:space-between;margin-top:4px}
+#avatarQuickSize .footRow button{font-size:10px;min-height:30px}
+#avatarGroundValue{white-space:nowrap;min-width:35px;text-align:center;color:#bdeecf;font-size:10px}
+@media(max-width:720px){.assetlist{grid-template-columns:1fr 1fr}.assetImage,.previewFallback{height:68px}.assetGroup .asset{min-height:108px}}
