@@ -31,6 +31,8 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
  });
 }
 w.getAsset=cacheFromDB;
+// Old projects contain GLB IDs but may not yet contain a saved category.
+w.categoryForKind=kind=>BUILTINS.find(item=>item[0]===kind)?.[2]||savedMeta.get(kind)?.category||groupType(savedMeta.get(kind)?.name||kind);
 async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),...(catalogMeta[id]||{}),name});}
 async function rememberTexture(id,name,bytes,mime='image/png',sourcePath=''){await dbOp('textures',id,{name,bytes,mime,sourcePath});textureMeta.set(id,{name,sourcePath});}
 async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
@@ -45,7 +47,7 @@ async function chooseAsset(id){
   const meta=savedMeta.get(id);
   w.setPlacement(id,meta?.category||groupType(meta?.name||id));w.select(null);
   $('btnSelect').classList.remove('active');renderLibrary();
-  toast('Выбрано: '+fmtName(meta?.name||id));
+  $('snapShiftLabel').textContent='0 м';toast('Выбрано: '+fmtName(meta?.displayName||meta?.name||id));
  }catch(e){console.error(e);toast('Не удалось выбрать модель: '+e.message)}
 }
 
@@ -86,7 +88,7 @@ function makeAssetButton(id,title,kind,category){
  }
  b.append(img,strong,small,materials);
  b.onclick=async()=>{
-  if(kind==='builtin'){w.setPlacement(id,category);w.select(null);toast('Выбрано: '+title)}
+  if(kind==='builtin'){w.setPlacement(id,category);w.select(null);$('snapShiftLabel').textContent='0 м';toast('Выбрано: '+title)}
   else await chooseAsset(id);
   if(w.mode==='playbuild')document.body.classList.remove('catalogOpen');
   renderLibrary();
@@ -249,7 +251,27 @@ function setMode(mode){w.setMode(mode);const game=mode==='walk'||mode==='playbui
 function wireButtons(){
  $('btnGameBuild').onclick=()=>setMode('playbuild');
  $('btnBuildCatalog').onclick=()=>{document.body.classList.toggle('catalogOpen');if(document.body.classList.contains('catalogOpen'))renderLibrary()};
- $('btnBuildRotate').onclick=()=>toast('Поворот: '+w.rotatePlacement()+'°');
+ $('btnBuildRotate').onclick=()=>toast('Дополнительный поворот: '+w.rotatePlacement()+'°');
+ $('btnSnapToggle').onclick=()=>{
+  const active=w.toggleSmartSnap();
+  $('btnSnapToggle').textContent=active?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
+  $('btnSnapToggle').setAttribute('aria-pressed',String(active));
+  toast(active?'Привязка к краям пола включена':'Свободная установка по сетке');
+ };
+ const moveEdge=delta=>{
+  const v=w.shiftAlongEdge(delta);
+  $('snapShiftLabel').textContent=v.toFixed(2)+' м';
+  toast('Сдвиг вдоль края: '+v.toFixed(2)+' м');
+ };
+ $('btnShiftLeft').onclick=()=>moveEdge(-.25);
+ $('btnShiftRight').onclick=()=>moveEdge(.25);
+ w.onSnapChanged=result=>{
+  const el=$('snapStatus');if(!el)return;
+  el.textContent=result.snapped?
+   (result.edge?'✓ Привязано к краю пола':'✓ Установлено на GLB-пол'):
+   (w.smartSnap?'Подойди ближе к краю пола':'Свободная установка');
+  el.classList.toggle('snapped',!!result.snapped);
+ };
  const setModuleScale=value=>{
   const scale=w.setPlacementScale(value);
   $('moduleScaleValue').textContent=Math.round(scale*100)+'%';
@@ -259,7 +281,12 @@ function wireButtons(){
  $('btnModuleSmaller').onclick=()=>setModuleScale(Math.round(w.placementScale*.8*100)/100);
  $('btnModuleLarger').onclick=()=>setModuleScale(Math.round(w.placementScale*1.25*100)/100);
  $('moduleScaleInput').onchange=e=>setModuleScale(Number(e.target.value)/100);
- $('btnBuildPlace').onclick=()=>{if(!w.placement)return toast('Выбери модуль в каталоге');w.placeAt(w.forwardPlacementPoint());saveSoon();toast('Установлено')};
+ $('btnBuildPlace').onclick=()=>{
+  if(!w.placement)return toast('Выбери модуль в каталоге');
+  const snap=w.solvePlacement(w.forwardPlacementPoint());
+  w.placeAt(w.forwardPlacementPoint());saveSoon();
+  toast(snap.snapped?'Установлено с привязкой к '+(snap.edge?'краю':'поверхности'):'Установлено по сетке');
+ };
  $('btnGameWalk').onclick=()=>{w.setPlacement(null);toast('Осматривай постройку, или выбери деталь в каталоге')};$('btnGameAvatar').onclick=()=>$('fileAvatar').click();$('btnGameRun').onclick=()=>{w.running=!w.running;$('btnGameRun').textContent='🏃 Бег: '+(w.running?'вкл.':'выкл.')};$('btnAvatarAnimationToggle').onclick=()=>{const on=w.toggleAvatarAnimations();$('btnAvatarAnimationToggle').textContent='🎞️ Анимация: '+(on?'вкл.':'выкл.');toast(on?'Анимации включены':'Анимации приостановлены: проверка рига')};const sizeFactor=factor=>updateAvatarSize(Math.max(.01,Math.round(w.avatarHeight*factor*1000)/1000));
  $('btnAvatarSmaller').onclick=()=>{sizeFactor(.5);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
  $('btnAvatarTaller').onclick=()=>{sizeFactor(2);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
