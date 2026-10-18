@@ -71,7 +71,7 @@ function wireButtons(){
  $('btnBuildCatalog').onclick=()=>{document.body.classList.toggle('catalogOpen');if(document.body.classList.contains('catalogOpen'))renderLibrary()};
  $('btnBuildRotate').onclick=()=>toast('Поворот: '+w.rotatePlacement()+'°');
  $('btnBuildPlace').onclick=()=>{if(!w.placement)return toast('Выбери модуль в каталоге');w.placeAt(w.forwardPlacementPoint());saveSoon();toast('Установлено')};
- $('btnGameWalk').onclick=()=>{w.setPlacement(null);toast('Осматривай постройку, или выбери деталь в каталоге')};$('btnGameAvatar').onclick=()=>$('fileAvatar').click();$('btnGameRun').onclick=()=>{w.running=!w.running;$('btnGameRun').textContent='🏃 Бег: '+(w.running?'вкл.':'выкл.')};const sizeFactor=factor=>updateAvatarSize(Math.max(.01,Math.round(w.avatarHeight*factor*1000)/1000));
+ $('btnGameWalk').onclick=()=>{w.setPlacement(null);toast('Осматривай постройку, или выбери деталь в каталоге')};$('btnGameAvatar').onclick=()=>$('fileAvatar').click();$('btnGameRun').onclick=()=>{w.running=!w.running;$('btnGameRun').textContent='🏃 Бег: '+(w.running?'вкл.':'выкл.')};$('btnAvatarAnimationToggle').onclick=()=>{const on=w.toggleAvatarAnimations();$('btnAvatarAnimationToggle').textContent='🎞️ Анимация: '+(on?'вкл.':'выкл.');toast(on?'Анимации включены':'Анимации приостановлены: проверка рига')};const sizeFactor=factor=>updateAvatarSize(Math.max(.01,Math.round(w.avatarHeight*factor*1000)/1000));
  $('btnAvatarSmaller').onclick=()=>sizeFactor(.5);
  $('btnAvatarTaller').onclick=()=>sizeFactor(2);
  $('btnAvatarTiny').onclick=()=>sizeFactor(.1);
@@ -97,10 +97,13 @@ function wireButtons(){
    await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));
    w.assetCache.delete(id);w.assetAnimations.delete(id);
    await cacheFromDB(id);
-   const info=await w.setAvatar(id);updateAvatarSize(w.avatarHeight);
+   const info=await w.setAvatar(id);updateAvatarSize(w.avatarHeight);$('btnAvatarAnimationToggle').textContent='🎞️ Анимация: вкл.';
    const sel=$('avatarAnimation');sel.innerHTML='<option value="">Автоматически: покой / ходьба / бег</option>';
    for(const name of info.animations){const opt=document.createElement('option');opt.value=name;opt.textContent=name;sel.append(opt)}
-   $('avatarInfo').textContent=(info.rigged?'Скелет найден':'Без скелета')+' · Анимаций: '+info.animations.length;
+   const formatDim=n=>Number(n).toFixed(n>=100?0:2);
+   $('avatarInfo').textContent=(info.rigged?'Скелет найден':'Без скелета')+
+    ' · Анимаций: '+info.animations.length+
+    ' · Исходные размеры XYZ: '+[info.originalSize.width,info.originalSize.height,info.originalSize.depth].map(formatDim).join(' × ');
    toast('Персонаж загружен: '+info.animations.length+' анимаций');
   }catch(err){console.error(err);toast('Ошибка персонажа: '+err.message)}
  };

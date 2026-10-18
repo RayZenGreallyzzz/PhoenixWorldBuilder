@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalBounds=null;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementRotation=0;this.selected=null;this.ghost=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementRotation=0;this.selected=null;this.ghost=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -41,7 +41,9 @@ class WorldBuilder{
   this.player.clear();
   const wrapper=new THREE.Group();wrapper.name='AvatarScaleWrapper';
   wrapper.add(clone);this.player.add(wrapper);
-  this.avatarModel=wrapper;this.avatarOriginalHeight=size.y;
+  this.avatarModel=wrapper;this.avatarSource=clone;this.avatarOriginalHeight=size.y;
+  this.avatarOriginalFitSize=Math.max(size.y,size.x/1.6,size.z/1.6);
+  this.avatarSourceDimensions={width:size.x,height:size.y,depth:size.z};
   this.avatarOriginalBounds={min:bounds.min.clone(),max:bounds.max.clone()};
   this.setAvatarHeight(this.avatarHeight);
   // glTF animation tracks sometimes target source-node UUIDs instead of names.
@@ -62,23 +64,29 @@ class WorldBuilder{
   this.player.userData.avatar=id;
   this.setAvatarMotion(false,true);
   let rigged=false;clone.traverse(o=>{if(o.isSkinnedMesh)rigged=true});
-  return {rigged,animations:clips.map(c=>c.name)};
+  return {rigged,animations:clips.map(c=>c.name),originalSize:{width:size.x,height:size.y,depth:size.z},fitSize:this.avatarOriginalFitSize};
  }
  setAvatarHeight(meters){
   const n=Number(meters);this.avatarHeight=THREE.MathUtils.clamp(Number.isFinite(n)?n:1.8,.01,20);
   if(!this.avatarModel||!this.avatarOriginalHeight||!this.avatarOriginalBounds)return;
-  const s=this.avatarHeight/this.avatarOriginalHeight,b=this.avatarOriginalBounds;
+  const s=this.avatarHeight/(this.avatarOriginalFitSize||this.avatarOriginalHeight),b=this.avatarOriginalBounds;
   this.avatarModel.scale.setScalar(s);
   this.avatarModel.position.set(-(b.min.x+b.max.x)*s*.5,-b.min.y*s-.85,-(b.min.z+b.max.z)*s*.5);
   this.avatarModel.updateMatrixWorld(true);
  }
  clearAvatar(){
   if(this.avatarMixer)this.avatarMixer.stopAllAction();
-  this.avatarMixer=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalBounds=null;
+  this.avatarMixer=null;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;
   this.player.userData.avatar=null;this.setupDefaultPlayer();
  }
+ toggleAvatarAnimations(){
+  this.avatarAnimationsEnabled=!this.avatarAnimationsEnabled;
+  if(!this.avatarAnimationsEnabled){this.avatarMixer?.stopAllAction();this.avatarMotionState='';}
+  else{this.avatarMotionState='';this.setAvatarMotion(false,true);}
+  return this.avatarAnimationsEnabled;
+ }
  setAvatarMotion(moving,force=false){
-  if(!this.avatarMixer||!this.avatarClips.length)return;
+  if(!this.avatarAnimationsEnabled||!this.avatarMixer||!this.avatarClips.length)return;
   const run=moving&&this.running;
   const state=this.avatarAnimationOverride||(!moving?'idle':run?'run':'walk');
   if(this.avatarMotionState===state&&!force)return;
@@ -216,5 +224,5 @@ class WorldBuilder{
   this.player.position.y=THREE.MathUtils.lerp(this.player.position.y,this.supportHeight(this.player.position.x,this.player.position.z,this.player.position.y-.85)+.85,Math.min(1,dt*14));
   this.setAvatarMotion(v.length()>.05);
  }
- animate=(time)=>{requestAnimationFrame(this.animate);if(time-this.tLast<1000/this.fpsLimit)return;let dt=Math.min(.08,(time-this.tLast)/1000||.02);this.tLast=time;this.updatePlayer(dt);if(this.avatarMixer)this.avatarMixer.update(dt);this.updateCamera();this.updateGameGhost();if(this.selected&&this.highlight.visible)this.highlight.setFromObject(this.selected.mesh);this.renderer.render(this.scene,this.camera);this.frames++;this.fps=this.fps*.85+(1/Math.max(dt,.001))*.15;};
+ animate=(time)=>{requestAnimationFrame(this.animate);if(time-this.tLast<1000/this.fpsLimit)return;let dt=Math.min(.08,(time-this.tLast)/1000||.02);this.tLast=time;this.updatePlayer(dt);if(this.avatarMixer&&this.avatarAnimationsEnabled)this.avatarMixer.update(dt);this.updateCamera();this.updateGameGhost();if(this.selected&&this.highlight.visible)this.highlight.setFromObject(this.selected.mesh);this.renderer.render(this.scene,this.camera);this.frames++;this.fps=this.fps*.85+(1/Math.max(dt,.001))*.15;};
 }
