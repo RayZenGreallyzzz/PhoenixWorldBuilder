@@ -1,14 +1,24 @@
 'use strict';
 const $=id=>document.getElementById(id), $all=s=>[...document.querySelectorAll(s)];
-const BUILTINS=[['floor','Пол 2×2','foundation'],['wall','Стена 2×2,6','wall'],['window','Стена с окном','wall'],['roof','Двускатная крыша','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','foundation'],['tree','Дерево','prop'],['crate','Ящик','prop']];
+const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок / перекрытие 2×2','ceiling'],['wall','Стена 2×2,6','wall'],['window','Стена с окном','wall'],['roof','Двускатная крыша','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
+const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
 const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',savedMeta=new Map(),textureMeta=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
 let statusMessage='';
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
-function groupType(name){const s=name.toLowerCase();if(/двер|door|ворот/.test(s))return 'door';if(/стен|окно|wall|window|колон/.test(s))return 'wall';if(/пол|лест|ступен|floor|stairs/.test(s))return 'foundation';if(/кры|roof|кровл/.test(s))return 'roof';return 'prop'}
-async function openDB(){return await new Promise((resolve,reject)=>{const request=indexedDB.open('phoenix_world_builder_v1',3);request.onupgradeneeded=()=>{const db=request.result;for(const store of ['assets','textures','projects','bindings'])if(!db.objectStoreNames.contains(store))db.createObjectStore(store);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+function groupType(name){
+ const s=String(name).toLowerCase();
+ if(/потол|ceiling|overhead|перекрыт/.test(s))return 'ceiling';
+ if(/лест|ступен|stairs?|step(s)?/.test(s))return 'stairs';
+ if(/кры|кровл|roof|shingles|gable/.test(s))return 'roof';
+ if(/двер|door|ворот|gate/.test(s))return 'door';
+ if(/стен|окно|wall|window|колон|pillar|column/.test(s))return 'wall';
+ if(/пол|floor|foundation|фундамент|плит|основан|platform/.test(s))return 'foundation';
+ return 'prop';
+}
+async function openDB(){return await new Promise((resolve,reject)=>{const request=indexedDB.open('phoenix_world_builder_v1',4);request.onupgradeneeded=()=>{const db=request.result;for(const store of ['assets','textures','projects','bindings','categories'])if(!db.objectStoreNames.contains(store))db.createObjectStore(store);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
 function dbOp(store,key,value){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,value===undefined?'readonly':'readwrite');const req=value===undefined?tx.objectStore(store).get(key):tx.objectStore(store).put(value,key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function dbKeys(store){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,'readonly');const r=tx.objectStore(store).getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function cacheFromDB(id){if(w.assetCache.has(id))return w.assetCache.get(id);const row=await dbOp('assets',id);if(!row)return null;try{const parsed=await GLB.load(row.bytes);await bindImportedMaterials(id,parsed.root);w.assetCache.set(id,parsed.root);w.assetAnimations.set(id,parsed.animations||[]);if(parsed.triangles>150000)toast('Модель тяжёлая: '+Math.round(parsed.triangles)+' треугольников');return parsed.root}catch(e){toast('Модель не открыта: '+e.message);throw e}}
@@ -21,15 +31,52 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
  });
 }
 w.getAsset=cacheFromDB;
-async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{name});}
+async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{name,category:savedMeta.get(id)?.category});}
 async function rememberTexture(id,name,bytes,mime='image/png'){await dbOp('textures',id,{name,bytes,mime});textureMeta.set(id,{name});}
 async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
-async function chooseAsset(id){try{const root=await cacheFromDB(id);if(!root)return toast('Файл не найден');w.setPlacement(id);w.select(null);$('btnSelect').classList.remove('active');toast('Выбрано: '+fmtName(savedMeta.get(id)?.name||id));}catch(e){console.error(e)}}
-function makeAssetButton(id,title,kind){const b=document.createElement('button');b.className='asset';if(w.placement===id)b.classList.add('active');const strong=document.createElement('b');strong.textContent=title;const small=document.createElement('small');small.textContent=kind==='builtin'?'Встроенная деталь':'GLB из памяти';b.append(strong,small);b.onclick=()=>{if(kind==='builtin'){w.setPlacement(id);w.select(null);toast('Выбрано: '+title)}else chooseAsset(id);if(w.mode==='playbuild'){document.body.classList.remove('catalogOpen');w.updateGameGhost()}renderLibrary()};return b}
+async function chooseAsset(id){
+ try{
+  const root=await cacheFromDB(id);if(!root)return toast('Файл не найден');
+  const meta=savedMeta.get(id);
+  w.setPlacement(id,meta?.category||groupType(meta?.name||id));w.select(null);
+  $('btnSelect').classList.remove('active');renderLibrary();
+  toast('Выбрано: '+fmtName(meta?.name||id));
+ }catch(e){console.error(e);toast('Не удалось выбрать модель: '+e.message)}
+}
+function makeAssetButton(id,title,kind,category){
+ const wrap=document.createElement('div');wrap.className='assetGroup';
+ const b=document.createElement('button');b.className='asset';if(w.placement===id)b.classList.add('active');
+ const strong=document.createElement('b');strong.textContent=title;
+ const small=document.createElement('small');small.textContent=kind==='builtin'?'Встроенная деталь':'GLB из памяти';
+ b.append(strong,small);
+ b.onclick=()=>{
+  if(kind==='builtin'){w.setPlacement(id,category);w.select(null);toast('Выбрано: '+title)}
+  else chooseAsset(id);
+  if(w.mode==='playbuild')document.body.classList.remove('catalogOpen');
+  renderLibrary();
+ };
+ wrap.append(b);
+ if(kind!=='builtin'){
+  const selector=document.createElement('select');selector.className='assetCategory';
+  for(const [key,label] of CATEGORIES){const opt=document.createElement('option');opt.value=key;opt.textContent=label;selector.append(opt)}
+  selector.value=category;
+  selector.title='Категория этой модели';
+  selector.onchange=async event=>{
+   const type=event.target.value,meta=savedMeta.get(id);
+   if(!meta)return;
+   meta.category=type;
+   if(w.placement===id)w.placementCategory=type;
+   try{await dbOp('categories',id,type)}catch(err){toast('Не удалось сохранить категорию')}
+   renderLibrary();toast('Модель перенесена в «'+CATEGORIES.find(v=>v[0]===type)?.[1]+'»');
+  };
+  wrap.append(selector);
+ }
+ return wrap;
+}
 function renderTextureOptions(){const el=$('textureSelect'),current=el.value;el.innerHTML='<option value="">Без дополнительной текстуры</option>';for(const [id,meta] of textureMeta){const option=document.createElement('option');option.value=id;option.textContent=meta.name;el.append(option)}el.value=current;}
 function renderLibrary(){const el=$('assetList');el.innerHTML='';const f=currentFilter,q=$('assetSearch')?.value.trim().toLowerCase()||'';
- for(const [id,name,cat] of BUILTINS)if((f==='all'||f===cat)&&(!q||name.toLowerCase().includes(q)))el.append(makeAssetButton(id,name,'builtin'));
- let count=0,total=0;for(const [id,meta] of savedMeta){let name=meta.name,cat=groupType(name);if((f!=='all'&&f!==cat)||(q&&!name.toLowerCase().includes(q)))continue;total++;if(count++>=90)continue;el.append(makeAssetButton(id,fmtName(name),'asset'))}
+ for(const [id,name,cat] of BUILTINS)if((f==='all'||f===cat)&&(!q||name.toLowerCase().includes(q)))el.append(makeAssetButton(id,name,'builtin',cat));
+ let count=0,total=0;for(const [id,meta] of savedMeta){let name=meta.name,cat=meta.category||groupType(name);if((f!=='all'&&f!==cat)||(q&&!name.toLowerCase().includes(q)))continue;total++;if(count++>=90)continue;el.append(makeAssetButton(id,fmtName(name),'asset',cat))}
  if(total>90){let notice=document.createElement('small');notice.textContent=`Показаны первые 90 из ${total}. Используй поиск.`;notice.className='note';el.append(notice)}
 }
 function setupPicker(){const search=document.createElement('input');search.id='assetSearch';search.placeholder='Поиск по названию или ID';search.style.cssText='background:#203442;color:#fff;border:1px solid #486373;border-radius:7px;padding:10px;width:100%;margin-bottom:8px;font-size:12px';$('assetList').before(search);search.oninput=renderLibrary;
@@ -39,7 +86,13 @@ function setupPicker(){const search=document.createElement('input');search.id='a
  $('brushSize').oninput=e=>{w.brushSize=+e.target.value;$('brushSizeValue').textContent=e.target.value};$('brushPower').oninput=e=>{w.brushPower=+e.target.value/100;$('brushPowerValue').textContent=e.target.value+'%'};
  $('roughSlider').oninput=e=>{let val=e.target.value/100;$('roughValue').textContent=e.target.value+'%';updateStyle('roughness',val)};
  $('metalSlider').oninput=e=>{let val=e.target.value/100;$('metalValue').textContent=e.target.value+'%';updateStyle('metalness',val)};
- $('levelDown').onclick=()=>{w.floorLevel=Math.max(0,w.floorLevel-1);$('levelValue').textContent=w.floorLevel+1};$('levelUp').onclick=()=>{w.floorLevel=Math.min(20,w.floorLevel+1);$('levelValue').textContent=w.floorLevel+1};
+ const changeLevel=dir=>{
+  const level=w.changeFloor(dir);
+  $('levelValue').textContent=level;$('buildLevelValue').textContent=level;
+  toast('Этаж '+level+' · высота '+(w.floorLevel*2.6).toFixed(1)+' м');
+ };
+ $('levelDown').onclick=()=>changeLevel(-1);$('levelUp').onclick=()=>changeLevel(1);
+ $('btnBuildLevelDown').onclick=()=>changeLevel(-1);$('btnBuildLevelUp').onclick=()=>changeLevel(1);
  $('textureSelect').onchange=async e=>{if(!w.selected)return toast('Сначала выбери объект');let id=e.target.value;try{if(id)await loadTexture(id);w.remember();w.selected.data.texture=id||null;applyEntry(w.selected);w.onChanged();toast(id?'Текстура применена':'Текстура снята')}catch(err){toast('Ошибка текстуры: '+err.message)}};
  $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.setScalar(scale);w.onChanged()};
  function updateAvatarSize(meters){
@@ -70,12 +123,21 @@ function wireButtons(){
  $('btnGameBuild').onclick=()=>setMode('playbuild');
  $('btnBuildCatalog').onclick=()=>{document.body.classList.toggle('catalogOpen');if(document.body.classList.contains('catalogOpen'))renderLibrary()};
  $('btnBuildRotate').onclick=()=>toast('Поворот: '+w.rotatePlacement()+'°');
+ const setModuleScale=value=>{
+  const scale=w.setPlacementScale(value);
+  $('moduleScaleValue').textContent=Math.round(scale*100)+'%';
+  $('moduleScaleInput').value=Math.round(scale*100);
+  toast('Размер детали: '+Math.round(scale*100)+'%');
+ };
+ $('btnModuleSmaller').onclick=()=>setModuleScale(Math.round(w.placementScale*.8*100)/100);
+ $('btnModuleLarger').onclick=()=>setModuleScale(Math.round(w.placementScale*1.25*100)/100);
+ $('moduleScaleInput').onchange=e=>setModuleScale(Number(e.target.value)/100);
  $('btnBuildPlace').onclick=()=>{if(!w.placement)return toast('Выбери модуль в каталоге');w.placeAt(w.forwardPlacementPoint());saveSoon();toast('Установлено')};
  $('btnGameWalk').onclick=()=>{w.setPlacement(null);toast('Осматривай постройку, или выбери деталь в каталоге')};$('btnGameAvatar').onclick=()=>$('fileAvatar').click();$('btnGameRun').onclick=()=>{w.running=!w.running;$('btnGameRun').textContent='🏃 Бег: '+(w.running?'вкл.':'выкл.')};$('btnAvatarAnimationToggle').onclick=()=>{const on=w.toggleAvatarAnimations();$('btnAvatarAnimationToggle').textContent='🎞️ Анимация: '+(on?'вкл.':'выкл.');toast(on?'Анимации включены':'Анимации приостановлены: проверка рига')};const sizeFactor=factor=>updateAvatarSize(Math.max(.01,Math.round(w.avatarHeight*factor*1000)/1000));
- $('btnAvatarSmaller').onclick=()=>sizeFactor(.5);
- $('btnAvatarTaller').onclick=()=>sizeFactor(2);
- $('btnAvatarTiny').onclick=()=>sizeFactor(.1);
- $('btnAvatarHuge').onclick=()=>sizeFactor(10);$('btnGameExit').onclick=()=>setMode('build');
+ $('btnAvatarSmaller').onclick=()=>{sizeFactor(.5);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
+ $('btnAvatarTaller').onclick=()=>{sizeFactor(2);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
+ $('btnAvatarTiny').onclick=()=>{sizeFactor(.1);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
+ $('btnAvatarHuge').onclick=()=>{sizeFactor(10);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};$('btnGameExit').onclick=()=>setMode('build');
  $('btnImport').onclick=$('importAssets').onclick=()=>$('fileAssets').click();$('btnTexture').onclick=()=>$('fileTexture').click();$('btnAvatar').onclick=()=>$('fileAvatar').click();
  $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{w.placement=null;w.moveTarget=null;if(w.ghost)w.ghost.removeFromParent();w.ghost=null;$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
  for(const action of ['Rotate','Copy','Move','Delete'])$('btn'+action).onclick=()=>{if(!w.action(action.toLowerCase()))toast('Сначала выбери объект');else toast({Rotate:'Поворот 90°',Copy:'Создана копия',Move:'Выбери новое место',Delete:'Удалено'}[action])};
@@ -163,7 +225,7 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>7)down.drag=true;
   if(w.mode==='terrain'){const p=w.hit(e.clientX,e.clientY);if(p&&performance.now()-brushLast>32){if(!strokePrepared){w.remember();strokePrepared=true;}w.sculpt(p.x,p.z,.8);brushLast=performance.now()}return;}
   if((w.mode==='build'||w.mode==='style')&&(w.placement||w.moveTarget)){const p=w.hit(e.clientX,e.clientY);if(p)w.updateGhost(p);return;}
-  if(down.drag){w.yaw+=(w.invertCameraX?1:-1)*dx*.006;w.pitch=THREE.MathUtils.clamp(w.pitch+dy*.005,.12,1.32);}
+  if(down.drag){w.yaw+=(w.invertCameraX?1:-1)*dx*.006;w.pitch=THREE.MathUtils.clamp(w.pitch+dy*.005,(w.mode==='playbuild'||w.mode==='walk')?-.65:.12,1.32);}
  });
  canvas.addEventListener('pointerup',e=>{const point=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(pointers.size!==0){lastTouch=null;return;}lastTouch=null;if(!down)return;
   const dist=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(w.mode==='terrain'){down=null;saveSoon();return;}
@@ -182,7 +244,9 @@ let saveHandle=0;function saveSoon(){clearTimeout(saveHandle);saveHandle=setTime
 async function init(){setupPicker();wireButtons();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
  w.onSelected=e=>{if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
- try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name})}renderTextureOptions();
+ try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
+  const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
+  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name})}renderTextureOptions();
   const autosave=await dbOp('projects','autosave');if(autosave){isLoading=true;await restoreProject(autosave);isLoading=false;toast('Карта восстановлена из памяти')}else toast('Редактор готов. Выбери деталь и коснись земли');renderLibrary();
  }catch(err){isLoading=false;toast('Хранилище недоступно: '+err.message);console.error(err)}
  try{w.invertCameraX=localStorage.getItem('pwb_camera_x')==='1';$('invertCameraX').checked=w.invertCameraX;w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');document.addEventListener('visibilitychange',()=>{if(document.hidden)saveLocal()});setInterval(()=>{$('fps').textContent=Math.round(w.fps)+' FPS'},1000);
