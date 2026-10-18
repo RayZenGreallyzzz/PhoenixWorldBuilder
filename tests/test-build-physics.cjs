@@ -1,0 +1,17 @@
+const assert=require('assert'),fs=require('fs'),path=require('path'),vm=require('vm');
+const base=path.resolve(__dirname,'../app/src/main/assets/js');
+global.THREE=require(path.join(base,'three.min.js'));
+vm.runInThisContext(fs.readFileSync(path.join(base,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
+const w=Object.create(WorldBuilder.prototype);
+w.objects=[];w.scene=new THREE.Scene();w.nextId=1;w.textures=new Map();w.onChanged=()=>{};
+w.onSelected=()=>{};w.floorLevel=0;w.heightAt=()=>0;w.highlight={visible:false};
+w.player=new THREE.Group();w.player.position.set(0,.85,-1.9);
+w.joy={x:0,y:0};w.keys={};w.playerSpeed=1.5;w.yaw=Math.PI;
+w.instantiate('stairs',{id:1,pos:[0,0,0],rot:0,scale:1,color:'#998877',roughness:.8,metalness:0});
+let foot=0;
+for(let z=-1.5;z<=.9;z+=.18)foot=w.supportHeight(0,z,foot);
+assert(foot>2.2,'Stair traversal must reach top step');
+w.instantiate('wall',{id:2,pos:[0,0,3],rot:0,scale:1,color:'#ddbbbb',roughness:.8,metalness:0});
+assert(w.movementBlocked(new THREE.Vector3(0,.85,2.65),new THREE.Vector3(0,.85,2.92),0),'Wall must stop player');
+w.objects.push({kind:'door',data:{door:true,open:true},mesh:w.makeBuiltin('door')});
+console.log('Stairs and collision tests OK');

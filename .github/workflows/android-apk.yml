@@ -49,6 +49,7 @@ jobs:
           for file in app/src/main/assets/js/*.js; do node --check "$file"; done
           node tests/test-export.cjs
           node tests/test-zip.cjs
+          node tests/test-build-physics.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4
