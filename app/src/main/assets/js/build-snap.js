@@ -108,8 +108,8 @@ const BuildSnap=(()=>{
    // Do not borrow a roof or a wall belonging to another vertical storey.
    if(typ==='ceiling'){
     if(s.top>=baseY+.3&&s.top<=baseY+8)ceilings.push(s);
-   }else if(Math.abs(s.bottom-baseY)<=Math.max(1.7,storyHeight*.55)&&
-     s.top>baseY+.65&&s.top<baseY+8){
+   }else if((storyOf(entry)===w.floorLevel||Math.abs(s.bottom-baseY)<=Math.max(1.7,storyHeight*.55))&&
+     s.top>baseY+.65&&s.top<baseY+9){
     walls.push(s);
    }
   }
@@ -165,11 +165,12 @@ const BuildSnap=(()=>{
    if(!structural(entryCat))continue;
    // Existing slabs on other levels must not hijack the placement preview.
    if(storyOf(entry)!==null&&storyOf(entry)!==w.floorLevel &&
-     !(entryCat==='ceiling'&&cat==='foundation'&&storyOf(entry)===w.floorLevel-1))continue;
+     !(entryCat==='ceiling'&&storyOf(entry)===w.floorLevel-1))continue;
    const s=surface(entry);if(!s)continue;
    const delta=Math.abs(s.top-refY);
    // Do not snap the ground floor to a completely different storey.
-   if(delta>3.8)continue;
+   if(delta>3.8&&storyOf(entry)!==w.floorLevel&&
+    !(entryCat==='ceiling'&&storyOf(entry)===w.floorLevel-1))continue;
    const local=p.clone().applyMatrix4(s.inv),b=s.box;
    const inside=local.x>=b.min.x-.2&&local.x<=b.max.x+.2&&local.z>=b.min.z-.2&&local.z<=b.max.z+.2;
    const edge=nearestEdge(s,p);
