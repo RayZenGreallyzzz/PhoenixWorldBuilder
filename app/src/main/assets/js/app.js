@@ -31,7 +31,7 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
  });
 }
 w.getAsset=cacheFromDB;
-async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),name});}
+async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),...(catalogMeta[id]||{}),name});}
 async function rememberTexture(id,name,bytes,mime='image/png'){await dbOp('textures',id,{name,bytes,mime});textureMeta.set(id,{name});}
 async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
 async function updateCatalog(id,patch){
@@ -255,7 +255,14 @@ function wireButtons(){
  $('btnAvatarSmaller').onclick=()=>{sizeFactor(.5);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
  $('btnAvatarTaller').onclick=()=>{sizeFactor(2);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
  $('btnAvatarTiny').onclick=()=>{sizeFactor(.1);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
- $('btnAvatarHuge').onclick=()=>{sizeFactor(10);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};$('btnGameExit').onclick=()=>setMode('build');
+ $('btnAvatarHuge').onclick=()=>{sizeFactor(10);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
+  const feetAdjust=delta=>{
+   const val=w.setAvatarGroundOffset(Math.round((w.avatarGroundOffset+delta)*100)/100);
+   $('avatarGroundValue').textContent=Math.round(val*100)+' см';
+   toast('Поправка ступней '+Math.round(val*100)+' см');
+  };
+  $('btnGroundDown').onclick=()=>feetAdjust(-.05);
+  $('btnGroundUp').onclick=()=>feetAdjust(.05);$('btnGameExit').onclick=()=>setMode('build');
  $('btnImport').onclick=$('importAssets').onclick=()=>$('fileAssets').click();$('btnTexture').onclick=()=>$('fileTexture').click();$('btnAvatar').onclick=()=>$('fileAvatar').click();
  $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{w.placement=null;w.moveTarget=null;if(w.ghost)w.ghost.removeFromParent();w.ghost=null;$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
  for(const action of ['Rotate','Copy','Move','Delete'])$('btn'+action).onclick=()=>{if(!w.action(action.toLowerCase()))toast('Сначала выбери объект');else toast({Rotate:'Поворот 90°',Copy:'Создана копия',Move:'Выбери новое место',Delete:'Удалено'}[action])};
@@ -277,7 +284,7 @@ function wireButtons(){
    await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));
    w.assetCache.delete(id);w.assetAnimations.delete(id);
    await cacheFromDB(id);
-   const info=await w.setAvatar(id);updateAvatarSize(w.avatarHeight);$('btnAvatarAnimationToggle').textContent='🎞️ Анимация: вкл.';
+   const info=await w.setAvatar(id);updateAvatarSize(w.avatarHeight);$('avatarGroundValue').textContent='0 см';$('btnAvatarAnimationToggle').textContent='🎞️ Анимация: вкл.';
    const sel=$('avatarAnimation');sel.innerHTML='<option value="">Автоматически: покой / ходьба / бег</option>';
    for(const name of info.animations){const opt=document.createElement('option');opt.value=name;opt.textContent=name;sel.append(opt)}
    const formatDim=n=>Number(n).toFixed(n>=100?0:2);
@@ -292,6 +299,7 @@ function wireButtons(){
 async function importZip(file,isProject=false){const entries=await ZipUtils.extract(file),glbs=[],textureKeys=[],keys=Object.keys(entries);let project=null;let manifest=null;let materialMap=null;let savedBindings=null;
  if(entries['assets_manifest.json'])try{manifest=JSON.parse(new TextDecoder().decode(entries['assets_manifest.json']))}catch(e){};
  if(entries['bindings.json'])try{savedBindings=JSON.parse(new TextDecoder().decode(entries['bindings.json']))}catch(e){};
+  if(entries['catalog.json'])try{const importedCatalog=JSON.parse(new TextDecoder().decode(entries['catalog.json']));catalogMeta={...catalogMeta,...importedCatalog}}catch(e){};
  for(const key of keys)if(/(?:^|\/)Привязки_материалов(?:_Все)?\.json$/i.test(key)){
   try{materialMap=JSON.parse(new TextDecoder().decode(entries[key]))}catch(e){console.warn(e)}break
  }
@@ -302,15 +310,40 @@ async function importZip(file,isProject=false){const entries=await ZipUtils.extr
   else if(/(?:^|\/)project\.json$/i.test(name))project=JSON.parse(new TextDecoder().decode(bytes));
   if(i%80===0)await new Promise(resolve=>setTimeout(resolve,0));
  }
- if(materialMap?.libraries){let linked=0;for(const lib of Object.values(materialMap.libraries))for(const model of Object.values(lib.models||{})){
-   const id='glb:'+String(model.file||'').toLowerCase();if(!glbs.includes(id))continue;
-   const slots=(model.material_slots||[]).map(slot=>{const path=slot.fbx_linked_texture||slot.palette_texture;
-    const texture=path&&entries[path]?'tex:'+path.toLowerCase():null;
-    return {name:slot.name||'',texture};});
-   if(slots.some(s=>s.texture)){await dbOp('bindings',id,{slots});w.assetCache.delete(id);linked++}
-  }toast('Связаны материалы '+linked+' моделей');
- }
- if(savedBindings)for(const [id,row] of Object.entries(savedBindings)){await dbOp('bindings',id,row);w.assetCache.delete(id);}
+ if(materialMap?.libraries){
+   let linked=0,covered=0;const imported=new Set(glbs);
+   for(const [library,lib] of Object.entries(materialMap.libraries)){
+    for(const [modelId,model] of Object.entries(lib.models||{})){
+     const id='glb:'+String(model.file||'').toLowerCase();
+     if(!imported.has(id))continue;
+     covered++;
+     const slots=(model.material_slots||[]).map(slot=>{
+      const candidate=slot.fbx_linked_texture||slot.palette_texture;
+      const texture=candidate&&entries[candidate]?'tex:'+candidate.toLowerCase():null;
+      return {name:slot.name||'',texture};
+     });
+     if(slots.some(s=>s.texture)){await dbOp('bindings',id,{slots});w.assetCache.delete(id);linked++}
+     const prior=catalogMeta[id]||{},old=savedMeta.get(id)||{};
+     const metadata={
+      sourceId:String(model.id||modelId),
+      library:library.replace(/_\d+$/,''),
+      sourceName:model.name_ru||'',
+      materialTotal:slots.length,
+      materialLinked:slots.filter(s=>s.texture).length
+     };
+     if(!prior.manualCategory&&!old.manualCategory){
+      metadata.category=groupType(model.name_ru||old.name||'');
+     }
+     catalogMeta[id]={...metadata,...prior};
+     savedMeta.set(id,{...old,...catalogMeta[id]});
+     if(covered%100===0)await new Promise(resolve=>setTimeout(resolve,0));
+    }
+   }
+   try{await dbOp('catalog','metadata',catalogMeta)}catch(e){console.warn('Catalogue metadata write',e)}
+   toast('Найдено текстурных привязок: '+linked+'/'+covered);
+  }
+  if(savedBindings)for(const [id,row] of Object.entries(savedBindings)){await dbOp('bindings',id,row);w.assetCache.delete(id);}
+  if(entries['catalog.json']){try{await dbOp('catalog','metadata',catalogMeta)}catch(e){}for(const [id,meta] of Object.entries(catalogMeta)){if(savedMeta.has(id))Object.assign(savedMeta.get(id),meta)}}
  if(isProject&&project)await restoreProject(project);
  renderLibrary();renderTextureOptions();if(!isProject)toast(`Импорт: ${glbs.length} GLB и ${textureKeys.length} текстур`);return glbs.length;
 }
@@ -331,7 +364,8 @@ async function exportPack(){try{toast('Создаю пакет карты…');c
  for(const id of assetIds){const row=await dbOp('assets',id);if(row){const path='models/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.glb';items[path]=row.bytes;manifest[path]=id;}}
  const texIds=new Set(project.objects.map(x=>x.texture).filter(Boolean));for(const id of assetIds){const binding=await dbOp('bindings',id);for(const slot of binding?.slots||[])if(slot.texture)texIds.add(slot.texture)}for(const id of texIds){const row=await dbOp('textures',id);if(row){const path='textures/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.'+(row.mime.split('/')[1]||'png');items[path]=row.bytes;manifest[path]=id;}}
  const bindings={};for(const id of assetIds){const row=await dbOp('bindings',id);if(row)bindings[id]=row;}
- items['bindings.json']=JSON.stringify(bindings);items['assets_manifest.json']=JSON.stringify(manifest);let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
+ const exportCatalog={};for(const id of assetIds)if(catalogMeta[id])exportCatalog[id]=catalogMeta[id];
+  items['catalog.json']=JSON.stringify(exportCatalog);items['bindings.json']=JSON.stringify(bindings);items['assets_manifest.json']=JSON.stringify(manifest);let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
 async function exportHouse(){try{toast('Собираю дом без земли и персонажа…');const blob=await SceneExporter.build(w,{houseOnly:true});await saveToDevice('phoenix_house.glb',blob)}catch(e){toast('Ошибка экспорта дома: '+e.message);console.error(e)}}
 async function exportGlb(){try{toast('Экспорт 3D-карты…');const blob=await SceneExporter.build(w);await saveToDevice('phoenix_map.glb',blob)}catch(e){toast('Ошибка GLB: '+e.message);console.error(e)}}
 function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared=false;
@@ -365,6 +399,8 @@ async function init(){setupPicker();wireButtons();attachTouches();const exit=doc
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
   const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name})}renderTextureOptions();
+  catalogMeta=await dbOp('catalog','metadata')||{};
+  for(const [id,meta] of Object.entries(catalogMeta)){if(savedMeta.has(id))Object.assign(savedMeta.get(id),meta)}
   const autosave=await dbOp('projects','autosave');if(autosave){isLoading=true;await restoreProject(autosave);isLoading=false;toast('Карта восстановлена из памяти')}else toast('Редактор готов. Выбери деталь и коснись земли');renderLibrary();
  }catch(err){isLoading=false;toast('Хранилище недоступно: '+err.message);console.error(err)}
  try{w.invertCameraX=localStorage.getItem('pwb_camera_x')==='1';$('invertCameraX').checked=w.invertCameraX;w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');document.addEventListener('visibilitychange',()=>{if(document.hidden)saveLocal()});setInterval(()=>{$('fps').textContent=Math.round(w.fps)+' FPS'},1000);
