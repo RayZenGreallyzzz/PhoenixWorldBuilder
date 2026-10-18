@@ -59,6 +59,7 @@ jobs:
           node tests/test-construction-tools.cjs
           node tests/test-catalog-visual.cjs
           node tests/test-glb-edge-snap.cjs
+          node tests/test-roof-ceiling-levels.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4
