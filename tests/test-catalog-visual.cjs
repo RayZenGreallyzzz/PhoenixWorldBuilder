@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),fs=require('fs'),path=require('path');
+const assets=path.resolve(__dirname,'../app/src/main/assets');
+const html=fs.readFileSync(path.join(assets,'index.html'),'utf8');
+const app=fs.readFileSync(path.join(assets,'js/app.js'),'utf8');
+const w=fs.readFileSync(path.join(assets,'js/world.js'),'utf8');
+const prev=fs.readFileSync(path.join(assets,'js/catalog-preview.js'),'utf8');
+for(const name of ['btnCatalogModels','btnCatalogTextures','galleryPrev','galleryNext','galleryStatus','categoryFilters','galleryHint','avatarGroundValue','btnGroundDown','btnGroundUp'])assert(html.includes('id="'+name+'"'),'Missing control '+name);
+assert(html.indexOf('js/catalog-preview.js')<html.indexOf('js/app.js'));
+const ids=new Set([...html.matchAll(/id="([^"]+)"/g)].map(m=>m[1]));
+for(const m of app.matchAll(/\$\('([^']+)'\)/g))assert(ids.has(m[1])||['assetSearch','btnBackEditor'].includes(m[1]),'Missing element '+m[1]);
+assert(prev.includes('IntersectionObserver'));assert(prev.includes('previews'));
+assert(app.includes('materialLinked')&&app.includes('sourceId')&&app.includes('catalogMeta[id]'));
+assert(w.includes('syncAvatarGround')&&w.includes('setAvatarGroundOffset'));
+console.log('Visual catalogue, original material IDs and grounding controls present');

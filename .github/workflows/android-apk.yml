@@ -57,6 +57,7 @@ jobs:
           node tests/test-avatar-root.cjs
           node tests/test-skinned-bounds.cjs
           node tests/test-construction-tools.cjs
+          node tests/test-catalog-visual.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4
