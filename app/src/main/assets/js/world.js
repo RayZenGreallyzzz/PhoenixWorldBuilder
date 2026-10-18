@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementRotation=0;this.selected=null;this.ghost=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.selected=null;this.ghost=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -180,9 +180,24 @@ class WorldBuilder{
   if(objectOnly){const targets=this.objects.map(x=>x.mesh);const hits=this.ray.intersectObjects(targets,true);if(hits.length){let o=hits[0].object;while(o&&!o.userData.objectId)o=o.parent;return o?.userData.objectId||null;}return null;}
   const hits=this.ray.intersectObject(this.terrain,false);return hits[0]?.point||null;
  }
- placeAt(p){if(!this.placement&&!this.moveTarget)return;this.remember();let x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap,y=this.heightAt(x,z)+this.floorLevel*2.6;
-  if(this.moveTarget){this.moveTarget.position.set(x,y,z);this.moveTarget.data.pos=[x,y,z];this.moveTarget=null;this.onChanged();return;}
-  let rec=this.instantiate(this.placement,{id:this.nextId++,pos:[x,y,z],rot:this.placementRotation||0,scale:1,color:this.placement.startsWith('glb:')?null:this.currentPaint,roughness:.85,metalness:0,door:false,open:false});this.select(rec);this.onChanged();
+ placementHeight(x,z,kind=this.placement,category=this.placementCategory){
+  const raised=kind==='ceiling'||kind==='roof'||category==='ceiling'||category==='roof';
+  return this.heightAt(x,z)+(this.floorLevel+(raised?1:0))*2.6;
+ }
+ changeFloor(delta){this.floorLevel=THREE.MathUtils.clamp(this.floorLevel+delta,0,20);this.updateGameGhost();return this.floorLevel+1;}
+ setPlacementScale(value){const n=Number(value);if(!Number.isFinite(n))return this.placementScale;this.placementScale=THREE.MathUtils.clamp(n,.1,10);if(this.ghost)this.ghost.scale.setScalar(this.placementScale);this.updateGameGhost();return this.placementScale;}
+ placeAt(p){
+  if(!this.placement&&!this.moveTarget)return;
+  const x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap;
+  const y=this.placementHeight(x,z,this.placement,this.placementCategory);
+  this.remember();
+  if(this.moveTarget){
+   this.moveTarget.mesh.position.set(x,y,z);this.moveTarget.data.pos=[x,y,z];
+   this.moveTarget=null;this.onChanged();return;
+  }
+  const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.currentPaint;
+  const rec=this.instantiate(this.placement,{id:this.nextId++,pos:[x,y,z],rot:this.placementRotation||0,scale:this.placementScale,color,roughness:.85,metalness:0,door:false,open:false});
+  this.select(rec);this.onChanged();return rec;
  }
  instantiate(kind,data){let obj=this.makeBuiltin(kind); if(!obj){const cache=this.assetCache.get(kind);if(!cache)throw Error('Сначала импортируй '+kind);obj=cache.clone(true)}
   let entry={kind,data:JSON.parse(JSON.stringify(data)),mesh:obj};obj.userData.objectId=data.id;
@@ -190,7 +205,7 @@ class WorldBuilder{
   obj.position.fromArray(data.pos);obj.rotation.y=(data.rot||0)*Math.PI/180;obj.scale.setScalar(data.scale||1);this.scene.add(obj);obj.updateMatrixWorld(true);this.objects.push(entry);this.applyAppearance(entry);this.nextId=Math.max(this.nextId,entry.data.id+1);return entry;
  }
  makeBuiltin(kind){const group=new THREE.Group();let m=new THREE.MeshStandardMaterial({color:'#b7ac91',roughness:.85,side:THREE.DoubleSide}); const add=(geo,x,y,z,mat=m)=>{let mesh=new THREE.Mesh(geo,mat);mesh.position.set(x,y,z);mesh.receiveShadow=true;group.add(mesh);return mesh};
-  if(kind==='floor')add(new THREE.BoxGeometry(2,.17,2),0,.08,0);
+  if(kind==='floor'||kind==='ceiling')add(new THREE.BoxGeometry(2,.17,2),0,.08,0);
   else if(kind==='wall')add(new THREE.BoxGeometry(2,2.6,.22),0,1.3,0);
   else if(kind==='window'){add(new THREE.BoxGeometry(.38,2.6,.25),-.81,1.3,0);add(new THREE.BoxGeometry(.38,2.6,.25),.81,1.3,0);add(new THREE.BoxGeometry(1.28,.34,.25),0,2.43,0);add(new THREE.BoxGeometry(1.28,.55,.25),0,.27,0);add(new THREE.BoxGeometry(1.28,1.6,.035),0,1.35,0,new THREE.MeshStandardMaterial({color:'#a8d9e6',roughness:.05,metalness:.15,transparent:true,opacity:.43,side:THREE.DoubleSide}));}
   else if(kind==='roof'){const g=new THREE.BoxGeometry(2.5,.16,1.65);add(g,-.62,.65,0).rotation.z=-Math.PI/4;add(g,.62,.65,0).rotation.z=Math.PI/4;}
@@ -227,9 +242,9 @@ class WorldBuilder{
  forwardPlacementPoint(){const d=4.0,fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw);
   const x=THREE.MathUtils.clamp(Math.round((this.player.position.x+fx*d)/this.snap)*this.snap,-62,62);
   const z=THREE.MathUtils.clamp(Math.round((this.player.position.z+fz*d)/this.snap)*this.snap,-62,62);
-  return new THREE.Vector3(x,this.heightAt(x,z)+this.floorLevel*2.6,z);
+  return new THREE.Vector3(x,this.placementHeight(x,z),z);
  }
- updateGameGhost(){if(this.mode!=='playbuild'||!this.ghost)return;this.ghost.position.copy(this.forwardPlacementPoint());this.ghost.rotation.y=(this.placementRotation||0)*Math.PI/180;}
+ updateGameGhost(){if(this.mode!=='playbuild'||!this.ghost)return;this.ghost.position.copy(this.forwardPlacementPoint());this.ghost.rotation.y=(this.placementRotation||0)*Math.PI/180;this.ghost.scale.setScalar(this.placementScale);}
  rotatePlacement(){this.placementRotation=(this.placementRotation+90)%360;this.updateGameGhost();return this.placementRotation;}
  // Lightweight surface and obstacle collision for previewing assembled buildings.
  supportHeight(x,z,footY){
@@ -251,10 +266,16 @@ class WorldBuilder{
   return ray.intersectObjects(targets,true).some(hit=>hit.distance<=length+.22);
  }
 
- setPlacement(kind){this.placement=kind;this.moveTarget=null;if(this.ghost)this.scene.remove(this.ghost);this.ghost=this.makeBuiltin(kind)||this.assetCache.get(kind)?.clone(true)||null;
-  if(this.ghost){this.ghost.traverse(m=>{if(m.isMesh){m.material=Array.isArray(m.material)?m.material.map(mat=>mat.clone()):m.material.clone();for(const mat of(Array.isArray(m.material)?m.material:[m.material])){mat.transparent=true;mat.opacity=.4;mat.depthWrite=false;}}});this.scene.add(this.ghost)}
+ setPlacement(kind,category=null){
+  this.placement=kind;this.placementCategory=category;this.moveTarget=null;
+  if(this.ghost)this.ghost.removeFromParent();
+  this.ghost=kind?(this.makeBuiltin(kind)||this.assetCache.get(kind)?.clone(true)||null):null;
+  if(this.ghost){
+   this.ghost.traverse(m=>{if(m.isMesh){m.material=Array.isArray(m.material)?m.material.map(mat=>mat.clone()):m.material.clone();for(const mat of(Array.isArray(m.material)?m.material:[m.material])){mat.transparent=true;mat.opacity=.4;mat.depthWrite=false;}}});
+   this.ghost.scale.setScalar(this.placementScale);this.scene.add(this.ghost);this.updateGameGhost();
+  }
  }
- updateGhost(p){if(!this.ghost)return;let x=Math.round(p.x/2)*2,z=Math.round(p.z/2)*2;this.ghost.position.set(x,this.heightAt(x,z)+this.floorLevel*2.6,z)}
+ updateGhost(p){if(!this.ghost)return;let x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap;this.ghost.position.set(x,this.placementHeight(x,z),z);this.ghost.scale.setScalar(this.placementScale)}
  action(act){const e=this.selected;if(!e)return false;this.remember();if(act==='rotate'){e.data.rot=(e.data.rot+90)%360;e.mesh.rotation.y=e.data.rot*Math.PI/180}
   else if(act==='copy'){const data=JSON.parse(JSON.stringify(e.data));data.id=this.nextId++;data.pos[0]+=2;let clone=this.instantiate(e.kind,data);this.select(clone)}
   else if(act==='move'){this.moveTarget=e;this.placement=null;this.ghost?.removeFromParent();this.ghost=null;}
