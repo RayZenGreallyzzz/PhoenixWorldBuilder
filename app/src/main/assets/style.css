@@ -3,3 +3,22 @@
 .levelrow{display:flex;gap:8px;align-items:center;justify-content:center;margin:8px 0;border:1px solid #354b58;border-radius:9px;padding:4px;color:#dcefe9}.levelrow button{min-height:30px;padding:4px 15px}.levelrow b{color:#48d5b6}.panelBody select{color:#e5f5f3;background:#203442;border:1px solid #476472;padding:9px;border-radius:8px}body.walking .panel,body.playbuilding:not(.catalogOpen) .panel{transform:translateX(-120%);pointer-events:none}body.playbuilding.catalogOpen .panel{transform:translateX(0);pointer-events:auto}#gameBuildHud{position:absolute;right:10px;bottom:65px;display:flex;flex-direction:column;gap:6px;z-index:5;max-width:200px}#gameBuildHud button{background:#203947ea;text-align:left;min-height:39px}#gameBuildHud #btnBuildPlace{background:#198464;border-color:#5df3c3;font-weight:700}.topActions #btnGameBuild{font-size:11px;background:#23594d}body.playbuilding #crosshair{opacity:.6}body.playbuilding #joystick{bottom:30px}body.playbuilding .rightTools{display:none}body.walking .rightTools{opacity:.35}body.walking #joystick{left:30px;bottom:36px}body.walking #walkHint{bottom:30px}
 
 body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuilding .topActions #btnGameBuild{background:#25856a}
+
+/* Touch-friendly in-character construction controls. */
+#gameBuildHud{width:206px;max-width:24vw;gap:5px;bottom:36px}
+#gameBuildHud>button{min-height:34px;padding:6px 9px;font-size:11px}
+#gameBuildHud .hudControl,#avatarQuickSize{background:#203947e8;border:1px solid #3e5d69;border-radius:9px;padding:5px 7px}
+#gameBuildHud .hudControl>span,#avatarQuickValue{display:block;font-size:11px;color:#b9e9dc;margin-bottom:4px;text-align:center}
+#gameBuildHud .hudRow{display:flex;align-items:center;justify-content:space-around;gap:5px}
+#gameBuildHud .hudRow button{flex:1;min-width:0;min-height:34px;padding:5px 3px;text-align:center;font-size:12px}
+#gameBuildHud .hudRow input{min-width:0;width:50px;max-width:55px;background:#102934;border:1px solid #4d7e7e;color:white;border-radius:5px;text-align:center;padding:5px 1px}
+#moduleScaleValue{font-size:11px;color:#b8e4df;min-width:39px;text-align:center}
+#buildLevelValue{color:#67f4ca;min-width:32px;text-align:center}
+#avatarQuickSize .hudRow{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+#avatarQuickSize .hudRow button{width:100%;min-height:36px;min-width:0;text-align:center}
+.assetGroup{display:flex;flex-direction:column;min-width:0;gap:3px}
+.assetGroup .asset{width:100%;min-height:63px;flex:1}
+.assetCategory{width:100%;min-width:0;color:#d9f4ef;background:#203b47;border:1px solid #476472;border-radius:7px;padding:5px;font-size:10px;touch-action:manipulation}
+.buildNote{display:block;color:#9fbcb7;font-size:10px;line-height:1.4;margin:5px 0 8px}
+@media(max-width:840px){#gameBuildHud{max-width:29vw;width:185px;bottom:12px;gap:3px}#gameBuildHud>button{min-height:30px;padding:4px 6px;font-size:10px}#gameBuildHud .hudRow button{min-height:30px}#gameBuildHud .hudControl,#avatarQuickSize{padding:3px}}
+@media(max-height:620px){#gameBuildHud{gap:2px}#gameBuildHud>button{min-height:26px;padding:3px 6px}#gameBuildHud .hudRow button{min-height:27px}#gameBuildHud .hudControl>span{margin-bottom:1px}}
