@@ -1,0 +1,41 @@
+/* Static glTF/GLB scene exporter: terrain, placed mesh geometry, per-instance
+ * materials, embedded base-color textures. Game logic remains in map.json. */
+const SceneExporter=(()=>{
+ const te=new TextEncoder();const align=n=>(n+3)&~3;
+ async function encodeTexture(tex){
+  let img=tex?.image;if(!img||!img.width||!img.height)return null;
+  const cv=document.createElement('canvas');cv.width=Math.min(img.width,2048);cv.height=Math.min(img.height,2048);
+  cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+  const blob=await new Promise(resolve=>cv.toBlob(resolve,'image/png'));return blob?new Uint8Array(await blob.arrayBuffer()):null;
+ }
+ async function build(world){
+  const gltf={asset:{version:'2.0',generator:'Phoenix World Builder'},scene:0,scenes:[{nodes:[]}],nodes:[],meshes:[],materials:[],accessors:[],bufferViews:[],buffers:[{byteLength:0}],images:[],textures:[],samplers:[{magFilter:9729,minFilter:9987,wrapS:10497,wrapT:10497}]};
+  const binary=[],matIdx=new Map(),texIdx=new Map();let offset=0;
+  function data(arr,target){const bytes=arr instanceof Uint8Array?arr:new Uint8Array(arr.buffer,arr.byteOffset,arr.byteLength);const padded=new Uint8Array(align(bytes.length));padded.set(bytes);const index=gltf.bufferViews.length;gltf.bufferViews.push({buffer:0,byteOffset:offset,byteLength:bytes.length,...(target?{target}:{})});binary.push(padded);offset+=padded.length;return index}
+  function access(typed,num,kind){let components={SCALAR:1,VEC2:2,VEC3:3,VEC4:4}[kind],comp=typed instanceof Uint32Array?5125:typed instanceof Uint16Array?5123:5126;
+   const meta={bufferView:data(typed,num===1?34963:34962),componentType:comp,count:typed.length/components,type:kind};
+   if(kind==='VEC3'&&comp===5126){let min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];for(let i=0;i<typed.length;i+=3)for(let a=0;a<3;a++){min[a]=Math.min(min[a],typed[i+a]);max[a]=Math.max(max[a],typed[i+a])}meta.min=min;meta.max=max;}
+   let idx=gltf.accessors.length;gltf.accessors.push(meta);return idx;}
+  async function material(m){if(Array.isArray(m))m=m[0];if(!m)m=new THREE.MeshStandardMaterial();if(matIdx.has(m))return matIdx.get(m);
+   let color=m.color||new THREE.Color(1,1,1),a=m.opacity??1;
+   let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:a<1?'BLEND':'OPAQUE'};
+   if(m.map){let textureIndex=texIdx.get(m.map);if(textureIndex===undefined){const image=await encodeTexture(m.map);if(image){const imageIndex=gltf.images.length;gltf.images.push({bufferView:data(image),mimeType:'image/png'});textureIndex=gltf.textures.length;gltf.textures.push({source:imageIndex,sampler:0});texIdx.set(m.map,textureIndex)}}if(textureIndex!==undefined)md.pbrMetallicRoughness.baseColorTexture={index:textureIndex};}
+   let idx=gltf.materials.length;gltf.materials.push(md);matIdx.set(m,idx);return idx;}
+  const models=[world.terrain,...world.objects.map(o=>o.mesh)];
+  for(const root of models){root.updateMatrixWorld(true);const meshes=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)meshes.push(o)});
+   for(const mesh of meshes){let geom=mesh.geometry;if(geom.index&&geom.index.count>700000)continue;const pos=geom.getAttribute('position');if(!pos||pos.count<3)continue;
+    const attributes={POSITION:access(new Float32Array(pos.array),0,'VEC3')};let norm=geom.getAttribute('normal'),uv=geom.getAttribute('uv'),col=geom.getAttribute('color');
+    if(norm)attributes.NORMAL=access(new Float32Array(norm.array),0,'VEC3');if(uv)attributes.TEXCOORD_0=access(new Float32Array(uv.array),0,'VEC2');if(col&&col.itemSize===3)attributes.COLOR_0=access(new Float32Array(col.array),0,'VEC3');
+    const prim={attributes,mode:4,material:await material(mesh.material)};
+    if(geom.index){let indices=geom.index.array;prim.indices=access(indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),1,'SCALAR');}
+    let mi=gltf.meshes.length;gltf.meshes.push({name:mesh.name||'Деталь',primitives:[prim]});let ni=gltf.nodes.length;gltf.nodes.push({mesh:mi,name:mesh.name||root.name||'Объект',matrix:mesh.matrixWorld.toArray()});gltf.scenes[0].nodes.push(ni);
+   }
+  }
+  gltf.buffers[0].byteLength=offset;
+  const jsonData=te.encode(JSON.stringify(gltf)),jsonSize=align(jsonData.length),binSize=offset,total=12+8+jsonSize+8+binSize;
+  const out=new Uint8Array(total),v=new DataView(out.buffer);v.setUint32(0,0x46546c67,true);v.setUint32(4,2,true);v.setUint32(8,total,true);v.setUint32(12,jsonSize,true);v.setUint32(16,0x4e4f534a,true);out.fill(32,20,20+jsonSize);out.set(jsonData,20);
+  let p=20+jsonSize;v.setUint32(p,binSize,true);v.setUint32(p+4,0x004e4942,true);p+=8;for(const x of binary){out.set(x,p);p+=x.length;}
+  return new Blob([out],{type:'model/gltf-binary'});
+ }
+ return {build};
+})();
