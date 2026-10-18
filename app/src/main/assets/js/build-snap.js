@@ -31,7 +31,7 @@ const BuildSnap=(()=>{
   if(box.isEmpty())return null;
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert();
-  return {entry,root,box,inv,top:worldPoint(root,0,box.max.y,0).y};
+  return {entry,root,box,inv,top:worldPoint(root,0,box.max.y,0).y,bottom:worldPoint(root,0,box.min.y,0).y};
  };
  const planeNormal=(root,nx,nz)=>{
   const p=new THREE.Vector3(nx,0,nz).transformDirection(root.matrixWorld);
@@ -61,19 +61,111 @@ const BuildSnap=(()=>{
   }
   return best;
  }
+
+ const kindOf=(w,entry)=>entry.data?.category||w.categoryForKind?.(entry.kind)||entry.kind;
+ const areaDistance=(s,p,margin=0)=>{
+  const v=p.clone().applyMatrix4(s.inv),b=s.box;
+  const dx=Math.max(0,b.min.x-v.x,v.x-b.max.x),dz=Math.max(0,b.min.z-v.z,v.z-b.max.z);
+  return Math.hypot(dx,dz);
+ };
+ const worldCenter=(s)=>{
+  const b=s.box;
+  return worldPoint(s.root,(b.min.x+b.max.x)/2,b.max.y,(b.min.z+b.max.z)/2);
+ };
+ const localFrameYaw=(root)=>{
+  const axis=new THREE.Vector3(1,0,0).transformDirection(root.matrixWorld);
+  axis.y=0;axis.normalize();
+  return Math.atan2(-axis.z,axis.x);
+ };
+ const storyOf=(entry)=>Number.isInteger(entry.data?.storey)?entry.data.storey:null;
+ function resolveOverhead(w,p,cat,model,modelBox){
+  const storyHeight=w.storeyHeight||2.6,ground=w.heightAt(p.x,p.z),nominal=ground+w.floorLevel*storyHeight;
+  const foot=w.mode==='playbuild'&&w.floorLevel===0&&w.player?
+   w.player.position.y-.85:nominal;
+  const candidates=[];
+  for(const entry of w.objects){
+   if(kindOf(w,entry)!=='foundation')continue;
+   if(storyOf(entry)!==null&&storyOf(entry)!==w.floorLevel)continue;
+   const s=surface(entry);if(!s)continue;
+   const d=areaDistance(s,p);
+   if(d>1.3)continue;
+   const vertical=Math.min(Math.abs(s.top-nominal),Math.abs(s.top-foot));
+   // Older projects may have elevated decks without an assigned storey.
+   if(storyOf(entry)===null&&vertical>4.5)continue;
+   candidates.push({s,score:d+vertical*.25});
+  }
+  candidates.sort((a,b)=>a.score-b.score);
+  let base=candidates[0]?.s||null,baseY=base?base.top:nominal;
+  let walls=[],ceilings=[];
+  for(const entry of w.objects){
+   const typ=kindOf(w,entry);
+   if(!['wall','door','ceiling'].includes(typ))continue;
+   if(storyOf(entry)!==null&&storyOf(entry)!==w.floorLevel)continue;
+   const s=surface(entry);if(!s)continue;
+   const proximity=base?areaDistance(base,worldCenter(s)):areaDistance(s,p);
+   const near=base?proximity<=1.5:proximity<=4;
+   if(!near)continue;
+   // Do not borrow a roof or a wall belonging to another vertical storey.
+   if(typ==='ceiling'){
+    if(s.top>=baseY+.3&&s.top<=baseY+8)ceilings.push(s);
+   }else if(Math.abs(s.bottom-baseY)<=Math.max(1.7,storyHeight*.55)&&
+     s.top>baseY+.65&&s.top<baseY+8){
+    walls.push(s);
+   }
+  }
+  // A wall is a measured height reference. Do not force it to the catalogue's 2.6 m preset.
+  let target=baseY+storyHeight;
+  if(walls.length)target=Math.max(...walls.map(s=>s.top));
+  if(cat==='roof'&&ceilings.length)target=Math.max(target,...ceilings.map(s=>s.top));
+  if(!base&&!walls.length&&!ceilings.length)return null;
+  let x=p.x,z=p.z;
+  if(base&&w.centerOverhead){
+   const center=worldCenter(base);x=center.x;z=center.z;
+  }
+  let yaw=(base?localFrameYaw(base.root):0)+(w.placementRotation||0)*Math.PI/180;
+  let anchor=new THREE.Vector3(x,target,z);
+  if(model&&!modelBox.isEmpty()){
+   const centerX=(modelBox.min.x+modelBox.max.x)/2,centerZ=(modelBox.min.z+modelBox.max.z)/2;
+   const centerShift=rotated(new THREE.Vector3(centerX,0,centerZ),yaw).multiplyScalar(w.placementScale||1);
+   anchor.x-=centerShift.x;anchor.z-=centerShift.z;
+   anchor.y-=modelBox.min.y*(w.placementScale||1);
+  }
+  return {position:anchor,rotation:((yaw*180/Math.PI)%360+360)%360,
+   snapped:true,overhead:true,edge:false,
+   reference:base?.entry.data.id||walls[0]?.entry.data.id||ceilings[0]?.entry.data.id,
+   targetHeight:target,category:cat};
+ }
  function resolve(w,p){
   const kind=w.placement||'',cat=w.placementCategory||w.categoryForKind?.(kind)||'prop';
   const aligned=edgable(cat,kind),useSnap=w.smartSnap!==false;
   const raw=new THREE.Vector3(Math.round(p.x/w.snap)*w.snap,w.placementHeight(p.x,p.z),Math.round(p.z/w.snap)*w.snap);
   const basic={position:raw,rotation:w.placementRotation||0,snapped:false,edge:false,reference:null,category:cat};
-  if(!useSnap||!w.objects.length)return basic;
+  const model=w.ghost||w.makeBuiltin(kind)||w.assetCache?.get(kind);
+  const modelBox=model?attrBounds(model):new THREE.Box3().makeEmpty();
+  const lifted=out=>{
+   out.position.y+=(w.placementLift||0);
+   return out;
+  };
+  // Roofs and ceilings use the actual wall tops, slab thickness and storey datum.
+  if(cat==='roof'||cat==='ceiling'){
+   if(useSnap&&w.objects.length){
+    const overhead=resolveOverhead(w,p,cat,model,modelBox);
+    if(overhead)return lifted(overhead);
+   }
+   if(!modelBox.isEmpty())basic.position.y-=modelBox.min.y*(w.placementScale||1);
+   return lifted(basic);
+  }
+  if(!useSnap||!w.objects.length)return lifted(basic);
   // A floor is chosen from actual transformed geometry, not the global 2 m grid.
-  const refY=w.floorLevel>0?w.heightAt(p.x,p.z)+w.floorLevel*2.6:
+  const refY=w.floorLevel>0?w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):
    w.mode==='playbuild'&&w.player?.visible!==false?w.player.position.y-.85:p.y;
   const support=[];
   for(const entry of w.objects){
    const entryCat=entry.data.category||w.categoryForKind?.(entry.kind)||entry.kind;
    if(!structural(entryCat))continue;
+   // Existing slabs on other levels must not hijack the placement preview.
+   if(storyOf(entry)!==null&&storyOf(entry)!==w.floorLevel &&
+     !(entryCat==='ceiling'&&cat==='foundation'&&storyOf(entry)===w.floorLevel-1))continue;
    const s=surface(entry);if(!s)continue;
    const delta=Math.abs(s.top-refY);
    // Do not snap the ground floor to a completely different storey.
@@ -87,9 +179,8 @@ const BuildSnap=(()=>{
    support.push({entry,s,edge,grade});
   }
   support.sort((a,b)=>a.grade-b.grade);
-  if(!support.length)return basic;
-  const chosen=support[0],floor=chosen.s,model=w.ghost||w.makeBuiltin(kind)||w.assetCache?.get(kind);
-  const modelBox=model?attrBounds(model):new THREE.Box3().makeEmpty();
+  if(!support.length)return lifted(basic);
+  const chosen=support[0],floor=chosen.s;
   let anchor=chosen.edge.point.clone(),yaw=(w.placementRotation||0)*Math.PI/180;
   if(aligned){
    // Walls/railings present their local X axis along the floor edge.
@@ -121,7 +212,7 @@ const BuildSnap=(()=>{
   }
   // Walls, doors and staircases join the top surface of the imported platform.
   const degrees=((yaw*180/Math.PI)%360+360)%360;
-  return {position:anchor,rotation:degrees,snapped:true,edge:aligned,reference:chosen.entry.data.id,category:cat};
+  return lifted({position:anchor,rotation:degrees,snapped:true,edge:aligned,reference:chosen.entry.data.id,category:cat});
  }
  return {resolve,attrBounds,nearestEdge};
 })();
