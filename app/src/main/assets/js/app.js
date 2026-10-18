@@ -32,7 +32,7 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
 }
 w.getAsset=cacheFromDB;
 async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),...(catalogMeta[id]||{}),name});}
-async function rememberTexture(id,name,bytes,mime='image/png'){await dbOp('textures',id,{name,bytes,mime});textureMeta.set(id,{name});}
+async function rememberTexture(id,name,bytes,mime='image/png',sourcePath=''){await dbOp('textures',id,{name,bytes,mime,sourcePath});textureMeta.set(id,{name,sourcePath});}
 async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
 async function updateCatalog(id,patch){
  catalogMeta[id]={...(catalogMeta[id]||{}),...patch};
@@ -156,7 +156,7 @@ function renderLibrary(){
  const items=[];
  if(isTexture){
   for(const [id,meta] of textureMeta){
-   if(q&&!meta.name.toLowerCase().includes(q))continue;
+   if(q&&!(meta.name+' '+(meta.sourcePath||id)).toLowerCase().includes(q))continue;
    items.push([id,meta]);
   }
  }else{
@@ -183,7 +183,7 @@ function renderLibrary(){
    const card=document.createElement('button');card.className='textureCard';
    if(w.textureId===id)card.classList.add('active');
    const image=document.createElement('img');image.className='textureImage';image.alt=meta.name;
-   const title=document.createElement('b');title.textContent=meta.name;
+   const title=document.createElement('b');title.textContent=(meta.sourcePath||id.replace(/^tex:/,'')).replace(/^Текстуры[\\/]/i,'');
    card.append(image,title);card.onclick=()=>selectTexture(id);
    el.append(card);showTextureImage(image,id).catch(console.warn);
   }
@@ -306,7 +306,7 @@ async function importZip(file,isProject=false){const entries=await ZipUtils.extr
  for(let i=0;i<keys.length;i++){
   let name=keys[i],bytes=entries[name],base=name.split('/').pop();
   if(/\.glb$/i.test(name)){const id=manifest?.[name]||'glb:'+name.toLowerCase();await rememberAsset(id,base,bytes);glbs.push(id)}
-  else if(/\.(png|jpe?g|webp)$/i.test(name)){const id=manifest?.[name]||'tex:'+name.toLowerCase();let ext=base.split('.').pop().toLowerCase();await rememberTexture(id,base,bytes,ext==='jpg'?'image/jpeg':'image/'+ext);textureKeys.push(id)}
+  else if(/\.(png|jpe?g|webp)$/i.test(name)){const id=manifest?.[name]||'tex:'+name.toLowerCase();let ext=base.split('.').pop().toLowerCase();await rememberTexture(id,base,bytes,ext==='jpg'?'image/jpeg':'image/'+ext,name);textureKeys.push(id)}
   else if(/(?:^|\/)project\.json$/i.test(name))project=JSON.parse(new TextDecoder().decode(bytes));
   if(i%80===0)await new Promise(resolve=>setTimeout(resolve,0));
  }
@@ -398,7 +398,7 @@ async function init(){setupPicker();wireButtons();attachTouches();const exit=doc
  renderLibrary();w.animate(0);
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
-  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name})}renderTextureOptions();
+  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||''})}renderTextureOptions();
   catalogMeta=await dbOp('catalog','metadata')||{};
   for(const [id,meta] of Object.entries(catalogMeta)){if(savedMeta.has(id))Object.assign(savedMeta.get(id),meta)}
   const autosave=await dbOp('projects','autosave');if(autosave){isLoading=true;await restoreProject(autosave);isLoading=false;toast('Карта восстановлена из памяти')}else toast('Редактор готов. Выбери деталь и коснись земли');renderLibrary();
