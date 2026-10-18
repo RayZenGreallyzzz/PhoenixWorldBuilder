@@ -5,6 +5,8 @@ vm.runInThisContext(fs.readFileSync(path.join(dir,'world.js'),'utf8')+'\nglobal.
 const w=Object.create(WorldBuilder.prototype);
 const root=new THREE.Group();
 const hips=new THREE.Bone();hips.name='mixamorig:Hips';hips.position.set(-.2697,11.52,1.586);
+// Official Three.js GLTFLoader r140 sanitizes ':' to '', e.g. mixamorig:Hips => mixamorigHips.
+hips.name='mixamorigHips';
 const foot=new THREE.Bone();foot.name='mixamorig:LeftFoot';foot.position.set(0,36,0);
 root.add(hips);hips.add(foot);
 const before=new THREE.VectorKeyframeTrack(hips.uuid+'.position',[0,1],

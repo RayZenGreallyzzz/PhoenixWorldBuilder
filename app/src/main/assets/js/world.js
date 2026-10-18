@@ -75,7 +75,7 @@ class WorldBuilder{
    const dot=track.name.lastIndexOf('.');
    if(dot<1||track.name.slice(dot+1)!=='position')return track;
    const bone=lookup.get(track.name.slice(0,dot));
-   if(!bone?.isBone||!/^(?:.*[:_])?(?:hips|pelvis|root)$/i.test(bone.name))return track;
+   if(!bone?.isBone||!(/(?:^|[:_]|mixamorig)(?:hips|pelvis)$/i.test(bone.name)||/^(?:root|rootbone)$/i.test(bone.name)))return track;
    const base=bone.position,end=Math.max(.001,clip.duration||.001);
    corrected++;
    // This character is moved by joystick. Remove animated pelvis translation.
