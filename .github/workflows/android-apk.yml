@@ -54,6 +54,7 @@ jobs:
           node tests/test-game-input.cjs
           node tests/test-camera-scale.cjs
           node tests/test-avatar-fit.cjs
+          node tests/test-avatar-root.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4

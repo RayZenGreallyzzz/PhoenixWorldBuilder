@@ -56,6 +56,7 @@ class WorldBuilder{
     const target=track.name.slice(0,dot);
     if(idMap.has(target))track.name=idMap.get(target)+track.name.slice(dot);
    }
+   this.lockAvatarRootMotion(copy,dstNodes);
    return copy;
   });
   this.avatarClips=clips;this.avatarActions={};this.avatarMixer=clips.length?new THREE.AnimationMixer(clone):null;
@@ -65,6 +66,25 @@ class WorldBuilder{
   this.setAvatarMotion(false,true);
   let rigged=false;clone.traverse(o=>{if(o.isSkinnedMesh)rigged=true});
   return {rigged,animations:clips.map(c=>c.name),originalSize:{width:size.x,height:size.y,depth:size.z},fitSize:this.avatarOriginalFitSize};
+ }
+ lockAvatarRootMotion(clip,nodes){
+  const lookup=new Map();
+  for(const node of nodes){lookup.set(node.uuid,node);if(node.name&&!lookup.has(node.name))lookup.set(node.name,node)}
+  let corrected=0;
+  clip.tracks=clip.tracks.map(track=>{
+   const dot=track.name.lastIndexOf('.');
+   if(dot<1||track.name.slice(dot+1)!=='position')return track;
+   const bone=lookup.get(track.name.slice(0,dot));
+   if(!bone?.isBone||!/^(?:.*[:_])?(?:hips|pelvis|root)$/i.test(bone.name))return track;
+   const base=bone.position,end=Math.max(.001,clip.duration||.001);
+   corrected++;
+   // This character is moved by joystick. Remove animated pelvis translation.
+   // This also handles GLBs with Armature scale 0.01 and CUBICSPLINE tracks.
+   return new THREE.VectorKeyframeTrack(track.name,[0,end],
+    [base.x,base.y,base.z,base.x,base.y,base.z]);
+  });
+  if(corrected)clip.resetDuration();
+  return corrected;
  }
  setAvatarHeight(meters){
   const n=Number(meters);this.avatarHeight=THREE.MathUtils.clamp(Number.isFinite(n)?n:1.8,.01,20);
