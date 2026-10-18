@@ -1,0 +1,16 @@
+const assert=require('node:assert/strict'),fs=require('fs'),path=require('path'),vm=require('vm');
+const d=path.join(__dirname,'../app/src/main/assets/js'),THREE=global.THREE=require(path.join(d,'three.min.js'));
+vm.runInThisContext(fs.readFileSync(path.join(d,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
+const root=new THREE.Group(),armature=new THREE.Group();armature.scale.setScalar(.01);root.add(armature);
+const geo=new THREE.BoxGeometry(1.2,1.87,.8),n=geo.attributes.position.count;
+geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(Array.from({length:n},()=>[0,0,0,0]).flat(),4));
+geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(Array.from({length:n},()=>[1,0,0,0]).flat(),4));
+const bone=new THREE.Bone();armature.add(bone);
+const mesh=new THREE.SkinnedMesh(geo,new THREE.MeshBasicMaterial());
+mesh.bind(new THREE.Skeleton([bone],[new THREE.Matrix4().makeScale(100,100,100)]));armature.add(mesh);
+const w=Object.create(WorldBuilder.prototype);w.player=new THREE.Group();w.player.position.set(2,.85,3);w.player.add(root);
+const naive=new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()).y;
+const actual=w.measureAvatarPoseBounds(root).getSize(new THREE.Vector3()).y;
+assert(naive<.03,'Ordinary bounds should shrink to .019m');
+assert(actual>1.8&&actual<1.95,'Skinned bounds should be about 1.87m, got '+actual);
+console.log('Skinned bounds '+actual.toFixed(3)+'m vs raw '+naive.toFixed(4)+'m');

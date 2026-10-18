@@ -17,14 +17,14 @@ const rootless=new THREE.AnimationClip('Walk',1,[before,limb]);
 assert.equal(w.lockAvatarRootMotion(rootless,[root,hips,foot]),1);
 const newRoot=rootless.tracks[0];
 for(let i=0;i<newRoot.values.length;i+=3){
- assert(Math.abs(newRoot.values[i]-hips.position.x)<1e-5);
- assert(Math.abs(newRoot.values[i+1]-hips.position.y)<1e-5);
- assert(Math.abs(newRoot.values[i+2]-hips.position.z)<1e-5);
+ assert(Math.abs(newRoot.values[i]+.7)<1e-5);
+ assert(Math.abs(newRoot.values[i+2]+90)<1e-5);
 }
+assert(Math.abs(newRoot.values[4]-11)<1e-5,'Vertical movement remains');
 assert.deepEqual(Array.from(rootless.tracks[1].values),Array.from(limb.values),
  'limb animation must remain unchanged');
 const mixer=new THREE.AnimationMixer(root);
 mixer.clipAction(rootless).play();mixer.update(.5);
-assert(hips.position.distanceTo(new THREE.Vector3(-.2697,11.52,1.586))<1e-4);
+assert(Math.abs(hips.position.x+.7)<1e-4);assert(Math.abs(hips.position.z+90)<1e-4);
 assert(foot.position.y>36.5,'leg keyframes must still animate');
 console.log('Mixamo root-motion lock and limb movement OK');

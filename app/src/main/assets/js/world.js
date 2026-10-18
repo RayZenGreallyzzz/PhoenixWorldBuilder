@@ -33,19 +33,13 @@ class WorldBuilder{
   const root=await this.getAsset(id);if(!root)throw new Error('Персонаж не найден в памяти');
   const clone=THREE.SkeletonUtils?.clone?THREE.SkeletonUtils.clone(root):root.clone(true);
   clone.updateMatrixWorld(true);
-  const bounds=new THREE.Box3().setFromObject(clone),size=bounds.getSize(new THREE.Vector3());
-  if(!Number.isFinite(size.y)||size.y<.001)throw new Error('В GLB нет видимой геометрии персонажа');
   if(this.avatarMixer)this.avatarMixer.stopAllAction();
   // Keep avatar scaling outside animated GLB nodes, whose animation
   // tracks may override the scene root's scale.
   this.player.clear();
   const wrapper=new THREE.Group();wrapper.name='AvatarScaleWrapper';
   wrapper.add(clone);this.player.add(wrapper);
-  this.avatarModel=wrapper;this.avatarSource=clone;this.avatarOriginalHeight=size.y;
-  this.avatarOriginalFitSize=Math.max(size.y,size.x/1.6,size.z/1.6);
-  this.avatarSourceDimensions={width:size.x,height:size.y,depth:size.z};
-  this.avatarOriginalBounds={min:bounds.min.clone(),max:bounds.max.clone()};
-  this.setAvatarHeight(this.avatarHeight);
+  this.avatarModel=wrapper;this.avatarSource=clone;
   // glTF animation tracks sometimes target source-node UUIDs instead of names.
   const srcNodes=[],dstNodes=[];root.traverse(o=>srcNodes.push(o));clone.traverse(o=>dstNodes.push(o));
   const idMap=new Map(srcNodes.map((node,i)=>[node.uuid,dstNodes[i]?.uuid]));
@@ -64,8 +58,46 @@ class WorldBuilder{
   this.avatarAnimationOverride=null;this.avatarMotionState='';
   this.player.userData.avatar=id;
   this.setAvatarMotion(false,true);
+  if(this.avatarMixer)this.avatarMixer.update(0);
+  // The actual animated, skin-deformed mesh can be 100x larger than Box3.
+  const bounds=this.measureAvatarPoseBounds(clone),size=bounds.getSize(new THREE.Vector3());
+  if(bounds.isEmpty()||!Number.isFinite(size.y)||size.y<.000001)
+   throw new Error('Не удалось измерить скелетную модель');
+  this.avatarOriginalHeight=size.y;
+  this.avatarOriginalFitSize=Math.max(size.y,size.x/1.6,size.z/1.6);
+  this.avatarSourceDimensions={width:size.x,height:size.y,depth:size.z};
+  this.avatarOriginalBounds={min:bounds.min.clone(),max:bounds.max.clone()};
+  this.setAvatarHeight(this.avatarHeight);
   let rigged=false;clone.traverse(o=>{if(o.isSkinnedMesh)rigged=true});
   return {rigged,animations:clips.map(c=>c.name),originalSize:{width:size.x,height:size.y,depth:size.z},fitSize:this.avatarOriginalFitSize};
+ }
+ measureAvatarPoseBounds(sceneRoot){
+  this.player.updateWorldMatrix(true,true);
+  const toPlayer=new THREE.Matrix4().copy(this.player.matrixWorld).invert();
+  const result=new THREE.Box3().makeEmpty(),point=new THREE.Vector3(),v=new THREE.Vector3(),temp=new THREE.Vector3();
+  sceneRoot.traverse(mesh=>{
+   if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
+   const attr=mesh.geometry.attributes.position, count=attr.count,step=Math.max(1,Math.floor(count/3500));
+   const indices=mesh.geometry.attributes.skinIndex,weights=mesh.geometry.attributes.skinWeight;
+   const skin=mesh.isSkinnedMesh&&mesh.skeleton&&indices&&weights;
+   const matrices=skin?mesh.skeleton.bones.map((bone,i)=>
+    new THREE.Matrix4().multiplyMatrices(bone.matrixWorld,mesh.skeleton.boneInverses[i])):null;
+   for(let i=0;i<count;i+=step){
+    point.fromBufferAttribute(attr,i);
+    if(skin){
+     v.set(0,0,0);let total=0;
+     for(let k=0;k<4;k++){
+      const weight=weights.getComponent(i,k);if(weight<=0)continue;
+      const matrix=matrices[indices.getComponent(i,k)];if(!matrix)continue;
+      v.add(temp.copy(point).applyMatrix4(matrix).multiplyScalar(weight));total+=weight;
+     }
+     if(total<=0)v.copy(point).applyMatrix4(mesh.matrixWorld);
+     else if(Math.abs(total-1)>.01)v.multiplyScalar(1/total);
+    }else v.copy(point).applyMatrix4(mesh.matrixWorld);
+    result.expandByPoint(v.applyMatrix4(toPlayer));
+   }
+  });
+  return result;
  }
  lockAvatarRootMotion(clip,nodes){
   const lookup=new Map();
@@ -76,12 +108,15 @@ class WorldBuilder{
    if(dot<1||track.name.slice(dot+1)!=='position')return track;
    const bone=lookup.get(track.name.slice(0,dot));
    if(!bone?.isBone||!(/(?:^|[:_]|mixamorig)(?:hips|pelvis)$/i.test(bone.name)||/^(?:root|rootbone)$/i.test(bone.name)))return track;
-   const base=bone.position,end=Math.max(.001,clip.duration||.001);
+   // Keep the clip's initial pelvis translation (Mixamo bind pose differs).
+   // Only remove horizontal drift so joystick controls world-space movement.
+   if(track.values.length!==track.times.length*3)return track;
+   const startX=track.values[0],startZ=track.values[2],copy=track.clone();
+   for(let i=0;i<copy.values.length;i+=3){
+    copy.values[i]=startX;copy.values[i+2]=startZ;
+   }
    corrected++;
-   // This character is moved by joystick. Remove animated pelvis translation.
-   // This also handles GLBs with Armature scale 0.01 and CUBICSPLINE tracks.
-   return new THREE.VectorKeyframeTrack(track.name,[0,end],
-    [base.x,base.y,base.z,base.x,base.y,base.z]);
+   return copy;
   });
   if(corrected)clip.resetDuration();
   return corrected;
