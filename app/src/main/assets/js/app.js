@@ -4,7 +4,7 @@ const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок 
 const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['corner','Углы'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
-const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
+const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),modulePresets=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
 let statusMessage='';let surfaceScope='all';let pendingRecovery=null;let savedNatively=false;let initializing=true;
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
@@ -64,6 +64,63 @@ async function chooseAsset(id){
   $('btnSelect').classList.remove('active');renderLibrary();
   $('snapShiftLabel').textContent='0 м';toast('Выбрано: '+fmtName(meta?.displayName||meta?.name||id));
  }catch(e){console.error(e);toast('Не удалось выбрать модель: '+e.message)}
+}
+
+const PRESET_KEY='my-module-presets-v1';
+const copyPresetData=data=>JSON.parse(JSON.stringify(data||{}));
+async function saveModulePreset(){
+ if(!localStore)return toast('Библиотека ещё загружается');
+ const entry=surfaceTarget(),kind=entry?.kind||w.placement;
+ if(!kind)return toast('Выбери модуль для сохранения');
+ const sourceName=BUILTINS.find(x=>x[0]===kind)?.[1]||savedMeta.get(kind)?.displayName||
+  savedMeta.get(kind)?.name||kind;
+ const name=prompt('Название в «Мои модули»','Мой '+fmtName(sourceName));
+ if(name===null)return;
+ if(!name.trim())return toast('Укажи название');
+ if(!BUILTINS.some(x=>x[0]===kind)&&!await dbOp('assets',kind))
+  return toast('Исходный GLB не найден; сначала импортируй модель');
+ const paint=copyPresetData(entry?.data?.surfacePaint||w.placementSurfacePaint);
+ const color=entry?.data?.color||w.currentPaint||'#b7ac91';
+ if(!Object.keys(paint).length)paint.all={color};
+ const preset={id:'preset:'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7),
+  name:name.trim().slice(0,64),sourceKind:kind,
+  category:entry?.data?.category||w.placementCategory||w.categoryForKind(kind),
+  surfacePaint:paint,color,scale:entry?.data?.scale||w.placementScale||1,
+  texture:entry?.data?.texture||null,created:new Date().toISOString()};
+ modulePresets.set(preset.id,preset);
+ try{await dbOp('catalog',PRESET_KEY,[...modulePresets.values()])}
+ catch(err){modulePresets.delete(preset.id);return toast('Не удалось сохранить модуль: '+err.message)}
+ currentFilter='my';catalogMode='models';catalogPage=0;
+ $all('#categoryFilters .pill').forEach(b=>b.classList.toggle('active',b.dataset.filter==='my'));
+ renderLibrary();toast('Модуль сохранён в библиотеку: '+preset.name);
+}
+async function chooseModulePreset(id){
+ const preset=modulePresets.get(id);if(!preset)return toast('Модуль не найден');
+ try{
+  if(!BUILTINS.some(x=>x[0]===preset.sourceKind)&&!await cacheFromDB(preset.sourceKind))
+   return toast('Для этого пресета требуется исходный GLB');
+  for(const face of SurfacePaint.faces){
+   const id=preset.surfacePaint?.[face]?.texture;
+   if(id&&!await loadTexture(id))return toast('Отсутствует PNG: '+id);
+  }
+  if(preset.texture&&!await loadTexture(preset.texture))return toast('Исходная PNG не найдена');
+  w.setPlacement(preset.sourceKind,preset.category);w.select(null);
+  w.placementScale=preset.scale||1;w.placementSurfacePaint=copyPresetData(preset.surfacePaint);
+  w.currentPaint=preset.color||w.currentPaint;w.textureId=preset.texture||null;
+  if(w.ghost){SurfacePaint.applyToRoot(w.ghost,w.placementSurfacePaint,w.textures);w.updateGameGhost()}
+  refreshConstructionUI();updateSurfaceUI();
+  $('btnSelect').classList.remove('active');
+  if(w.mode==='playbuild')document.body.classList.remove('catalogOpen');
+  renderLibrary();toast('Мой модуль: '+preset.name);
+ }catch(err){console.error(err);toast('Ошибка загрузки моего модуля: '+err.message)}
+}
+async function deleteModulePreset(id){
+ const preset=modulePresets.get(id);
+ if(!preset||!confirm('Удалить '+preset.name+' из библиотеки? Уже установленные детали останутся.'))return;
+ modulePresets.delete(id);
+ try{await dbOp('catalog',PRESET_KEY,[...modulePresets.values()])}
+ catch(err){modulePresets.set(id,preset);return toast('Ошибка удаления: '+err.message)}
+ renderLibrary();toast('Модуль удалён из библиотеки');
 }
 
 const GALLERY_SIZE=20;
