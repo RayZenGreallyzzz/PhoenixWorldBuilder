@@ -14,6 +14,7 @@ function groupType(name){
  if(/лест|ступен|stairs?|step(s)?/.test(s))return 'stairs';
  if(/кры|кровл|roof|shingles|gable/.test(s))return 'roof';
  if(/(?:угол|углов|corner|miter|mitre|косой|скошен)/.test(s)&&/(?:пол|floor|настил|плит|slab|foundation)/.test(s))return 'foundation';
+ if(/(?:^|[\\/:_-])arc[_-]?r\d|полукругл|curved[_-]?wall|round[_-]?wall/.test(s))return 'wall';
  if(/(?:угол|углов|corner|miter|mitre|стык_стен|стыков|скошен)/.test(s))return 'corner';
  if(/двер|door|ворот|gate/.test(s))return 'door';
  if(/стен|окно|wall|window|колон|pillar|column/.test(s))return 'wall';

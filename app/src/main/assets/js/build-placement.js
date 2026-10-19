@@ -129,6 +129,21 @@ const BuildPlacementValidator=(()=>{
   if(!a)return {...solved,valid:false,reason:'У детали нет геометрии для проверки'};
   if(![a.cx,a.cz,a.top,a.bottom].every(finite))
    return {...solved,valid:false,reason:'Некорректные координаты GLB'};
+  // Curved walls have large empty AABBs. A box/box overlap along their curve
+  // is NOT a real intersection. Only reject an identical curve placed twice.
+  const curvy=typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement);
+  if(curvy){
+   for(const entry of w.objects||[]){
+    if(entry.kind!==w.placement)continue;
+    const samePosition=entry.mesh.position.distanceTo(root.position)<.035;
+    let turn=Math.abs((entry.mesh.rotation.y-root.rotation.y)%(Math.PI*2));
+    turn=Math.min(turn,Math.PI*2-turn);
+    if(samePosition&&turn<.03)
+     return {...solved,valid:false,reason:'Этот полукруглый модуль уже установлен'};
+   }
+   return {...solved,valid:true,reason:solved.curveJoin?'Торцы дуги и стены состыкованы':
+    solved.snapped?'Дуга привязана к опоре':'Свободное расположение дуги'};
+  }
   // Only reject obviously duplicated structural volume, never edges touching.
   for(const entry of w.objects||[]){
    if(entry===w.moveTarget)continue;
@@ -143,10 +158,12 @@ const BuildPlacementValidator=(()=>{
    if(dy>EPS)continue;
    const reach=Math.max(a.width,a.length)+Math.max(b.width,b.length);
    if(Math.hypot(a.cx-b.cx,a.cz-b.cz)>reach)continue;
+   if(typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind))continue;
    if(collisionCandidate(a,b,cat,otherType,solved,entry))
     return {...solved,valid:false,reason:'Место занято другой деталью',obstacle:entry.data?.id};
   }
-  return {...solved,valid:true,reason:solved.corner?'Угол состыкован':
+  return {...solved,valid:true,reason:solved.curveJoin?'Прямая стена состыкована с дугой':
+   solved.corner?'Угол состыкован':
    solved.stacked?'Стена установится сверху':
    solved.slab?'Пол пристыкуется по толщине':
    solved.overhead?'Перекрытие выровнено':
