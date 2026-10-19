@@ -77,10 +77,10 @@ const BuildPlacementValidator=(()=>{
   const isWall=wallLike.has(catA)&&wallLike.has(catB);
   const same=catA===catB || isWall;
   if(!same)return false;
-  if((solved.corner||solved.stacked||solved.wallEnd)&&
-     other.data?.id===solved.reference&&isWall){
-   // End joints and L-shaped corners legitimately touch/overlap a wall by
-   // their thickness. They must not be made red by broad-phase GLB bounds.
+  if(solved.stacked&&other.data?.id===solved.reference&&isWall){
+   // The upper wall may share a little vertical thickness with its support.
+   // Wall-end and corner joints are NOT exempt: the old exemption allowed
+   // a supposedly magnetic wall to penetrate half of the reference wall.
    return false;
   }
   const yFraction=vertical/Math.max(.01,Math.min(a.top-a.bottom,b.top-b.bottom));

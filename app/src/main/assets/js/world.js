@@ -494,7 +494,20 @@ class WorldBuilder{
   this.onChanged();return true;
  }
  remember(){const snap=this.snapshot();this.undo.push(snap);if(this.undo.length>15)this.undo.shift();}
- async undoLast(){const s=this.undo.pop();if(!s)return;await this.restore(s);this.onChanged();}
+ async undoLast(){
+  const s=this.undo.pop();if(!s)return false;
+  await this.restore(s);
+  // Restoring replaces all world object instances. The old placement result
+  // may reference a deleted wall or floor, so solve against the new scene now.
+  this.moveTarget=null;
+  this.lastSnapResult=null;
+  if(this.ghost&&this.placement){
+   const target=this.mode==='playbuild'?this.forwardPlacementPoint():this.ghost.position.clone();
+   this.applyGhostPlacement(target);
+  }
+  this.onChanged();
+  return true;
+ }
  snapshot(){const pos=this.terrain.geometry.attributes.position,col=this.terrain.geometry.attributes.color;let heights=[];for(let i=0;i<pos.count;i++)heights.push(Math.round(pos.getZ(i)*1000)/1000);return {version:1,size:128,heights,colors:Array.from(col.array).map(x=>Math.round(x*1000)/1000),construction:{storeyHeight:this.storeyHeight||2.6,floorLevel:this.floorLevel||0,smartSnap:this.smartSnap!==false,autoThickness:this.autoThickness!==false},objects:this.objects.map(e=>({kind:e.kind,...JSON.parse(JSON.stringify(e.data))})),updated:new Date().toISOString()};}
  async restore(s){
    if(!s||!Array.isArray(s.objects)||!Array.isArray(s.heights))throw Error('Неверный формат проекта');

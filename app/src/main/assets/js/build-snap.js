@@ -169,8 +169,21 @@ const BuildSnap=(()=>{
   const zz=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
   const width=(box.max.x-box.min.x)*scale,depth=(box.max.z-box.min.z)*scale;
   const extent=.5*(Math.abs(xx.dot(normal))*width+Math.abs(zz.dot(normal))*depth);
-  // Join along the nearest reference edge, preserving source XY footprint.
-  const point=edge.point.clone().addScaledVector(normal,extent);
+  // Lock modular floors to whole edge intervals. Previously the cursor's
+  // arbitrary projection was used as the tile centre, so moving the character
+  // by half a tile produced half-overlapping slabs. Undo made that especially
+  // obvious when the nearest reference edge changed.
+  const edgeLength=edge.first.distanceTo(edge.last);
+  const tangentSpan=Math.max(.001,
+   Math.abs(xx.dot(edge.tangent))*width+Math.abs(zz.dot(edge.tangent))*depth);
+  const slots=Math.max(1,Math.floor(edgeLength/tangentSpan+1e-4));
+  const firstCenter=edgeLength*.5-(slots-1)*tangentSpan*.5;
+  const projected=edge.point.clone().sub(edge.first).dot(edge.tangent);
+  const slot=clamp(Math.round((projected-firstCenter)/tangentSpan),0,slots-1);
+  const along=firstCenter+slot*tangentSpan;
+  const point=edge.first.clone().addScaledVector(edge.tangent,along)
+   .addScaledVector(normal,extent);
+  // Explicit adjustment remains available in 25 cm increments.
   point.addScaledVector(edge.tangent,w.edgeShift||0);
   const center=rotated(new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2),yaw).multiplyScalar(scale);
   point.x-=center.x;point.z-=center.z;
