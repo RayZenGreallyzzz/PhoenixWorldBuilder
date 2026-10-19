@@ -27,7 +27,7 @@ const BuildJoin=(()=>{
  function nearby(w,p){
   const possible=[];
   for(const entry of w.objects||[]){
-   if(!wallCategory(catOf(w,entry)))continue;
+   if(!wallCategory(catOf(w,entry))&&!(typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind)))continue;
    const root=entry.mesh;
    // Fast world-space rejection based on geometry bounding sphere after pivot shift.
    const info=wallInfo(w,entry);if(!info)continue;
@@ -216,21 +216,28 @@ const BuildJoin=(()=>{
   const mode=w.joinMode||'auto';
   const isCorner=mode==='corner'||(mode==='auto'&&cat==='corner');
   const isStack=mode==='stack'||(mode==='auto'&&cat==='wall'&&w.floorLevel>0);
-  const isEnd=mode==='auto'&&['wall','door','railing'].includes(cat);
+  const isEnd=mode==='auto'&&(['wall','door','railing'].includes(cat)||typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement));
   if(!isCorner&&!isStack&&!isEnd)return null;
   const walls=nearby(w,p),box=modelBounds(w);
-  // For two walls on the same level, snap their real GLB ends first.
-  // This must run BEFORE the floor edge, otherwise a floor captures the wall.
-  if(isEnd){
-   const end=joinEnd(w,p,walls,box,false);
+  // Curved modules MUST join via physical end-cap sockets and tangent,
+  // never via the rectangular bounds used for ordinary straight walls.
+  const curved=typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement);
+  const nearCurves=typeof BuildCurves!=='undefined'&&walls.some(x=>BuildCurves.isArc(x.entry.kind));
+  if((curved||nearCurves)&&typeof BuildCurves!=='undefined'){
+   const matched=BuildCurves.connect(w,p,walls,box);
+   if(matched)return matched;
+  }
+  const straightWalls=nearCurves?walls.filter(x=>!BuildCurves.isArc(x.entry.kind)):walls;
+  if(isEnd&&!curved){
+   const end=joinEnd(w,p,straightWalls,box,false);
    if(end)return end;
   }
-  if(mode==='corner'&&['wall','door'].includes(cat)){
-   const end=joinEnd(w,p,walls,box,true);
+  if(mode==='corner'&&['wall','door'].includes(cat)&&!curved){
+   const end=joinEnd(w,p,straightWalls,box,true);
    if(end)return end;
   }
   if(mode==='auto'&&isStack&&hasCurrentDeck(w,p))return null;
-  const result=isCorner?corner(w,p,walls,box):isStack?stack(w,p,walls,box):null;
+  const result=isCorner&&!curved?corner(w,p,straightWalls,box):isStack&&!curved?stack(w,p,straightWalls,box):null;
   if(result)return result;
   if(mode!=='auto')return {position:new THREE.Vector3(p.x,w.placementHeight(p.x,p.z),p.z),
    rotation:w.placementRotation||0,snapped:false,valid:false,category:cat,
