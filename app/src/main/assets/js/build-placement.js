@@ -1,6 +1,7 @@
 /* Preview placement validation. Offline; conservative broad-phase for imported GLB. */
 const BuildPlacementValidator=(()=>{
  const EPS=.025;
+ const rectCache=new WeakMap();
  const structural=new Set(['foundation','wall','corner','door','ceiling','roof','stairs']);
  const wallLike=new Set(['wall','corner','door']);
  const decorative=new Set(['prop','decor','decoration','ceiling_finish','overlay','foliage']);
@@ -24,9 +25,11 @@ const BuildPlacementValidator=(()=>{
   return out;
  }
  function rect(root) {
+  root.updateMatrixWorld(true,true);
+  const mat=root.matrixWorld.elements,prior=rectCache.get(root);
+  if(prior&&prior.matrix.every((v,i)=>v===mat[i]))return prior.rect;
   const box=localBounds(root);
   if(box.isEmpty())return null;
-  root.updateMatrixWorld(true,true);
   const mx=root.matrixWorld,mid=(box.min.y+box.max.y)/2;
   const points=[];
   for(const [x,z] of [[box.min.x,box.min.z],[box.max.x,box.min.z],[box.max.x,box.max.z],[box.min.x,box.max.z]]){
@@ -39,7 +42,9 @@ const BuildPlacementValidator=(()=>{
   const width=Math.hypot(points[1][0]-points[0][0],points[1][1]-points[0][1]);
   const length=Math.hypot(points[3][0]-points[0][0],points[3][1]-points[0][1]);
   const area=Math.max(.00001,width*length);
-  return {points,cx,cz,top:Math.max(top,bottom),bottom:Math.min(top,bottom),width,length,area};
+  const value={points,cx,cz,top:Math.max(top,bottom),bottom:Math.min(top,bottom),width,length,area};
+  rectCache.set(root,{matrix:mat.slice(),rect:value});
+  return value;
  }
  function projected(points,axis){
   let low=Infinity,high=-Infinity;
@@ -116,6 +121,9 @@ const BuildPlacementValidator=(()=>{
   // surfaces. Also respect the already exposed "Free" placement mode.
   if(w.joinMode==='free'||decorative.has(cat)||!structural.has(cat))
    return {...solved,valid:true,reason:w.joinMode==='free'?'Свободная установка':'Декор можно накладывать поверх основы'};
+  if((cat==='roof'||cat==='ceiling')&&w.smartSnap!==false&&!solved.snapped&&w.objects?.length){
+   return {...solved,valid:false,reason:cat==='roof'?'Не найдена опора для крыши':'Не найдены стены или опора для перекрытия'};
+  }
   const a=rect(root);
   if(!a)return {...solved,valid:false,reason:'У детали нет геометрии для проверки'};
   if(![a.cx,a.cz,a.top,a.bottom].every(finite))
