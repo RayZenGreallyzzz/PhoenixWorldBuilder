@@ -5,7 +5,7 @@ const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceilin
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
 const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
-let statusMessage='';let surfaceScope='all';let pendingRecovery=null;let savedNatively=false;
+let statusMessage='';let surfaceScope='all';let pendingRecovery=null;let savedNatively=false;let initializing=true;
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
 function groupType(name){
@@ -646,7 +646,7 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
 }
 let saveHandle=0;
 function saveSoon(){
- if(isLoading||pendingRecovery)return;
+ if(isLoading||pendingRecovery||initializing)return;
  saveIndicator('◌ Сохраняю…');
  clearTimeout(saveHandle);
  saveHandle=setTimeout(()=>saveLocal(false),500);
@@ -684,7 +684,7 @@ async function init(){setupPicker();wireButtons();refreshConstructionUI();attach
    saveIndicator('⚠ Требуются GLB');toast('Проект найден! Для восстановления импортируй исходный ZIP');
   }else if(!w.objects.length)toast('Хранилище недоступно: '+err.message);
  }
- try{w.invertCameraX=localStorage.getItem('pwb_camera_x')==='1';$('invertCameraX').checked=w.invertCameraX;w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');
+ try{w.invertCameraX=localStorage.getItem('pwb_camera_x')==='1';$('invertCameraX').checked=w.invertCameraX;w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');initializing=false;
  document.addEventListener('visibilitychange',()=>{
   if(document.hidden){PhoenixPersistence.flushNow();saveLocal(false)}
  });

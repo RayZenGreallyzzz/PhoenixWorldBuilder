@@ -102,3 +102,8 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 .levelGo input,#gameLevelGo{width:100%;min-width:0;background:#142c39;color:white;padding:7px 5px;border:1px solid #53898a;border-radius:7px;font-size:12px}
 .levelGo button{min-height:36px;padding:6px 9px;white-space:nowrap}
 #gameBuildHud #btnGameGoLevel{font-size:10px;min-width:65px;flex:1}
+
+/* Always display durable project-save state without covering the touch HUD. */
+.saveStatus{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;border:1px solid #355b59;border-radius:7px;background:#14343a;color:#b2f2df;font-size:10px;min-height:27px;padding:4px 7px}
+#saveDetails{display:block;line-height:1.45;color:#b8d0c9;white-space:normal}
+@media(max-width:780px){.saveStatus{max-width:88px;font-size:9px;padding:2px 4px}}
