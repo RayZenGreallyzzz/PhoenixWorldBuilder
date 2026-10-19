@@ -116,7 +116,9 @@ const BuildJoin=(()=>{
    }
   }
   const yaw=baseYaw+(w.placementRotation||0)*Math.PI/180;
-  return {position:solvePivot(w,box,best.where,yaw,best.y),
+  const placed=solvePivot(w,box,best.where,yaw,best.y);
+  placed.x+=w.cornerOffsetX||0;placed.z+=w.cornerOffsetZ||0;
+  return {position:placed,
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,corner:true,edge:false,
    reference:best.reference,category:w.placementCategory||'corner',joinedTo:'corner'};
  }
