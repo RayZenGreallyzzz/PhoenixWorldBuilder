@@ -310,7 +310,7 @@ $('avatarHeightExact').onchange=e=>updateAvatarSize(Number(e.target.value));
  swatches('materialColors',COLORS,c=>updateStyle('color',c));swatches('terrainColors',TERRAIN_COLORS,c=>{w.terrainPaint=c;toast('Цвет земли выбран')});
 }
 function updateStyle(key,value){
- if(key==='color'&&surfaceScope!=='all')return assignSurfacePaint('color',value);
+ if(key==='color')return assignSurfacePaint('color',value);
  w.currentPaint=key==='color'?value:w.currentPaint;
  const e=w.selected;if(!e){toast('Сначала выбери объект на карте');return}
  w.remember();e.data[key]=value;applyEntry(e);w.onChanged();
@@ -447,7 +447,9 @@ function wireButtons(){
    toast('Персонаж загружен: '+info.animations.length+' анимаций');
   }catch(err){console.error(err);toast('Ошибка персонажа: '+err.message)}
  };
- $('fileTexture').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{const id='tex:'+f.name.toLowerCase();await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');await loadTexture(id);renderTextureOptions();$('textureSelect').value=id;if(w.selected){w.remember();w.selected.data.texture=id;applyEntry(w.selected);w.onChanged();toast('Текстура установлена')}else toast('Текстура добавлена. Выбери объект для применения')}catch(err){toast('Текстура не открыта: '+err.message)}};
+ $('fileTexture').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{const id='tex:'+f.name.toLowerCase();await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');await loadTexture(id);renderTextureOptions();$('textureSelect').value=id;
+   if(surfaceTarget()||(w.placement&&w.ghost))assignSurfacePaint('texture',id);
+   else toast('PNG добавлена. Выбери деталь и сторону для нанесения')}catch(err){toast('Текстура не открыта: '+err.message)}};
 }
 async function importZip(file,isProject=false){const entries=await ZipUtils.extract(file),glbs=[],textureKeys=[],keys=Object.keys(entries);let project=null;let manifest=null;let materialMap=null;let savedBindings=null;
  if(entries['assets_manifest.json'])try{manifest=JSON.parse(new TextDecoder().decode(entries['assets_manifest.json']))}catch(e){};
