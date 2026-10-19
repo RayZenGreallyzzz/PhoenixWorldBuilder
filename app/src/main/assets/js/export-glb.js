@@ -2,11 +2,22 @@
  * materials, embedded base-color textures. Game logic remains in map.json. */
 const SceneExporter=(()=>{
  const te=new TextEncoder();const align=n=>(n+3)&~3;
+ // Use the same pixel budget as high-resolution decal imports. Keep wide
+ // PNG/JPEG pictures at full native resolution when they fit in memory.
+ function textureDimensions(width,height){
+  const maxEdge=4096,maxPixels=2048*2048;
+  const scale=Math.min(1,maxEdge/Math.max(width,height),Math.sqrt(maxPixels/(width*height)));
+  return {width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale))};
+ }
  async function encodeTexture(tex){
-  let img=tex?.image;if(!img||!img.width||!img.height)return null;
-  const cv=document.createElement('canvas');cv.width=Math.min(img.width,2048);cv.height=Math.min(img.height,2048);
-  cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-  const blob=await new Promise(resolve=>cv.toBlob(resolve,'image/png'));return blob?new Uint8Array(await blob.arrayBuffer()):null;
+  const img=tex?.image;if(!img||!img.width||!img.height)return null;
+  const size=textureDimensions(img.width,img.height);
+  const cv=document.createElement('canvas');cv.width=size.width;cv.height=size.height;
+  const ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(img,0,0,cv.width,cv.height);
+  const blob=await new Promise(resolve=>cv.toBlob(resolve,'image/png'));
+  return blob?new Uint8Array(await blob.arrayBuffer()):null;
  }
  async function build(world,options={}){
   const gltf={asset:{version:'2.0',generator:'Phoenix World Builder'},scene:0,scenes:[{nodes:[]}],nodes:[],meshes:[],materials:[],accessors:[],bufferViews:[],buffers:[{byteLength:0}],images:[],textures:[],samplers:[{magFilter:9729,minFilter:9987,wrapS:10497,wrapT:10497}]};
@@ -185,5 +196,5 @@ const SceneExporter=(()=>{
   let p=20+jsonSize;v.setUint32(p,binSize,true);v.setUint32(p+4,0x004e4942,true);p+=8;for(const x of binary){out.set(x,p);p+=x.length;}
   return new Blob([out],{type:'model/gltf-binary'});
  }
- return {build};
+ return {build,textureDimensions};
 })();
