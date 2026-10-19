@@ -2,6 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const d=path.resolve(__dirname,'../app/src/main/assets/js');
 const THREE=global.THREE=require(path.join(d,'three.min.js'));
 global.SurfacePaint=require(path.join(d,'surface-paint.js'));
+vm.runInThisContext(fs.readFileSync(path.join(d,'export-glb.js'),'utf8')+'\nglobal.SceneExporter=SceneExporter');
 vm.runInThisContext(fs.readFileSync(path.join(d,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
 const wrap=new THREE.DataTexture(new Uint8Array([200,100,50,255]),1,1,THREE.RGBAFormat);
 const bottom=new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat);
@@ -77,5 +78,19 @@ assert.equal(installed.data.surfacePaint.bottom,undefined);
   if(snippet==='loadTexture(texId)')continue;
   assert(app.includes(snippet),'No serialized surface texture export: '+snippet);
  }
- console.log('Single mesh two-faced painted floor, GLB shader, separate PNGs, save/restore, unlimited levels OK');
+ // GLB has one mesh and one set of vertex positions, yet two independent face materials.
+ const exportEntry=w.objects[0];
+ exportEntry.data.surfacePaint={top:{color:'#b59b66'},bottom:{color:'#ffffff'}};
+ w.applyAppearance(exportEntry);
+ const buffer=await (await SceneExporter.build(w,{houseOnly:true})).arrayBuffer();
+ const bytes=new Uint8Array(buffer),header=new DataView(buffer);
+ const json=JSON.parse(new TextDecoder().decode(bytes.slice(20,20+header.getUint32(12,true))));
+ assert.equal(json.meshes.length,1,'GLB must contain one floor mesh');
+ assert.equal(json.nodes.length,1,'GLB must have one node for the entire floor');
+ assert(json.meshes[0].primitives.length>=3,'Separate top/bottom/sides material primitives');
+ const primitives=json.meshes[0].primitives,ids=primitives.map(p=>p.material);
+ assert(new Set(ids).size>=3,'Top and underside retain distinct materials in exported GLB');
+ assert.equal(primitives.reduce((sum,p)=>sum+json.accessors[p.indices].count,0),36,
+  'Export reuses original 12 triangles instead of duplicating the floor');
+ console.log('Single mesh, full/top/bottom shaders, independent PNGs, exported GLB face materials and unlimited levels OK');
 })().catch(e=>{console.error(e);process.exitCode=1});
