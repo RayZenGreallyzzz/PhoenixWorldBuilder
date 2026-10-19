@@ -21,19 +21,105 @@ const SceneExporter=(()=>{
    let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:a<1?'BLEND':'OPAQUE'};
    if(m.map){let textureIndex=texIdx.get(m.map);if(textureIndex===undefined){const image=await encodeTexture(m.map);if(image){const imageIndex=gltf.images.length;gltf.images.push({bufferView:data(image),mimeType:'image/png'});textureIndex=gltf.textures.length;gltf.textures.push({source:imageIndex,sampler:0});texIdx.set(m.map,textureIndex)}}if(textureIndex!==undefined)md.pbrMetallicRoughness.baseColorTexture={index:textureIndex};}
    let idx=gltf.materials.length;gltf.materials.push(md);matIdx.set(m,idx);return idx;}
-  const models=options.houseOnly?world.objects.map(o=>o.mesh):[world.terrain,...world.objects.map(o=>o.mesh)];
-  const assembledBounds=new THREE.Box3();for(const obj of models){obj.updateMatrixWorld(true);assembledBounds.expandByObject(obj)}
+  const entries=options.houseOnly?
+   world.objects.map(item=>({root:item.mesh,entry:item})):
+   [{root:world.terrain,entry:null},...world.objects.map(item=>({root:item.mesh,entry:item}))];
+  const models=entries.map(item=>item.root);
+  const assembledBounds=new THREE.Box3();
+  for(const obj of models){obj.updateMatrixWorld(true);assembledBounds.expandByObject(obj)}
   const shift=options.houseOnly&&!assembledBounds.isEmpty()
     ?new THREE.Vector3(-((assembledBounds.min.x+assembledBounds.max.x)/2),-assembledBounds.min.y,-((assembledBounds.min.z+assembledBounds.max.z)/2))
     :new THREE.Vector3();
   if(options.houseOnly&&!models.length)throw Error('Сначала построй дом');
-  for(const root of models){root.updateMatrixWorld(true);const meshes=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)meshes.push(o)});
-   for(const mesh of meshes){let geom=mesh.geometry;if(geom.index&&geom.index.count>700000)continue;const pos=geom.getAttribute('position');if(!pos||pos.count<3)continue;
-    const attributes={POSITION:access(new Float32Array(pos.array),0,'VEC3')};let norm=geom.getAttribute('normal'),uv=geom.getAttribute('uv'),col=geom.getAttribute('color');
-    if(norm)attributes.NORMAL=access(new Float32Array(norm.array),0,'VEC3');if(uv)attributes.TEXCOORD_0=access(new Float32Array(uv.array),0,'VEC2');if(col&&col.itemSize===3)attributes.COLOR_0=access(new Float32Array(col.array),0,'VEC3');
-    const prim={attributes,mode:4,material:await material(mesh.material)};
-    if(geom.index){let indices=geom.index.array;prim.indices=access(indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),1,'SCALAR');}
-    let mi=gltf.meshes.length;gltf.meshes.push({name:mesh.name||'Деталь',primitives:[prim]});let ni=gltf.nodes.length;gltf.nodes.push({mesh:mi,name:mesh.name||root.name||'Объект',matrix:new THREE.Matrix4().makeTranslation(shift.x,shift.y,shift.z).multiply(mesh.matrixWorld).toArray()});gltf.scenes[0].nodes.push(ni);
+  const v0=new THREE.Vector3(),v1=new THREE.Vector3(),v2=new THREE.Vector3(),
+   edge1=new THREE.Vector3(),edge2=new THREE.Vector3(),normal=new THREE.Vector3();
+  async function coatedMaterial(original,paint,label){
+   const source=Array.isArray(original)?original[0]:original;
+   if(!paint)return material(source);
+   const mat=source?.clone()||new THREE.MeshStandardMaterial();
+   mat.name=(source?.name||'Материал')+' ['+label+']';
+   mat.map=paint.texture?world.textures?.get(paint.texture)||null:null;
+   if(mat.color)mat.color.set(paint.color||'#ffffff');
+   return material(mat);
+  }
+  for(const {root,entry} of entries){
+   root.updateMatrixWorld(true);
+   const hasPaint=typeof SurfacePaint!=='undefined'&&
+    Object.keys(SurfacePaint.normalize(entry?.data?.surfacePaint)).length>0;
+   const skin=hasPaint?SurfacePaint.normalize(entry.data.surfacePaint):{};
+   const meshes=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)meshes.push(o)});
+   for(const mesh of meshes){
+    const geom=mesh.geometry;if(geom.index&&geom.index.count>700000)continue;
+    const pos=geom.getAttribute('position');if(!pos||pos.count<3)continue;
+    const attrs={POSITION:access(new Float32Array(pos.array),0,'VEC3')};
+    const norm=geom.getAttribute('normal'),uv=geom.getAttribute('uv'),col=geom.getAttribute('color');
+    if(norm)attrs.NORMAL=access(new Float32Array(norm.array),0,'VEC3');
+    if(uv)attrs.TEXCOORD_0=access(new Float32Array(uv.array),0,'VEC2');
+    if(col&&col.itemSize===3)attrs.COLOR_0=access(new Float32Array(col.array),0,'VEC3');
+    let primitives=[];
+    if(!hasPaint){
+     const prim={attributes:attrs,mode:4,material:await material(mesh.material)};
+     if(geom.index){
+      const indices=geom.index.array;
+      prim.indices=access(indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),1,'SCALAR');
+     }
+     primitives.push(prim);
+    }else{
+     // Keep one glTF mesh and one vertex buffer. Painted sides use separate
+     // *index primitives*, not duplicated ceiling/floor meshes or triangles.
+     const inds=geom.index?.array||null;
+     const triCount=Math.floor((inds?.length||pos.count)/3);
+     const groups=geom.groups||[],materialList=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+     const buckets=new Map(),projectedUV=new Map();
+     function getProjection(mode){
+      if(mode==='source')return attrs.TEXCOORD_0??null;
+      if(projectedUV.has(mode))return projectedUV.get(mode);
+      const data=new Float32Array(pos.count*2),p=new THREE.Vector3();
+      for(let i=0;i<pos.count;i++){
+       p.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(mesh.matrixWorld);
+       if(mode==='xz'){data[2*i]=p.x;data[2*i+1]=p.z}
+       else if(mode==='yz'){data[2*i]=p.z;data[2*i+1]=p.y}
+       else {data[2*i]=p.x;data[2*i+1]=p.y}
+      }
+      const value=access(data,0,'VEC2');projectedUV.set(mode,value);return value;
+     }
+     for(let tri=0;tri<triCount;tri++){
+      const off=tri*3,i0=inds?inds[off]:off,i1=inds?inds[off+1]:off+1,i2=inds?inds[off+2]:off+2;
+      v0.set(pos.getX(i0),pos.getY(i0),pos.getZ(i0)).applyMatrix4(mesh.matrixWorld);
+      v1.set(pos.getX(i1),pos.getY(i1),pos.getZ(i1)).applyMatrix4(mesh.matrixWorld);
+      v2.set(pos.getX(i2),pos.getY(i2),pos.getZ(i2)).applyMatrix4(mesh.matrixWorld);
+      normal.copy(edge1.subVectors(v1,v0)).cross(edge2.subVectors(v2,v0)).normalize();
+      const face=normal.y>.55?'top':normal.y<-.55?'bottom':'side';
+      const finish=(face==='top'?skin.top:face==='bottom'?skin.bottom:null)||skin.all||null;
+      const srcGroup=groups.find(g=>off>=g.start&&off<g.start+g.count);
+      const materialIndex=srcGroup?.materialIndex||0,orig=materialList[materialIndex]||materialList[0];
+      let uvMode='source';
+      if(finish?.texture){
+       uvMode=face==='top'||face==='bottom'?'xz':
+        Math.abs(normal.x)>=Math.abs(normal.z)?'yz':'xy';
+      }
+      const finishKey=finish===skin.top?'top':finish===skin.bottom?'bottom':finish===skin.all?'all':'original';
+      const key=materialIndex+'|'+face+'|'+finishKey+'|'+uvMode;
+      if(!buckets.has(key))buckets.set(key,{indices:[],orig,finish,face,uvMode});
+      buckets.get(key).indices.push(i0,i1,i2);
+     }
+     for(const bucket of buckets.values()){
+      let max=0;for(const idx of bucket.indices)if(idx>max)max=idx;
+      const array=max>65535?new Uint32Array(bucket.indices):new Uint16Array(bucket.indices);
+      const attributes={...attrs};
+      const proj=getProjection(bucket.uvMode);
+      if(proj!==null)attributes.TEXCOORD_0=proj;
+      const primitive={attributes,mode:4,
+       indices:access(array,1,'SCALAR'),
+       material:await coatedMaterial(bucket.orig,bucket.finish,bucket.face)};
+      primitives.push(primitive);
+     }
+    }
+    const mi=gltf.meshes.length;gltf.meshes.push({name:mesh.name||'Деталь',primitives});
+    const ni=gltf.nodes.length;
+    gltf.nodes.push({mesh:mi,name:mesh.name||root.name||'Объект',
+     matrix:new THREE.Matrix4().makeTranslation(shift.x,shift.y,shift.z).multiply(mesh.matrixWorld).toArray()});
+    gltf.scenes[0].nodes.push(ni);
    }
   }
   gltf.buffers[0].byteLength=offset;
