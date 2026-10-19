@@ -275,14 +275,19 @@ function renderLibrary(){
   }
  }else{
   for(const [id,name,category] of BUILTINS){
-   if((currentFilter!=='all'&&currentFilter!==category)||(q&&!name.toLowerCase().includes(q)))continue;
+   if(currentFilter==='my'||(currentFilter!=='all'&&currentFilter!==category)||(q&&!name.toLowerCase().includes(q)))continue;
    items.push({id,name,kind:'builtin',category});
   }
   for(const [id,meta] of savedMeta){
    const name=meta.displayName||fmtName(meta.name);
    const category=meta.category||groupType(meta.name);
-   if((currentFilter!=='all'&&currentFilter!==category)||(q&&!(name+' '+meta.name+' '+(meta.sourceId||'')).toLowerCase().includes(q)))continue;
+   if(currentFilter==='my'||(currentFilter!=='all'&&currentFilter!==category)||(q&&!(name+' '+meta.name+' '+(meta.sourceId||'')).toLowerCase().includes(q)))continue;
    items.push({id,name,kind:'asset',category});
+  }
+  for(const [id,preset] of modulePresets){
+   if(!['all','my',preset.category].includes(currentFilter))continue;
+   if(q&&!(preset.name+' '+preset.sourceKind).toLowerCase().includes(q))continue;
+   items.push({id,name:preset.name,kind:'preset',category:preset.category});
   }
  }
  const pages=Math.max(1,Math.ceil(items.length/GALLERY_SIZE));
@@ -369,6 +374,7 @@ function setupPicker(){
  $('gameSurfaceScope').onchange=e=>setSurfaceScope(e.target.value);
  $('surfacePaintTarget').onchange=updateSurfaceUI;
  $('btnSurfaceClear').onclick=clearSurface;
+ $('btnSavePreset').onclick=saveModulePreset;
  $('textureSelect').onchange=e=>selectTexture(e.target.value);
  $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.set(scale,scale*(w.selected.data.thicknessY||1),scale);w.onChanged()};
  function updateAvatarSize(meters){
@@ -409,6 +415,7 @@ function wireButtons(){
  };
  $('btnGameSurfaceColor').onclick=()=>assignSurfacePaint('color',$('gameSurfaceColor').value);
  $('btnGameSurfaceClear').onclick=clearSurface;
+ $('btnGameSavePreset').onclick=saveModulePreset;
  $('btnBuildRotate').onclick=()=>toast('Дополнительный поворот: '+w.rotatePlacement()+'°');
  $('buildJoinMode').onchange=e=>{
   const mode=w.setJoinMode(e.target.value);refreshConstructionUI();
@@ -730,6 +737,8 @@ async function init(){setupPicker();wireButtons();refreshConstructionUI();attach
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
   const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||''})}renderTextureOptions();
   catalogMeta=await dbOp('catalog','metadata')||{};
+  const storedPresets=await dbOp('catalog',PRESET_KEY)||[];
+  modulePresets=new Map(Array.isArray(storedPresets)?storedPresets.filter(x=>x?.id&&x?.sourceKind).map(x=>[x.id,x]):[]);
   for(const [id,meta] of Object.entries(catalogMeta)){if(savedMeta.has(id))Object.assign(savedMeta.get(id),meta)}
   const autosave=await dbOp('projects','autosave');
   const selected=PhoenixPersistence.choose(PhoenixPersistence.read(),autosave);
