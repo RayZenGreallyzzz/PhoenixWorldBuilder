@@ -135,6 +135,55 @@ const BuildSnap=(()=>{
    reference:base?.entry.data.id||walls[0]?.entry.data.id||ceilings[0]?.entry.data.id,
    targetHeight:target,category:cat};
  }
+ function matchSlab(w,p,cat,model,box){
+  // Floors share a top plane and, optionally, thickness without scaling X or Z.
+  // 3D cut-corner geometry is kept intact: only the parent group's Y scale changes.
+  if(cat!=='foundation'||!model||box.isEmpty())return null;
+  const baseLevel=w.floorLevel||0;
+  const sourceThickness=box.max.y-box.min.y;
+  const scale=w.placementScale||1;
+  if(!Number.isFinite(sourceThickness)||sourceThickness<.012)return null;
+  const possible=[];
+  for(const entry of w.objects){
+   if(kindOf(w,entry)!=='foundation')continue;
+   const tagged=storyOf(entry);
+   if(tagged!==null&&tagged!==baseLevel)continue;
+   const ref=surface(entry);if(!ref)continue;
+   const physicalThickness=ref.top-ref.bottom;
+   if(!Number.isFinite(physicalThickness)||physicalThickness<.025||physicalThickness>1.5)continue;
+   const edge=nearestEdge(ref,p),distance=edge.distance;
+   if(distance>Math.max(3.5,Math.min(6,Math.max(box.max.x-box.min.x,box.max.z-box.min.z)*scale)))continue;
+   const nominal=w.heightAt(p.x,p.z)+baseLevel*(w.storeyHeight||2.6);
+   // Reject different floors in tall buildings, but accept raised non-standard decks.
+   const playerTop=w.mode==='playbuild'&&w.player?w.player.position.y-.85:nominal;
+   const delta=Math.min(Math.abs(ref.top-nominal),Math.abs(ref.top-playerTop));
+   if(tagged===null&&delta>3.4)continue;
+   possible.push({ref,edge,distance,thickness:physicalThickness,
+    score:distance+(tagged===baseLevel?-2:0)+delta*.1});
+  }
+  possible.sort((a,b)=>a.score-b.score);
+  if(!possible.length)return null;
+  const choice=possible[0],ref=choice.ref,edge=choice.edge,normal=edge.normal;
+  const yaw=(w.placementRotation||0)*Math.PI/180;
+  const xx=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+  const zz=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+  const width=(box.max.x-box.min.x)*scale,depth=(box.max.z-box.min.z)*scale;
+  const extent=.5*(Math.abs(xx.dot(normal))*width+Math.abs(zz.dot(normal))*depth);
+  // Join along the nearest reference edge, preserving source XY footprint.
+  const point=edge.point.clone().addScaledVector(normal,extent);
+  point.addScaledVector(edge.tangent,w.edgeShift||0);
+  const center=rotated(new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2),yaw).multiplyScalar(scale);
+  point.x-=center.x;point.z-=center.z;
+  let factor=1;
+  if(w.autoThickness!==false){
+   const match=choice.thickness/(sourceThickness*scale);
+   // Do not flatten highly sculpted or accidentally miscategorized objects.
+   if(match>=.15&&match<=6)factor=match;
+  }
+  point.y=ref.top-box.max.y*scale*factor+(w.placementLift||0);
+  return {position:point,rotation:(w.placementRotation||0),snapped:true,slab:true,edge:true,
+   reference:ref.entry.data.id,category:cat,thicknessY:factor,referenceThickness:choice.thickness};
+ }
  function resolve(w,p){
   const kind=w.placement||'',cat=w.placementCategory||w.categoryForKind?.(kind)||'prop';
   const aligned=edgable(cat,kind),useSnap=w.smartSnap!==false;
@@ -146,6 +195,10 @@ const BuildSnap=(()=>{
    out.position.y+=(w.placementLift||0);
    return out;
   };
+  if(cat==='foundation'&&useSnap&&w.objects.length){
+   const match=matchSlab(w,p,cat,model,modelBox);
+   if(match)return match;
+  }
   // Roofs and ceilings use the actual wall tops, slab thickness and storey datum.
   if(cat==='roof'||cat==='ceiling'){
    if(useSnap&&w.objects.length){
@@ -216,6 +269,6 @@ const BuildSnap=(()=>{
   const degrees=((yaw*180/Math.PI)%360+360)%360;
   return lifted({position:anchor,rotation:degrees,snapped:true,edge:aligned,reference:chosen.entry.data.id,category:cat});
  }
- return {resolve,attrBounds,nearestEdge};
+ return {resolve,attrBounds,nearestEdge,matchSlab};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildSnap;
