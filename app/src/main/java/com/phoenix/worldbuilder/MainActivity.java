@@ -18,6 +18,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
+import org.json.JSONObject;
+import org.json.JSONException;
 
 public class MainActivity extends Activity {
     private static final int PICK_FILE = 41;
@@ -76,7 +83,83 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/index.html");
     }
 
+    private static final int MAX_PROJECT_CHARS = 16000000;
+    private static final String SCENE_MAIN = "phoenix_scene_autosave.json";
+    private static final String SCENE_PREVIOUS = "phoenix_scene_previous.json";
+    private static final String SCENE_MANUAL = "phoenix_scene_manual.json";
+
+    private boolean isValidScene(String json) {
+        if (json == null || json.isEmpty() || json.length() > MAX_PROJECT_CHARS) return false;
+        try {
+            JSONObject doc = new JSONObject(json);
+            return doc.optJSONArray("objects") != null && doc.optJSONArray("heights") != null;
+        } catch (JSONException ex) {
+            return false;
+        }
+    }
+    private String readScene(String name) {
+        try {
+            File file = new File(getFilesDir(), name);
+            if (!file.isFile() || file.length() > MAX_PROJECT_CHARS) return "";
+            String json = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            return isValidScene(json) ? json : "";
+        } catch (Exception ex) {
+            android.util.Log.e("PhoenixSave", "read " + name, ex);
+            return "";
+        }
+    }
+    private void atomicMove(Path from, Path to) throws java.io.IOException {
+        try {
+            Files.move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException unsupported) {
+            Files.move(from, to, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+    private boolean writeScene(String name, String json, boolean makePrevious) {
+        if (!isValidScene(json)) return false;
+        try {
+            File dir = getFilesDir();
+            File current = new File(dir, name);
+            File tmp = new File(dir, name + ".writing");
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            try (FileOutputStream out = new FileOutputStream(tmp, false)) {
+                out.write(bytes);
+                out.getFD().sync();
+            }
+            if (makePrevious && current.isFile() && !readScene(name).isEmpty()) {
+                File backupTmp = new File(dir, SCENE_PREVIOUS + ".writing");
+                Files.copy(current.toPath(), backupTmp.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                try (FileOutputStream out = new FileOutputStream(backupTmp, true)) {
+                    out.getFD().sync();
+                }
+                atomicMove(backupTmp.toPath(), new File(dir, SCENE_PREVIOUS).toPath());
+            }
+            atomicMove(tmp.toPath(), current.toPath());
+            return true;
+        } catch (Exception ex) {
+            android.util.Log.e("PhoenixSave", "write " + name, ex);
+            return false;
+        }
+    }
     public class ExportBridge {
+        @JavascriptInterface public synchronized boolean saveProject(String json) {
+            return writeScene(SCENE_MAIN, json, true);
+        }
+        @JavascriptInterface public synchronized boolean saveManualProject(String json) {
+            return writeScene(SCENE_MANUAL, json, false);
+        }
+        @JavascriptInterface public synchronized String loadProject() {
+            String scene = readScene(SCENE_MAIN);
+            if (scene.isEmpty()) scene = readScene(SCENE_PREVIOUS);
+            if (scene.isEmpty()) scene = readScene(SCENE_MANUAL);
+            return scene;
+        }
+        @JavascriptInterface public synchronized String loadBackupProject() {
+            return readScene(SCENE_PREVIOUS);
+        }
+        @JavascriptInterface public synchronized String loadManualProject() {
+            return readScene(SCENE_MANUAL);
+        }
         @JavascriptInterface public synchronized void beginSave(String name, String mime) {
             try {
                 if (tempStream != null) tempStream.close();
@@ -134,10 +217,27 @@ public class MainActivity extends Activity {
         }
     }
     @Override public void onBackPressed() {
-        // Prevent accidental loss of the current offline scene. Use editor menu to save.
-        new android.app.AlertDialog.Builder(this).setMessage("Закрыть 3D-редактор?")
-            .setPositiveButton("Закрыть", (d,which)->super.onBackPressed())
-            .setNegativeButton("Остаться", (d,which)->{}).show();
+        new android.app.AlertDialog.Builder(this)
+            .setMessage("Сохранить постройку и закрыть редактор?")
+            .setPositiveButton("Сохранить и закрыть", (d, which) -> {
+                if (webView == null) { finish(); return; }
+                webView.evaluateJavascript(
+                    "(window.PhoenixPersistence&&window.PhoenixPersistence.flushNow?window.PhoenixPersistence.flushNow():false)",
+                    value -> {
+                        if ("true".equals(value)) finish();
+                        else Toast.makeText(this, "Не удалось сохранить. Редактор оставлен открытым.", Toast.LENGTH_LONG).show();
+                    });
+            })
+            .setNegativeButton("Остаться", (d, which) -> {}).show();
     }
-    @Override protected void onDestroy(){if(webView!=null)webView.destroy();super.onDestroy();}
+    @Override protected void onPause() {
+        if (webView != null) webView.evaluateJavascript(
+            "(window.PhoenixPersistence&&window.PhoenixPersistence.flushNow?window.PhoenixPersistence.flushNow():false)",
+            null);
+        super.onPause();
+    }
+    @Override protected void onDestroy() {
+        if (webView != null) { webView.destroy(); webView = null; }
+        super.onDestroy();
+    }
 }
