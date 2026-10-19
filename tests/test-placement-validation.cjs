@@ -1,0 +1,82 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const root=path.join(__dirname,'../app/src/main/assets/js');
+const THREE=global.THREE=require(path.join(root,'three.min.js'));
+global.BuildSnap=require(path.join(root,'build-snap.js'));
+global.BuildJoin=require(path.join(root,'build-join.js'));
+global.BuildPlacementValidator=require(path.join(root,'build-placement.js'));
+vm.runInThisContext(fs.readFileSync(path.join(root,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
+const w=Object.create(WorldBuilder.prototype);
+Object.assign(w,{scene:new THREE.Scene(),objects:[],assetCache:new Map(),textures:new Map(),nextId:1,ghost:null,
+ placementOutline:null,selected:null,moveTarget:null,mode:'build',placement:null,placementCategory:null,
+ placementRotation:0,placementScale:1,smartSnap:true,joinMode:'auto',autoThickness:false,edgeShift:0,
+ placementLift:0,cornerOffsetX:0,cornerOffsetZ:0,storeyHeight:2.6,floorLevel:0,snap:2,currentPaint:'#cccccc',
+ yaw:0,placementSurfacePaint:{},lastSnapResult:null});
+w.player=new THREE.Group();w.player.position.set(0,.85,0);w.scene.add(w.player);
+w.heightAt=()=>0;w.remember=()=>{};w.onChanged=()=>{};w.onSelected=()=>{};w.onSnapChanged=()=>{};
+w.highlight={setFromObject(){},visible:false};
+w.categoryForKind=kind=>({floor:'foundation',wall:'wall',door:'door',corner:'corner',
+ stairs:'stairs',ceiling:'ceiling',roof:'roof',crate:'prop'})[kind]||'prop';
+const pos=(x,y,z)=>new THREE.Vector3(x,y,z);
+w.smartSnap=false;
+w.setPlacement('floor','foundation');
+assert(w.ghost?.children.length===1,'A translucent floor is created');
+assert(w.placementOutline,'Ghost gets a single green/red box outline');
+assert(w.ghost.children[0].material.opacity<.6,'Preview remains translucent');
+let hit=w.applyGhostPlacement(pos(0,0,0));
+assert.equal(hit.valid,true,'Empty build position is green');
+assert.equal(w.placementOutline.material.color.getHex(),0x50f4a0);
+const first=w.placeAt(pos(0,0,0));
+assert(first&&w.objects.length===1,'First foundation saved');
+assert.equal(first.mesh.children[0].material.opacity,1,'Placed module is not tinted/transparent');
+hit=w.applyGhostPlacement(pos(0,0,0));
+assert.equal(hit.valid,false,'Identical overlapping foundation must be red');
+assert.equal(hit.obstacle,first.data.id);
+assert.equal(w.placementOutline.material.color.getHex(),0xff635c);
+assert.equal(w.placeAt(pos(0,0,0)),null,'Blocked placement creates no duplicate');
+assert.equal(w.objects.length,1);
+hit=w.applyGhostPlacement(pos(2,0,0));
+assert.equal(hit.valid,true,'Edge-to-edge floors allowed');
+assert.equal(w.placeAt(pos(2,0,0)).data.id,2);
+w.setPlacement('wall','wall');
+let oldWall=w.instantiate('wall',{id:110,pos:[0,0,0],rot:0,scale:1,category:'wall',storey:0});
+hit=w.applyGhostPlacement(pos(0,0,0));
+assert.equal(hit.valid,false,'Duplicate parallel wall blocked');
+assert.equal(w.placeAt(pos(0,0,0)),null);
+w.placementRotation=90;
+hit=w.applyGhostPlacement(pos(0,0,0));
+assert.equal(hit.valid,true,'Perpendicular wall intersection is a valid join');
+w.setPlacement('crate','prop');hit=w.applyGhostPlacement(pos(0,0,0));
+assert.equal(hit.valid,true,'Decor may layer on top of floor and wall');
+assert(w.placeAt(pos(0,0,0)),'Decor may be installed on shared surface');
+w.setPlacement('wall','wall');w.setJoinMode('free');w.placementRotation=0;
+hit=w.applyGhostPlacement(pos(0,0,0));
+assert.equal(hit.valid,true,'Free mode permits intentionally overlapping walls');
+w.setJoinMode('stack');w.smartSnap=true;
+hit=w.applyGhostPlacement(pos(60,0,60));
+assert.equal(hit.valid,false,'Missing mandatory wall join is blocked');
+assert.match(hit.reason,/стене|Подойди/);
+assert.equal(w.placeAt(pos(60,0,60)),null);
+const rotated=new THREE.Group(),m=new THREE.Mesh(new THREE.BoxGeometry(2,.2,3),
+ new THREE.MeshStandardMaterial());
+rotated.add(m);rotated.position.set(25,0,25);rotated.rotation.y=Math.PI/4;
+const angled={mesh:rotated,kind:'glb:angled',data:{id:500,category:'foundation',storey:0}};
+w.objects.push(angled);w.scene.add(rotated);
+w.setJoinMode('auto');w.smartSnap=false;
+const custom=rotated.clone(true);w.assetCache.set('glb:angled',custom);
+w.setPlacement('glb:angled','foundation');
+w.placementRotation=45;
+hit=w.applyGhostPlacement(pos(25,0,25));
+assert.equal(hit.valid,false,'Same rotated imported GLB overlaps existing floor');
+hit=w.applyGhostPlacement(pos(35,0,25));
+assert.equal(hit.valid,true,'Distant rotated GLB does not collide');
+const index=fs.readFileSync(path.join(root,'../index.html'),'utf8');
+const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+const css=fs.readFileSync(path.join(root,'../style.css'),'utf8');
+for(const id of ['placementStatus','buildPlacementStatus','btnBuildPlace'])
+ assert(index.includes('id="'+id+'"'),'Missing live validity indicator '+id);
+assert(index.includes('src="js/build-placement.js"'),'Validator loaded before app');
+assert(app.includes('w.applyGhostPlacement(point)'),'Game install revalidates ghost');
+assert(app.includes('result.reason'),'Placement failure shows reason');
+assert(css.includes('.placementStatus.blocked'),'Blocked status red stylesheet missing');
+console.log('Ghost green/red, no duplicate foundations/walls, legal corners, decorative overlay, free placement, blocked joins and rotated GLB tests OK');
