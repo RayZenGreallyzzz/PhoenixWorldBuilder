@@ -259,18 +259,26 @@ class WorldBuilder{
  }
  setPlacementScale(value){const n=Number(value);if(!Number.isFinite(n))return this.placementScale;this.placementScale=THREE.MathUtils.clamp(n,.1,10);if(this.ghost)this.ghost.scale.setScalar(this.placementScale);this.updateGameGhost();return this.placementScale;}
  solvePlacement(p){
+  const fine=solved=>{
+   const cat=this.placementCategory||this.categoryForKind?.(this.placement)||this.placement;
+   if(solved&&['wall','corner','door','railing','stairs'].includes(cat)){
+    solved.position.x+=this.cornerOffsetX||0;
+    solved.position.z+=this.cornerOffsetZ||0;
+   }
+   return solved;
+  };
   if(this.joinMode==='free'){
    const x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap;
-   return {position:new THREE.Vector3(x,this.placementHeight(x,z)+(this.placementLift||0),z),
-    rotation:this.placementRotation||0,snapped:false};
+   return fine({position:new THREE.Vector3(x,this.placementHeight(x,z)+(this.placementLift||0),z),
+    rotation:this.placementRotation||0,snapped:false});
   }
   if(typeof BuildJoin!=='undefined'&&this.placement&&!this.moveTarget&&this.smartSnap!==false){
    const joined=BuildJoin.resolve(this,p);
-   if(joined)return joined;
+   if(joined)return fine(joined);
   }
-  if(typeof BuildSnap!=='undefined'&&this.placement&&!this.moveTarget)return BuildSnap.resolve(this,p);
+  if(typeof BuildSnap!=='undefined'&&this.placement&&!this.moveTarget)return fine(BuildSnap.resolve(this,p));
   const x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap;
-  return {position:new THREE.Vector3(x,this.placementHeight(x,z)+(this.placementLift||0),z),rotation:this.placementRotation||0,snapped:false};
+  return fine({position:new THREE.Vector3(x,this.placementHeight(x,z)+(this.placementLift||0),z),rotation:this.placementRotation||0,snapped:false});
  }
  placeAt(p){
   if(!this.placement&&!this.moveTarget)return;
