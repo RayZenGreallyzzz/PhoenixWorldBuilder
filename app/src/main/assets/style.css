@@ -107,3 +107,13 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 .saveStatus{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;border:1px solid #355b59;border-radius:7px;background:#14343a;color:#b2f2df;font-size:10px;min-height:27px;padding:4px 7px}
 #saveDetails{display:block;line-height:1.45;color:#b8d0c9;white-space:normal}
 @media(max-width:780px){.saveStatus{max-width:88px;font-size:9px;padding:2px 4px}}
+
+/* Placement validity: one inexpensive text status, plus a GPU-light ghost outline. */
+.placementStatus{display:block;margin:5px 0 8px;padding:7px 9px;font-size:11px;line-height:1.35;border-radius:8px;
+ color:#b4d9d6;background:#18313e;border:1px solid #44656e;text-align:center;min-height:30px}
+.placementStatus.allowed{background:#163d34;color:#9bf7c5;border-color:#3aa779}
+.placementStatus.blocked{background:#52282b;color:#ffd5cc;border-color:#ec6b69}
+#gameBuildHud .placementStatus{margin:4px 0;padding:6px 7px;font-size:10px;min-height:29px;max-width:100%}
+#gameBuildHud #btnBuildPlace.placementBlocked{background:#632e30;border-color:#ef7775;color:#fbe0df}
+#gameBuildHud #snapStatus.blocked{color:#ff8981}
+#buildPlacementStatus{margin:8px 0 9px}
