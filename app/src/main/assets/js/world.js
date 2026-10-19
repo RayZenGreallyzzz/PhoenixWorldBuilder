@@ -208,10 +208,24 @@ class WorldBuilder{
   return this.ray.intersectObject(this.terrain,false)[0]?.point||null;
  }
  placementHeight(x,z,kind=this.placement,category=this.placementCategory){
-  const raised=kind==='ceiling'||kind==='roof'||category==='ceiling'||category==='roof';
+  const raised=kind==='ceiling'||kind==='ceiling_finish'||kind==='roof'||category==='ceiling'||category==='ceiling_finish'||category==='roof';
   return this.heightAt(x,z)+(this.floorLevel+(raised?1:0))*(this.storeyHeight||2.6);
  }
- changeFloor(delta){this.floorLevel=THREE.MathUtils.clamp(this.floorLevel+delta,0,20);this.updateGameGhost();return this.floorLevel+1;}
+ changeFloor(delta){return this.setFloorLevel(this.floorLevel+(Number(delta)||0)+1);}
+ setFloorLevel(value){
+  const raw=Number(value),level=raw-1;
+  if(!Number.isSafeInteger(level)||level<0)return this.floorLevel+1;
+  this.floorLevel=level;
+  this.updateGameGhost();this.onChanged();return level+1;
+ }
+ focusBuildFloor(){
+  // Non-destructive: camera alone rises, existing character and pieces stay put.
+  const x=this.player?.position.x??this.target.x,z=this.player?.position.z??this.target.z;
+  this.target.set(x,this.heightAt(x,z)+this.floorLevel*(this.storeyHeight||2.6)+1.25,z);
+  this.distance=THREE.MathUtils.clamp(this.distance,5,26);
+  this.updateCamera();
+  return this.target.y;
+ }
  setStoreyHeight(value){
   const n=Number(value);if(!Number.isFinite(n))return this.storeyHeight;
   this.storeyHeight=THREE.MathUtils.clamp(Math.round(n*100)/100,1.8,6);
@@ -257,7 +271,7 @@ class WorldBuilder{
    this.moveTarget.mesh.position.copy(v);this.moveTarget.data.pos=v.toArray();
    this.moveTarget=null;this.onChanged();return;
   }
-  const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.currentPaint;
+  const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.placementCategory==='ceiling_finish'?'#ffffff':this.currentPaint;
   const rec=this.instantiate(this.placement,{id:this.nextId++,pos:v.toArray(),rot:solved.rotation,scale:this.placementScale,thicknessY:solved.thicknessY||1,category:this.placementCategory||this.categoryForKind?.(this.placement)||null,storey:this.floorLevel,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
   this.select(rec);this.onChanged();return rec;
  }
@@ -268,6 +282,7 @@ class WorldBuilder{
  }
  makeBuiltin(kind){const group=new THREE.Group();let m=new THREE.MeshStandardMaterial({color:'#b7ac91',roughness:.85,side:THREE.DoubleSide}); const add=(geo,x,y,z,mat=m)=>{let mesh=new THREE.Mesh(geo,mat);mesh.position.set(x,y,z);mesh.receiveShadow=true;group.add(mesh);return mesh};
   if(kind==='floor'||kind==='ceiling')add(new THREE.BoxGeometry(2,.17,2),0,.08,0);
+   else if(kind==='ceiling_finish')add(new THREE.BoxGeometry(2,.024,2),0,-.012,0);
   else if(kind==='wall')add(new THREE.BoxGeometry(2,2.6,.22),0,1.3,0);
   else if(kind==='corner'){
    add(new THREE.BoxGeometry(2,2.6,.22),-.9,1.3,0);
@@ -332,7 +347,10 @@ class WorldBuilder{
  supportHeight(x,z,footY){
   let best=this.heightAt(x,z);const origin=new THREE.Vector3(x,footY+.58,z);
   const ray=new THREE.Raycaster(origin,new THREE.Vector3(0,-1,0),0,5);
-  const targets=this.objects.filter(e=>e.kind!=='tree'&&e.kind!=='crate'&&!(e.data.door&&e.data.open)).map(e=>e.mesh);
+  const targets=this.objects.filter(e=>{
+    const cat=e.data.category||this.categoryForKind?.(e.kind)||e.kind;
+    return !['tree','crate','ceiling_finish','prop','roof'].includes(cat)&&!(e.data.door&&e.data.open);
+   }).map(e=>e.mesh);
   for(const hit of ray.intersectObjects(targets,true)){
    const normal=hit.face?.normal?.clone();if(!normal)continue;
    const nMatrix=new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);normal.applyMatrix3(nMatrix).normalize();
@@ -371,7 +389,7 @@ class WorldBuilder{
    if(!s||!Array.isArray(s.objects)||!Array.isArray(s.heights))throw Error('Неверный формат проекта');
    const cfg=s.construction||{};
    this.storeyHeight=THREE.MathUtils.clamp(Number(cfg.storeyHeight)||2.6,1.8,6);
-   this.floorLevel=THREE.MathUtils.clamp(Number(cfg.floorLevel)||0,0,20);
+   this.floorLevel=Number.isSafeInteger(Number(cfg.floorLevel))&&Number(cfg.floorLevel)>=0?Number(cfg.floorLevel):0;
    this.smartSnap=cfg.smartSnap!==false;this.autoThickness=cfg.autoThickness!==false;this.joinMode='auto';
    this.objects.forEach(e=>e.mesh.removeFromParent());this.objects=[];this.select(null);this.nextId=1;
   const pos=this.terrain.geometry.attributes.position,col=this.terrain.geometry.attributes.color;
