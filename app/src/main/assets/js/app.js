@@ -330,6 +330,16 @@ function refreshConstructionUI(){
  $('levelGo').value=String((w.floorLevel||0)+1);
  $('gameLevelGo').value=String((w.floorLevel||0)+1);
  $('placementLiftValue').textContent=Math.round((w.placementLift||0)*100)+' см';
+ for(const btn of document.querySelectorAll('.floorQuick')){
+  const current=Number(btn.dataset.quickFloor)===(w.floorLevel||0)+1;
+  btn.classList.toggle('active',current);
+  btn.setAttribute('aria-pressed',String(current));
+ }
+ const anchor=w.mode==='playbuild'?w.forwardPlacementPoint():w.target;
+ const datum=w.floorDatumAt(anchor.x,anchor.z,w.placementCategory);
+ const sourceName={floor:'по верхней плите',ceiling:'по перекрытию',wall:'по стене',configured:'по высоте этажа'}[datum.source];
+ for(const id of ['floorDatumInfo','gameFloorDatumInfo'])
+  $(id).textContent='Основание: '+datum.height.toFixed(2)+' м ('+sourceName+')';
  $('btnSnapToggle').textContent=w.smartSnap!==false?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
  $('btnSnapToggle').setAttribute('aria-pressed',String(w.smartSnap!==false));
  updateSurfaceUI();
@@ -354,13 +364,24 @@ function setupPicker(){
  $('brushSize').oninput=e=>{w.brushSize=+e.target.value;$('brushSizeValue').textContent=e.target.value};$('brushPower').oninput=e=>{w.brushPower=+e.target.value/100;$('brushPowerValue').textContent=e.target.value+'%'};
  $('roughSlider').oninput=e=>{let val=e.target.value/100;$('roughValue').textContent=e.target.value+'%';updateStyle('roughness',val)};
  $('metalSlider').oninput=e=>{let val=e.target.value/100;$('metalValue').textContent=e.target.value+'%';updateStyle('metalness',val)};
- const changeLevel=dir=>{
-  const level=w.changeFloor(dir);
-  $('levelValue').textContent=level;$('buildLevelValue').textContent=level;
-  toast('Этаж '+level+' · базовая отметка '+(w.floorLevel*(w.storeyHeight||2.6)).toFixed(2)+' м');
+ const switchToFloor=level=>{
+  const selected=w.setFloorLevel(level);
+  refreshConstructionUI();
+  // In construction walk mode keep the character and preview where they are;
+  // in overhead build mode bring the camera to the chosen storey.
+  if(w.mode==='walk')setMode('build');
+  if(w.mode!=='playbuild')w.focusBuildFloor();
+  const point=w.mode==='playbuild'?w.forwardPlacementPoint():w.target;
+  const datum=w.floorDatumAt(point.x,point.z,w.placementCategory);
+  toast('Этаж '+selected+' · основание '+datum.height.toFixed(2)+' м'+
+   (datum.source==='configured'?' (по настройке)':' (по постройке)'));
  };
+ const changeLevel=dir=>switchToFloor((w.floorLevel||0)+1+dir);
  $('levelDown').onclick=()=>changeLevel(-1);$('levelUp').onclick=()=>changeLevel(1);
  $('btnBuildLevelDown').onclick=()=>changeLevel(-1);$('btnBuildLevelUp').onclick=()=>changeLevel(1);
+ document.querySelectorAll('.floorQuick').forEach(button=>{
+  button.onclick=()=>switchToFloor(Number(button.dataset.quickFloor));
+ });
  const changeHeight=e=>{
   const h=w.setStoreyHeight(e.target.value);
   refreshConstructionUI();
@@ -371,11 +392,7 @@ function setupPicker(){
  const goLevel=field=>{
   const raw=Number($(field).value);
   if(!Number.isSafeInteger(raw)||raw<1){refreshConstructionUI();return toast('Номер этажа должен быть целым и больше нуля')}
-  w.setFloorLevel(raw);refreshConstructionUI();
-  // The avatar remains safely on the ground. Free camera moves to the chosen level.
-  if(w.mode==='playbuild'||w.mode==='walk')setMode('build');
-  w.focusBuildFloor();
-  toast('Этаж '+raw+' · без искусственного ограничения по номеру');
+  switchToFloor(raw);
  };
  $('btnGoLevel').onclick=()=>goLevel('levelGo');
  $('btnGameGoLevel').onclick=()=>goLevel('gameLevelGo');
