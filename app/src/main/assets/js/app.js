@@ -126,17 +126,19 @@ async function deleteModulePreset(id){
 const GALLERY_SIZE=20;
 function makeAssetButton(id,title,kind,category){
  const wrapper=document.createElement('div');wrapper.className='assetGroup';
- const meta=savedMeta.get(id)||{};
+ const meta=kind==='preset'?(modulePresets.get(id)||{}):savedMeta.get(id)||{};
  const b=document.createElement('button');b.className='asset';
  if(w.placement===id)b.classList.add('active');
  const img=document.createElement('img');img.className='assetImage unloaded';
  img.alt='3D-превью: '+title;
- img.dataset.previewId=id;img.dataset.builtin=kind==='builtin'?'1':'0';
+ img.dataset.previewId=kind==='preset'?meta.sourceKind:id;
+  img.dataset.builtin=(kind==='builtin'||(kind==='preset'&&BUILTINS.some(x=>x[0]===meta.sourceKind)))?'1':'0';
  const strong=document.createElement('b');strong.textContent=title;
  const small=document.createElement('small');
- small.textContent=kind==='builtin'?'Встроенная деталь':[(meta.library||'Импортированный GLB'),(meta.sourceId?'ID '+meta.sourceId:'')].filter(Boolean).join(' · ');
+ small.textContent=kind==='preset'?'Мой готовый модуль':kind==='builtin'?'Встроенная деталь':[(meta.library||'Импортированный GLB'),(meta.sourceId?'ID '+meta.sourceId:'')].filter(Boolean).join(' · ');
  const materials=document.createElement('span');materials.className='materialStatus';
- if(kind==='builtin')materials.textContent='Цвет можно изменить';
+ if(kind==='preset')materials.textContent='✓ Текстуры сохранены';
+ else if(kind==='builtin')materials.textContent='Цвет можно изменить';
  else if(meta.materialTotal!==undefined){
   materials.textContent='Материалы: '+(meta.materialLinked||0)+'/'+meta.materialTotal;
   if(!meta.materialLinked)materials.classList.add('missing');
@@ -161,12 +163,16 @@ function makeAssetButton(id,title,kind,category){
  b.append(img,strong,small,materials);
  b.onclick=async()=>{
   if(kind==='builtin'){w.setPlacement(id,category);w.select(null);refreshConstructionUI();$('snapShiftLabel').textContent='0 м';toast('Выбрано: '+title)}
+  else if(kind==='preset')await chooseModulePreset(id);
   else await chooseAsset(id);
   if(w.mode==='playbuild')document.body.classList.remove('catalogOpen');
   renderLibrary();
  };
  wrapper.append(b);
- if(kind!=='builtin'){
+ if(kind==='preset'){
+  const del=document.createElement('button');del.className='presetDelete';del.textContent='✕ Удалить';del.onclick=()=>deleteModulePreset(id);wrapper.append(del);
+ }
+ if(kind!=='builtin'&&kind!=='preset'){
   const controls=document.createElement('div');controls.className='assetControls';
   const selector=document.createElement('select');selector.className='assetCategory';
   for(const [key,label] of CATEGORIES){const opt=document.createElement('option');opt.value=key;opt.textContent=label;selector.append(opt)}
