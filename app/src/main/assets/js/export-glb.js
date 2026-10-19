@@ -42,11 +42,46 @@ const SceneExporter=(()=>{
    if(mat.color)mat.color.set(paint.color||'#ffffff');
    return material(mat);
   }
+  const decalCache=new Map();
+  async function materialWithDecals(original,paint,face,root,emblems){
+   if(!emblems?.length)return coatedMaterial(original,paint,face);
+   const source=Array.isArray(original)?original[0]:original;
+   const cacheId=(source?.uuid||'')+root.uuid+face+JSON.stringify(paint)+JSON.stringify(emblems);
+   if(decalCache.has(cacheId))return decalCache.get(cacheId);
+   const cv=document.createElement('canvas');cv.width=cv.height=512;
+   const ctx=cv.getContext('2d');if(!ctx)throw Error('Нет Canvas для экспорта');
+   ctx.fillStyle=paint?.color||(source?.color?'#'+source.color.getHexString():'#ffffff');
+   ctx.fillRect(0,0,512,512);
+   const originalTexture=paint?.texture?world.textures?.get(paint.texture):source?.map;
+   if(originalTexture?.image?.width){
+    ctx.globalCompositeOperation='multiply';
+    ctx.drawImage(originalTexture.image,0,0,512,512);
+    ctx.globalCompositeOperation='source-over';
+   }
+   const g=DecalLayer.faceGeometry(root,face);
+   if(g)for(const e of emblems){
+    const im=world.textures?.get(e.texture)?.image;if(!im?.width||!im?.height)continue;
+    const w=e.fit==='fill'?1:e.size;
+    const h=e.fit==='fill'?1:Math.min(4,Math.max(.01,w*g.width/g.height*im.height/im.width));
+    ctx.save();ctx.globalAlpha=e.opacity;
+    ctx.translate(e.x*512,(1-e.y)*512);ctx.rotate(e.rotation*Math.PI/180);
+    ctx.drawImage(im,-w*256,-h*256,w*512,h*512);ctx.restore();
+   }
+   const mat=source?.clone()||new THREE.MeshStandardMaterial();
+   mat.name=(source?.name||'Материал')+' эмблема '+face;
+   mat.color?.set('#ffffff');mat.map=new THREE.CanvasTexture(cv);
+   mat.map.encoding=THREE.sRGBEncoding;mat.map.flipY=false;mat.opacity=1;mat.transparent=false;
+   const index=await material(mat);decalCache.set(cacheId,index);return index;
+  }
   for(const {root,entry} of entries){
    root.updateMatrixWorld(true);
    const hasPaint=typeof SurfacePaint!=='undefined'&&
     Object.keys(SurfacePaint.normalize(entry?.data?.surfacePaint)).length>0;
    const skin=hasPaint?SurfacePaint.normalize(entry.data.surfacePaint):{};
+   const emblems=typeof DecalLayer!=='undefined'?DecalLayer.normalize(entry?.data?.decals):[];
+   const hasEmblems=emblems.length>0;
+   const bounds=hasEmblems?BuildSnap.attrBounds(root):null;
+   const toRoot=hasEmblems?root.matrixWorld.clone().invert():null;
    const meshes=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)meshes.push(o)});
    for(const mesh of meshes){
     const geom=mesh.geometry;if(geom.index&&geom.index.count>700000)continue;
@@ -57,7 +92,7 @@ const SceneExporter=(()=>{
     if(uv)attrs.TEXCOORD_0=access(new Float32Array(uv.array),0,'VEC2');
     if(col&&col.itemSize===3)attrs.COLOR_0=access(new Float32Array(col.array),0,'VEC3');
     let primitives=[];
-    if(!hasPaint){
+    if(!hasPaint&&!hasEmblems){
      const prim={attributes:attrs,mode:4,material:await material(mesh.material)};
      if(geom.index){
       const indices=geom.index.array;
@@ -77,7 +112,15 @@ const SceneExporter=(()=>{
       const data=new Float32Array(pos.count*2),p=new THREE.Vector3();
       for(let i=0;i<pos.count;i++){
        p.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(mesh.matrixWorld);
-       if(mode==='xz'){data[2*i]=p.x;data[2*i+1]=p.z}
+       if(mode.startsWith('emblem:')&&bounds){
+        p.applyMatrix4(toRoot);
+        const name=mode.slice(7);
+        const x=(p.x-bounds.min.x)/Math.max(.001,bounds.max.x-bounds.min.x);
+        const y=(p.y-bounds.min.y)/Math.max(.001,bounds.max.y-bounds.min.y);
+        const z=(p.z-bounds.min.z)/Math.max(.001,bounds.max.z-bounds.min.z);
+        data[2*i]=name==='back'?1-x:name==='right'?1-z:name==='left'?z:x;
+        data[2*i+1]=name==='top'?z:name==='bottom'?1-z:y;
+       }else if(mode==='xz'){data[2*i]=p.x;data[2*i+1]=p.z}
        else if(mode==='yz'){data[2*i]=p.z;data[2*i+1]=p.y}
        else {data[2*i]=p.x;data[2*i+1]=p.y}
       }
@@ -89,7 +132,13 @@ const SceneExporter=(()=>{
       v1.set(pos.getX(i1),pos.getY(i1),pos.getZ(i1)).applyMatrix4(mesh.matrixWorld);
       v2.set(pos.getX(i2),pos.getY(i2),pos.getZ(i2)).applyMatrix4(mesh.matrixWorld);
       normal.copy(edge1.subVectors(v1,v0)).cross(edge2.subVectors(v2,v0)).normalize();
-      const face=normal.y>.55?'top':normal.y<-.55?'bottom':'side';
+      let face=normal.y>.55?'top':normal.y<-.55?'bottom':'side';
+      if(hasEmblems){
+       const local=normal.clone().transformDirection(toRoot);
+       if(Math.abs(local.y)>.55)face=local.y>0?'top':'bottom';
+       else if(Math.abs(local.z)>=Math.abs(local.x))face=local.z>0?'front':'back';
+       else face=local.x>0?'right':'left';
+      }
       const finish=(face==='top'?skin.top:face==='bottom'?skin.bottom:null)||skin.all||null;
       const srcGroup=groups.find(g=>off>=g.start&&off<g.start+g.count);
       const materialIndex=srcGroup?.materialIndex||0,orig=materialList[materialIndex]||materialList[0];
@@ -98,9 +147,11 @@ const SceneExporter=(()=>{
        uvMode=face==='top'||face==='bottom'?'xz':
         Math.abs(normal.x)>=Math.abs(normal.z)?'yz':'xy';
       }
+      const stamps=emblems.filter(e=>e.face===face);
+      if(stamps.length)uvMode='emblem:'+face;
       const finishKey=finish===skin.top?'top':finish===skin.bottom?'bottom':finish===skin.all?'all':'original';
       const key=materialIndex+'|'+face+'|'+finishKey+'|'+uvMode;
-      if(!buckets.has(key))buckets.set(key,{indices:[],orig,finish,face,uvMode});
+      if(!buckets.has(key))buckets.set(key,{indices:[],orig,finish,face,uvMode,stamps});
       buckets.get(key).indices.push(i0,i1,i2);
      }
      for(const bucket of buckets.values()){
@@ -111,7 +162,7 @@ const SceneExporter=(()=>{
       if(proj!==null)attributes.TEXCOORD_0=proj;
       const primitive={attributes,mode:4,
        indices:access(array,1,'SCALAR'),
-       material:await coatedMaterial(bucket.orig,bucket.finish,bucket.face)};
+       material:await materialWithDecals(bucket.orig,bucket.finish,bucket.face,root,bucket.stamps)};
       primitives.push(primitive);
      }
     }
