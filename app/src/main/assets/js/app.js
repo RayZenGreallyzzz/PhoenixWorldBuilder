@@ -388,15 +388,24 @@ function wireButtons(){
   toast(centered?'Крыша и потолок центрируются над выбранным полом':'Свободное положение крыши и потолка');
  };
  w.onSnapChanged=result=>{
-  const el=$('snapStatus');if(!el)return;
-  el.textContent=result.valid===false?(result.missingTarget||'Нет точки соединения'):
-   result.corner?'✓ Соединение угла':
-   result.stacked?'✓ Стена над стеной':
-   result.slab?'✓ Толщина соседнего пола: '+Math.round((result.referenceThickness||0)*100)+' см':
-   result.overhead?'✓ Поверхность перекрытия':
-   result.snapped?(result.edge?'✓ Привязано к краю пола':'✓ Установлено на GLB-пол'):
-   (w.smartSnap?'Подойди ближе к краю пола':'Свободная установка');
-  el.classList.toggle('snapped',!!result.snapped);
+  const good=result.valid!==false;
+  const detail=result.reason||(result.valid===false?result.missingTarget:
+   result.corner?'Угол состыкован':
+   result.stacked?'Стена над стеной':
+   result.slab?'Толщина соседнего пола: '+Math.round((result.referenceThickness||0)*100)+' см':
+   result.overhead?'Перекрытие выровнено':
+   result.snapped?'Привязано к детали':'По сетке');
+  const status=(good?'✓ Можно установить: ':'✕ Нельзя установить: ')+(detail||'Нет опоры');
+  for(const name of ['placementStatus','buildPlacementStatus']){
+   const el=$(name);if(!el)continue;
+   el.textContent=status;
+   el.classList.toggle('allowed',good);
+   el.classList.toggle('blocked',!good);
+  }
+  const snap=$('snapStatus');
+  if(snap){snap.textContent=detail||'';snap.classList.toggle('snapped',good&&!!result.snapped);snap.classList.toggle('blocked',!good)}
+  const place=$('btnBuildPlace');
+  if(place){place.classList.toggle('placementBlocked',!good);place.setAttribute('aria-disabled',String(!good))}
  };
  const setModuleScale=value=>{
   const scale=w.setPlacementScale(value);
@@ -409,10 +418,11 @@ function wireButtons(){
  $('moduleScaleInput').onchange=e=>setModuleScale(Number(e.target.value)/100);
  $('btnBuildPlace').onclick=()=>{
   if(!w.placement)return toast('Выбери модуль в каталоге');
-  const snap=w.solvePlacement(w.forwardPlacementPoint());
-  if(snap.valid===false)return toast(snap.missingTarget||'Нет подходящего соединения');
-  const placed=w.placeAt(w.forwardPlacementPoint());
-  if(!placed)return toast('Не удалось установить деталь');
+  const point=w.forwardPlacementPoint();
+  const snap=w.applyGhostPlacement(point)||w.solvePlacement(point);
+  if(snap.valid===false)return toast(snap.reason||snap.missingTarget||'Место занято');
+  const placed=w.placeAt(point);
+  if(!placed)return toast(w.lastSnapResult?.reason||'Не удалось установить деталь');
   saveSoon();
   toast(snap.corner?'Угол соединён':snap.stacked?'Стена установлена сверху':snap.slab?'Пол состыкован по толщине':
    snap.snapped?'Деталь присоединена':'Установлено по сетке');
@@ -635,12 +645,12 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   const dist=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(w.mode==='terrain'){down=null;saveSoon();return;}
   if((w.mode==='walk'||w.mode==='playbuild')&&dist<12){const id=w.hit(e.clientX,e.clientY,true),entry=w.objects.find(x=>x.data.id===id);if(entry&&entry.data.door&&entry.mesh.position.distanceTo(w.player.position)<5){w.toggleDoor(entry);toast(entry.data.open?'Дверь открыта':'Дверь закрыта')}down=null;return;}
   if(w.mode==='build'||w.mode==='style'){
-   if(w.placement||w.moveTarget){const p=w.hit(e.clientX,e.clientY);if(p){w.placeAt(p);saveSoon()}}
+   if(w.placement||w.moveTarget){const p=w.hit(e.clientX,e.clientY);if(p){const placed=w.placeAt(p);if(placed!==null)saveSoon();else toast(w.lastSnapResult?.reason||'Здесь установить нельзя')}}
    else if(dist<12){let id=w.hit(e.clientX,e.clientY,true);w.select(w.objects.find(x=>x.data.id===id)||null);if(id)toast('Деталь выделена')}
   }down=null;});
  canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);down=null;lastTouch=null});
  canvas.addEventListener('wheel',e=>{e.preventDefault();w.distance=THREE.MathUtils.clamp(w.distance*(e.deltaY>0?1.08:.92),2,90)},{passive:false});
- window.addEventListener('keydown',e=>{if(['INPUT','SELECT'].includes(document.activeElement?.tagName))return;w.keys[e.code]=true;if(w.mode==='playbuild'&&e.code==='KeyE'&&w.placement){w.placeAt(w.forwardPlacementPoint());saveSoon()}if(w.mode==='playbuild'&&e.code==='KeyR')w.rotatePlacement();if(e.code==='Escape'){$('modal').classList.add('hidden');w.select(null)}if((e.ctrlKey||e.metaKey)&&e.code==='KeyS'){e.preventDefault();saveLocal(true)}});window.addEventListener('keyup',e=>w.keys[e.code]=false);
+ window.addEventListener('keydown',e=>{if(['INPUT','SELECT'].includes(document.activeElement?.tagName))return;w.keys[e.code]=true;if(w.mode==='playbuild'&&e.code==='KeyE'&&w.placement){const placed=w.placeAt(w.forwardPlacementPoint());if(placed)saveSoon();else toast(w.lastSnapResult?.reason||'Место занято')}if(w.mode==='playbuild'&&e.code==='KeyR')w.rotatePlacement();if(e.code==='Escape'){$('modal').classList.add('hidden');w.select(null)}if((e.ctrlKey||e.metaKey)&&e.code==='KeyS'){e.preventDefault();saveLocal(true)}});window.addEventListener('keyup',e=>w.keys[e.code]=false);
  const stick=$('joystick'),knob=$('joystickKnob');const update=e=>{const r=stick.getBoundingClientRect();let vx=(e.clientX-(r.left+r.width/2))/(r.width*.32),vy=(e.clientY-(r.top+r.height/2))/(r.height*.32);let l=Math.hypot(vx,vy);if(l>1){vx/=l;vy/=l}w.joy={x:vx,y:vy};knob.style.transform=`translate(${vx*36}px,${vy*36}px)`};
  stick.addEventListener('pointerdown',e=>{e.preventDefault();stick.setPointerCapture(e.pointerId);update(e)});stick.addEventListener('pointermove',e=>{if(stick.hasPointerCapture(e.pointerId))update(e)});const reset=()=>{w.joy={x:0,y:0};knob.style.transform='translate(0,0)'};stick.addEventListener('pointerup',reset);stick.addEventListener('pointercancel',reset);
 }
