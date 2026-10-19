@@ -199,6 +199,16 @@ class WorldBuilder{
    return cat==='foundation'||cat==='ceiling';
   }).map(e=>e.mesh);
   const hits=this.ray.intersectObjects([...floors,this.terrain],true);
+  if((this.mode==='build'||this.mode==='style')&&this.floorLevel>0){
+   // Plane is an editing aid, not a visible second floor or collision surface.
+   const levelY=this.heightAt(this.target.x,this.target.z)+this.floorLevel*(this.storeyHeight||2.6);
+   const supported=hits.find(h=>h.object!==this.terrain&&Math.abs(h.point.y-levelY)<1.2&&
+     h.face?.normal?.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(h.object.matrixWorld)).normalize().y>.55);
+   if(supported)return supported.point;
+   const plane=new THREE.Plane(new THREE.Vector3(0,1,0),-levelY);
+   const point=this.ray.ray.intersectPlane(plane,new THREE.Vector3());
+   if(point)return point;
+  }
   for(const hit of hits){
    if(hit.object===this.terrain)return hit.point;
    if(!hit.face)continue;
