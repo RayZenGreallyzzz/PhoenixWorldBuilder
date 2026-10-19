@@ -437,8 +437,27 @@ function wireButtons(){
  $('btnZoomIn').onclick=()=>w.distance=Math.max(3,w.distance*.8);$('btnZoomOut').onclick=()=>w.distance=Math.min(90,w.distance*1.22);$('btnCamera').onclick=()=>{w.pitch=.55;w.yaw=.65;w.distance=(w.mode==='playbuild'||w.mode==='walk')?5.2:23};
  $('btnRun').onclick=()=>{w.running=!w.running;$('btnRun').textContent='🏃 Бег: '+(w.running?'вкл.':'выкл.')};
  $('btnSave').onclick=()=>saveLocal(true);$('btnMenu').onclick=()=>{$('modal').classList.remove('hidden')};$('btnCloseModal').onclick=()=>{$('modal').classList.add('hidden')};
- $('newWorld').onclick=async()=>{if(!confirm('Очистить текущую карту? Локально сохранённая версия останется.'))return;w.remember();await w.restore({heights:new Array(4225).fill(0),objects:[]});$('modal').classList.add('hidden');toast('Создана новая карта')};
- $('saveWorld').onclick=async()=>{await saveLocal(true);$('modal').classList.add('hidden')};$('loadWorld').onclick=()=>$('fileProject').click();
+ $('newWorld').onclick=async()=>{
+  if(!confirm('Создать новую пустую карту? Текущая постройка будет заменена.'))return;
+  pendingRecovery=null;w.remember();
+  await w.restore({heights:new Array(4225).fill(0),objects:[],construction:{storeyHeight:2.6,floorLevel:0}});
+  $('modal').classList.add('hidden');
+  await saveLocal(true);toast('Создана новая карта. Прежнюю можно попробовать восстановить из резервной копии.');
+ };
+ $('saveWorld').onclick=async()=>{if(await saveLocal(true))$('modal').classList.add('hidden')};
+ $('loadWorld').onclick=()=>$('fileProject').click();
+ const recoverFrom=async method=>{
+  const scene=PhoenixPersistence.read(method);
+  if(!scene)return toast('Резервная копия в памяти Android не найдена');
+  if(!confirm('Восстановить проект: '+scene.objects.length+' деталей? Текущая сцена будет заменена.'))return;
+  try{
+   isLoading=true;await restoreProject(scene);
+   isLoading=false;await saveLocal(true);
+   $('modal').classList.add('hidden');toast('Восстановлено деталей: '+scene.objects.length);
+  }catch(err){isLoading=false;toast(err.message||'Не удалось восстановить')}
+ };
+ $('restoreManual').onclick=()=>recoverFrom('loadManualProject');
+ $('restoreBackup').onclick=()=>recoverFrom('loadBackupProject');
  $('exportHouse').onclick=()=>exportHouse();$('exportJson').onclick=()=>exportJson();$('exportPack').onclick=()=>exportPack();$('exportGlb').onclick=()=>exportGlb();
  $('settingsBtn').onclick=()=>$('settings').classList.toggle('hidden');$('fpsLimit').onchange=e=>{w.fpsLimit=+e.target.value;toast('Ограничение '+e.target.value+' FPS')};
  $('sceneExposure').oninput=e=>{const exp=+e.target.value/100;w.renderer.toneMappingExposure=exp;$('exposureValue').textContent=e.target.value+'%';try{localStorage.setItem('phoenix_scene_exposure',e.target.value)}catch(_){}};$('renderScale').onchange=e=>{w.setQuality(+e.target.value,$('shadows').checked);toast('Разрешение '+Math.round(+e.target.value*100)+'%')};$('invertCameraX').onchange=e=>{w.invertCameraX=e.target.checked;try{localStorage.setItem('pwb_camera_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickX').onchange=e=>{w.invertJoystickX=e.target.checked;try{localStorage.setItem('pwb_joy_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickY').onchange=e=>{w.invertJoystickY=e.target.checked;try{localStorage.setItem('pwb_joy_y',e.target.checked?'1':'0')}catch(_){}};$('avatarFacing').onchange=e=>{w.avatarFacingOffset=Number(e.target.value)*Math.PI/180;try{localStorage.setItem('pwb_avatar_forward',e.target.value)}catch(_){}};$('shadows').onchange=e=>{w.setQuality(w.renderScale,e.target.checked);toast(e.target.checked?'Тени включены':'Тени выключены')};
@@ -513,6 +532,11 @@ async function importZip(file,isProject=false){const entries=await ZipUtils.extr
   if(savedBindings)for(const [id,row] of Object.entries(savedBindings)){await dbOp('bindings',id,row);w.assetCache.delete(id);}
   if(entries['catalog.json']){try{await dbOp('catalog','metadata',catalogMeta)}catch(e){}for(const [id,meta] of Object.entries(catalogMeta)){if(savedMeta.has(id))Object.assign(savedMeta.get(id),meta)}}
  if(isProject&&project)await restoreProject(project);
+ else if(pendingRecovery){
+  const previous=pendingRecovery;
+  try{await restoreProject(previous);await saveLocal(false);toast('Постройка восстановлена после импорта GLB')}
+  catch(err){console.warn('Still missing assets',err);toast('Нужны остальные модели для восстановления')}
+ }
  renderLibrary();renderTextureOptions();if(!isProject)toast(`Импорт: ${glbs.length} GLB и ${textureKeys.length} текстур`);return glbs.length;
 }
 async function loadDependencies(project){
@@ -635,8 +659,39 @@ async function init(){setupPicker();wireButtons();refreshConstructionUI();attach
   const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||''})}renderTextureOptions();
   catalogMeta=await dbOp('catalog','metadata')||{};
   for(const [id,meta] of Object.entries(catalogMeta)){if(savedMeta.has(id))Object.assign(savedMeta.get(id),meta)}
-  const autosave=await dbOp('projects','autosave');if(autosave){isLoading=true;await restoreProject(autosave);isLoading=false;toast('Карта восстановлена из памяти')}else toast('Редактор готов. Выбери деталь и коснись земли');renderLibrary();
- }catch(err){isLoading=false;toast('Хранилище недоступно: '+err.message);console.error(err)}
- try{w.invertCameraX=localStorage.getItem('pwb_camera_x')==='1';$('invertCameraX').checked=w.invertCameraX;w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');document.addEventListener('visibilitychange',()=>{if(document.hidden)saveLocal()});setInterval(()=>{$('fps').textContent=Math.round(w.fps)+' FPS'},1000);
+  const autosave=await dbOp('projects','autosave');
+  const selected=PhoenixPersistence.choose(PhoenixPersistence.read(),autosave);
+  if(selected){
+   isLoading=true;await restoreProject(selected.project);isLoading=false;
+   saveIndicator('✓ Восстановлено');
+   toast('Восстановлено '+selected.project.objects.length+' деталей ('+
+    (selected.source==='android'?'Android':'WebView')+')');
+   if(selected.source==='webview'&&PhoenixPersistence.native())
+    PhoenixPersistence.write(selected.project,false);
+  }else{saveIndicator('◌ Новая карта');toast('Редактор готов. Выбери деталь')}
+  renderLibrary();
+ }catch(err){
+  isLoading=false;console.error('Scene load failed',err);
+  if(!pendingRecovery){
+   const nativeScene=PhoenixPersistence.read();
+   if(nativeScene)try{
+    isLoading=true;await restoreProject(nativeScene);isLoading=false;
+    saveIndicator('✓ Восстановлено с диска');
+    toast('Карта восстановлена из памяти Android');
+   }catch(recoveryError){isLoading=false;console.error(recoveryError)}
+  }
+  if(pendingRecovery){
+   saveIndicator('⚠ Требуются GLB');toast('Проект найден! Для восстановления импортируй исходный ZIP');
+  }else if(!w.objects.length)toast('Хранилище недоступно: '+err.message);
+ }
+ try{w.invertCameraX=localStorage.getItem('pwb_camera_x')==='1';$('invertCameraX').checked=w.invertCameraX;w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){PhoenixPersistence.flushNow();saveLocal(false)}
+ });
+ window.addEventListener('pagehide',()=>PhoenixPersistence.flushNow());
+ setInterval(()=>{
+  if(!document.hidden&&!isLoading&&!pendingRecovery&&w.objects.length>0)PhoenixPersistence.flushNow();
+ },15000);
+ setInterval(()=>{$('fps').textContent=Math.round(w.fps)+' FPS'},1000);
 }
 init();
