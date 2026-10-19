@@ -86,12 +86,12 @@ async function saveModulePreset(){
   name:name.trim().slice(0,64),sourceKind:kind,
   category:entry?.data?.category||w.placementCategory||w.categoryForKind(kind),
   surfacePaint:paint,color,scale:entry?.data?.scale||w.placementScale||1,
-  texture:entry?.data?.texture||null,decals:copyPresetData(entry?.data?.decals||w.placementDecals),created:new Date().toISOString()};
+  texture:entry?.data?.texture||null,decals:Array.isArray(entry?.data?.decals||w.placementDecals)?copyPresetData(entry?.data?.decals||w.placementDecals):[],created:new Date().toISOString()};
  modulePresets.set(preset.id,preset);
  try{await dbOp('catalog',PRESET_KEY,[...modulePresets.values()])}
  catch(err){modulePresets.delete(preset.id);return toast('Не удалось сохранить модуль: '+err.message)}
  currentFilter='my';catalogMode='models';catalogPage=0;
- $all('#categoryFilters .pill').forEach(b=>b.classList.toggle('active',b.dataset.filter==='my'));
+ $all('#categoryFilters .pill').forEach(b=>b.classList.toggle('active',b.dataset?.filter==='my'));
  renderLibrary();toast('Модуль сохранён в библиотеку: '+preset.name);
 }
 async function chooseModulePreset(id){
