@@ -291,7 +291,7 @@ class WorldBuilder{
    this.moveTarget=null;this.onChanged();return;
   }
   const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.placementCategory==='ceiling_finish'?'#ffffff':this.currentPaint;
-  const rec=this.instantiate(this.placement,{id:this.nextId++,pos:v.toArray(),rot:solved.rotation,scale:this.placementScale,thicknessY:solved.thicknessY||1,surfacePaint:JSON.parse(JSON.stringify(this.placementSurfacePaint||{})),category:this.placementCategory||this.categoryForKind?.(this.placement)||null,storey:this.floorLevel,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
+  const rec=this.instantiate(this.placement,{id:this.nextId++,pos:v.toArray(),rot:solved.rotation,scale:this.placementScale,thicknessY:solved.thicknessY||1,surfacePaint:JSON.parse(JSON.stringify(this.placementSurfacePaint||{})),decals:JSON.parse(JSON.stringify(this.placementDecals||[])),category:this.placementCategory||this.categoryForKind?.(this.placement)||null,storey:this.floorLevel,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
   this.select(rec);this.onChanged();return rec;
  }
  instantiate(kind,data){let obj=this.makeBuiltin(kind); if(!obj){const cache=this.assetCache.get(kind);if(!cache)throw Error('Сначала импортируй '+kind);obj=cache.clone(true)}
@@ -319,7 +319,15 @@ class WorldBuilder{
   else return null;
   group.name=kind;return group;
  }
- applyAppearance(entry){const c=entry.data.color?new THREE.Color(entry.data.color):null;entry.mesh.traverse(o=>{if(!o.isMesh)return;const old=o.material;o.material=Array.isArray(old)?old.map(m=>m.clone()):old.clone();const mats=Array.isArray(o.material)?o.material:[o.material];mats.forEach(m=>{
+ applyAppearance(entry){
+  if(!this._pwbBaseMaterials)this._pwbBaseMaterials=new WeakMap();
+  const c=entry.data.color?new THREE.Color(entry.data.color):null;
+  entry.mesh.traverse(o=>{
+   if(!o.isMesh)return;
+   if(!this._pwbBaseMaterials.has(o))this._pwbBaseMaterials.set(o,o.material);
+   const old=this._pwbBaseMaterials.get(o);
+   o.material=Array.isArray(old)?old.map(m=>m.clone()):old.clone();
+   const mats=Array.isArray(o.material)?o.material:[o.material];mats.forEach(m=>{
    // Glass and metal accents in built-ins keep their characteristic surfaces.
    if(m.transparent&&entry.kind==='window')return;
    if(m.color&&c)m.color.copy(c);
@@ -335,6 +343,14 @@ class WorldBuilder{
     entry.mesh.userData.pwbSurfaceCoated=true;
    }
   }
+  if(typeof DecalLayer!=='undefined'&&entry.data.decals?.length)
+   DecalLayer.applyToRoot(entry.mesh,entry.data.decals,this.textures);
+ }
+ updateDecals(entry,decals){
+  if(!entry||typeof DecalLayer==='undefined')return [];
+  this.remember();
+  entry.data.decals=DecalLayer.normalize(decals);
+  this.applyAppearance(entry);this.onChanged();return entry.data.decals;
  }
  updateSurfacePaint(entry,face,kind,value){
   if(!entry||typeof SurfacePaint==='undefined')return null;
@@ -445,7 +461,7 @@ class WorldBuilder{
  }
 
  setPlacement(kind,category=null){
-  if(kind!==this.placement)this.placementSurfacePaint={};
+  if(kind!==this.placement){this.placementSurfacePaint={};this.placementDecals=[];}
   this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
   if(this.ghost)this.ghost.removeFromParent();
   if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline.geometry.dispose();this.placementOutline.material.dispose();this.placementOutline=null;}
@@ -459,6 +475,7 @@ class WorldBuilder{
    this.ghost.userData.pwbPreview=true;
    if(typeof SurfacePaint!=='undefined'&&Object.keys(this.placementSurfacePaint||{}).length)
     SurfacePaint.applyToRoot(this.ghost,this.placementSurfacePaint,this.textures);
+   if(typeof DecalLayer!=='undefined'&&this.placementDecals?.length)DecalLayer.applyToRoot(this.ghost,this.placementDecals,this.textures);
    this.ghost.scale.setScalar(this.placementScale);this.scene.add(this.ghost);
    if(typeof THREE.BoxHelper==='function'){
     this.placementOutline=new THREE.BoxHelper(this.ghost,0x50f4a0);
@@ -489,7 +506,7 @@ class WorldBuilder{
   const pos=this.terrain.geometry.attributes.position,col=this.terrain.geometry.attributes.color;
   for(let i=0;i<Math.min(pos.count,s.heights.length);i++)pos.setZ(i,s.heights[i]);if(s.colors&&s.colors.length===col.array.length)col.array.set(s.colors);
   pos.needsUpdate=true;col.needsUpdate=true;this.terrain.geometry.computeVertexNormals();this.terrain.geometry.computeBoundingBox();this.terrain.geometry.computeBoundingSphere();
-  for(const e of s.objects){if(this.makeBuiltin(e.kind)||this.assetCache.has(e.kind)){try{this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,thicknessY:e.thicknessY||1,category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},color:e.color,roughness:e.roughness,metalness:e.metalness,texture:e.texture,door:e.door,open:e.open})}catch(err){console.warn(err)}}}
+  for(const e of s.objects){if(this.makeBuiltin(e.kind)||this.assetCache.has(e.kind)){try{this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,thicknessY:e.thicknessY||1,category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,texture:e.texture,door:e.door,open:e.open})}catch(err){console.warn(err)}}}
   this.onChanged();}
  updateCamera(){if(this.mode==='walk'||this.mode==='playbuild'){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));this.target.copy(this.player.position).add(new THREE.Vector3(0,1.15,0));const range=THREE.MathUtils.clamp(this.distance,2.7,9);this.camera.position.copy(this.target).addScaledVector(forward,-Math.cos(this.pitch)*range).add(new THREE.Vector3(0,Math.sin(this.pitch)*range,0));}
   else{this.camera.position.set(this.target.x+Math.sin(this.yaw)*Math.cos(this.pitch)*this.distance,this.target.y+Math.sin(this.pitch)*this.distance,this.target.z+Math.cos(this.yaw)*Math.cos(this.pitch)*this.distance);}this.camera.lookAt(this.target);}
