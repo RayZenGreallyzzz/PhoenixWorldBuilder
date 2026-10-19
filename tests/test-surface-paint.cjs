@@ -8,7 +8,7 @@ const bottom=new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.R
 const w=Object.create(WorldBuilder.prototype);
 Object.assign(w,{scene:new THREE.Scene(),objects:[],assetCache:new Map(),textures:new Map([['tex:all',wrap],['tex:bottom',bottom]]),nextId:1,ghost:null,selected:null,moveTarget:null,mode:'build',placement:null,placementCategory:null,placementRotation:0,placementScale:1,smartSnap:false,joinMode:'auto',placementSurfacePaint:{},placementLift:0,storeyHeight:2.6,floorLevel:0,snap:2,currentPaint:'#b7ac91',yaw:0,textureId:null});
 w.player=new THREE.Group();w.player.position.set(0,.85,0);w.scene.add(w.player);
-w.heightAt=()=>0;w.onChanged=()=>{};w.onSelected=()=>{};w.onSnapChanged=()=>{};w.updateGameGhost=()=>{};
+w.undo=[];w.heightAt=()=>0;w.onChanged=()=>{};w.onSelected=()=>{};w.onSnapChanged=()=>{};w.updateGameGhost=()=>{};
 w.highlight={setFromObject(){},visible:false};
 w.categoryForKind=kind=>kind==='floor'?'foundation':kind;
 const terrainGeo=new THREE.BufferGeometry();
