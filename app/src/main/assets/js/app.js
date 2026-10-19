@@ -47,7 +47,7 @@ async function chooseAsset(id){
  try{
   const root=await cacheFromDB(id);if(!root)return toast('Файл не найден');
   const meta=savedMeta.get(id);
-  w.setPlacement(id,meta?.category||groupType(meta?.name||id));w.select(null);
+  w.setPlacement(id,meta?.category||groupType(meta?.name||id));w.select(null);refreshConstructionUI();
   $('btnSelect').classList.remove('active');renderLibrary();
   $('snapShiftLabel').textContent='0 м';toast('Выбрано: '+fmtName(meta?.displayName||meta?.name||id));
  }catch(e){console.error(e);toast('Не удалось выбрать модель: '+e.message)}
@@ -90,7 +90,7 @@ function makeAssetButton(id,title,kind,category){
  }
  b.append(img,strong,small,materials);
  b.onclick=async()=>{
-  if(kind==='builtin'){w.setPlacement(id,category);w.select(null);$('snapShiftLabel').textContent='0 м';toast('Выбрано: '+title)}
+  if(kind==='builtin'){w.setPlacement(id,category);w.select(null);refreshConstructionUI();$('snapShiftLabel').textContent='0 м';toast('Выбрано: '+title)}
   else await chooseAsset(id);
   if(w.mode==='playbuild')document.body.classList.remove('catalogOpen');
   renderLibrary();
@@ -217,6 +217,9 @@ function refreshConstructionUI(){
  $('buildJoinMode').value=w.joinMode||'auto';
  $('btnAutoThickness').textContent=w.autoThickness!==false?'↕ Толщина пола: авто':'↕ Толщина пола: исходная';
  $('btnAutoThickness').setAttribute('aria-pressed',String(w.autoThickness!==false));
+ $('cornerAdjust').classList.toggle('hidden',w.joinMode!=='corner'&&w.placementCategory!=='corner');
+ $('cornerXValue').textContent=Math.round((w.cornerOffsetX||0)*100)+' см';
+ $('cornerZValue').textContent=Math.round((w.cornerOffsetZ||0)*100)+' см';
  $('btnOverheadCenter').textContent=w.centerOverhead?'⌂ Центрировать крышу: вкл.':'⌂ Центрировать крышу: выкл.';
  $('btnOverheadCenter').setAttribute('aria-pressed',String(!!w.centerOverhead));
 }
@@ -276,13 +279,21 @@ function wireButtons(){
  $('btnBuildCatalog').onclick=()=>{document.body.classList.toggle('catalogOpen');if(document.body.classList.contains('catalogOpen'))renderLibrary()};
  $('btnBuildRotate').onclick=()=>toast('Дополнительный поворот: '+w.rotatePlacement()+'°');
  $('buildJoinMode').onchange=e=>{
-  const mode=w.setJoinMode(e.target.value);
+  const mode=w.setJoinMode(e.target.value);refreshConstructionUI();
   toast(({auto:'Автопривязка',corner:'Стыковка углов',stack:'Ставим стену над стеной',free:'Свободная установка'})[mode]);
  };
  $('btnAutoThickness').onclick=()=>{
   const yes=w.toggleAutoThickness();refreshConstructionUI();
   toast(yes?'Толщина пола подгоняется автоматически по соседнему полу':'Оставляем исходную толщину каждой детали');
  };
+ const shiftCorner=(dx,dz)=>{
+  const offset=w.shiftCorner(dx,dz);
+  refreshConstructionUI();toast('Сдвиг угла: X '+Math.round(offset[0]*100)+' см · Z '+Math.round(offset[1]*100)+' см');
+ };
+ $('btnCornerXDown').onclick=()=>shiftCorner(-.1,0);
+ $('btnCornerXUp').onclick=()=>shiftCorner(.1,0);
+ $('btnCornerZDown').onclick=()=>shiftCorner(0,-.1);
+ $('btnCornerZUp').onclick=()=>shiftCorner(0,.1);
  $('btnSnapToggle').onclick=()=>{
   const active=w.toggleSmartSnap();
   $('btnSnapToggle').textContent=active?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
