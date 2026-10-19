@@ -59,6 +59,16 @@ global.document={createElement:tag=>{
  c.toBlob=callback=>callback(new Blob([new Uint8Array([137,80,78,71,13,10,26,10])],{type:'image/png'}));
  return c;
 }};
+const DecalUI=require(path.join(dir,'decal-ui.js'));
+assert.deepEqual(DecalUI.importDimensions(2080,756),{width:2080,height:756},
+ 'Panoramic tapestry must retain original pixels in the editor');
+assert.deepEqual(DecalUI.importDimensions(1024,1024),{width:1024,height:1024},
+ 'Small emblem must not be re-encoded');
+assert.deepEqual(DecalUI.importDimensions(4096,4096),{width:2048,height:2048},
+ 'Large square must stay within Android texture budget');
+const wide=DecalUI.importDimensions(10000,1000);
+assert(wide.width<=4096&&wide.width*wide.height<=2048*2048+4096,
+ 'Long artwork must respect both dimension and pixel budget');
 (async()=>{
  await w.restore(snapshot);
  assert.equal(w.objects.length,2);
