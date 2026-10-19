@@ -41,7 +41,10 @@ const BuildJoin=(()=>{
  }
  function solvePivot(w,box,at,yaw,yHeight){
   const scale=w.placementScale||1;
-  const offset=new THREE.Vector3((box.min.x+box.max.x)*.5,0,(box.min.z+box.max.z)*.5);
+  const anchor=(w.joinMode==='corner'||w.placementCategory==='corner')&&w.ghost?.userData?.joinAnchor;
+   const offset=Array.isArray(anchor)&&anchor.length>=3?
+    new THREE.Vector3(Number(anchor[0])||0,0,Number(anchor[2])||0):
+    new THREE.Vector3((box.min.x+box.max.x)*.5,0,(box.min.z+box.max.z)*.5);
   const v=rotate(offset,yaw).multiplyScalar(scale);
   return new THREE.Vector3(at.x-v.x,yHeight-box.min.y*scale+(w.placementLift||0),at.z-v.z);
  }
@@ -65,7 +68,12 @@ const BuildJoin=(()=>{
     if(d>maxReach)continue;
     const levelCost=w.floorLevel>0?abs(a.bottom-targetY)*.25:0;
     const grade=d+distXZ(ap,bp)*.4+levelCost;
-    if(!best||grade<best.grade)best={where,y:Math.max(a.bottom,b.bottom),yaw:angle(a.a,a.c),reference:a.entry.data.id,grade};
+    if(!best||grade<best.grade){
+      const farA=ap===a.a?a.c:a.a,farB=bp===b.a?b.c:b.a;
+      best={where,y:Math.max(a.bottom,b.bottom),yaw:angle(a.a,a.c),
+       arms:[farA.clone().sub(ap).setY(0).normalize(),farB.clone().sub(bp).setY(0).normalize()],
+       reference:a.entry.data.id,grade};
+     }
    }
   }
   // A solitary wall end may also be a corner where the next wall isn't built yet.
@@ -94,7 +102,20 @@ const BuildJoin=(()=>{
    }
   }
   if(!best)return null;
-  const yaw=best.yaw+(w.placementRotation||0)*Math.PI/180;
+  let baseYaw=best.yaw;
+  if(w.ghost?.userData?.joinAnchor&&best.arms?.length===2){
+   // Builtin L-piece arms leave the local pivot along -X and -Z.
+   let bestMatch=-Infinity;
+   for(let k=0;k<4;k++){
+    const candidate=best.yaw+k*Math.PI/2;
+    const x=rotate(new THREE.Vector3(-1,0,0),candidate);
+    const z=rotate(new THREE.Vector3(0,0,-1),candidate);
+    const [a,b]=best.arms;
+    const match=Math.max(x.dot(a)+z.dot(b),x.dot(b)+z.dot(a));
+    if(match>bestMatch){bestMatch=match;baseYaw=candidate;}
+   }
+  }
+  const yaw=baseYaw+(w.placementRotation||0)*Math.PI/180;
   return {position:solvePivot(w,box,best.where,yaw,best.y),
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,corner:true,edge:false,
    reference:best.reference,category:w.placementCategory||'corner',joinedTo:'corner'};
