@@ -72,3 +72,10 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 #gameBuildHud #btnOverheadCenter{font-size:10px;white-space:normal;min-height:30px;text-align:center;margin:5px 0 0;padding:5px}
 #gameBuildHud #btnOverheadCenter[aria-pressed=true]{background:#24685a;border-color:#63e4bc}
 @media(max-height:620px){#gameBuildHud .buildingHeight .hudRow button{min-height:28px;font-size:10px}#gameBuildHud .buildingHeight>span{display:none}}
+
+/* Snapping modes and vertical slab thickness — compact touch layout. */
+#gameBuildHud #buildJoinMode{display:block;margin:4px 0;width:100%;color:#e8fff7;background:#173542;border:1px solid #4b938d;border-radius:7px;padding:7px 6px;min-height:37px;font-size:11px;touch-action:manipulation}
+#gameBuildHud #btnAutoThickness{min-height:30px;text-align:center;font-size:11px;padding:5px;margin:2px 0 6px}
+#gameBuildHud #btnAutoThickness[aria-pressed=true]{border-color:#61cfad;background:#285d50}
+#gameBuildHud #snapStatus{word-break:normal}
+@media(max-height:580px){#gameBuildHud #buildJoinMode{min-height:30px;padding:4px}#gameBuildHud #btnAutoThickness{min-height:27px}}
