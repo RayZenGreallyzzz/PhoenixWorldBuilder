@@ -1,6 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('fs'),path=require('path'),vm=require('vm');
 const assets=path.join(__dirname,'../app/src/main/assets'),dir=path.join(assets,'js');
 const THREE=global.THREE=require(path.join(dir,'three.min.js'));
+global.BuildSnap=require(path.join(dir,'build-snap.js'));
 global.SurfacePaint=require(path.join(dir,'surface-paint.js'));
 global.DecalLayer=require(path.join(dir,'decal-layer.js'));
 vm.runInThisContext(fs.readFileSync(path.join(dir,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
