@@ -271,9 +271,11 @@ class WorldBuilder{
   this.updateGameGhost();this.onChanged();return level+1;
  }
  focusBuildFloor(){
-  // Non-destructive: camera alone rises, existing character and pieces stay put.
-  const x=this.player?.position.x??this.target.x,z=this.player?.position.z??this.target.z;
-  this.target.set(x,this.heightAt(x,z)+this.floorLevel*(this.storeyHeight||2.6)+1.25,z);
+  // Focus the viewed building, not an old avatar location off-screen.
+  // The camera follows the same measured support elevation as placements.
+  const x=this.target.x,z=this.target.z;
+  const datum=this.floorDatumAt(x,z,'wall');
+  this.target.set(x,datum.height+1.25,z);
   this.distance=THREE.MathUtils.clamp(this.distance,5,26);
   this.updateCamera();
   return this.target.y;
