@@ -217,9 +217,51 @@ class WorldBuilder{
   }
   return this.ray.intersectObject(this.terrain,false)[0]?.point||null;
  }
+ // Find the actual base of the chosen storey from nearby built geometry.
+ // 1st-floor walls rest on the existing foundation; upper walls rest on the
+ // selected storey's floor, or on the previous storey's wall/ceiling top.
+ // No scene objects are moved and manual magnet-off placement is unchanged.
+ floorDatumAt(x,z,category=this.placementCategory){
+  const level=this.floorLevel||0,height=this.storeyHeight||2.6;
+  const nominal=this.heightAt(x,z)+level*height;
+  const result={height:nominal,source:'configured'};
+  if(this.smartSnap===false||!this.objects?.length||typeof BuildSnap==='undefined')return result;
+  const cat=category||this.categoryForKind?.(this.placement)||'prop';
+  const isSlab=cat==='foundation';
+  let best=null;
+  for(const entry of this.objects){
+   const story=entry.data?.storey;
+   if(!Number.isInteger(story))continue;
+   const type=entry.data?.category||this.categoryForKind?.(entry.kind)||entry.kind;
+   let priority;
+   if(!isSlab&&story===level&&type==='foundation')priority=0;
+   else if(level>0&&story===level-1&&type==='ceiling')priority=1;
+   else if(level>0&&story===level-1&&['wall','corner','door','railing'].includes(type))priority=2;
+   else continue;
+   const mesh=entry.mesh;if(!mesh)continue;
+   mesh.updateWorldMatrix(true,true);
+   const bounds=BuildSnap.attrBounds(mesh);if(bounds.isEmpty())continue;
+   const inverse=mesh.matrixWorld.clone().invert();
+   const local=new THREE.Vector3(x,nominal,z).applyMatrix4(inverse);
+   const near=new THREE.Vector3(
+    THREE.MathUtils.clamp(local.x,bounds.min.x,bounds.max.x),
+    bounds.max.y,
+    THREE.MathUtils.clamp(local.z,bounds.min.z,bounds.max.z)
+   ).applyMatrix4(mesh.matrixWorld);
+   const distance=Math.hypot(near.x-x,near.z-z);
+   if(distance>1.35)continue;
+   const top=near.y;
+   if(!Number.isFinite(top)||Math.abs(top-nominal)>Math.max(2.5,height*.8))continue;
+   const score=priority*10+distance;
+   if(!best||score<best.score)best={height:top,source:priority===0?'floor':priority===1?'ceiling':'wall',score};
+  }
+  return best?{height:best.height,source:best.source}:result;
+ }
  placementHeight(x,z,kind=this.placement,category=this.placementCategory){
-  const raised=kind==='ceiling'||kind==='ceiling_finish'||kind==='roof'||category==='ceiling'||category==='ceiling_finish'||category==='roof';
-  return this.heightAt(x,z)+(this.floorLevel+(raised?1:0))*(this.storeyHeight||2.6);
+  const cat=category||this.categoryForKind?.(kind)||'prop';
+  const raised=kind==='ceiling'||kind==='ceiling_finish'||kind==='roof'||cat==='ceiling'||cat==='ceiling_finish'||cat==='roof';
+  const base=this.floorDatumAt(x,z,cat).height;
+  return base+(raised?this.storeyHeight||2.6:0);
  }
  changeFloor(delta){return this.setFloorLevel(this.floorLevel+(Number(delta)||0)+1);}
  setFloorLevel(value){
