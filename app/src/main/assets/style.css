@@ -85,3 +85,20 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 #gameBuildHud .cornerAdjust>small{font-size:10px;text-align:center;color:#b7eadb}
 #gameBuildHud .cornerAdjust .hudRow span{font-size:10px;min-width:45px;text-align:center;color:#7cefc8}
 #gameBuildHud .cornerAdjust .hudRow button{min-width:36px;min-height:28px}
+
+/* Single mesh coatings: all, top and underside; touch friendly. */
+.surfaceControls{border:1px solid #487c79;border-radius:9px;padding:9px;margin:8px 0;background:#17343ed9;color:#cce9e0}
+.surfaceControls strong{font-size:12px;display:block;margin-bottom:5px}
+.surfaceControls label{display:block;font-size:11px;margin:4px 0}
+.surfaceControls small{display:block;color:#acc9c0;line-height:1.3;font-size:10px;margin:6px 0}
+.surfaceControls select{width:100%;background:#173341;color:#edfefa;border:1px solid #51837f;border-radius:6px;padding:6px;min-height:35px;margin:2px 0 4px}
+.surfaceControls button{white-space:normal}
+#gameBuildHud .surfaceControls{padding:6px;margin:2px 0;display:flex;flex-direction:column;gap:3px}
+#gameBuildHud .surfaceControls>span{font-size:11px;text-align:center}
+#gameBuildHud .surfaceControls button{min-height:30px;padding:4px 5px;font-size:10px}
+#gameBuildHud .surfaceControls select{font-size:11px;padding:4px;min-height:31px}
+#gameSurfaceColor{height:34px;min-width:36px;width:44px;padding:1px;background:#162f3b;border:1px solid #558e83;border-radius:7px}
+.levelGo{display:flex;align-items:center;gap:7px;margin:7px 0}
+.levelGo input,#gameLevelGo{width:100%;min-width:0;background:#142c39;color:white;padding:7px 5px;border:1px solid #53898a;border-radius:7px;font-size:12px}
+.levelGo button{min-height:36px;padding:6px 9px;white-space:nowrap}
+#gameBuildHud #btnGameGoLevel{font-size:10px;min-width:65px;flex:1}
