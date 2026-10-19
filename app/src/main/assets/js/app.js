@@ -5,7 +5,7 @@ const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceilin
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
 const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
-let statusMessage='';let surfaceScope='all';
+let statusMessage='';let surfaceScope='all';let pendingRecovery=null;let savedNatively=false;
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
 function groupType(name){
@@ -21,7 +21,20 @@ function groupType(name){
  return 'prop';
 }
 async function openDB(){return await new Promise((resolve,reject)=>{const request=indexedDB.open('phoenix_world_builder_v1',5);request.onupgradeneeded=()=>{const db=request.result;for(const store of ['assets','textures','projects','bindings','categories','previews','catalog'])if(!db.objectStoreNames.contains(store))db.createObjectStore(store);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-function dbOp(store,key,value){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,value===undefined?'readonly':'readwrite');const req=value===undefined?tx.objectStore(store).get(key):tx.objectStore(store).put(value,key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
+function dbOp(store,key,value){
+ return new Promise((resolve,reject)=>{
+  if(!localStore)return reject(new Error('База редактора недоступна'));
+  let tx,req;
+  try{
+   tx=localStore.transaction(store,value===undefined?'readonly':'readwrite');
+   req=value===undefined?tx.objectStore(store).get(key):tx.objectStore(store).put(value,key);
+  }catch(e){reject(e);return}
+  // A successful IDB request is not a committed transaction. Wait for tx.complete.
+  tx.oncomplete=()=>resolve(req.result);
+  tx.onerror=()=>reject(tx.error||req.error||new Error('Ошибка базы'));
+  tx.onabort=()=>reject(tx.error||new Error('Запись прервана'));
+ });
+}
 function dbKeys(store){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,'readonly');const r=tx.objectStore(store).getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function cacheFromDB(id){if(w.assetCache.has(id))return w.assetCache.get(id);const row=await dbOp('assets',id);if(!row)return null;try{const parsed=await GLB.load(row.bytes);await bindImportedMaterials(id,parsed.root);w.assetCache.set(id,parsed.root);w.assetAnimations.set(id,parsed.animations||[]);if(parsed.triangles>150000)toast('Модель тяжёлая: '+Math.round(parsed.triangles)+' треугольников');return parsed.root}catch(e){toast('Модель не открыта: '+e.message);throw e}}
 async function bindImportedMaterials(id,root){if(!localStore)return;const binding=await dbOp('bindings',id);if(!binding?.slots?.length)return;
@@ -502,17 +515,69 @@ async function importZip(file,isProject=false){const entries=await ZipUtils.extr
  if(isProject&&project)await restoreProject(project);
  renderLibrary();renderTextureOptions();if(!isProject)toast(`Импорт: ${glbs.length} GLB и ${textureKeys.length} текстур`);return glbs.length;
 }
-async function loadDependencies(project){const need=new Set(project.objects.map(o=>o.kind).filter(k=>!BUILTINS.some(x=>x[0]===k)));
- for(const id of need)if(!w.assetCache.has(id))try{await cacheFromDB(id)}catch(e){console.warn(id,e)};
+async function loadDependencies(project){
+ const need=new Set(project.objects.map(o=>o.kind).filter(k=>!BUILTINS.some(x=>x[0]===k)));
+ const missing=[];
+ for(const id of need)if(!w.assetCache.has(id)){
+  try{if(!await cacheFromDB(id))missing.push(id)}
+  catch(e){missing.push(id);console.warn('Required model unavailable',id,e)}
+ }
+ if(missing.length)return missing;
  const tex=new Set(project.objects.map(o=>o.texture).filter(Boolean));
  for(const obj of project.objects)for(const face of SurfacePaint.faces){
   const texId=obj.surfacePaint?.[face]?.texture;if(texId)tex.add(texId);
  }
- for(const id of tex)try{await loadTexture(id)}catch(e){};
+ for(const id of tex)try{await loadTexture(id)}catch(e){console.warn('Missing material',id,e)}
+ return [];
 }
-async function restoreProject(project){await loadDependencies(project);await w.restore(project);refreshConstructionUI();if(project.camera){w.yaw=project.camera.yaw??.65;w.pitch=project.camera.pitch??.55;w.distance=project.camera.distance??26;w.target.fromArray(project.camera.target||[0,2,0])}w.undo=[];}
-function projectData(){return {...w.snapshot(),camera:{yaw:w.yaw,pitch:w.pitch,distance:w.distance,target:w.target.toArray()},editor:'Phoenix World Builder',format:'PhoenixMap 1.0'}}
-async function saveLocal(notify=false){if(isLoading)return;try{await dbOp('projects','autosave',projectData());if(notify)toast('Карта сохранена на планшете')}catch(err){toast('Не удалось сохранить: '+err.message)}}
+async function restoreProject(project){
+ const missing=await loadDependencies(project);
+ if(missing.length){
+  pendingRecovery=project;
+  $('saveStatus').textContent='⚠ Нужны модели';
+  $('saveDetails').textContent='Сцена найдена, но для восстановления не хватает '+missing.length+' GLB. Импортируй исходный ZIP. Сохранение заблокировано, чтобы не стереть найденный проект.';
+  throw new Error('Для восстановления импортируй архив GLB: не хватает '+missing.length+' моделей');
+ }
+ await w.restore(project);pendingRecovery=null;
+ refreshConstructionUI();
+ if(project.camera){
+  w.yaw=project.camera.yaw??.65;w.pitch=project.camera.pitch??.55;
+  w.distance=project.camera.distance??26;w.target.fromArray(project.camera.target||[0,2,0]);
+ }
+ w.undo=[];
+}
+function projectData(){
+ return {...w.snapshot(),camera:{yaw:w.yaw,pitch:w.pitch,distance:w.distance,target:w.target.toArray()},editor:'Phoenix World Builder',format:'PhoenixMap 1.0'};
+}
+function saveIndicator(message){const element=$('saveStatus');if(element)element.textContent=message;}
+async function saveLocal(notify=false){
+ if(isLoading||pendingRecovery)return false;
+ clearTimeout(saveHandle);
+ let snapshot;
+ try{snapshot=projectData()}catch(err){console.error('Scene snapshot failed',err);saveIndicator('⚠ Ошибка сцены');return false}
+ // Android app-private storage is independent of Chromium's storage quota/origin.
+ const hasNative=PhoenixPersistence.native();
+ const nativeOK=hasNative?PhoenixPersistence.write(snapshot,notify):false;
+ let webOK=false;
+ if(localStore)try{await dbOp('projects','autosave',snapshot);webOK=true}
+ catch(err){console.error('IndexedDB scene save failed',err)}
+ const success=nativeOK||webOK;
+ if(success){
+  savedNatively=!!nativeOK;
+  saveIndicator(nativeOK?'✓ Сохранено':'⚠ Только WebView');
+  if(notify)toast(nativeOK?'Сцена сохранена во внутренней памяти Android': 'Сохранено только в WebView. Экспортируй резервный ZIP!');
+ }else{
+  saveIndicator('⚠ Не сохранено');toast('Ошибка сохранения. Экспортируй проект в ZIP!');
+ }
+ return success;
+}
+// Synchronous Android disk checkpoint for Home/Back/background closing.
+PhoenixPersistence.flushNow=()=>{
+ if(pendingRecovery||isLoading)return true; // Keep the untouched recovery file.
+ try{return PhoenixPersistence.write(projectData(),false)}
+ catch(err){console.error('Emergency flush failed',err);return false}
+};
+window.PhoenixPersistence=PhoenixPersistence;
 function b64(bytes){let result='';for(let i=0;i<bytes.length;i+=16384)result+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(result)}
 async function saveToDevice(filename,blob){if(window.NativeBridge?.beginSave){const bytes=new Uint8Array(await blob.arrayBuffer());if(bytes.length>100000000){toast('Файл больше 100 МБ: уменьшите набор моделей');return}
   NativeBridge.beginSave(filename,blob.type||'application/octet-stream');for(let i=0;i<bytes.length;i+=32768)NativeBridge.appendSaveChunk(b64(bytes.subarray(i,i+32768)));NativeBridge.finishSave();toast('Выбери папку для сохранения');
@@ -555,7 +620,13 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
  const stick=$('joystick'),knob=$('joystickKnob');const update=e=>{const r=stick.getBoundingClientRect();let vx=(e.clientX-(r.left+r.width/2))/(r.width*.32),vy=(e.clientY-(r.top+r.height/2))/(r.height*.32);let l=Math.hypot(vx,vy);if(l>1){vx/=l;vy/=l}w.joy={x:vx,y:vy};knob.style.transform=`translate(${vx*36}px,${vy*36}px)`};
  stick.addEventListener('pointerdown',e=>{e.preventDefault();stick.setPointerCapture(e.pointerId);update(e)});stick.addEventListener('pointermove',e=>{if(stick.hasPointerCapture(e.pointerId))update(e)});const reset=()=>{w.joy={x:0,y:0};knob.style.transform='translate(0,0)'};stick.addEventListener('pointerup',reset);stick.addEventListener('pointercancel',reset);
 }
-let saveHandle=0;function saveSoon(){clearTimeout(saveHandle);saveHandle=setTimeout(()=>saveLocal(),1500)}
+let saveHandle=0;
+function saveSoon(){
+ if(isLoading||pendingRecovery)return;
+ saveIndicator('◌ Сохраняю…');
+ clearTimeout(saveHandle);
+ saveHandle=setTimeout(()=>saveLocal(false),500);
+}
 async function init(){setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
  w.onSelected=e=>{if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
