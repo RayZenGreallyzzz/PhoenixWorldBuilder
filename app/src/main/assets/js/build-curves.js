@@ -44,8 +44,17 @@ const BuildCurves=(()=>{
   const beginWidth=dist(points[0],points[1]),endWidth=dist(points[n-2],points[n-1]);
   if(beginWidth<.015||endWidth<.015||beginWidth>2||endWidth>2||
      dist(first,next)<.04||dist(last,before)<.04||dist(first,last)<.3)return null;
-  const beginOut=first.clone().sub(next).setY(0).normalize();
-  const endOut=last.clone().sub(before).setY(0).normalize();
+  // A cap's two vertices define the actual joint plane. Its perpendicular
+  // is the exact outgoing tangent, unlike a neighboring arc-segment chord
+  // which is 3.75–5 degrees off and leaves visible seams on thick walls.
+  const capOut=(a,b,rough)=>{
+   const cross=b.clone().sub(a).setY(0);
+   const tangent=new THREE.Vector3(-cross.z,0,cross.x).normalize();
+   if(tangent.dot(rough)<0)tangent.negate();
+   return tangent;
+  };
+  const beginOut=capOut(points[0],points[1],first.clone().sub(next));
+  const endOut=capOut(points[n-2],points[n-1],last.clone().sub(before));
   return [{name:'begin',point:first,out:beginOut},{name:'end',point:last,out:endOut}];
  }
  function localSockets(root,kind){
