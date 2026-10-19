@@ -40,9 +40,16 @@ for(const action of ['saveProject(String json)','loadProject()','loadBackupProje
 }
 assert(java.includes('window.PhoenixPersistence.flushNow()'),'Android back must flush synchronously');
 for(const action of ['PhoenixPersistence.choose','PhoenixPersistence.write','PhoenixPersistence.read','pendingRecovery',
- 'tx.oncomplete','pagehide','visibilitychange','importZip','saveLocal']){
+ 'tx.oncomplete','importZip','saveLocal']){
  assert(app.includes(action),'Missing WebView recovery behavior '+action);
 }
+assert(!app.includes("addEventListener('visibilitychange'"),'No autosave when Android backgrounded');
+assert(!app.includes("addEventListener('pagehide'"),'No autosave when app hidden');
+assert(!app.includes("setInterval(()=>{\n  if(!document.hidden"),'No 15s checkpoint');
+assert(app.includes("if(!notify||isLoading||pendingRecovery)return false"),'Only manual Save writes');
+assert(app.includes("saveIndicator('● Не сохранено')"),'Unsaved changes marked without writing');
+assert(!java.includes('onPause() {\n        if (webView != null)'), 'Home button must not trigger saves');
+assert(java.includes('Выйти без сохранения'),'Android must offer exit without saving');
 assert(html.indexOf('js/persistence.js')<html.indexOf('js/app.js'),'Persistence needs to load first');
 for(const id of ['saveStatus','restoreManual','restoreBackup','saveDetails'])assert(html.includes('id="'+id+'"'),id);
 console.log('Native two-copy journal, manual checkpoint, legacy IndexedDB rescue and exit-flush wiring OK');
