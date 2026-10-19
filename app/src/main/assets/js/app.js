@@ -570,9 +570,12 @@ function wireButtons(){
    toast('Персонаж загружен: '+info.animations.length+' анимаций');
   }catch(err){console.error(err);toast('Ошибка персонажа: '+err.message)}
  };
- $('fileTexture').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{const id='tex:'+f.name.toLowerCase();await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');await loadTexture(id);renderTextureOptions();$('textureSelect').value=id;
+ $('fileTexture').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{// Treat each import as a new image; reusing a filename must not silently
+   // show a stale cached texture (or mutate pictures already on the wall).
+   const id='tex:'+f.name.toLowerCase()+':'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+   await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');await loadTexture(id);renderTextureOptions();$('textureSelect').value=id;
    if(surfaceTarget()||(w.placement&&w.ghost))assignSurfacePaint('texture',id);
-   else toast('PNG добавлена. Выбери деталь и сторону для нанесения')}catch(err){toast('Текстура не открыта: '+err.message)}};
+   else toast('PNG/JPEG добавлена. Выбери деталь и сторону для нанесения')}catch(err){toast('Текстура не открыта: '+err.message)}};
 }
 async function importZip(file,isProject=false){const entries=await ZipUtils.extract(file),glbs=[],textureKeys=[],keys=Object.keys(entries);let project=null;let manifest=null;let materialMap=null;let savedBindings=null;
  if(entries['assets_manifest.json'])try{manifest=JSON.parse(new TextDecoder().decode(entries['assets_manifest.json']))}catch(e){};
