@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.selected=null;this.ghost=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.selected=null;this.ghost=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -228,6 +228,11 @@ class WorldBuilder{
   this.updateGameGhost();return this.joinMode;
  }
  toggleAutoThickness(){this.autoThickness=!this.autoThickness;this.updateGameGhost();this.onChanged();return this.autoThickness;}
+ shiftCorner(dx,dz){
+  this.cornerOffsetX=THREE.MathUtils.clamp(Math.round((this.cornerOffsetX+dx)*100)/100,-2,2);
+  this.cornerOffsetZ=THREE.MathUtils.clamp(Math.round((this.cornerOffsetZ+dz)*100)/100,-2,2);
+  this.updateGameGhost();return [this.cornerOffsetX,this.cornerOffsetZ];
+ }
  setPlacementScale(value){const n=Number(value);if(!Number.isFinite(n))return this.placementScale;this.placementScale=THREE.MathUtils.clamp(n,.1,10);if(this.ghost)this.ghost.scale.setScalar(this.placementScale);this.updateGameGhost();return this.placementScale;}
  solvePlacement(p){
   if(this.joinMode==='free'){
@@ -315,7 +320,9 @@ class WorldBuilder{
   this.ghost.scale.set(this.placementScale,this.placementScale*(solved.thicknessY||1),this.placementScale);
   const last=this.lastSnapResult;
   this.lastSnapResult=solved;
-  if(!!last?.snapped!==!!solved.snapped||last?.reference!==solved.reference)this.onSnapChanged(solved);
+  if(!!last?.snapped!==!!solved.snapped||last?.reference!==solved.reference||
+     last?.joinedTo!==solved.joinedTo||last?.thicknessY!==solved.thicknessY||
+     last?.valid!==solved.valid||last?.overhead!==solved.overhead)this.onSnapChanged(solved);
  }
  updateGameGhost(){if(this.mode!=='playbuild'||!this.ghost)return;this.applyGhostPlacement(this.forwardPlacementPoint());}
  toggleSmartSnap(){this.smartSnap=!this.smartSnap;this.updateGameGhost();return this.smartSnap;}
@@ -342,7 +349,7 @@ class WorldBuilder{
  }
 
  setPlacement(kind,category=null){
-  this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.edgeShift=0;this.lastSnapResult=null;
+  this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
   if(this.ghost)this.ghost.removeFromParent();
   this.ghost=kind?(this.makeBuiltin(kind)||this.assetCache.get(kind)?.clone(true)||null):null;
   if(this.ghost){
