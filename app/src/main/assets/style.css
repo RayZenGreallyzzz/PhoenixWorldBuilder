@@ -79,3 +79,9 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 #gameBuildHud #btnAutoThickness[aria-pressed=true]{border-color:#61cfad;background:#285d50}
 #gameBuildHud #snapStatus{word-break:normal}
 @media(max-height:580px){#gameBuildHud #buildJoinMode{min-height:30px;padding:4px}#gameBuildHud #btnAutoThickness{min-height:27px}}
+
+/* Small manual socket corrections for imported corner meshes with offset pivots. */
+#gameBuildHud .cornerAdjust{display:flex;flex-direction:column;gap:4px;padding:5px;margin:5px 0;border:1px solid #48766d;border-radius:7px}
+#gameBuildHud .cornerAdjust>small{font-size:10px;text-align:center;color:#b7eadb}
+#gameBuildHud .cornerAdjust .hudRow span{font-size:10px;min-width:45px;text-align:center;color:#7cefc8}
+#gameBuildHud .cornerAdjust .hudRow button{min-width:36px;min-height:28px}
