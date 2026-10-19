@@ -19,6 +19,10 @@
 <div class="hudControl snapTools"><span>Соединение деталей</span>
 <select id="buildJoinMode" class="wide" aria-label="Режим соединения"><option value="auto">🧲 Автоматически</option><option value="corner">⌞ Угол (стык стен)</option><option value="stack">⇧ Стена сверху</option><option value="free">✥ Свободное размещение</option></select>
 <button id="btnAutoThickness" class="wide" aria-pressed="true">↕ Толщина пола: авто</button>
+<div id="cornerAdjust" class="cornerAdjust hidden"><small>Угол: поправка по X/Z</small>
+<div class="hudRow"><button id="btnCornerXDown">X −</button><span id="cornerXValue">0</span><button id="btnCornerXUp">X +</button></div>
+<div class="hudRow"><button id="btnCornerZDown">Z −</button><span id="cornerZValue">0</span><button id="btnCornerZUp">Z +</button></div>
+</div>
 <span>Привязка к деталям</span>
  <button id="btnSnapToggle" class="wide" aria-pressed="true">🧲 К краю пола: вкл.</button>
  <div class="hudRow"><button id="btnShiftLeft" title="Сдвинуть вдоль края влево">◀ 0,25 м</button><span id="snapShiftLabel">0 м</span><button id="btnShiftRight" title="Сдвинуть вдоль края вправо">0,25 м ▶</button></div>
