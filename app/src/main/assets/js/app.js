@@ -258,7 +258,7 @@ function refreshConstructionUI(){
  $('buildJoinMode').value=w.joinMode||'auto';
  $('btnAutoThickness').textContent=w.autoThickness!==false?'↕ Толщина пола: авто':'↕ Толщина пола: исходная';
  $('btnAutoThickness').setAttribute('aria-pressed',String(w.autoThickness!==false));
- $('cornerAdjust').classList.toggle('hidden',w.joinMode!=='corner'&&w.placementCategory!=='corner');
+ $('cornerAdjust').classList.toggle('hidden',!['wall','corner','door','stairs','railing'].includes(w.placementCategory));
  $('cornerXValue').textContent=Math.round((w.cornerOffsetX||0)*100)+' см';
  $('cornerZValue').textContent=Math.round((w.cornerOffsetZ||0)*100)+' см';
  $('btnOverheadCenter').textContent=w.centerOverhead?'⌂ Центрировать крышу: вкл.':'⌂ Центрировать крышу: выкл.';
@@ -349,7 +349,7 @@ function wireButtons(){
  $('btnBuildRotate').onclick=()=>toast('Дополнительный поворот: '+w.rotatePlacement()+'°');
  $('buildJoinMode').onchange=e=>{
   const mode=w.setJoinMode(e.target.value);refreshConstructionUI();
-  toast(({auto:'Автопривязка',corner:'Стыковка углов',stack:'Ставим стену над стеной',free:'Свободная установка'})[mode]);
+  toast(({auto:'Привязка по торцам стен, затем по краю пола',corner:'Стыковка под углом 90°',stack:'Ставим стену над стеной',free:'Свободная установка'})[mode]);
  };
  $('btnAutoThickness').onclick=()=>{
   const yes=w.toggleAutoThickness();refreshConstructionUI();
