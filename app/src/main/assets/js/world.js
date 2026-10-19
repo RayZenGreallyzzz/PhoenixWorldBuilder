@@ -21,7 +21,45 @@ class WorldBuilder{
   this.keys={};this.joy={x:0,y:0};this.running=false;this.playerSpeed=4;this.playerYaw=0;this.camOrbit=false;
   this.setQuality(.75,false);window.addEventListener('resize',()=>this.resize());this.resize();
  }
- setQuality(scale,shadows){this.renderScale=scale;this.sun.castShadow=!!shadows;this.renderer.shadowMap.enabled=!!shadows;this.scene.traverse(o=>{if(o.isMesh){o.castShadow=!!shadows;o.receiveShadow=!!shadows}});this.resize()}
+ setQuality(scale,shadows){
+  const value=Number(scale);
+  this.renderScale=Number.isFinite(value)?THREE.MathUtils.clamp(value,.6,1.25):.75;
+  this.sun.castShadow=!!shadows;this.renderer.shadowMap.enabled=!!shadows;
+  this.scene.traverse(o=>{if(o.isMesh){o.castShadow=!!shadows;o.receiveShadow=!!shadows}});
+  this.resize();
+ }
+ // Mipmaps and anisotropic sampling keep paintings clear at oblique angles.
+ // Preserve non-power-of-two art on WebGL1: mipmaps would force a downscale.
+ tuneTexture(texture){
+  if(!texture?.isTexture)return;
+  const max=typeof this.renderer?.capabilities?.getMaxAnisotropy==='function'?
+   this.renderer.capabilities.getMaxAnisotropy():1;
+  const anisotropy=Math.max(1,Math.min(this.textureQuality||4,max||1));
+  const image=texture.image;
+  const pot=n=>Number.isInteger(n)&&n>0&&(n&(n-1))===0;
+  const nonPOT=image?.width&&image?.height&&(!pot(image.width)||!pot(image.height));
+  const clamped=texture.wrapS===THREE.ClampToEdgeWrapping&&texture.wrapT===THREE.ClampToEdgeWrapping;
+  const preserveNative=nonPOT&&clamped&&!this.renderer?.capabilities?.isWebGL2;
+  texture.anisotropy=anisotropy;texture.magFilter=THREE.LinearFilter;
+  texture.minFilter=preserveNative?THREE.LinearFilter:THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps=!preserveNative;texture.needsUpdate=true;
+ }
+ tuneModelTextures(root){
+  root?.traverse?.(o=>{
+   if(!o.isMesh)return;
+   for(const m of(Array.isArray(o.material)?o.material:[o.material]))
+    if(m?.map)this.tuneTexture(m.map);
+  });
+ }
+ setTextureQuality(level){
+  const n=Number(level);
+  this.textureQuality=[1,4,8].includes(n)?n:4;
+  for(const texture of this.textures?.values?.()||[])this.tuneTexture(texture);
+  for(const root of this.assetCache?.values?.()||[])this.tuneModelTextures(root);
+  this.tuneModelTextures(this.scene);
+  this.tuneModelTextures(this.ghost);
+  return this.textureQuality;
+ }
  resize(){let r=this.canvas.getBoundingClientRect();if(!r.width||!r.height)return;this.renderer.setSize(Math.round(r.width*this.renderScale),Math.round(r.height*this.renderScale),false);this.camera.aspect=r.width/r.height;this.camera.updateProjectionMatrix();}
  setupDefaultPlayer(){this.player.clear();const mat=new THREE.MeshStandardMaterial({color:'#475d7b'}),skin=new THREE.MeshStandardMaterial({color:'#e6be91'}),dark=new THREE.MeshStandardMaterial({color:'#253349'});
   const mk=(geo,m,x,y,z)=>{let o=new THREE.Mesh(geo,m);o.position.set(x,y,z);this.player.add(o);return o};
