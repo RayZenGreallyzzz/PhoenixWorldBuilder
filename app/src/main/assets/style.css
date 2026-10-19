@@ -117,3 +117,7 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 #gameBuildHud #btnBuildPlace.placementBlocked{background:#632e30;border-color:#ef7775;color:#fbe0df}
 #gameBuildHud #snapStatus.blocked{color:#ff8981}
 #buildPlacementStatus{margin:8px 0 9px}
+
+/* Lightweight saved-module preset controls for Android. */
+#btnSavePreset,#btnGameSavePreset{font-size:11px;line-height:1.3;white-space:normal;min-height:39px}
+.assetGroup>.presetDelete{width:100%;padding:3px 6px;min-height:24px;font-size:10px;background:#3f292d;border-color:#805452;border-radius:7px}
