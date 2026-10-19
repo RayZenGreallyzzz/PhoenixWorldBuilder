@@ -462,8 +462,8 @@ function wireButtons(){
   if(!confirm('Восстановить проект: '+scene.objects.length+' деталей? Текущая сцена будет заменена.'))return;
   try{
    isLoading=true;await restoreProject(scene);
-   isLoading=false;await saveLocal(true);
-   $('modal').classList.add('hidden');toast('Восстановлено деталей: '+scene.objects.length);
+   isLoading=false;saveSoon();
+   $('modal').classList.add('hidden');toast('Восстановлено деталей: '+scene.objects.length+'. Нажми 💾 для сохранения');
   }catch(err){isLoading=false;toast(err.message||'Не удалось восстановить')}
  };
  $('restoreManual').onclick=()=>recoverFrom('loadManualProject');
