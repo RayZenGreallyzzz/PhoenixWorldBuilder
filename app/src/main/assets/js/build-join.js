@@ -25,6 +25,12 @@ const BuildJoin=(()=>{
    alongX:acrossX,dir:c.clone().sub(a).setY(0).normalize(),length:distXZ(a,c)};
  }
  function nearby(w,p){
+  // The center of an R5 / 180° arc can be >6m from its connecting end.
+  // Extend candidate discovery to the true physical reach of the incoming arc.
+  const curved=typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement);
+  const b=curved?modelBounds(w):null;
+  const reach=b?Math.max(5.5,Math.min(15,
+   Math.hypot(b.max.x-b.min.x,b.max.z-b.min.z)*(w.placementScale||1)+2)):5.5;
   const possible=[];
   for(const entry of w.objects||[]){
    if(!wallCategory(catOf(w,entry))&&!(typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind)))continue;
@@ -33,7 +39,7 @@ const BuildJoin=(()=>{
    const info=wallInfo(w,entry);if(!info)continue;
    const projected=nearest(info.a,info.c,p);
    const d=distXZ(p,projected.point);
-   if(d>5.5)continue;
+   if(d>reach)continue;
    possible.push({...info,projected,d});
   }
   possible.sort((a,b)=>a.d-b.d);
