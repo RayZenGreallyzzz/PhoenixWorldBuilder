@@ -25,6 +25,14 @@ const DecalUI=(()=>{
    sel.value=list.length?String(active):'';
   }
   const d=list[active];
+  if(!d&&entry){
+   const cat=entry.data.category||entry.kind;
+   const choice=get('decalFace');
+   if(!choice.dataset.userChosenFor||choice.dataset.userChosenFor!==String(entry.data.id)){
+    choice.value=['foundation','floor','ceiling','ceiling_finish'].includes(cat)?'top':'front';
+    choice.dataset.userChosenFor=String(entry.data.id);
+   }
+  }
   if(d){
    get('decalFace').value=d.face;
    get('decalSize').value=Math.round(d.size*100);
