@@ -204,6 +204,10 @@ const BuildSnap=(()=>{
   const basic={position:raw,rotation:w.placementRotation||0,snapped:false,edge:false,reference:null,category:cat};
   const model=w.ghost||w.makeBuiltin(kind)||w.assetCache?.get(kind);
   const modelBox=model?attrBounds(model):new THREE.Box3().makeEmpty();
+  // GLB origins are often at the mesh centre rather than the sole. The
+  // selected storey represents the contact plane, not the GLB pivot.
+  if(!modelBox.isEmpty()&&['foundation','wall','corner','door','railing'].includes(cat))
+   basic.position.y-=modelBox.min.y*(w.placementScale||1);
   const lifted=out=>{
    out.position.y+=(w.placementLift||0);
    return out;

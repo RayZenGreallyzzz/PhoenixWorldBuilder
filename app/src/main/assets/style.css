@@ -139,3 +139,10 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 .presetDelete{margin-top:4px;width:100%;min-height:26px;font-size:10px;background:#493139}
 #btnGameEmblems{border-color:#b49be1}
 @media(max-width:720px){.decalControls{padding:7px;gap:5px}.galleryTabs button{font-size:10px}.decalControls .decalrow button{min-height:30px}.decalControls label{font-size:10px}}
+
+/* One-tap floor navigation. Keep buttons large enough for touch screens. */
+.floorQuickRow{display:flex;gap:5px;margin:5px 0;align-items:stretch}
+.floorQuickRow button{flex:1;min-width:0;min-height:37px;padding:5px 2px;font-size:12px;border-radius:7px}
+.floorQuickRow .floorQuick.active{background:#236758;color:#fff;border-color:#56d9b8}
+.floorDatumInfo{display:block;color:#9ddacb;font-size:11px;margin:2px 0 6px}
+#gameBuildHud .floorQuickRow button{min-height:36px;font-size:11px}
