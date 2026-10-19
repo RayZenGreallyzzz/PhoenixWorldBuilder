@@ -66,6 +66,7 @@ jobs:
           node tests/test-placement-validation.cjs
           node tests/test-wall-end-manual.cjs
           node tests/test-module-presets.cjs
+          node tests/test-decals.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4
