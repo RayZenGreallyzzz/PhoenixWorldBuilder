@@ -1,7 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id), $all=s=>[...document.querySelectorAll(s)];
-const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок / перекрытие 2×2','ceiling'],['wall','Стена 2×2,6','wall'],['window','Стена с окном','wall'],['roof','Двускатная крыша','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
-const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
+const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок / перекрытие 2×2','ceiling'],['wall','Стена 2×2,6','wall'],['corner','Угол стены 90°','corner'],['window','Стена с окном','wall'],['roof','Двускатная крыша','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
+const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['corner','Углы'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
 const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
@@ -13,6 +13,8 @@ function groupType(name){
  if(/потол|ceiling|overhead|перекрыт/.test(s))return 'ceiling';
  if(/лест|ступен|stairs?|step(s)?/.test(s))return 'stairs';
  if(/кры|кровл|roof|shingles|gable/.test(s))return 'roof';
+ if(/(?:угол|углов|corner|miter|mitre|косой|скошен)/.test(s)&&/(?:пол|floor|настил|плит|slab|foundation)/.test(s))return 'foundation';
+ if(/(?:угол|углов|corner|miter|mitre|стык_стен|стыков|скошен)/.test(s))return 'corner';
  if(/двер|door|ворот|gate/.test(s))return 'door';
  if(/стен|окно|wall|window|колон|pillar|column/.test(s))return 'wall';
  if(/пол|floor|foundation|фундамент|плит|основан|platform/.test(s))return 'foundation';
@@ -212,6 +214,9 @@ function refreshConstructionUI(){
  $('placementLiftValue').textContent=Math.round((w.placementLift||0)*100)+' см';
  $('btnSnapToggle').textContent=w.smartSnap!==false?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
  $('btnSnapToggle').setAttribute('aria-pressed',String(w.smartSnap!==false));
+ $('buildJoinMode').value=w.joinMode||'auto';
+ $('btnAutoThickness').textContent=w.autoThickness!==false?'↕ Толщина пола: авто':'↕ Толщина пола: исходная';
+ $('btnAutoThickness').setAttribute('aria-pressed',String(w.autoThickness!==false));
  $('btnOverheadCenter').textContent=w.centerOverhead?'⌂ Центрировать крышу: вкл.':'⌂ Центрировать крышу: выкл.';
  $('btnOverheadCenter').setAttribute('aria-pressed',String(!!w.centerOverhead));
 }
@@ -241,7 +246,7 @@ function setupPicker(){
  $('storeyHeightInput').onchange=changeHeight;
  $('buildStoreyHeight').onchange=changeHeight;
  $('textureSelect').onchange=async e=>{if(!w.selected)return toast('Сначала выбери объект');let id=e.target.value;try{if(id)await loadTexture(id);w.remember();w.selected.data.texture=id||null;applyEntry(w.selected);w.onChanged();toast(id?'Текстура применена':'Текстура снята')}catch(err){toast('Ошибка текстуры: '+err.message)}};
- $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.setScalar(scale);w.onChanged()};
+ $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.set(scale,scale*(w.selected.data.thicknessY||1),scale);w.onChanged()};
  function updateAvatarSize(meters){
  w.setAvatarHeight(meters);
  const value=w.avatarHeight.toFixed(2);
@@ -270,6 +275,14 @@ function wireButtons(){
  $('btnGameBuild').onclick=()=>setMode('playbuild');
  $('btnBuildCatalog').onclick=()=>{document.body.classList.toggle('catalogOpen');if(document.body.classList.contains('catalogOpen'))renderLibrary()};
  $('btnBuildRotate').onclick=()=>toast('Дополнительный поворот: '+w.rotatePlacement()+'°');
+ $('buildJoinMode').onchange=e=>{
+  const mode=w.setJoinMode(e.target.value);
+  toast(({auto:'Автопривязка',corner:'Стыковка углов',stack:'Ставим стену над стеной',free:'Свободная установка'})[mode]);
+ };
+ $('btnAutoThickness').onclick=()=>{
+  const yes=w.toggleAutoThickness();refreshConstructionUI();
+  toast(yes?'Толщина пола подгоняется автоматически по соседнему полу':'Оставляем исходную толщину каждой детали');
+ };
  $('btnSnapToggle').onclick=()=>{
   const active=w.toggleSmartSnap();
   $('btnSnapToggle').textContent=active?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
@@ -296,8 +309,12 @@ function wireButtons(){
  };
  w.onSnapChanged=result=>{
   const el=$('snapStatus');if(!el)return;
-  el.textContent=result.snapped?
-   (result.overhead?'✓ Опирается на верх стен или перекрытия':result.edge?'✓ Привязано к краю пола':'✓ Установлено на GLB-пол'):
+  el.textContent=result.valid===false?(result.missingTarget||'Нет точки соединения'):
+   result.corner?'✓ Соединение угла':
+   result.stacked?'✓ Стена над стеной':
+   result.slab?'✓ Толщина соседнего пола: '+Math.round((result.referenceThickness||0)*100)+' см':
+   result.overhead?'✓ Поверхность перекрытия':
+   result.snapped?(result.edge?'✓ Привязано к краю пола':'✓ Установлено на GLB-пол'):
    (w.smartSnap?'Подойди ближе к краю пола':'Свободная установка');
   el.classList.toggle('snapped',!!result.snapped);
  };
@@ -313,8 +330,12 @@ function wireButtons(){
  $('btnBuildPlace').onclick=()=>{
   if(!w.placement)return toast('Выбери модуль в каталоге');
   const snap=w.solvePlacement(w.forwardPlacementPoint());
-  w.placeAt(w.forwardPlacementPoint());saveSoon();
-  toast(snap.snapped?'Установлено с привязкой к '+(snap.edge?'краю':'поверхности'):'Установлено по сетке');
+  if(snap.valid===false)return toast(snap.missingTarget||'Нет подходящего соединения');
+  const placed=w.placeAt(w.forwardPlacementPoint());
+  if(!placed)return toast('Не удалось установить деталь');
+  saveSoon();
+  toast(snap.corner?'Угол соединён':snap.stacked?'Стена установлена сверху':snap.slab?'Пол состыкован по толщине':
+   snap.snapped?'Деталь присоединена':'Установлено по сетке');
  };
  $('btnGameWalk').onclick=()=>{w.setPlacement(null);toast('Осматривай постройку, или выбери деталь в каталоге')};$('btnGameAvatar').onclick=()=>$('fileAvatar').click();$('btnGameRun').onclick=()=>{w.running=!w.running;$('btnGameRun').textContent='🏃 Бег: '+(w.running?'вкл.':'выкл.')};$('btnAvatarAnimationToggle').onclick=()=>{const on=w.toggleAvatarAnimations();$('btnAvatarAnimationToggle').textContent='🎞️ Анимация: '+(on?'вкл.':'выкл.');toast(on?'Анимации включены':'Анимации приостановлены: проверка рига')};const sizeFactor=factor=>updateAvatarSize(Math.max(.01,Math.round(w.avatarHeight*factor*1000)/1000));
  $('btnAvatarSmaller').onclick=()=>{sizeFactor(.5);toast('Рост персонажа: '+w.avatarHeight.toFixed(2)+' м')};
