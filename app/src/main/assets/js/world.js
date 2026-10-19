@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.selected=null;this.ghost=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.selected=null;this.ghost=null;this.placementOutline=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;this.placementSurfacePaint={};
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -274,8 +274,9 @@ class WorldBuilder{
  }
  placeAt(p){
   if(!this.placement&&!this.moveTarget)return;
-  const solved=this.solvePlacement(p),v=solved.position;
-  if(solved.valid===false)return null;
+  const solved=this.moveTarget?this.solvePlacement(p):this.applyGhostPlacement(p);
+  if(!solved||solved.valid===false)return null;
+  const v=solved.position;
   this.remember();
   if(this.moveTarget){
    this.moveTarget.mesh.position.copy(v);this.moveTarget.data.pos=v.toArray();
@@ -340,6 +341,7 @@ class WorldBuilder{
    this.ghost.userData.pwbCategory=this.placementCategory||this.categoryForKind?.(this.placement)||this.placement;
    this.ghost.userData.pwbPreview=true;
    SurfacePaint.applyToRoot(this.ghost,this.placementSurfacePaint,this.textures);
+   this.colorPlacementPreview(this.lastSnapResult?.valid!==false);
   }
   return this.placementSurfacePaint;
  }
@@ -357,7 +359,7 @@ class WorldBuilder{
   if(isGame&&!wasGame){this.player.position.set(this.target.x,this.heightAt(this.target.x,this.target.z)+.85,this.target.z);this.distance=5.2;this.pitch=.34;}
   else if(!isGame&&wasGame){this.target.copy(this.player.position);this.target.y+=1;this.distance=17;this.pitch=.58;}
   if(mode==='playbuild'&&this.placement&&!this.ghost)this.setPlacement(this.placement,this.placementCategory);
-  if(mode==='walk'&&this.ghost){this.ghost.removeFromParent();this.ghost=null;}
+  if(mode==='walk'&&this.ghost){this.ghost.removeFromParent();this.ghost=null;this.placementOutline?.removeFromParent();}
   this.onChanged();
  }
  forwardPlacementPoint(){
@@ -367,16 +369,45 @@ class WorldBuilder{
   return new THREE.Vector3(x,this.placementHeight(x,z),z);
  }
  applyGhostPlacement(p){
-  if(!this.ghost)return;
+  if(!this.ghost)return null;
   const solved=this.solvePlacement(p);
   this.ghost.position.copy(solved.position);
   this.ghost.rotation.y=solved.rotation*Math.PI/180;
   this.ghost.scale.set(this.placementScale,this.placementScale*(solved.thicknessY||1),this.placementScale);
-  const last=this.lastSnapResult;
-  this.lastSnapResult=solved;
-  if(!!last?.snapped!==!!solved.snapped||last?.reference!==solved.reference||
-     last?.joinedTo!==solved.joinedTo||last?.thicknessY!==solved.thicknessY||
-     last?.valid!==solved.valid||last?.overhead!==solved.overhead)this.onSnapChanged(solved);
+  const checked=typeof BuildPlacementValidator!=='undefined'?
+   BuildPlacementValidator.validate(this,solved,this.ghost):
+   {...solved,valid:solved.valid!==false,reason:solved.missingTarget||(solved.snapped?'Привязано':'По сетке')};
+  this.colorPlacementPreview(checked.valid!==false);
+  if(this.placementOutline){
+   this.placementOutline.update();
+   this.placementOutline.material.color.setHex(checked.valid===false?0xff635c:0x50f4a0);
+  }
+  const previous=this.lastSnapResult;
+  this.lastSnapResult=checked;
+  if(previous?.valid!==checked.valid||previous?.reason!==checked.reason||
+     previous?.reference!==checked.reference||previous?.joinedTo!==checked.joinedTo||
+     previous?.snapped!==checked.snapped||previous?.overhead!==checked.overhead||
+     previous?.thicknessY!==checked.thicknessY)this.onSnapChanged(checked);
+  return checked;
+ }
+ colorPlacementPreview(valid){
+  if(!this.ghost)return;
+  const rgb=new THREE.Color(valid?'#66ffaa':'#ff505c');
+  this.ghost.traverse(obj=>{
+   if(!obj.isMesh)return;
+   for(const mat of (Array.isArray(obj.material)?obj.material:[obj.material])){
+    if(!mat)return;
+    if(mat.color){
+     if(!mat.userData.pwbPreviewOriginalColor)mat.userData.pwbPreviewOriginalColor=mat.color.clone();
+     mat.color.copy(mat.userData.pwbPreviewOriginalColor).lerp(rgb,valid?.24:.56);
+    }
+    if(mat.emissive){
+     if(!mat.userData.pwbPreviewOriginalEmissive)mat.userData.pwbPreviewOriginalEmissive=mat.emissive.clone();
+     mat.emissive.copy(mat.userData.pwbPreviewOriginalEmissive).lerp(rgb,valid?.23:.52);
+    }
+    mat.opacity=.47;mat.transparent=true;mat.depthWrite=false;
+   }
+  });
  }
  updateGameGhost(){if(this.mode!=='playbuild'||!this.ghost)return;this.applyGhostPlacement(this.forwardPlacementPoint());}
  toggleSmartSnap(){this.smartSnap=!this.smartSnap;this.updateGameGhost();return this.smartSnap;}
@@ -409,20 +440,31 @@ class WorldBuilder{
   if(kind!==this.placement)this.placementSurfacePaint={};
   this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
   if(this.ghost)this.ghost.removeFromParent();
+  if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline.geometry.dispose();this.placementOutline.material.dispose();this.placementOutline=null;}
   this.ghost=kind?(this.makeBuiltin(kind)||this.assetCache.get(kind)?.clone(true)||null):null;
   if(this.ghost){
-   this.ghost.traverse(m=>{if(m.isMesh){m.material=Array.isArray(m.material)?m.material.map(mat=>mat.clone()):m.material.clone();for(const mat of(Array.isArray(m.material)?m.material:[m.material])){mat.transparent=true;mat.opacity=.4;mat.depthWrite=false;}}});
+   this.ghost.traverse(m=>{if(m.isMesh){
+    m.material=Array.isArray(m.material)?m.material.map(mat=>mat.clone()):m.material.clone();
+    for(const mat of(Array.isArray(m.material)?m.material:[m.material])){mat.transparent=true;mat.opacity=.47;mat.depthWrite=false;}
+   }});
    this.ghost.userData.pwbCategory=category||this.categoryForKind?.(kind)||kind;
    this.ghost.userData.pwbPreview=true;
    if(typeof SurfacePaint!=='undefined'&&Object.keys(this.placementSurfacePaint||{}).length)
     SurfacePaint.applyToRoot(this.ghost,this.placementSurfacePaint,this.textures);
-   this.ghost.scale.setScalar(this.placementScale);this.scene.add(this.ghost);this.updateGameGhost();
+   this.ghost.scale.setScalar(this.placementScale);this.scene.add(this.ghost);
+   if(typeof THREE.BoxHelper==='function'){
+    this.placementOutline=new THREE.BoxHelper(this.ghost,0x50f4a0);
+    this.placementOutline.material.transparent=true;this.placementOutline.material.opacity=.92;
+    this.placementOutline.material.depthTest=false;
+    this.scene.add(this.placementOutline);
+   }
+   this.updateGameGhost();
   }
  }
  updateGhost(p){this.applyGhostPlacement(p)}
  action(act){const e=this.selected;if(!e)return false;this.remember();if(act==='rotate'){e.data.rot=(e.data.rot+90)%360;e.mesh.rotation.y=e.data.rot*Math.PI/180}
   else if(act==='copy'){const data=JSON.parse(JSON.stringify(e.data));data.id=this.nextId++;data.pos[0]+=2;let clone=this.instantiate(e.kind,data);this.select(clone)}
-  else if(act==='move'){this.moveTarget=e;this.placement=null;this.ghost?.removeFromParent();this.ghost=null;}
+  else if(act==='move'){this.moveTarget=e;this.placement=null;this.ghost?.removeFromParent();this.ghost=null;if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline.geometry.dispose();this.placementOutline.material.dispose();this.placementOutline=null;}}
   else if(act==='delete'){this.scene.remove(e.mesh);this.objects.splice(this.objects.indexOf(e),1);this.select(null);}
   this.onChanged();return true;
  }
