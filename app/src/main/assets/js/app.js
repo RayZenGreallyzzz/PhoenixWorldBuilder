@@ -51,7 +51,7 @@ w.getAsset=cacheFromDB;
 w.categoryForKind=kind=>BUILTINS.find(item=>item[0]===kind)?.[2]||savedMeta.get(kind)?.category||groupType(savedMeta.get(kind)?.name||kind);
 async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),...(catalogMeta[id]||{}),name});}
 async function rememberTexture(id,name,bytes,mime='image/png',sourcePath=''){await dbOp('textures',id,{name,bytes,mime,sourcePath});textureMeta.set(id,{name,sourcePath});}
-async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
+async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;if(id.startsWith('emblem:')){t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;t.anisotropy=Math.min(4,w.renderer.capabilities.getMaxAnisotropy());}else t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,reject)})}
 async function updateCatalog(id,patch){
  catalogMeta[id]={...(catalogMeta[id]||{}),...patch};
  const m=savedMeta.get(id);if(m)Object.assign(m,patch);
