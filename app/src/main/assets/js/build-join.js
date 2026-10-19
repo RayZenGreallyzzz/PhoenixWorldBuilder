@@ -122,12 +122,30 @@ const BuildJoin=(()=>{
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,stacked:true,edge:false,
    reference:old.entry.data.id,category:w.placementCategory||'wall',joinedTo:'stack'};
  }
+ function hasCurrentDeck(w,p){
+  // A wall on an actual next-storey floor belongs on that floor. Only stack
+  // directly on the lower wall when no usable current-floor slab exists.
+  const nominal=w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6);
+  for(const entry of w.objects||[]){
+   if(catOf(w,entry)!=='foundation')continue;
+   const story=entry.data?.storey;
+   const root=entry.mesh;root.updateMatrixWorld(true,true);
+   const box=BuildSnap.attrBounds(root);if(box.isEmpty())continue;
+   const y=byLocal(root,0,box.max.y,0).y;
+   if(story!==w.floorLevel&&(Number.isInteger(story)||abs(y-nominal)>1.25))continue;
+   const local=p.clone().applyMatrix4(root.matrixWorld.clone().invert());
+   if(local.x>=box.min.x-.35&&local.x<=box.max.x+.35&&
+      local.z>=box.min.z-.35&&local.z<=box.max.z+.35)return true;
+  }
+  return false;
+ }
  function resolve(w,p){
   const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
   const mode=w.joinMode||'auto';
   const isCorner=mode==='corner'||(mode==='auto'&&cat==='corner');
   const isStack=mode==='stack'||(mode==='auto'&&cat==='wall'&&w.floorLevel>0);
   if(!isCorner&&!isStack)return null;
+  if(mode==='auto'&&isStack&&hasCurrentDeck(w,p))return null;
   const walls=nearby(w,p),box=modelBounds(w);
   const result=isCorner?corner(w,p,walls,box):stack(w,p,walls,box);
   if(result)return result;
