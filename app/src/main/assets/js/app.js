@@ -5,7 +5,7 @@ const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceilin
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
 const w=new WorldBuilder($('viewport'));w.textures=new Map();try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
-let statusMessage='';
+let statusMessage='';let surfaceScope='all';
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
 function groupType(name){
@@ -141,24 +141,49 @@ async function showTextureImage(img,id){
  img.onerror=()=>URL.revokeObjectURL(url);
  img.src=url;
 }
+function surfaceTarget(){
+ if(w.mode==='playbuild'&&$('surfacePaintTarget').value==='new')return null;
+ return w.selected||null;
+}
+function updateSurfaceUI(){
+ $('surfaceScope').value=surfaceScope;
+ $('gameSurfaceScope').value=surfaceScope;
+ const entry=surfaceTarget(),skin=entry?.data?.surfacePaint||w.placementSurfacePaint||{};
+ const info=skin[surfaceScope]||{};
+ $('textureSelect').value=info.texture||((surfaceScope==='all'&&entry?.data?.texture)||'');
+ $('gameSurfaceColor').value=info.color||'#ffffff';
+}
+function assignSurfacePaint(property,value){
+ if(typeof SurfacePaint==='undefined')return toast('Режим поверхностей недоступен');
+ const entry=surfaceTarget();
+ if(entry){w.updateSurfacePaint(entry,surfaceScope,property,value);}
+ else if(w.placement&&w.ghost){w.updatePreviewSurfacePaint(surfaceScope,property,value);}
+ else return toast('Выбери установленный модуль или новую деталь в каталоге');
+ updateSurfaceUI();
+ toast('Облицовка '+({all:'всего модуля',top:'сверху',bottom:'снизу'})[surfaceScope]+' изменена');
+}
+function clearSurface(){
+ const entry=surfaceTarget();
+ if(entry)w.clearSurfacePaint(entry,surfaceScope);
+ else if(w.placement){
+  w.updatePreviewSurfacePaint(surfaceScope,'texture',null);
+  w.updatePreviewSurfacePaint(surfaceScope,'color',null);
+ }else return toast('Сначала выбери деталь');
+ updateSurfaceUI();toast('Облицовка стороны снята');
+}
+function setSurfaceScope(face){
+ surfaceScope=SurfacePaint.faces.includes(face)?face:'all';updateSurfaceUI();
+}
 function selectTexture(id){
  return (async()=>{
+  if(!id)return assignSurfacePaint('texture',null);
   const tex=await loadTexture(id);
   if(!tex){toast('Не удалось открыть текстуру');return}
-  w.textureId=id;
-  if(w.selected){
-   w.remember();w.selected.data.texture=id;applyEntry(w.selected);w.onChanged();
-  }
-  if(w.ghost)w.ghost.traverse(obj=>{
-   if(!obj.isMesh)return;
-   for(const mat of(Array.isArray(obj.material)?obj.material:[obj.material])){
-    mat.map=tex;if(mat.color)mat.color.set('#ffffff');mat.needsUpdate=true;
-   }
-  });
-  toast('Текстура выбрана: '+(textureMeta.get(id)?.name||id));
+  assignSurfacePaint('texture',id);
   renderLibrary();
  })().catch(e=>toast('Ошибка текстуры: '+e.message));
 }
+
 function renderLibrary(){
  const el=$('assetList');el.innerHTML='';
  const isTexture=catalogMode==='textures';
@@ -211,9 +236,12 @@ function refreshConstructionUI(){
  $('storeyHeightInput').value=height;$('buildStoreyHeight').value=height;
  $('levelValue').textContent=(w.floorLevel||0)+1;
  $('buildLevelValue').textContent=(w.floorLevel||0)+1;
+ $('levelGo').value=String((w.floorLevel||0)+1);
+ $('gameLevelGo').value=String((w.floorLevel||0)+1);
  $('placementLiftValue').textContent=Math.round((w.placementLift||0)*100)+' см';
  $('btnSnapToggle').textContent=w.smartSnap!==false?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
  $('btnSnapToggle').setAttribute('aria-pressed',String(w.smartSnap!==false));
+ updateSurfaceUI();
  $('buildJoinMode').value=w.joinMode||'auto';
  $('btnAutoThickness').textContent=w.autoThickness!==false?'↕ Толщина пола: авто':'↕ Толщина пола: исходная';
  $('btnAutoThickness').setAttribute('aria-pressed',String(w.autoThickness!==false));
@@ -248,7 +276,24 @@ function setupPicker(){
  };
  $('storeyHeightInput').onchange=changeHeight;
  $('buildStoreyHeight').onchange=changeHeight;
- $('textureSelect').onchange=async e=>{if(!w.selected)return toast('Сначала выбери объект');let id=e.target.value;try{if(id)await loadTexture(id);w.remember();w.selected.data.texture=id||null;applyEntry(w.selected);w.onChanged();toast(id?'Текстура применена':'Текстура снята')}catch(err){toast('Ошибка текстуры: '+err.message)}};
+ const goLevel=field=>{
+  const raw=Number($(field).value);
+  if(!Number.isSafeInteger(raw)||raw<1){refreshConstructionUI();return toast('Номер этажа должен быть целым и больше нуля')}
+  w.setFloorLevel(raw);refreshConstructionUI();
+  // The avatar remains safely on the ground. Free camera moves to the chosen level.
+  if(w.mode==='playbuild'||w.mode==='walk')setMode('build');
+  w.focusBuildFloor();
+  toast('Этаж '+raw+' · без искусственного ограничения по номеру');
+ };
+ $('btnGoLevel').onclick=()=>goLevel('levelGo');
+ $('btnGameGoLevel').onclick=()=>goLevel('gameLevelGo');
+ $('levelGo').onkeydown=e=>{if(e.key==='Enter')goLevel('levelGo')};
+ $('gameLevelGo').onkeydown=e=>{if(e.key==='Enter')goLevel('gameLevelGo')};
+ $('surfaceScope').onchange=e=>setSurfaceScope(e.target.value);
+ $('gameSurfaceScope').onchange=e=>setSurfaceScope(e.target.value);
+ $('surfacePaintTarget').onchange=updateSurfaceUI;
+ $('btnSurfaceClear').onclick=clearSurface;
+ $('textureSelect').onchange=e=>selectTexture(e.target.value);
  $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.set(scale,scale*(w.selected.data.thicknessY||1),scale);w.onChanged()};
  function updateAvatarSize(meters){
  w.setAvatarHeight(meters);
@@ -264,7 +309,12 @@ $('avatarHeightExact').onchange=e=>updateAvatarSize(Number(e.target.value));
  function swatches(where,colors,fn){let root=$(where);for(const color of colors){const b=document.createElement('button');b.className='swatch';b.style.background=color;b.title=color;b.onclick=()=>{root.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');fn(color)};root.append(b)}}
  swatches('materialColors',COLORS,c=>updateStyle('color',c));swatches('terrainColors',TERRAIN_COLORS,c=>{w.terrainPaint=c;toast('Цвет земли выбран')});
 }
-function updateStyle(key,value){w.currentPaint=key==='color'?value:w.currentPaint;const e=w.selected;if(!e){toast('Сначала выбери объект на карте');return}w.remember();e.data[key]=value;applyEntry(e);w.onChanged()}
+function updateStyle(key,value){
+ if(key==='color'&&surfaceScope!=='all')return assignSurfacePaint('color',value);
+ w.currentPaint=key==='color'?value:w.currentPaint;
+ const e=w.selected;if(!e){toast('Сначала выбери объект на карте');return}
+ w.remember();e.data[key]=value;applyEntry(e);w.onChanged();
+}
 function applyEntry(e){const color=e.data.color?new THREE.Color(e.data.color):null;e.mesh.traverse(o=>{if(!o.isMesh)return;for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(m.color&&color&&!(e.kind==='window'&&m.transparent))m.color.copy(color);if(m.roughness!==undefined)m.roughness=e.data.roughness??.8;if(m.metalness!==undefined)m.metalness=e.data.metalness??0;if(e.data.texture&&w.textures.get(e.data.texture)){m.map=w.textures.get(e.data.texture);m.needsUpdate=true}}});}
 function setMode(mode){w.setMode(mode);const game=mode==='walk'||mode==='playbuild';
  $all('.tab').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
@@ -277,6 +327,12 @@ function setMode(mode){w.setMode(mode);const game=mode==='walk'||mode==='playbui
 function wireButtons(){
  $('btnGameBuild').onclick=()=>setMode('playbuild');
  $('btnBuildCatalog').onclick=()=>{document.body.classList.toggle('catalogOpen');if(document.body.classList.contains('catalogOpen'))renderLibrary()};
+ $('btnGameTextureGallery').onclick=()=>{
+  catalogMode='textures';catalogPage=0;
+  document.body.classList.add('catalogOpen');renderLibrary();
+ };
+ $('btnGameSurfaceColor').onclick=()=>assignSurfacePaint('color',$('gameSurfaceColor').value);
+ $('btnGameSurfaceClear').onclick=clearSurface;
  $('btnBuildRotate').onclick=()=>toast('Дополнительный поворот: '+w.rotatePlacement()+'°');
  $('buildJoinMode').onchange=e=>{
   const mode=w.setJoinMode(e.target.value);refreshConstructionUI();
@@ -446,7 +502,11 @@ async function importZip(file,isProject=false){const entries=await ZipUtils.extr
 }
 async function loadDependencies(project){const need=new Set(project.objects.map(o=>o.kind).filter(k=>!BUILTINS.some(x=>x[0]===k)));
  for(const id of need)if(!w.assetCache.has(id))try{await cacheFromDB(id)}catch(e){console.warn(id,e)};
- const tex=new Set(project.objects.map(o=>o.texture).filter(Boolean));for(const id of tex)try{await loadTexture(id)}catch(e){};
+ const tex=new Set(project.objects.map(o=>o.texture).filter(Boolean));
+ for(const obj of project.objects)for(const face of SurfacePaint.faces){
+  const texId=obj.surfacePaint?.[face]?.texture;if(texId)tex.add(texId);
+ }
+ for(const id of tex)try{await loadTexture(id)}catch(e){};
 }
 async function restoreProject(project){await loadDependencies(project);await w.restore(project);refreshConstructionUI();if(project.camera){w.yaw=project.camera.yaw??.65;w.pitch=project.camera.pitch??.55;w.distance=project.camera.distance??26;w.target.fromArray(project.camera.target||[0,2,0])}w.undo=[];}
 function projectData(){return {...w.snapshot(),camera:{yaw:w.yaw,pitch:w.pitch,distance:w.distance,target:w.target.toArray()},editor:'Phoenix World Builder',format:'PhoenixMap 1.0'}}
@@ -459,7 +519,11 @@ async function exportJson(){await saveToDevice('phoenix_map.json',new Blob([JSON
 async function exportPack(){try{toast('Создаю пакет карты…');const project=projectData(),items={'project.json':JSON.stringify(project)},manifest={};
  const assetIds=new Set(project.objects.map(x=>x.kind).filter(x=>!BUILTINS.some(b=>b[0]===x)));// Character GLB is only used for scene inspection, not exported as house geometry.
  for(const id of assetIds){const row=await dbOp('assets',id);if(row){const path='models/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.glb';items[path]=row.bytes;manifest[path]=id;}}
- const texIds=new Set(project.objects.map(x=>x.texture).filter(Boolean));for(const id of assetIds){const binding=await dbOp('bindings',id);for(const slot of binding?.slots||[])if(slot.texture)texIds.add(slot.texture)}for(const id of texIds){const row=await dbOp('textures',id);if(row){const path='textures/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.'+(row.mime.split('/')[1]||'png');items[path]=row.bytes;manifest[path]=id;}}
+ const texIds=new Set(project.objects.map(x=>x.texture).filter(Boolean));
+ for(const obj of project.objects)for(const face of SurfacePaint.faces){
+  const skin=obj.surfacePaint?.[face]?.texture;if(skin)texIds.add(skin);
+ }
+ for(const id of assetIds){const binding=await dbOp('bindings',id);for(const slot of binding?.slots||[])if(slot.texture)texIds.add(slot.texture)}for(const id of texIds){const row=await dbOp('textures',id);if(row){const path='textures/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.'+(row.mime.split('/')[1]||'png');items[path]=row.bytes;manifest[path]=id;}}
  const bindings={};for(const id of assetIds){const row=await dbOp('bindings',id);if(row)bindings[id]=row;}
  const exportCatalog={};for(const id of assetIds)if(catalogMeta[id])exportCatalog[id]=catalogMeta[id];
   items['catalog.json']=JSON.stringify(exportCatalog);items['bindings.json']=JSON.stringify(bindings);items['assets_manifest.json']=JSON.stringify(manifest);let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
@@ -491,7 +555,7 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
 }
 let saveHandle=0;function saveSoon(){clearTimeout(saveHandle);saveHandle=setTimeout(()=>saveLocal(),1500)}
 async function init(){setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
- w.onSelected=e=>{if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);}};w.onChanged=saveSoon;
+ w.onSelected=e=>{if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
