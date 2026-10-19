@@ -39,7 +39,7 @@ assert.equal(installed.data.surfacePaint.bottom.texture,'tex:bottom');
 assert.equal(installed.data.surfacePaint.all.texture,'tex:all');
 const mesh=installed.mesh.children[0];
 assert(mesh.geometry.isBufferGeometry,'Original mesh geometry retained');
-const shader={uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <map_fragment>'};
+const shader={uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <map_fragment>\n#include <color_fragment>'};
 mesh.material.onBeforeCompile(shader);
 assert.equal(shader.uniforms.pwbEnabledall.value,1);
 assert.equal(shader.uniforms.pwbEnabledtop.value,1);
