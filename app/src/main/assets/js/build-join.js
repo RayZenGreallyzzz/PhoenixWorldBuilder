@@ -162,6 +162,55 @@ const BuildJoin=(()=>{
   return best;
  }
  function hasCurrentDeck(w,p){return currentDeckTop(w,p)!==null}
+
+ function joinEnd(w,p,candidates,box,onlyCorner=false){
+  const category=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
+  if(!['wall','door','railing'].includes(category))return null;
+  const majorX=box.max.x-box.min.x>=box.max.z-box.min.z;
+  const main=majorX?'x':'z',cross=majorX?'z':'x';
+  const mid=(box.min[cross]+box.max[cross])/2;
+  const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
+  const scale=w.placementScale||1;
+  const half=(box.max[main]-box.min[main])*scale/2;
+  const deckTop=w.floorLevel>0?currentDeckTop(w,p):null;
+  let best=null;
+  for(const old of candidates){
+   const floor=old.entry.data?.storey;
+   if(floor!==undefined&&floor!==null&&floor!==w.floorLevel)continue;
+   if(deckTop!==null&&abs(old.bottom-deckTop)>.09)continue;
+   const expected=w.floorLevel>0?w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):
+    w.mode==='playbuild'&&w.player?w.player.position.y-.85:p.y;
+   if(floor==null&&abs(old.bottom-expected)>2.2)continue;
+   const baseline=angle(old.a,old.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
+   for(const endpoint of ['a','c']){
+    const join=old[endpoint],inwards=old.dir.clone().multiplyScalar(endpoint==='a'?1:-1);
+    for(const k of (onlyCorner?[1,3]:[0,1,2,3])){
+     const yaw=baseline+k*Math.PI/2;
+     for(const attachment of ['min','max']){
+      const local=new THREE.Vector3();
+      local[main]=box[attachment][main];local[cross]=mid;
+      const delta=rotate(local,yaw).multiplyScalar(scale);
+      const at=new THREE.Vector3(join.x-delta.x,old.bottom-box.min.y*scale+(w.placementLift||0),join.z-delta.z);
+      const middle=at.clone().add(rotate(center,yaw).multiplyScalar(scale));
+      const distance=distXZ(p,middle);
+      if(distance>Math.max(1.85,Math.min(3.6,half+1.35)))continue;
+      const outward=middle.clone().sub(join).setY(0).normalize();
+      const dot=outward.dot(inwards);
+      if(dot>.77)continue; // Do not return inside the already built wall.
+      const perpendicular=abs(dot)<.38;
+      if(onlyCorner&&!perpendicular)continue;
+      const score=distance+(perpendicular?.09:0);
+      if(!best||score<best.score)
+       best={position:at,yaw,perpendicular,reference:old.entry.data.id,score};
+     }
+    }
+   }
+  }
+  if(!best)return null;
+  return {position:best.position,rotation:((best.yaw*180/Math.PI)%360+360)%360,
+   snapped:true,edge:true,wallEnd:true,wallCorner:best.perpendicular,
+   joinedTo:best.perpendicular?'wall-corner':'wall-end',reference:best.reference,category};
+ }
  function resolve(w,p){
   const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
   const mode=w.joinMode||'auto';
