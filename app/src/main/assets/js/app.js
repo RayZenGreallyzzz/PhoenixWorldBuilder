@@ -585,7 +585,8 @@ function projectData(){
 }
 function saveIndicator(message){const element=$('saveStatus');if(element)element.textContent=message;}
 async function saveLocal(notify=false){
- if(isLoading||pendingRecovery)return false;
+ // Scene persistence is EXPLICIT ONLY. Even accidental noninteractive calls cannot write.
+ if(!notify||isLoading||pendingRecovery)return false;
  let snapshot;
  try{snapshot=projectData()}catch(err){console.error('Scene snapshot failed',err);saveIndicator('⚠ Ошибка сцены');return false}
  // Android app-private storage is independent of Chromium's storage quota/origin.
