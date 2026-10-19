@@ -387,7 +387,7 @@ class WorldBuilder{
   if(previous?.valid!==checked.valid||previous?.reason!==checked.reason||
      previous?.reference!==checked.reference||previous?.joinedTo!==checked.joinedTo||
      previous?.snapped!==checked.snapped||previous?.overhead!==checked.overhead||
-     previous?.thicknessY!==checked.thicknessY)this.onSnapChanged(checked);
+     previous?.thicknessY!==checked.thicknessY)this.onSnapChanged?.(checked);
   return checked;
  }
  colorPlacementPreview(valid){
