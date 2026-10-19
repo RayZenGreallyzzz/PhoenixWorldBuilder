@@ -48,14 +48,20 @@ const SceneExporter=(()=>{
    const source=Array.isArray(original)?original[0]:original;
    const cacheId=(source?.uuid||'')+root.uuid+face+JSON.stringify(paint)+JSON.stringify(emblems);
    if(decalCache.has(cacheId))return decalCache.get(cacheId);
-   const cv=document.createElement('canvas');cv.width=cv.height=512;
+   // Larger paintings need a larger baked image, but small emblems stay cheap.
+   const sourceSize=Math.max(512,...emblems.map(e=>{
+    const img=world.textures?.get(e.texture)?.image;
+    return Math.max(img?.width||0,img?.height||0);
+   }));
+   const bakeSize=Math.min(2048,Math.ceil(sourceSize/512)*512);
+   const cv=document.createElement('canvas');cv.width=cv.height=bakeSize;
    const ctx=cv.getContext('2d');if(!ctx)throw Error('Нет Canvas для экспорта');
    ctx.fillStyle=paint?.color||(source?.color?'#'+source.color.getHexString():'#ffffff');
-   ctx.fillRect(0,0,512,512);
+   ctx.fillRect(0,0,bakeSize,bakeSize);
    const originalTexture=paint?.texture?world.textures?.get(paint.texture):source?.map;
    if(originalTexture?.image?.width){
     ctx.globalCompositeOperation='multiply';
-    ctx.drawImage(originalTexture.image,0,0,512,512);
+    ctx.drawImage(originalTexture.image,0,0,bakeSize,bakeSize);
     ctx.globalCompositeOperation='source-over';
    }
    const g=DecalLayer.faceGeometry(root,face);
@@ -64,8 +70,8 @@ const SceneExporter=(()=>{
     const w=e.fit==='fill'?1:e.size;
     const h=e.fit==='fill'?1:Math.min(4,Math.max(.01,w*g.width/g.height*im.height/im.width));
     ctx.save();ctx.globalAlpha=e.opacity;
-    ctx.translate(e.x*512,(1-e.y)*512);ctx.rotate(e.rotation*Math.PI/180);
-    ctx.drawImage(im,-w*256,-h*256,w*512,h*512);ctx.restore();
+    ctx.translate(e.x*bakeSize,(1-e.y)*bakeSize);ctx.rotate(e.rotation*Math.PI/180);
+    ctx.drawImage(im,-w*bakeSize/2,-h*bakeSize/2,w*bakeSize,h*bakeSize);ctx.restore();
    }
    const mat=source?.clone()||new THREE.MeshStandardMaterial();
    mat.name=(source?.name||'Материал')+' эмблема '+face;

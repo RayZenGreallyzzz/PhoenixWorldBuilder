@@ -151,6 +151,12 @@ const DecalUI=(()=>{
   if(existing())await addImage(id);
   else api.toast('Надпись добавлена в каталог. Выбери стену или пол.');
  }
+ // Keep wide tapestries at native resolution while capping GPU memory on Android.
+ function importDimensions(width,height){
+  const maxSide=4096,maxPixels=2048*2048;
+  const scale=Math.min(1,maxSide/Math.max(width,height),Math.sqrt(maxPixels/(width*height)));
+  return {width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale))};
+ }
  async function importFile(file){
   if(!file)return;
   if(!/^image\/(png|webp|jpeg)$/.test(file.type))return api.toast('Нужна картинка PNG, WEBP или JPG');
@@ -159,10 +165,21 @@ const DecalUI=(()=>{
   let img;
   try{
    img=await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Изображение не загрузилось'));i.src=url});
-   const max=1024,scale=Math.min(1,max/Math.max(img.width,img.height));
-   const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));
-   c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-   const id=await saveCanvas(c,file.name.replace(/\.(png|webp|jpe?g)$/i,''));
+   const target=importDimensions(img.width,img.height);
+   const name=file.name.replace(/\.(png|webp|jpe?g)$/i,'');
+   let id;
+   if(target.width===img.width&&target.height===img.height){
+    // Do not re-encode in Canvas: preserve original pixels and transparency.
+    id=DECAL_PREFIX+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7);
+    await api.saveTexture(id,name,new Uint8Array(await file.arrayBuffer()),file.type);
+    await api.loadTexture(id);
+    api.refreshGallery();
+   }else{
+    const c=document.createElement('canvas');c.width=target.width;c.height=target.height;
+    const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    ctx.drawImage(img,0,0,c.width,c.height);
+    id=await saveCanvas(c,name);
+   }
    if(existing())await addImage(id);
    else api.toast('PNG добавлена в каталог. Выбери стену и эмблему.');
   }catch(e){console.error(e);api.toast('Ошибка PNG: '+e.message)}
@@ -200,6 +217,6 @@ const DecalUI=(()=>{
   await ensureStarter().catch(err=>console.warn('Starter emblems',err));
   api.openGallery(fromGame);
  }
- return {init,render,addImage,importFile,createText,ensureStarter,openGallery};
+ return {init,render,addImage,importFile,importDimensions,createText,ensureStarter,openGallery};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=DecalUI;
