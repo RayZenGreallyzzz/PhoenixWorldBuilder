@@ -217,23 +217,24 @@ public class MainActivity extends Activity {
         }
     }
     @Override public void onBackPressed() {
+        // No implicit saves. The user decides whether to save before leaving.
         new android.app.AlertDialog.Builder(this)
-            .setMessage("Сохранить постройку и закрыть редактор?")
-            .setPositiveButton("Сохранить и закрыть", (d, which) -> {
+            .setMessage("Закрыть Phoenix Builder? Несохранённые изменения будут потеряны.")
+            .setPositiveButton("Сохранить и выйти", (d, which) -> {
                 if (webView == null) { finish(); return; }
                 webView.evaluateJavascript(
                     "(window.PhoenixPersistence&&window.PhoenixPersistence.flushNow?window.PhoenixPersistence.flushNow():false)",
-                    value -> {
-                        if ("true".equals(value)) finish();
-                        else Toast.makeText(this, "Не удалось сохранить. Редактор оставлен открытым.", Toast.LENGTH_LONG).show();
+                    result -> {
+                        if ("true".equals(result)) finish();
+                        else Toast.makeText(this, "Не удалось сохранить. Редактор остался открытым.", Toast.LENGTH_LONG).show();
                     });
             })
-            .setNegativeButton("Остаться", (d, which) -> {}).show();
+            .setNeutralButton("Выйти без сохранения", (d, which) -> finish())
+            .setNegativeButton("Остаться", (d, which) -> {})
+            .show();
     }
     @Override protected void onPause() {
-        if (webView != null) webView.evaluateJavascript(
-            "(window.PhoenixPersistence&&window.PhoenixPersistence.flushNow?window.PhoenixPersistence.flushNow():false)",
-            null);
+        // Android Home/Recents must NEVER write a scene in manual-save mode.
         super.onPause();
     }
     @Override protected void onDestroy() {
