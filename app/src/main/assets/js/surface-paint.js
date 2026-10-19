@@ -99,7 +99,8 @@ vec3 pwbSampleWrap(sampler2D image,vec3 coord,vec3 normal){
      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',beginVertex);
      shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
       '#include <common>\n'+commonFragment);
-     shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',applyFragment);
+     shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',
+      '#include <color_fragment>\n'+applyFragment.replace('#include <map_fragment>',''));
     };
     mat.customProgramCacheKey=()=>has?'PWB_surface_3':'PWB_surface_clear_3';
     const category=root.userData?.pwbCategory;
