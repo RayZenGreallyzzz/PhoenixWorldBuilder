@@ -267,6 +267,7 @@ class WorldBuilder{
   else if(kind==='corner'){
    add(new THREE.BoxGeometry(2,2.6,.22),-.9,1.3,0);
    add(new THREE.BoxGeometry(.22,2.6,2),0,1.3,-.9);
+   group.userData.joinAnchor=[0,0,0];
   }
   else if(kind==='window'){add(new THREE.BoxGeometry(.38,2.6,.25),-.81,1.3,0);add(new THREE.BoxGeometry(.38,2.6,.25),.81,1.3,0);add(new THREE.BoxGeometry(1.28,.34,.25),0,2.43,0);add(new THREE.BoxGeometry(1.28,.55,.25),0,.27,0);add(new THREE.BoxGeometry(1.28,1.6,.035),0,1.35,0,new THREE.MeshStandardMaterial({color:'#a8d9e6',roughness:.05,metalness:.15,transparent:true,opacity:.43,side:THREE.DoubleSide}));}
   else if(kind==='roof'){const g=new THREE.BoxGeometry(2.5,.16,1.65);add(g,-.62,.65,0).rotation.z=-Math.PI/4;add(g,.62,.65,0).rotation.z=Math.PI/4;}
