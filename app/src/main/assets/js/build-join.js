@@ -211,9 +211,7 @@ const BuildJoin=(()=>{
    }
   }
   if(!best)return null;
-  const position=best.position;
-  position.x+=w.cornerOffsetX||0;position.z+=w.cornerOffsetZ||0;
-  return {position,rotation:((best.yaw*180/Math.PI)%360+360)%360,
+  return {position:best.position,rotation:((best.yaw*180/Math.PI)%360+360)%360,
    snapped:true,edge:true,wallEnd:true,wallCorner:best.perpendicular,
    joinedTo:best.perpendicular?'wall-corner':'wall-end',reference:best.reference,
    category:cat};
