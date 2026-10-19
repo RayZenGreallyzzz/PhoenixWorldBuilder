@@ -77,10 +77,11 @@ const BuildPlacementValidator=(()=>{
   const isWall=wallLike.has(catA)&&wallLike.has(catB);
   const same=catA===catB || isWall;
   if(!same)return false;
-  if((solved.corner||solved.stacked)&&other.data?.id===solved.reference&&isWall){
-   // Do not reject intended corner sockets or walls stacked on wall tops.
-   // Duplicate wall centers, however, are still rejected by the general test.
-   if(solved.stacked)return false;
+  if((solved.corner||solved.stacked||solved.wallEnd)&&
+     other.data?.id===solved.reference&&isWall){
+   // End joints and L-shaped corners legitimately touch/overlap a wall by
+   // their thickness. They must not be made red by broad-phase GLB bounds.
+   return false;
   }
   const yFraction=vertical/Math.max(.01,Math.min(a.top-a.bottom,b.top-b.bottom));
   if(yFraction<.3)return false;
