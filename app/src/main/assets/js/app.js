@@ -86,7 +86,7 @@ async function saveModulePreset(){
   name:name.trim().slice(0,64),sourceKind:kind,
   category:entry?.data?.category||w.placementCategory||w.categoryForKind(kind),
   surfacePaint:paint,color,scale:entry?.data?.scale||w.placementScale||1,
-  texture:entry?.data?.texture||null,created:new Date().toISOString()};
+  texture:entry?.data?.texture||null,decals:copyPresetData(entry?.data?.decals||w.placementDecals),created:new Date().toISOString()};
  modulePresets.set(preset.id,preset);
  try{await dbOp('catalog',PRESET_KEY,[...modulePresets.values()])}
  catch(err){modulePresets.delete(preset.id);return toast('Не удалось сохранить модуль: '+err.message)}
@@ -104,10 +104,17 @@ async function chooseModulePreset(id){
    if(id&&!await loadTexture(id))return toast('Отсутствует PNG: '+id);
   }
   if(preset.texture&&!await loadTexture(preset.texture))return toast('Исходная PNG не найдена');
+  for(const decal of(preset.decals||[]))if(decal.texture&&!await loadTexture(decal.texture))
+   return toast('Не найдена PNG эмблемы');
   w.setPlacement(preset.sourceKind,preset.category);w.select(null);
   w.placementScale=preset.scale||1;w.placementSurfacePaint=copyPresetData(preset.surfacePaint);
   w.currentPaint=preset.color||w.currentPaint;w.textureId=preset.texture||null;
-  if(w.ghost){SurfacePaint.applyToRoot(w.ghost,w.placementSurfacePaint,w.textures);w.updateGameGhost()}
+  w.placementDecals=copyPresetData(preset.decals||[]);
+  if(w.ghost){
+   SurfacePaint.applyToRoot(w.ghost,w.placementSurfacePaint,w.textures);
+   if(w.placementDecals.length)DecalLayer.applyToRoot(w.ghost,w.placementDecals,w.textures);
+   w.updateGameGhost();
+  }
   refreshConstructionUI();updateSurfaceUI();
   $('btnSelect').classList.remove('active');
   if(w.mode==='playbuild')document.body.classList.remove('catalogOpen');
@@ -262,14 +269,16 @@ function selectTexture(id){
 
 function renderLibrary(){
  const el=$('assetList');el.innerHTML='';
- const isTexture=catalogMode==='textures';
- $('categoryFilters').classList.toggle('hidden',isTexture);
- $('btnCatalogModels').classList.toggle('active',!isTexture);
+ const isTexture=catalogMode==='textures',isEmblem=catalogMode==='emblems',isImage=isTexture||isEmblem;
+ $('categoryFilters').classList.toggle('hidden',isImage);
+ $('btnCatalogModels').classList.toggle('active',!isImage);
  $('btnCatalogTextures').classList.toggle('active',isTexture);
+ $('btnCatalogEmblems').classList.toggle('active',isEmblem);
  const q=$('assetSearch')?.value.trim().toLowerCase()||'';
  const items=[];
- if(isTexture){
+ if(isImage){
   for(const [id,meta] of textureMeta){
+   if(isEmblem&&!id.startsWith('emblem:'))continue;
    if(q&&!(meta.name+' '+(meta.sourcePath||id)).toLowerCase().includes(q))continue;
    items.push([id,meta]);
   }
@@ -295,15 +304,15 @@ function renderLibrary(){
  $('galleryStatus').textContent='Стр. '+(catalogPage+1)+'/'+pages+' · '+items.length;
  $('galleryPrev').disabled=catalogPage===0;
  $('galleryNext').disabled=catalogPage>=pages-1;
- $('galleryHint').textContent=isTexture?'Нажми на изображение, чтобы назначить покрытие выбранной детали или использовать его для новых.':'Картинки показывают реальную геометрию GLB. Неверное название исправь кнопкой ✎; материалы без привязки отмечены отдельно.';
+ $('galleryHint').textContent=isEmblem?'Сначала выдели стену или пол, затем нажми на эмблему. На одну деталь можно наложить до трёх PNG без лишней геометрии.':isTexture?'Нажми на изображение, чтобы назначить покрытие выбранной детали или использовать его для новых.':'Картинки показывают реальную геометрию GLB. Неверное название исправь кнопкой ✎; материалы без привязки отмечены отдельно.';
  const page=items.slice(catalogPage*GALLERY_SIZE,(catalogPage+1)*GALLERY_SIZE);
- if(isTexture){
+ if(isImage){
   for(const [id,meta] of page){
    const card=document.createElement('button');card.className='textureCard';
    if(w.textureId===id)card.classList.add('active');
    const image=document.createElement('img');image.className='textureImage';image.alt=meta.name;
    const title=document.createElement('b');title.textContent=(meta.sourcePath||id.replace(/^tex:/,'')).replace(/^Текстуры[\\/]/i,'');
-   card.append(image,title);card.onclick=()=>selectTexture(id);
+   card.append(image,title);card.onclick=()=>isEmblem?DecalUI.addImage(id):selectTexture(id);
    el.append(card);showTextureImage(image,id).catch(console.warn);
   }
  }else{
@@ -335,6 +344,7 @@ function refreshConstructionUI(){
 function setupPicker(){
  $('btnCatalogModels').onclick=()=>{catalogMode='models';catalogPage=0;renderLibrary()};
  $('btnCatalogTextures').onclick=()=>{catalogMode='textures';catalogPage=0;renderLibrary()};
+ $('btnCatalogEmblems').onclick=()=>DecalUI.openGallery();
  $('galleryPrev').onclick=()=>{catalogPage=Math.max(0,catalogPage-1);renderLibrary();$('buildPanel').scrollTop=0};
  $('galleryNext').onclick=()=>{catalogPage++;renderLibrary();$('buildPanel').scrollTop=0};const search=document.createElement('input');search.id='assetSearch';search.placeholder='Поиск по названию или ID';search.style.cssText='background:#203442;color:#fff;border:1px solid #486373;border-radius:7px;padding:10px;width:100%;margin-bottom:8px;font-size:12px';$('assetList').before(search);search.oninput=()=>{catalogPage=0;renderLibrary()};
  $all('.pill').forEach(b=>b.onclick=()=>{$all('.pill').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentFilter=b.dataset.filter;catalogPage=0;renderLibrary()});
@@ -631,6 +641,7 @@ async function loadDependencies(project){
  for(const obj of project.objects)for(const face of SurfacePaint.faces){
   const texId=obj.surfacePaint?.[face]?.texture;if(texId)tex.add(texId);
  }
+ for(const obj of project.objects)for(const decal of(obj.decals||[]))if(decal.texture)tex.add(decal.texture);
  for(const id of tex)try{await loadTexture(id)}catch(e){console.warn('Missing material',id,e)}
  return [];
 }
@@ -695,6 +706,7 @@ async function exportPack(){try{toast('Создаю пакет карты…');c
  for(const obj of project.objects)for(const face of SurfacePaint.faces){
   const skin=obj.surfacePaint?.[face]?.texture;if(skin)texIds.add(skin);
  }
+ for(const obj of project.objects)for(const decal of(obj.decals||[]))if(decal.texture)texIds.add(decal.texture);
  for(const id of assetIds){const binding=await dbOp('bindings',id);for(const slot of binding?.slots||[])if(slot.texture)texIds.add(slot.texture)}for(const id of texIds){const row=await dbOp('textures',id);if(row){const path='textures/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.'+(row.mime.split('/')[1]||'png');items[path]=row.bytes;manifest[path]=id;}}
  const bindings={};for(const id of assetIds){const row=await dbOp('bindings',id);if(row)bindings[id]=row;}
  const exportCatalog={};for(const id of assetIds)if(catalogMeta[id])exportCatalog[id]=catalogMeta[id];
@@ -730,8 +742,19 @@ function saveSoon(){
  // Manual mode: dirty indicator only; no IndexedDB or native writes.
  saveIndicator('● Не сохранено');
 }
-async function init(){setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
- w.onSelected=e=>{if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
+async function init(){
+ DecalUI.init({
+  world:w,toast,loadTexture,textureMeta:()=>textureMeta,refreshGallery:renderLibrary,
+  saveTexture:(id,name,bytes,mime)=>rememberTexture(id,name,bytes,mime),
+  openGallery:fromGame=>{
+   catalogMode='emblems';catalogPage=0;
+   if(fromGame){document.body.classList.add('catalogOpen');}
+   else if(w.mode!=='build'&&w.mode!=='playbuild')setMode('build');
+   renderLibrary();
+  }
+ });
+ setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
+ w.onSelected=e=>{DecalUI.render();if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
