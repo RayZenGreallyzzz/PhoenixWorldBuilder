@@ -117,7 +117,6 @@ const BuildJoin=(()=>{
   }
   const yaw=baseYaw+(w.placementRotation||0)*Math.PI/180;
   const placed=solvePivot(w,box,best.where,yaw,best.y);
-  placed.x+=w.cornerOffsetX||0;placed.z+=w.cornerOffsetZ||0;
   return {position:placed,
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,corner:true,edge:false,
    reference:best.reference,category:w.placementCategory||'corner',joinedTo:'corner'};
@@ -162,21 +161,90 @@ const BuildJoin=(()=>{
   }
   return false;
  }
+
+ function joinEnd(w,p,candidates,box,onlyCorner=false){
+  const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
+  if(!['wall','door','railing'].includes(cat))return null;
+  const majorX=(box.max.x-box.min.x)>=(box.max.z-box.min.z);
+  const along=majorX?'x':'z',minor=majorX?'z':'x';
+  const middle=(box.min[minor]+box.max[minor])/2;
+  const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
+  const half=Math.abs(box.max[along]-box.min[along])*(w.placementScale||1)*.5;
+  const placeEnd=(rootEnd,yaw,which)=>{
+   const local=new THREE.Vector3(0,0,0);
+   local[along]=which==='min'?box.min[along]:box.max[along];
+   local[minor]=middle;
+   const pivot=rotate(local,yaw).multiplyScalar(w.placementScale||1);
+   return new THREE.Vector3(rootEnd.x-pivot.x,rootEnd.y-box.min.y*(w.placementScale||1)+(w.placementLift||0),rootEnd.z-pivot.z);
+  };
+  let best=null;
+  for(const old of candidates){
+   // Never glue the first floor to a wall from the storey above or below.
+   const level=old.entry.data?.storey;
+   if(level!==undefined&&level!==null&&level!==w.floorLevel)continue;
+   const groundReference=w.floorLevel>0?
+    w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):
+    (w.mode==='playbuild'&&w.player? w.player.position.y-.85:p.y);
+   if(level==null&&Math.abs(old.bottom-groundReference)>2.2)continue;
+   const baseYaw=angle(old.a,old.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
+   for(const end of ['a','c']){
+    const endpoint=old[end],inward=old.dir.clone().multiplyScalar(end==='a'?1:-1);
+    for(const quarter of (onlyCorner?[1,3]:[0,1,2,3])){
+     const yaw=baseYaw+quarter*Math.PI/2;
+     for(const which of ['min','max']){
+      const position=placeEnd(endpoint,yaw,which);
+      const rotatedCenter=rotate(center,yaw).multiplyScalar(w.placementScale||1);
+      const c=position.clone().add(rotatedCenter);
+      const reach=distXZ(c,p),direction=c.clone().sub(endpoint).setY(0).normalize();
+      const dot=direction.dot(inward);
+      if(dot>.77)continue; // Would run back inside the existing wall.
+      const limit=Math.max(1.85,Math.min(3.6,half+1.35));
+      if(reach>limit)continue;
+      const perpendicular=abs(dot)<.38;
+      if(onlyCorner&&!perpendicular)continue;
+      const heightPenalty=w.floorLevel===0?0:Math.abs(old.bottom-groundReference)*.1;
+      const score=reach+heightPenalty+(perpendicular?.09:0);
+      if(best===null||score<best.score)
+       best={score,position,yaw,reference:old.entry.data.id,perpendicular};
+     }
+    }
+   }
+  }
+  if(!best)return null;
+  const position=best.position;
+  position.x+=w.cornerOffsetX||0;position.z+=w.cornerOffsetZ||0;
+  return {position,rotation:((best.yaw*180/Math.PI)%360+360)%360,
+   snapped:true,edge:true,wallEnd:true,wallCorner:best.perpendicular,
+   joinedTo:best.perpendicular?'wall-corner':'wall-end',reference:best.reference,
+   category:cat};
+ }
+
  function resolve(w,p){
   const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
   const mode=w.joinMode||'auto';
   const isCorner=mode==='corner'||(mode==='auto'&&cat==='corner');
   const isStack=mode==='stack'||(mode==='auto'&&cat==='wall'&&w.floorLevel>0);
-  if(!isCorner&&!isStack)return null;
-  if(mode==='auto'&&isStack&&hasCurrentDeck(w,p))return null;
+  const isEnd=mode==='auto'&&['wall','door','railing'].includes(cat);
+  if(!isCorner&&!isStack&&!isEnd)return null;
   const walls=nearby(w,p),box=modelBounds(w);
-  const result=isCorner?corner(w,p,walls,box):stack(w,p,walls,box);
+  // For two walls on the same level, snap their real GLB ends first.
+  // This must run BEFORE the floor edge, otherwise a floor captures the wall.
+  if(isEnd){
+   const end=joinEnd(w,p,walls,box,false);
+   if(end)return end;
+  }
+  if(mode==='corner'&&['wall','door'].includes(cat)){
+   const end=joinEnd(w,p,walls,box,true);
+   if(end)return end;
+  }
+  if(mode==='auto'&&isStack&&hasCurrentDeck(w,p))return null;
+  const result=isCorner?corner(w,p,walls,box):isStack?stack(w,p,walls,box):null;
   if(result)return result;
   if(mode!=='auto')return {position:new THREE.Vector3(p.x,w.placementHeight(p.x,p.z),p.z),
    rotation:w.placementRotation||0,snapped:false,valid:false,category:cat,
-   missingTarget:mode==='stack'?'Подойди к стене, на которую ставишь следующую':'Подойди к стыку стен или к углу пола'};
+   missingTarget:mode==='stack'?'Подойди к стене, на которую ставишь следующую':'Подойди к торцу стены или углу пола'};
   return null;
  }
- return {resolve,wallInfo,nearby,corner,stack};
+ return {resolve,wallInfo,nearby,corner,stack,joinEnd};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildJoin;
