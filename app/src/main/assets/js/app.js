@@ -452,7 +452,7 @@ function wireButtons(){
   pendingRecovery=null;w.remember();
   await w.restore({heights:new Array(4225).fill(0),objects:[],construction:{storeyHeight:2.6,floorLevel:0}});
   $('modal').classList.add('hidden');
-  await saveLocal(true);toast('Создана новая карта. Прежнюю можно попробовать восстановить из резервной копии.');
+  saveSoon();toast('Создана новая карта. Для сохранения нажми 💾.');
  };
  $('saveWorld').onclick=async()=>{if(await saveLocal(true))$('modal').classList.add('hidden')};
  $('loadWorld').onclick=()=>$('fileProject').click();
@@ -544,7 +544,7 @@ async function importZip(file,isProject=false){const entries=await ZipUtils.extr
  if(isProject&&project)await restoreProject(project);
  else if(pendingRecovery){
   const previous=pendingRecovery;
-  try{await restoreProject(previous);await saveLocal(false);toast('Постройка восстановлена после импорта GLB')}
+  try{await restoreProject(previous);saveSoon();toast('Постройка восстановлена. Нажми 💾, чтобы сохранить')}
   catch(err){console.warn('Still missing assets',err);toast('Нужны остальные модели для восстановления')}
  }
  renderLibrary();renderTextureOptions();if(!isProject)toast(`Импорт: ${glbs.length} GLB и ${textureKeys.length} текстур`);return glbs.length;
@@ -586,12 +586,11 @@ function projectData(){
 function saveIndicator(message){const element=$('saveStatus');if(element)element.textContent=message;}
 async function saveLocal(notify=false){
  if(isLoading||pendingRecovery)return false;
- clearTimeout(saveHandle);
  let snapshot;
  try{snapshot=projectData()}catch(err){console.error('Scene snapshot failed',err);saveIndicator('⚠ Ошибка сцены');return false}
  // Android app-private storage is independent of Chromium's storage quota/origin.
  const hasNative=PhoenixPersistence.native();
- const nativeOK=hasNative?PhoenixPersistence.write(snapshot,notify):false;
+ const nativeOK=hasNative?PhoenixPersistence.write(snapshot,true):false;
  let webOK=false;
  if(localStore)try{await dbOp('projects','autosave',snapshot);webOK=true}
  catch(err){console.error('IndexedDB scene save failed',err)}
@@ -607,9 +606,10 @@ async function saveLocal(notify=false){
 }
 // Synchronous Android disk checkpoint for Home/Back/background closing.
 PhoenixPersistence.flushNow=()=>{
- if(pendingRecovery||isLoading)return true; // Keep the untouched recovery file.
- try{return PhoenixPersistence.write(projectData(),false)}
- catch(err){console.error('Emergency flush failed',err);return false}
+ // Only the explicit Android 'Сохранить и закрыть' action invokes this.
+ if(pendingRecovery||isLoading)return false;
+ try{return PhoenixPersistence.write(projectData(),true)}
+ catch(err){console.error('Manual exit save failed',err);return false}
 };
 window.PhoenixPersistence=PhoenixPersistence;
 function b64(bytes){let result='';for(let i=0;i<bytes.length;i+=16384)result+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(result)}
@@ -654,12 +654,10 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
  const stick=$('joystick'),knob=$('joystickKnob');const update=e=>{const r=stick.getBoundingClientRect();let vx=(e.clientX-(r.left+r.width/2))/(r.width*.32),vy=(e.clientY-(r.top+r.height/2))/(r.height*.32);let l=Math.hypot(vx,vy);if(l>1){vx/=l;vy/=l}w.joy={x:vx,y:vy};knob.style.transform=`translate(${vx*36}px,${vy*36}px)`};
  stick.addEventListener('pointerdown',e=>{e.preventDefault();stick.setPointerCapture(e.pointerId);update(e)});stick.addEventListener('pointermove',e=>{if(stick.hasPointerCapture(e.pointerId))update(e)});const reset=()=>{w.joy={x:0,y:0};knob.style.transform='translate(0,0)'};stick.addEventListener('pointerup',reset);stick.addEventListener('pointercancel',reset);
 }
-let saveHandle=0;
 function saveSoon(){
  if(isLoading||pendingRecovery||initializing)return;
- saveIndicator('◌ Сохраняю…');
- clearTimeout(saveHandle);
- saveHandle=setTimeout(()=>saveLocal(false),500);
+ // Manual mode: dirty indicator only; no IndexedDB or native writes.
+ saveIndicator('● Не сохранено');
 }
 async function init(){setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
  w.onSelected=e=>{if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
@@ -676,8 +674,7 @@ async function init(){setupPicker();wireButtons();refreshConstructionUI();attach
    saveIndicator('✓ Восстановлено');
    toast('Восстановлено '+selected.project.objects.length+' деталей ('+
     (selected.source==='android'?'Android':'WebView')+')');
-   if(selected.source==='webview'&&PhoenixPersistence.native())
-    PhoenixPersistence.write(selected.project,false);
+   // No silent migration writes; keep the old WebView data until manual save.
   }else{saveIndicator('◌ Новая карта');toast('Редактор готов. Выбери деталь')}
   renderLibrary();
  }catch(err){
@@ -695,13 +692,7 @@ async function init(){setupPicker();wireButtons();refreshConstructionUI();attach
   }else if(!w.objects.length)toast('Хранилище недоступно: '+err.message);
  }
  try{w.invertCameraX=localStorage.getItem('pwb_camera_x')==='1';$('invertCameraX').checked=w.invertCameraX;w.invertJoystickX=localStorage.getItem('pwb_joy_x')==='1';w.invertJoystickY=localStorage.getItem('pwb_joy_y')==='1';const facing=localStorage.getItem('pwb_avatar_forward');w.avatarFacingOffset=(facing===null?180:Number(facing))*Math.PI/180;$('invertJoystickX').checked=w.invertJoystickX;$('invertJoystickY').checked=w.invertJoystickY;$('avatarFacing').value=String(Math.round(w.avatarFacingOffset*180/Math.PI))}catch(e){}setMode('playbuild');initializing=false;
- document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){PhoenixPersistence.flushNow();saveLocal(false)}
- });
- window.addEventListener('pagehide',()=>PhoenixPersistence.flushNow());
- setInterval(()=>{
-  if(!document.hidden&&!isLoading&&!pendingRecovery&&w.objects.length>0)PhoenixPersistence.flushNow();
- },15000);
+ // No autosave on visibilitychange, pagehide or periodic timers.
  setInterval(()=>{$('fps').textContent=Math.round(w.fps)+' FPS'},1000);
 }
 init();
