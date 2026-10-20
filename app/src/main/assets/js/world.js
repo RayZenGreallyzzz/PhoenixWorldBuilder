@@ -18,7 +18,7 @@ class WorldBuilder{
   const water=new THREE.Mesh(new THREE.PlaneGeometry(128,128),new THREE.MeshBasicMaterial({color:0x297f9d,transparent:true,opacity:.24,side:THREE.DoubleSide,depthWrite:false}));water.rotation.x=-Math.PI/2;water.position.y=-.4;this.scene.add(water);
   this.highlight=new THREE.BoxHelper(new THREE.Mesh(new THREE.BoxGeometry(1,1,1)),0x63ffce);this.scene.add(this.highlight);this.highlight.visible=false;
   this.player=new THREE.Group();this.player.position.set(0,1.4,0);this.scene.add(this.player);this.setupDefaultPlayer();this.player.visible=false;
-  this.keys={};this.joy={x:0,y:0};this.running=false;this.playerSpeed=4;this.playerYaw=0;this.camOrbit=false;
+  this.keys={};this.joy={x:0,y:0};this.running=false;this.playerSpeed=4;this.playerYaw=0;this.camOrbit=false;this.droneMode=false;this.droneReturnView=null;
   this.setQuality(.75,false);window.addEventListener('resize',()=>this.resize());this.resize();
  }
  setQuality(scale,shadows){
@@ -237,7 +237,7 @@ class WorldBuilder{
    return cat==='foundation'||cat==='ceiling';
   }).map(e=>e.mesh);
   const hits=this.ray.intersectObjects([...floors,this.terrain],true);
-  if((this.mode==='build'||this.mode==='style')&&this.floorLevel>0){
+  if((this.mode==='build'||this.mode==='style'||(this.mode==='playbuild'&&this.droneMode))&&this.floorLevel>0){
    // Plane is an editing aid, not a visible second floor or collision surface.
    const levelY=this.heightAt(this.target.x,this.target.z)+this.floorLevel*(this.storeyHeight||2.6);
    const supported=hits.find(h=>h.object!==this.terrain&&Math.abs(h.point.y-levelY)<1.2&&
@@ -459,9 +459,59 @@ class WorldBuilder{
  setDoor(entry,open){entry.data.open=!!open;const h=entry.mesh.userData.hinge; if(h)h.rotation.y=open?-1.65:0;}
  toggleDoor(entry){if(!entry)return;this.remember();entry.data.door=true;entry.data.open=!entry.data.open;this.setDoor(entry,entry.data.open);if(!entry.mesh.userData.hinge){entry.mesh.rotation.y=((entry.data.rot||0)+(entry.data.open?80:0))*Math.PI/180;}this.onChanged();}
  select(entry){this.selected=entry||null;if(entry){this.highlight.setFromObject(entry.mesh);this.highlight.visible=true}else this.highlight.visible=false;this.onSelected(entry);}
+ setDroneMode(enabled){
+  // Independent camera in construction: character position is untouched.
+  if(enabled&&this.mode!=='playbuild')return false;
+  const turnOn=!!enabled;
+  if(turnOn===!!this.droneMode)return !!this.droneMode;
+  if(turnOn){
+   this.droneReturnView={yaw:this.yaw,pitch:this.pitch,distance:this.distance};
+   const x=this.player.position.x,z=this.player.position.z;
+   this.target.set(x,this.placementHeight(x,z,'wall','wall')+.6,z);
+   this.pitch=1.13;this.distance=20;this.droneMode=true;
+  }else{
+   this.droneMode=false;
+   if(this.droneReturnView){
+    this.yaw=this.droneReturnView.yaw;this.pitch=this.droneReturnView.pitch;
+    this.distance=this.droneReturnView.distance;
+   }
+   this.droneReturnView=null;
+  }
+  this.joy={x:0,y:0};
+  this.player.visible=this.mode==='playbuild'?!turnOn:this.mode==='walk';
+  this.updateCamera();this.updateGameGhost();
+  return this.droneMode;
+ }
+ setDroneView(view){
+  if(!this.droneMode)return false;
+  if(view==='top')this.pitch=1.535;
+  else if(view==='angled')this.pitch=.86;
+  else return false;
+  this.updateCamera();this.updateGameGhost();
+  return true;
+ }
+ centerDrone(){
+  if(!this.droneMode)return false;
+  const p=this.selected?.mesh?.position||this.player?.position;if(!p)return false;
+  const x=THREE.MathUtils.clamp(p.x,-62,62),z=THREE.MathUtils.clamp(p.z,-62,62);
+  this.target.set(x,this.placementHeight(x,z,'wall','wall')+.6,z);
+  this.updateCamera();this.updateGameGhost();
+  return true;
+ }
+ panDrone(dx,dy){
+  if(!this.droneMode)return false;
+  const scale=THREE.MathUtils.clamp(this.distance*.0028,.018,.34);
+  const rightX=Math.cos(this.yaw),rightZ=-Math.sin(this.yaw);
+  const upX=-Math.sin(this.yaw),upZ=-Math.cos(this.yaw);
+  this.target.x=THREE.MathUtils.clamp(this.target.x+(-dx*rightX+dy*upX)*scale,-62,62);
+  this.target.z=THREE.MathUtils.clamp(this.target.z+(-dx*rightZ+dy*upZ)*scale,-62,62);
+  this.updateGameGhost();
+  return true;
+ }
  setMode(mode){
   const wasGame=this.mode==='walk'||this.mode==='playbuild',isGame=mode==='walk'||mode==='playbuild';
-  this.mode=mode;this.player.visible=isGame;this.grid.visible=!isGame;this.highlight.visible=!isGame&&!!this.selected;
+  if(mode!=='playbuild'&&this.droneMode)this.setDroneMode(false);
+  this.mode=mode;this.player.visible=isGame&&!this.droneMode;this.grid.visible=!isGame;this.highlight.visible=!isGame&&!!this.selected;
   if(isGame&&!wasGame){this.player.position.set(this.target.x,this.heightAt(this.target.x,this.target.z)+.85,this.target.z);this.distance=5.2;this.pitch=.34;}
   else if(!isGame&&wasGame){this.target.copy(this.player.position);this.target.y+=1;this.distance=17;this.pitch=.58;}
   if(mode==='playbuild'&&this.placement&&!this.ghost)this.setPlacement(this.placement,this.placementCategory);
@@ -469,6 +519,10 @@ class WorldBuilder{
   this.onChanged();
  }
  forwardPlacementPoint(){
+  if(this.mode==='playbuild'&&this.droneMode){
+   const x=THREE.MathUtils.clamp(this.target.x,-62,62),z=THREE.MathUtils.clamp(this.target.z,-62,62);
+   return new THREE.Vector3(x,this.placementHeight(x,z),z);
+  }
   const d=4.0,fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw);
   const x=THREE.MathUtils.clamp(this.player.position.x+fx*d,-62,62);
   const z=THREE.MathUtils.clamp(this.player.position.z+fz*d,-62,62);
@@ -603,9 +657,23 @@ class WorldBuilder{
   pos.needsUpdate=true;col.needsUpdate=true;this.terrain.geometry.computeVertexNormals();this.terrain.geometry.computeBoundingBox();this.terrain.geometry.computeBoundingSphere();
   for(const e of s.objects){if(this.makeBuiltin(e.kind)||this.assetCache.has(e.kind)){try{this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,thicknessY:e.thicknessY||1,category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,texture:e.texture,door:e.door,open:e.open})}catch(err){console.warn(err)}}}
   this.onChanged();}
- updateCamera(){if(this.mode==='walk'||this.mode==='playbuild'){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));this.target.copy(this.player.position).add(new THREE.Vector3(0,1.15,0));const range=THREE.MathUtils.clamp(this.distance,2.7,9);this.camera.position.copy(this.target).addScaledVector(forward,-Math.cos(this.pitch)*range).add(new THREE.Vector3(0,Math.sin(this.pitch)*range,0));}
+ updateCamera(){if(this.mode==='walk'||(this.mode==='playbuild'&&!this.droneMode)){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));this.target.copy(this.player.position).add(new THREE.Vector3(0,1.15,0));const range=THREE.MathUtils.clamp(this.distance,2.7,9);this.camera.position.copy(this.target).addScaledVector(forward,-Math.cos(this.pitch)*range).add(new THREE.Vector3(0,Math.sin(this.pitch)*range,0));}
   else{this.camera.position.set(this.target.x+Math.sin(this.yaw)*Math.cos(this.pitch)*this.distance,this.target.y+Math.sin(this.pitch)*this.distance,this.target.z+Math.cos(this.yaw)*Math.cos(this.pitch)*this.distance);}this.camera.lookAt(this.target);}
- updatePlayer(dt){if(this.mode!=='walk'&&this.mode!=='playbuild')return;let mx=this.joy.x*(this.invertJoystickX?-1:1)+(this.keys.KeyD||this.keys.ArrowRight?1:0)-(this.keys.KeyA||this.keys.ArrowLeft?1:0),my=-this.joy.y*(this.invertJoystickY?-1:1)+(this.keys.KeyW||this.keys.ArrowUp?1:0)-(this.keys.KeyS||this.keys.ArrowDown?1:0);const v=new THREE.Vector2(mx,my);if(v.length()>1)v.normalize();if(v.length()>.05){let f=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw)),r=new THREE.Vector3(Math.cos(this.yaw),0,-Math.sin(this.yaw));let d=f.multiplyScalar(v.y).addScaledVector(r,v.x);let speed=this.playerSpeed*(this.running||this.keys.ShiftLeft?1.85:1);const next=this.player.position.clone().addScaledVector(d,dt*speed);
+ updatePlayer(dt){
+  if(this.mode==='playbuild'&&this.droneMode){
+   const strafe=this.joy.x*(this.invertJoystickX?-1:1)+(this.keys.KeyD||this.keys.ArrowRight?1:0)-(this.keys.KeyA||this.keys.ArrowLeft?1:0);
+   const forward=-this.joy.y*(this.invertJoystickY?-1:1)+(this.keys.KeyW||this.keys.ArrowUp?1:0)-(this.keys.KeyS||this.keys.ArrowDown?1:0);
+   const length=Math.hypot(strafe,forward);
+   if(length>.05){
+    const dx=(Math.cos(this.yaw)*strafe-Math.sin(this.yaw)*forward)/Math.max(1,length);
+    const dz=(-Math.sin(this.yaw)*strafe-Math.cos(this.yaw)*forward)/Math.max(1,length);
+    const speed=THREE.MathUtils.clamp(this.distance*.38,2,22)*(this.keys.ShiftLeft?1.8:1);
+    this.target.x=THREE.MathUtils.clamp(this.target.x+dx*dt*speed,-62,62);
+    this.target.z=THREE.MathUtils.clamp(this.target.z+dz*dt*speed,-62,62);
+   }
+   return;
+  }
+  if(this.mode!=='walk'&&this.mode!=='playbuild')return;let mx=this.joy.x*(this.invertJoystickX?-1:1)+(this.keys.KeyD||this.keys.ArrowRight?1:0)-(this.keys.KeyA||this.keys.ArrowLeft?1:0),my=-this.joy.y*(this.invertJoystickY?-1:1)+(this.keys.KeyW||this.keys.ArrowUp?1:0)-(this.keys.KeyS||this.keys.ArrowDown?1:0);const v=new THREE.Vector2(mx,my);if(v.length()>1)v.normalize();if(v.length()>.05){let f=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw)),r=new THREE.Vector3(Math.cos(this.yaw),0,-Math.sin(this.yaw));let d=f.multiplyScalar(v.y).addScaledVector(r,v.x);let speed=this.playerSpeed*(this.running||this.keys.ShiftLeft?1.85:1);const next=this.player.position.clone().addScaledVector(d,dt*speed);
    next.x=THREE.MathUtils.clamp(next.x,-62,62);next.z=THREE.MathUtils.clamp(next.z,-62,62);
    if(!this.movementBlocked(this.player.position,next,this.player.position.y-.85)){
     this.player.position.x=next.x;this.player.position.z=next.z;
