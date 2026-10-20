@@ -53,7 +53,8 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
   if(!maps.has(slot.texture))try{maps.set(slot.texture,await loadTexture(slot.texture))}catch(e){console.warn('Missing texture',slot.texture,e)}
  }
  root.traverse(o=>{if(!o.isMesh)return;const mats=Array.isArray(o.material)?o.material:[o.material];
-  for(let i=0;i<mats.length;i++){let m=mats[i];const slot=binding.slots.find(s=>s.name===m.name)||binding.slots[i];const t=maps.get(slot?.texture);if(t){m.map=t;m.color.set('#ffffff');m.needsUpdate=true;}}
+  for(let i=0;i<mats.length;i++){let m=mats[i];const slot=binding.slots.find(s=>s.name&&s.name===m.name)||
+   (binding.applyAll?binding.slots[0]:binding.slots[i]);const t=maps.get(slot?.texture);if(t){m.map=t;m.color.set('#ffffff');m.needsUpdate=true;}}
  });
 }
 w.getAsset=cacheFromDB;
@@ -63,6 +64,7 @@ async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes})
 async function rememberTexture(id,name,bytes,mime='image/png',sourcePath='',role=''){
  const resolved=role|| (id.startsWith('emblem:')?'painting':'texture');
  await dbOp('textures',id,{name,bytes,mime,sourcePath,role:resolved});
+ if(w.textures.has(id)){w.textures.get(id)?.dispose?.();w.textures.delete(id)}
  textureMeta.set(id,{name,sourcePath,role:resolved});
 }
 async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;t.wrapS=t.wrapT=(id.startsWith('emblem:')||textureMeta.get(id)?.role==='painting')?THREE.ClampToEdgeWrapping:THREE.RepeatWrapping;w.tuneTexture(t);w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,error=>{URL.revokeObjectURL(url);reject(error)})})}
@@ -294,7 +296,8 @@ function renderLibrary(){
  if(isImage){
   for(const [id,meta] of textureMeta){
    const painting=meta.role==='painting'||id.startsWith('emblem:');
-   if(isEmblem?!painting:!isTexture?false:painting)continue;
+   if(isEmblem&&!painting)continue;
+   if(isTexture&&painting)continue;
    if(q&&!(meta.name+' '+(meta.sourcePath||id)).toLowerCase().includes(q))continue;
    items.push([id,meta]);
   }
@@ -785,8 +788,8 @@ async function exportPack(){try{toast('Создаю пакет карты…');c
  const exportCatalog={};for(const id of assetIds)if(catalogMeta[id])exportCatalog[id]=catalogMeta[id];
   items['catalog.json']=JSON.stringify(exportCatalog);items['bindings.json']=JSON.stringify(bindings);items['assets_manifest.json']=JSON.stringify(manifest);
  items['metadata.json']=JSON.stringify({version:1,
-  models:Object.entries(manifest).filter(([path])=>/\\.glb$/i.test(path)).map(([path,id])=>({path,category:catalogMeta[id]?.category||savedMeta.get(id)?.category||groupType(id)})),
-  images:Object.entries(manifest).filter(([path])=>/\\.(png|jpe?g|webp)$/i.test(path)).map(([path,id])=>({path,role:textureMeta.get(id)?.role||(id.startsWith('emblem:')?'painting':'texture')}))});let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
+  models:Object.entries(manifest).filter(([path])=>/\.glb$/i.test(path)).map(([path,id])=>({path,category:catalogMeta[id]?.category||savedMeta.get(id)?.category||groupType(id)})),
+  images:Object.entries(manifest).filter(([path])=>/\.(png|jpe?g|webp)$/i.test(path)).map(([path,id])=>({path,role:textureMeta.get(id)?.role||(id.startsWith('emblem:')?'painting':'texture')}))});let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
 async function exportHouse(){try{toast('Собираю дом без земли и персонажа…');const blob=await SceneExporter.build(w,{houseOnly:true});await saveToDevice('phoenix_house.glb',blob)}catch(e){toast('Ошибка экспорта дома: '+e.message);console.error(e)}}
 async function exportGlb(){try{toast('Экспорт 3D-карты…');const blob=await SceneExporter.build(w);await saveToDevice('phoenix_map.glb',blob)}catch(e){toast('Ошибка GLB: '+e.message);console.error(e)}}
 function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared=false;
