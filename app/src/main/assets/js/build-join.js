@@ -12,6 +12,62 @@ const BuildJoin=(()=>{
  };
  const angle=(a,b)=>Math.atan2(-(b.z-a.z),b.x-a.x);
  const rotate=(v,yaw)=>new THREE.Vector3(v.x*Math.cos(yaw)+v.z*Math.sin(yaw),0,-v.x*Math.sin(yaw)+v.z*Math.cos(yaw));
+
+ // A corner is an L made of two perpendicular panels, not a straight wall.
+ // Identify its ACTUAL exposed cap centre-lines from the child meshes.
+ // This works for built-in corners and GLBs that contain separate arm meshes.
+ // A merged/arbitrary GLB with no identifiable arms is deliberately excluded
+ // from corner-end snapping instead of inventing a socket on the AABB diagonal.
+ function cornerArms(root,kind,category){
+  if(category!=='corner'&&kind!=='corner')return null;
+  root.updateWorldMatrix(true,true);
+  const inv=root.matrixWorld.clone().invert(),transform=new THREE.Matrix4();
+  const arms=[],box=new THREE.Box3(),worldBox=new THREE.Box3();
+  root.traverse(mesh=>{
+   if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
+   if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();
+   if(!mesh.geometry.boundingBox)return;
+   transform.multiplyMatrices(inv,mesh.matrixWorld);
+   box.copy(mesh.geometry.boundingBox).applyMatrix4(transform);
+   const sx=box.max.x-box.min.x,sz=box.max.z-box.min.z;
+   const big=Math.max(sx,sz),small=Math.max(.00001,Math.min(sx,sz));
+   if(big<.65||big/small<3.5) return;
+   if(box.max.y-box.min.y<.35)return;
+   arms.push({box:box.clone(),axis:sx>sz?'x':'z',length:big,
+    centerX:(box.min.x+box.max.x)/2,centerZ:(box.min.z+box.max.z)/2});
+  });
+  let best=null;
+  for(const x of arms.filter(a=>a.axis==='x'))for(const z of arms.filter(a=>a.axis==='z')){
+   const overlapY=Math.min(x.box.max.y,z.box.max.y)-Math.max(x.box.min.y,z.box.min.y);
+   if(overlapY<.35)continue;
+   const ix=z.centerX,iz=x.centerZ;
+   const nearX=Math.max(0,x.box.min.x-ix,ix-x.box.max.x);
+   const nearZ=Math.max(0,z.box.min.z-iz,iz-z.box.max.z);
+   if(nearX>.16||nearZ>.16)continue;
+   const score=x.length+z.length-nearX-nearZ;
+   if(!best||score>best.score)best={x,z,ix,iz,score};
+  }
+  if(!best)return null;
+  const {x,z,ix,iz}=best;
+  const minY=Math.min(x.box.min.y,z.box.min.y);
+  const xEnd=Math.abs(x.box.min.x-ix)>Math.abs(x.box.max.x-ix)?x.box.min.x:x.box.max.x;
+  const zEnd=Math.abs(z.box.min.z-iz)>Math.abs(z.box.max.z-iz)?z.box.min.z:z.box.max.z;
+  const local=[
+   {name:'corner-x',tip:new THREE.Vector3(xEnd,minY,iz),pivot:new THREE.Vector3(ix,minY,iz)},
+   {name:'corner-z',tip:new THREE.Vector3(ix,minY,zEnd),pivot:new THREE.Vector3(ix,minY,iz)}
+  ];
+  if(local.some(a=>distXZ(a.tip,a.pivot)<.35))return null;
+  return local;
+ }
+ function cornerSegments(root,kind,category){
+  const arms=cornerArms(root,kind,category);
+  return arms?.map(arm=>{
+   const a=byLocal(root,arm.tip.x,arm.tip.y,arm.tip.z);
+   const c=byLocal(root,arm.pivot.x,arm.pivot.y,arm.pivot.z);
+   return {name:arm.name,a,c,dir:c.clone().sub(a).setY(0).normalize(),
+    length:distXZ(a,c),tipOnly:true};
+  })||null;
+ }
  function wallInfo(w,entry){
   const root=entry.mesh;root.updateWorldMatrix(true,true);
   const b=BuildSnap.attrBounds(root);if(b.isEmpty())return null;
@@ -21,8 +77,14 @@ const BuildJoin=(()=>{
   const c=acrossX?byLocal(root,b.max.x,b.min.y,cz):byLocal(root,cx,b.min.y,b.max.z);
   const top=byLocal(root,cx,b.max.y,cz).y,bottom=byLocal(root,cx,b.min.y,cz).y;
   if(!Number.isFinite(top)||!Number.isFinite(bottom)||top<=bottom+.1)return null;
+  const type=catOf(w,entry),segments=cornerSegments(root,entry.kind,type);
+  // Never use a corner's rectangular diagonal as a wall end if the
+  // geometry does not expose reliable corner sockets.
   return {entry,root,b,a,c,top,bottom,mid:byLocal(root,cx,b.min.y,cz),
-   alongX:acrossX,dir:c.clone().sub(a).setY(0).normalize(),length:distXZ(a,c)};
+   alongX:acrossX,dir:c.clone().sub(a).setY(0).normalize(),length:distXZ(a,c),
+   segments,unresolvedCorner:type==='corner'&&!segments,
+   sockets:segments?.map(line=>({name:line.name,point:line.a.clone(),
+    out:line.a.clone().sub(line.c).setY(0).normalize(),curved:false}))};
  }
  function nearby(w,p){
   // The center of an R5 / 180° arc can be >6m from its connecting end.
@@ -37,10 +99,14 @@ const BuildJoin=(()=>{
    const root=entry.mesh;
    // Fast world-space rejection based on geometry bounding sphere after pivot shift.
    const info=wallInfo(w,entry);if(!info)continue;
-   const projected=nearest(info.a,info.c,p);
-   const d=distXZ(p,projected.point);
+   if(info.unresolvedCorner)continue;
+   const lines=info.segments||[info];
+   const projections=lines.map(line=>({line,...nearest(line.a,line.c,p)}));
+   projections.sort((a,b)=>distXZ(p,a.point)-distXZ(p,b.point));
+   const closest=projections[0],d=distXZ(p,closest.point);
    if(d>reach)continue;
-   possible.push({...info,projected,d});
+   possible.push({...info,projected:{point:closest.point,t:closest.t},
+    bestSegment:closest.line,d});
   }
   possible.sort((a,b)=>a.d-b.d);
   return possible.slice(0,14);
@@ -61,13 +127,23 @@ const BuildJoin=(()=>{
  }
  function corner(w,p,candidates,box){
   let best=null;
-  const targetY=w.floorLevel>0?w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):p.y;
+  const targetY=w.floorLevel>0?w.floorDatumAt?.(p.x,p.z,'wall')?.height??
+   w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):p.y;
+  // A 1st-floor wall must never hijack corner snapping while working on
+  // the 2nd floor, even when both are close to the same screen cursor.
+  candidates=candidates.filter(item=>{
+   const story=item.entry.data?.storey;
+   return Number.isInteger(story)?story===w.floorLevel:
+    w.floorLevel===0||abs(item.bottom-targetY)<.35;
+  }).flatMap(item=>(item.segments||[item]).map(line=>({...item,...line})));
   const maxReach=4.5;
   for(let i=0;i<candidates.length;i++)for(let j=i+1;j<candidates.length;j++){
    const a=candidates[i],b=candidates[j];
-   if(abs(a.bottom-b.bottom)>1.25)continue;
+   if(a.entry===b.entry)continue;
+   if(abs(a.bottom-b.bottom)>.12)continue;
    if(abs(a.dir.x*b.dir.z-a.dir.z*b.dir.x)<.27)continue;
-   for(const ap of [a.a,a.c])for(const bp of [b.a,b.c]){
+   for(const ap of (a.tipOnly?[a.a]:[a.a,a.c]))
+    for(const bp of (b.tipOnly?[b.a]:[b.a,b.c])){
     if(distXZ(ap,bp)>2.1)continue;
     let where=ap.clone().add(bp).multiplyScalar(.5);
     const d=distXZ(where,p);
@@ -84,7 +160,8 @@ const BuildJoin=(()=>{
   }
   // A solitary wall end may also be a corner where the next wall isn't built yet.
   if(!best&&candidates.length){
-   for(const entry of candidates.slice(0,5))for(const ep of [entry.a,entry.c]){
+   for(const entry of candidates.slice(0,10))
+    for(const ep of (entry.tipOnly?[entry.a]:[entry.a,entry.c])){
     const distance=distXZ(ep,p);if(distance>2.5)continue;
     const grade=distance+.5;
     if(!best||grade<best.grade)best={where:ep,y:entry.bottom,yaw:angle(entry.a,entry.c),reference:entry.entry.data.id,grade};
@@ -141,11 +218,12 @@ const BuildJoin=(()=>{
    if(!best||grade<best.grade)best={wall,grade};
   }
   if(!best)return null;
-  const old=best.wall,hit=old.projected.point;
-  const delta=(w.edgeShift||0),t=clamp(old.projected.t+delta/Math.max(old.length,.001),0,1);
-  const anchor=new THREE.Vector3(old.a.x+(old.c.x-old.a.x)*t,old.top,old.a.z+(old.c.z-old.a.z)*t);
+  const old=best.wall,line=old.bestSegment||old;
+  const delta=(w.edgeShift||0),t=clamp(old.projected.t+delta/Math.max(line.length,.001),0,1);
+  const anchor=new THREE.Vector3(line.a.x+(line.c.x-line.a.x)*t,old.top,
+   line.a.z+(line.c.z-line.a.z)*t);
   const majorX=(box.max.x-box.min.x)>=(box.max.z-box.min.z);
-  let yaw=angle(old.a,old.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
+  let yaw=angle(line.a,line.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
   return {position:solvePivot(w,box,anchor,yaw,old.top),
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,stacked:true,edge:false,
    reference:old.entry.data.id,category:w.placementCategory||'wall',joinedTo:'stack'};
@@ -187,9 +265,10 @@ const BuildJoin=(()=>{
    const expected=w.floorLevel>0?w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):
     w.mode==='playbuild'&&w.player?w.player.position.y-.85:p.y;
    if(floor==null&&abs(old.bottom-expected)>2.2)continue;
-   const baseline=angle(old.a,old.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
-   for(const endpoint of ['a','c']){
-    const join=old[endpoint],inwards=old.dir.clone().multiplyScalar(endpoint==='a'?1:-1);
+   for(const line of (old.segments||[old])){
+   const baseline=angle(line.a,line.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
+   for(const endpoint of (line.tipOnly?['a']:['a','c'])){
+    const join=line[endpoint],inwards=line.dir.clone().multiplyScalar(endpoint==='a'?1:-1);
     for(const k of (onlyCorner?[1,3]:[0,1,2,3])){
      const yaw=baseline+k*Math.PI/2;
      for(const attachment of ['min','max']){
@@ -210,6 +289,7 @@ const BuildJoin=(()=>{
        best={position:at,yaw,perpendicular,reference:old.entry.data.id,score};
      }
     }
+   }
    }
   }
   if(!best)return null;
@@ -250,6 +330,6 @@ const BuildJoin=(()=>{
    missingTarget:mode==='stack'?'Подойди к стене, на которую ставишь следующую':'Подойди к торцу стены или углу пола'};
   return null;
  }
- return {resolve,wallInfo,nearby,corner,stack,joinEnd};
+ return {resolve,wallInfo,nearby,corner,stack,joinEnd,cornerArms,cornerSegments};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildJoin;
