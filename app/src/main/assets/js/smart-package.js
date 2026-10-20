@@ -19,11 +19,14 @@ const SmartPackage=(()=>{
  const category=s=>{
   const v=key(s);
   if(/(?:wall|стен|window|окно|двер|door|pillar|колон)/.test(v)&&/(?:arc|полукруг|curved|round)/.test(v))return 'wall';
-  if(/(?:corner|угол|углов|стык)/.test(v)&&/(?:floor|пол|slab|плит)/.test(v))return 'foundation';
-  if(/(?:corner|угол|углов|стык)/.test(v))return 'corner';
+  const corner=/(?:corner|угол|углов|углы|угловые|угловой|угловая|стык)/.test(v);
+  // «Полукруглая стена» is not a floor. Match standalone floor words.
+  const floorWord=/(?:^|[\\/\s_.-])(?:floor|slab|foundation|пол|полы|пола|плит[а-яё]*|фундамент[а-яё]*|настил[а-яё]*)(?=$|[\\/\s_.-])/i.test(v);
+  if(corner&&floorWord)return 'foundation';
+  if(corner)return 'corner';
   if(/(?:ceiling|потол|перекрыт)/.test(v))return 'ceiling';
   if(/(?:roof|крыша|кровл)/.test(v))return 'roof';
-  if(/(?:floor|пол|foundation|фундамент|плит|platform)/.test(v))return 'foundation';
+  if(floorWord||/(?:platform|основан)/.test(v))return 'foundation';
   if(/(?:wall|стен|window|окно|pillar|колон)/.test(v))return 'wall';
   if(/(?:door|двер|ворот)/.test(v))return 'door';
   if(/(?:stairs|лестниц|ступен)/.test(v))return 'stairs';
@@ -40,7 +43,7 @@ const SmartPackage=(()=>{
   if(!value)return category(fallback);
   const v=String(value).toLocaleLowerCase().trim();
   if(['foundation','wall','corner','ceiling','stairs','roof','door','prop'].includes(v))return v;
-  if(/угол|углов|corner/.test(v))return 'corner';
+  if(/угол|углов|углы|угловые|угловой|угловая|corner/.test(v))return 'corner';
   if(/стен|wall|колонн|pillar/.test(v))return 'wall';
   if(/потол|перекрыт|ceiling/.test(v))return 'ceiling';
   if(/кры|кровл|roof/.test(v))return 'roof';
