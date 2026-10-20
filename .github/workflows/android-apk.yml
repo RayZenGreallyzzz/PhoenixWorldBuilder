@@ -65,6 +65,7 @@ jobs:
           node tests/test-roof-ceiling-levels.cjs
           node tests/test-storey-quick-select.cjs
           node tests/test-joints-thickness.cjs
+          node tests/test-corner-wall-continuity.cjs
           node tests/test-surface-paint.cjs
           node tests/test-surface-mapping.cjs
           node tests/test-texture-vs-model-scale.cjs
