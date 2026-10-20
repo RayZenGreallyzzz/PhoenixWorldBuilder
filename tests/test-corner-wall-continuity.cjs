@@ -106,6 +106,42 @@ for(const yaw of [0,90,180,270])for(const story of [0,1]){
   assert(Math.min(dist(preview.a,line.a),dist(preview.c,line.a))<.025,'No inward/outward offset after custom GLB corner');
  }
 }
+// Both sides of a 90° L module must also have real end sockets for
+// round-wall connections, not the diagonal of its bounding rectangle.
+{
+ const w=fresh(),arcKind='glb:polukruglye/arc_r1_5_90deg.glb';
+ const vertices=[],radius=1.5,angle=90,count=9,half=angle*Math.PI/360;
+ for(let i=0;i<=count;i++){
+  const phi=-half+i/count*(2*half);
+  for(const r of [radius-.11,radius+.11]){
+   vertices.push(r*Math.sin(phi),0,r*Math.cos(phi)-radius*.86);
+   vertices.push(r*Math.sin(phi),2.6,r*Math.cos(phi)-radius*.86);
+  }
+ }
+ const geo=new THREE.BufferGeometry();
+ geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+ const arc=new THREE.Group();arc.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial()));
+ w.assetCache.set(arcKind,arc);
+ const source=instance(w,'corner',75,[0,0,0],90,0);
+ const original=BuildJoin.wallInfo(w,source),socket=original.sockets[0];
+ assert.equal(BuildCurves.sourceSockets(original).length,2,'A corner exposes two physical arc-join sockets');
+ w.categoryForKind=id=>id===arcKind?'wall':id==='corner'?'corner':'wall';
+ w.setPlacement(arcKind,'wall');
+ const incoming=BuildCurves.localSockets(arc,arcKind);
+ assert(incoming?.length===2,'Arc test geometry exposes true end-cap sockets');
+ const theta=v=>Math.atan2(-v.z,v.x);
+ const rotate=(v,t)=>new THREE.Vector3(v.x*Math.cos(t)+v.z*Math.sin(t),0,-v.x*Math.sin(t)+v.z*Math.cos(t));
+ const yaw=theta(socket.out.clone().negate())-theta(incoming[0].out);
+ const pos=socket.point.clone().sub(rotate(incoming[0].point,yaw));
+ const box=BuildSnap.attrBounds(arc);
+ const center=pos.clone().add(rotate(new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2),yaw));
+ const solved=w.solvePlacement(center);
+ assert(solved.curveJoin&&solved.reference===75,'Arc must meet real L-tip without phantom offset');
+ w.applyGhostPlacement(center);
+ const newInfo=BuildJoin.wallInfo(w,{kind:arcKind,data:{category:'wall'},mesh:w.ghost});
+ const arcSockets=BuildCurves.sourceSockets(newInfo);
+ assert(arcSockets.some(s=>dist(s.point,socket.point)<.025),'Physical L-to-arc end caps coincide');
+}
 // Non-L shapes that merely have the category "corner" must not be
 // promoted to imaginary rectangular sockets.
 {
