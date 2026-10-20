@@ -110,6 +110,8 @@ const SceneExporter=(()=>{
    const hasEmblems=emblems.length>0;
    const bounds=hasEmblems?BuildSnap.attrBounds(root):null;
    const toRoot=hasEmblems?root.matrixWorld.clone().invert():null;
+   const surfaceLocalBounds=hasPaint?SurfacePaint.localBounds(root):null;
+   const surfaceToRoot=hasPaint?root.matrixWorld.clone().invert():null;
    const meshes=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)meshes.push(o)});
    for(const mesh of meshes){
     const geom=mesh.geometry;if(geom.index&&geom.index.count>700000)continue;
@@ -138,9 +140,42 @@ const SceneExporter=(()=>{
       if(mode==='source')return attrs.TEXCOORD_0??null;
       if(projectedUV.has(mode))return projectedUV.get(mode);
       const data=new Float32Array(pos.count*2),p=new THREE.Vector3();
+      const finishSpec=mode.startsWith('finish:')?mode.slice(7).split('|'):null;
+      const fitFace=finishSpec?.[0],layout=finishSpec?.[1],meters=Number(finishSpec?.[2]||1);
+      const region=finishSpec?.[3]?.split(',').map(Number)||[0,0,1,1];
+      const aspect=Number(finishSpec?.[4]||1);
+      const localExt=surfaceLocalBounds?.getSize(new THREE.Vector3())||new THREE.Vector3(1,1,1);
       for(let i=0;i<pos.count;i++){
        p.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(mesh.matrixWorld);
-       if(mode.startsWith('emblem:')&&bounds){
+       if(finishSpec){
+        const coords=fitFace==='top'||fitFace==='bottom'?'xz':
+         fitFace==='sideX'?'zy':'xy';
+        const worldUV=coords==='xz'?[p.x,p.z]:coords==='zy'?[p.z,p.y]:[p.x,p.y];
+        let u,v;
+        if(layout==='repeat'){
+         u=worldUV[0]/Math.max(.1,meters);v=worldUV[1]/Math.max(.1,meters);
+        }else if(layout==='joined'){
+         u=(p.x-region[0])/Math.max(.0001,region[2]-region[0]);
+         v=(p.z-region[1])/Math.max(.0001,region[3]-region[1]);
+        }else{
+         p.applyMatrix4(surfaceToRoot);
+         const x=(p.x-surfaceLocalBounds.min.x)/Math.max(.0001,localExt.x),
+          y=(p.y-surfaceLocalBounds.min.y)/Math.max(.0001,localExt.y),
+          z=(p.z-surfaceLocalBounds.min.z)/Math.max(.0001,localExt.z);
+         if(coords==='xz'){u=x;v=z}
+         else if(coords==='zy'){u=z;v=y}
+         else{u=x;v=y}
+         if(layout==='tile'){
+          const ratio=coords==='xz'?localExt.x/Math.max(.0001,localExt.z):
+           coords==='zy'?localExt.z/Math.max(.0001,localExt.y):
+           localExt.x/Math.max(.0001,localExt.y);
+          if(ratio>aspect)v=.5+(v-.5)*aspect/ratio;
+          else u=.5+(u-.5)*ratio/Math.max(.0001,aspect);
+         }
+        }
+        data[2*i]=layout==='repeat'?u:Math.max(.001,Math.min(.999,u));
+        data[2*i+1]=layout==='repeat'?v:Math.max(.001,Math.min(.999,v));
+       }else if(mode.startsWith('emblem:')&&bounds){
         p.applyMatrix4(toRoot);
         const name=mode.slice(7);
         const x=(p.x-bounds.min.x)/Math.max(.001,bounds.max.x-bounds.min.x);
@@ -172,8 +207,13 @@ const SceneExporter=(()=>{
       const materialIndex=srcGroup?.materialIndex||0,orig=materialList[materialIndex]||materialList[0];
       let uvMode='source';
       if(finish?.texture){
-       uvMode=face==='top'||face==='bottom'?'xz':
-        Math.abs(normal.x)>=Math.abs(normal.z)?'yz':'xy';
+       const mapping=finish.mode||'repeat';
+       const facePlane=face==='top'||face==='bottom'?face:
+        Math.abs(normal.x)>=Math.abs(normal.z)?'sideX':'sideZ';
+       const t=world.textures?.get(finish.texture),aspect=
+        (t?.image?.width||1)/Math.max(1,t?.image?.height||1);
+       uvMode='finish:'+facePlane+'|'+mapping+'|'+(finish.tileMeters||1)+
+        '|'+(finish.region||[0,0,1,1]).join(',')+'|'+aspect;
       }
       const stamps=emblems.filter(e=>e.face===face);
       if(stamps.length)uvMode='emblem:'+face;
