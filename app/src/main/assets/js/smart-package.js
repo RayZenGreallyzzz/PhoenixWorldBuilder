@@ -14,7 +14,7 @@ const SmartPackage=(()=>{
  // Read Cyrillic folder names as they are. Paths such as
  // "Большие гобелены/..." and "Картины на стену/..." must work too.
  // The file extension alone does not turn a painting into a tiled material.
- const artworkWord=/(?:^|[\\/\s_.-])(?:картин[а-яё]*|гобелен[а-яё]*|габелен[а-яё]*|гобилен[а-яё]*|панно|фреск[а-яё]*|живопис[а-яё]*|эмблем[а-яё]*|герб[а-яё]*|логотип[а-яё]*|постер[а-яё]*|плакат[а-яё]*|фотографи[а-яё]*|витраж[а-яё]*|декал[а-яё]*|баннер[а-яё]*|painting[s]?|tapestr(?:y|ies)|mural[s]?|artwork|picture[s]?|poster[s]?|emblem[s]?|decal[s]?|banner[s]?|gallery)(?=$|[\\/\s_.-])/i;
+ const artworkWord=/(?:^|[\\/\s_.-])(?:картин[а-яё]*|гобелен[а-яё]*|габелен[а-яё]*|габилен[а-яё]*|гобилен[а-яё]*|панно|фреск[а-яё]*|живопис[а-яё]*|эмблем[а-яё]*|герб[а-яё]*|логотип[а-яё]*|постер[а-яё]*|плакат[а-яё]*|фотографи[а-яё]*|витраж[а-яё]*|декал[а-яё]*|баннер[а-яё]*|painting[s]?|tapestr(?:y|ies)|mural[s]?|artwork|picture[s]?|poster[s]?|emblem[s]?|decal[s]?|banner[s]?|gallery)(?=$|[\\/\s_.-])/i;
  const kind=s=>artworkWord.test(key(s))?'painting':'texture';
  const category=s=>{
   const v=key(s);
@@ -34,7 +34,7 @@ const SmartPackage=(()=>{
  };
  const normalizedRole=role=>{
   const r=String(role||'').toLocaleLowerCase();
-  if(artworkWord.test(r)||/paint|art|tapestry|mural|decal|emblem|картин|гобелен|габелен|панно|эмблем|фреск/.test(r))
+  if(artworkWord.test(r)||/paint|art|tapestry|mural|decal|emblem|картин|гобелен|габелен|габилен|панно|эмблем|фреск/.test(r))
    return 'painting';
   if(/texture|finish|material|облицов|отделк|текстур|покрыт|покрыти|штукатур|обои|ткан|кирпич|камен|дерев/.test(r))return 'texture';
   return null;
