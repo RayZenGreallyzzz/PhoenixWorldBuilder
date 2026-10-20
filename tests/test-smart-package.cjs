@@ -70,7 +70,7 @@ const actual=SmartPackage.analyze([
  'All_Building_Libraries_GLB_RU/XQCQ_255/Стена_угловая_90.glb'
 ]);
 assert.equal(actual.textures.length,1,'Tile stays repeatable');
-assert.equal(actual.pictures.length,3,'Decals, pictures and user's variant габилены stay one-off artwork');
+assert.equal(actual.pictures.length,3,'Decals, pictures and the variant габилены stay one-off artwork');
 assert.equal(actual.models.length,1);
 assert.equal(actual.models[0].category,'corner');
 assert.equal(SmartPackage.kind('габилены/Геральдика.png'),'painting');
