@@ -144,6 +144,7 @@ const SceneExporter=(()=>{
       const fitFace=finishSpec?.[0],layout=finishSpec?.[1],meters=Number(finishSpec?.[2]||1);
       const region=finishSpec?.[3]?.split(',').map(Number)||[0,0,1,1];
       const aspect=Number(finishSpec?.[4]||1);
+      const imageScale=Number(finishSpec?.[5]||1);
       const localExt=surfaceLocalBounds?.getSize(new THREE.Vector3())||new THREE.Vector3(1,1,1);
       for(let i=0;i<pos.count;i++){
        p.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(mesh.matrixWorld);
@@ -172,6 +173,8 @@ const SceneExporter=(()=>{
           if(ratio>aspect)v=.5+(v-.5)*aspect/ratio;
           else u=.5+(u-.5)*ratio/Math.max(.0001,aspect);
          }
+         u=.5+(u-.5)/Math.max(.25,imageScale);
+         v=.5+(v-.5)/Math.max(.25,imageScale);
         }
         data[2*i]=layout==='repeat'?u:Math.max(.001,Math.min(.999,u));
         data[2*i+1]=layout==='repeat'?v:Math.max(.001,Math.min(.999,v));
@@ -213,7 +216,7 @@ const SceneExporter=(()=>{
        const t=world.textures?.get(finish.texture),aspect=
         (t?.image?.width||1)/Math.max(1,t?.image?.height||1);
        uvMode='finish:'+facePlane+'|'+mapping+'|'+(finish.tileMeters||1)+
-        '|'+(finish.region||[0,0,1,1]).join(',')+'|'+aspect;
+        '|'+(finish.region||[0,0,1,1]).join(',')+'|'+aspect+'|'+(finish.imageScale||1);
       }
       const stamps=emblems.filter(e=>e.face===face);
       if(stamps.length)uvMode='emblem:'+face;
