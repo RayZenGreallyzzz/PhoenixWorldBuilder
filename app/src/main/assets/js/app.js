@@ -831,7 +831,7 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
    else{
     w.yaw+=(w.invertCameraX?1:-1)*dx*.006;
     w.pitch=THREE.MathUtils.clamp(w.pitch+dy*.005,
-     w.mode==='playbuild'&&w.droneMode?.12:(w.mode==='playbuild'||w.mode==='walk')?-.65:.12,
+     (w.mode==='playbuild'&&w.droneMode)? .12 : ((w.mode==='playbuild'||w.mode==='walk')?-.65:.12),
      w.mode==='playbuild'&&w.droneMode?1.535:1.32);
    }
   }
