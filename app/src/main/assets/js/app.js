@@ -53,15 +53,21 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
   if(!maps.has(slot.texture))try{maps.set(slot.texture,await loadTexture(slot.texture))}catch(e){console.warn('Missing texture',slot.texture,e)}
  }
  root.traverse(o=>{if(!o.isMesh)return;const mats=Array.isArray(o.material)?o.material:[o.material];
-  for(let i=0;i<mats.length;i++){let m=mats[i];const slot=binding.slots.find(s=>s.name===m.name)||binding.slots[i];const t=maps.get(slot?.texture);if(t){m.map=t;m.color.set('#ffffff');m.needsUpdate=true;}}
+  for(let i=0;i<mats.length;i++){let m=mats[i];const slot=binding.slots.find(s=>s.name&&s.name===m.name)||
+   (binding.applyAll?binding.slots[0]:binding.slots[i]);const t=maps.get(slot?.texture);if(t){m.map=t;m.color.set('#ffffff');m.needsUpdate=true;}}
  });
 }
 w.getAsset=cacheFromDB;
 // Old projects contain GLB IDs but may not yet contain a saved category.
 w.categoryForKind=kind=>BUILTINS.find(item=>item[0]===kind)?.[2]||savedMeta.get(kind)?.category||groupType(savedMeta.get(kind)?.name||kind);
 async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),...(catalogMeta[id]||{}),name});}
-async function rememberTexture(id,name,bytes,mime='image/png',sourcePath=''){await dbOp('textures',id,{name,bytes,mime,sourcePath});textureMeta.set(id,{name,sourcePath});}
-async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;t.wrapS=t.wrapT=id.startsWith('emblem:')?THREE.ClampToEdgeWrapping:THREE.RepeatWrapping;w.tuneTexture(t);w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,error=>{URL.revokeObjectURL(url);reject(error)})})}
+async function rememberTexture(id,name,bytes,mime='image/png',sourcePath='',role=''){
+ const resolved=role|| (id.startsWith('emblem:')?'painting':'texture');
+ await dbOp('textures',id,{name,bytes,mime,sourcePath,role:resolved});
+ if(w.textures.has(id)){w.textures.get(id)?.dispose?.();w.textures.delete(id)}
+ textureMeta.set(id,{name,sourcePath,role:resolved});
+}
+async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;t.wrapS=t.wrapT=(id.startsWith('emblem:')||textureMeta.get(id)?.role==='painting')?THREE.ClampToEdgeWrapping:THREE.RepeatWrapping;w.tuneTexture(t);w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,error=>{URL.revokeObjectURL(url);reject(error)})})}
 async function updateCatalog(id,patch){
  catalogMeta[id]={...(catalogMeta[id]||{}),...patch};
  const m=savedMeta.get(id);if(m)Object.assign(m,patch);
@@ -289,7 +295,9 @@ function renderLibrary(){
  const items=[];
  if(isImage){
   for(const [id,meta] of textureMeta){
-   if(isEmblem&&!id.startsWith('emblem:'))continue;
+   const painting=meta.role==='painting'||id.startsWith('emblem:');
+   if(isEmblem&&!painting)continue;
+   if(isTexture&&painting)continue;
    if(q&&!(meta.name+' '+(meta.sourcePath||id)).toLowerCase().includes(q))continue;
    items.push([id,meta]);
   }
@@ -604,61 +612,98 @@ function wireButtons(){
    if(surfaceTarget()||(w.placement&&w.ghost))assignSurfacePaint('texture',id);
    else toast('PNG/JPEG добавлена. Выбери деталь и сторону для нанесения')}catch(err){toast('Текстура не открыта: '+err.message)}};
 }
-async function importZip(file,isProject=false){const entries=await ZipUtils.extract(file),glbs=[],textureKeys=[],keys=Object.keys(entries);let project=null;let manifest=null;let materialMap=null;let savedBindings=null;
- if(entries['assets_manifest.json'])try{manifest=JSON.parse(new TextDecoder().decode(entries['assets_manifest.json']))}catch(e){};
- if(entries['bindings.json'])try{savedBindings=JSON.parse(new TextDecoder().decode(entries['bindings.json']))}catch(e){};
-  if(entries['catalog.json'])try{const importedCatalog=JSON.parse(new TextDecoder().decode(entries['catalog.json']));catalogMeta={...catalogMeta,...importedCatalog}}catch(e){};
- for(const key of keys)if(/(?:^|\/)Привязки_материалов(?:_Все)?\.json$/i.test(key)){
-  try{materialMap=JSON.parse(new TextDecoder().decode(entries[key]))}catch(e){console.warn(e)}break
- }
+async function importZip(file,isProject=false){
+ const entries=await ZipUtils.extract(file),keys=Object.keys(entries);
+ const readJson=key=>{const name=SmartPackage.lookup(keys,key);if(!name)return null;
+  try{return JSON.parse(new TextDecoder().decode(entries[name]))}
+  catch(e){console.warn('ZIP JSON:',name,e);return null}
+ };
+ const manifest=readJson('assets_manifest.json'),savedBindings=readJson('bindings.json');
+ const importedCatalog=readJson('catalog.json'),packageMeta=readJson('metadata.json')||readJson('package.json')||{};
+ const plan=SmartPackage.analyze(keys,packageMeta);
+ const glbs=[],imageIds=new Map(),textureKeys=[];
+ // First save all source bytes. Images retain independent roles and cannot
+ // accidentally enter the repeating-texture selector when they are paintings.
  for(let i=0;i<keys.length;i++){
-  let name=keys[i],bytes=entries[name],base=name.split('/').pop();
-  if(/\.glb$/i.test(name)){const id=manifest?.[name]||'glb:'+name.toLowerCase();await rememberAsset(id,base,bytes);glbs.push(id)}
-  else if(/\.(png|jpe?g|webp)$/i.test(name)){const id=manifest?.[name]||'tex:'+name.toLowerCase();let ext=base.split('.').pop().toLowerCase();await rememberTexture(id,base,bytes,ext==='jpg'?'image/jpeg':'image/'+ext,name);textureKeys.push(id)}
-  else if(/(?:^|\/)project\.json$/i.test(name))project=JSON.parse(new TextDecoder().decode(bytes));
-  if(i%80===0)await new Promise(resolve=>setTimeout(resolve,0));
- }
- if(materialMap?.libraries){
-   let linked=0,covered=0;const imported=new Set(glbs);
-   for(const [library,lib] of Object.entries(materialMap.libraries)){
-    for(const [modelId,model] of Object.entries(lib.models||{})){
-     const id='glb:'+String(model.file||'').toLowerCase();
-     if(!imported.has(id))continue;
-     covered++;
-     const slots=(model.material_slots||[]).map(slot=>{
-      const candidate=slot.fbx_linked_texture||slot.palette_texture;
-      const texture=candidate&&entries[candidate]?'tex:'+candidate.toLowerCase():null;
-      return {name:slot.name||'',texture};
-     });
-     if(slots.some(s=>s.texture)){await dbOp('bindings',id,{slots});w.assetCache.delete(id);linked++}
-     const prior=catalogMeta[id]||{},old=savedMeta.get(id)||{};
-     const metadata={
-      sourceId:String(model.id||modelId),
-      library:library.replace(/_\d+$/,''),
-      sourceName:model.name_ru||'',
-      materialTotal:slots.length,
-      materialLinked:slots.filter(s=>s.texture).length
-     };
-     if(!prior.manualCategory&&!old.manualCategory){
-      metadata.category=groupType(model.name_ru||old.name||'');
-     }
-     catalogMeta[id]={...metadata,...prior};
-     savedMeta.set(id,{...old,...catalogMeta[id]});
-     if(covered%100===0)await new Promise(resolve=>setTimeout(resolve,0));
-    }
-   }
-   try{await dbOp('catalog','metadata',catalogMeta)}catch(e){console.warn('Catalogue metadata write',e)}
-   toast('Найдено текстурных привязок: '+linked+'/'+covered);
+  const name=keys[i],bytes=entries[name],base=name.split('/').pop();
+  const model=plan.models.find(x=>x.path===name);
+  const image=[...plan.pictures,...plan.textures].find(x=>x.path===name);
+  if(model){
+   const id=manifest?.[name]||'glb:'+name.toLowerCase();
+   await rememberAsset(id,base,bytes);glbs.push(id);
+   const old=savedMeta.get(id)||{},prior=catalogMeta[id]||{};
+   const explicit=model.metadata?.category||model.category;
+   const addition={sourcePath:name,assetRole:'model'};
+   if(!old.manualCategory&&!prior.manualCategory)addition.category=explicit;
+   const next={...addition,...prior};
+   catalogMeta[id]=next;savedMeta.set(id,{...old,...next});
+  }else if(image){
+   const role=image.role;
+   const id=manifest?.[name]||(role==='painting'?'emblem:':'tex:')+name.toLowerCase();
+   const ext=base.split('.').pop().toLowerCase();
+   await rememberTexture(id,base,bytes,ext==='jpg'||ext==='jpeg'?'image/jpeg':'image/'+ext,name,role);
+   imageIds.set(name,id);textureKeys.push(id);
+  }else if(/(?:^|\/)project\.json$/i.test(name)){
+   // Pick up project only when the caller explicitly imports a scene.
   }
-  if(savedBindings)for(const [id,row] of Object.entries(savedBindings)){await dbOp('bindings',id,row);w.assetCache.delete(id);}
-  if(entries['catalog.json']){try{await dbOp('catalog','metadata',catalogMeta)}catch(e){}for(const [id,meta] of Object.entries(catalogMeta)){if(savedMeta.has(id))Object.assign(savedMeta.get(id),meta)}}
+  if(i%60===0)await new Promise(resolve=>setTimeout(resolve,0));
+ }
+ // Explicit legacy project metadata must remain authoritative.
+ if(importedCatalog&&typeof importedCatalog==='object')catalogMeta={...catalogMeta,...importedCatalog};
+ // Auto-bind only high-confidence filename matches, or explicit metadata.
+ let linked=0;
+ for(const [name,binding] of plan.bindings){
+  const id=manifest?.[name]||'glb:'+name.toLowerCase();
+  if(!glbs.includes(id)||savedBindings?.[id])continue;
+  const slots=binding.slots.map(s=>({name:s.name||'',texture:imageIds.get(s.path)||null}))
+   .filter(s=>s.texture);
+  if(!slots.length)continue;
+  await dbOp('bindings',id,{slots,applyAll:!!binding.applyAll});w.assetCache.delete(id);linked++;
+ }
+ // Support existing exported material-link tables; resolve paths even with
+ // one extra ZIP root directory and never point a slot at a nonexistent PNG.
+ const mapName=keys.find(n=>/(?:^|\/)Привязки_материалов(?:_Все)?\.json$/i.test(n));
+ const materialMap=mapName?readJson(mapName):null;
+ if(materialMap?.libraries)for(const [library,lib] of Object.entries(materialMap.libraries)){
+  for(const [modelId,model] of Object.entries(lib.models||{})){
+   const resolved=SmartPackage.lookup(keys,model.file||'');
+   if(!resolved)continue;
+   const id=manifest?.[resolved]||'glb:'+resolved.toLowerCase();
+   if(!glbs.includes(id))continue;
+   const slots=(model.material_slots||[]).map(slot=>{
+    const raw=slot.fbx_linked_texture||slot.palette_texture;
+    const found=raw&&SmartPackage.lookup([...imageIds.keys()],raw);
+    return {name:slot.name||'',texture:found?imageIds.get(found):null};
+   });
+   if(slots.some(x=>x.texture)&&!savedBindings?.[id]){
+    await dbOp('bindings',id,{slots});w.assetCache.delete(id);linked++;
+   }
+   const previous=catalogMeta[id]||{},old=savedMeta.get(id)||{};
+   const meta={sourceId:String(model.id||modelId),library:library.replace(/_\d+$/,''),
+    sourceName:model.name_ru||'',materialTotal:slots.length,
+    materialLinked:slots.filter(s=>s.texture).length};
+   if(!previous.manualCategory&&!old.manualCategory)meta.category=groupType(model.name_ru||old.name||'');
+   catalogMeta[id]={...meta,...previous};
+  }
+ }
+ if(savedBindings&&typeof savedBindings==='object')for(const [id,row] of Object.entries(savedBindings)){
+  await dbOp('bindings',id,row);w.assetCache.delete(id);
+ }
+ for(const [id,meta] of Object.entries(catalogMeta)){
+  if(savedMeta.has(id))savedMeta.set(id,{...savedMeta.get(id),...meta});
+ }
+ try{await dbOp('catalog','metadata',catalogMeta)}catch(e){console.warn('ZIP catalogue save',e)}
+ const project=readJson('project.json');
  if(isProject&&project)await restoreProject(project);
  else if(pendingRecovery){
   const previous=pendingRecovery;
   try{await restoreProject(previous);saveSoon();toast('Постройка восстановлена. Нажми 💾, чтобы сохранить')}
   catch(err){console.warn('Still missing assets',err);toast('Нужны остальные модели для восстановления')}
  }
- renderLibrary();renderTextureOptions();if(!isProject)toast(`Импорт: ${glbs.length} GLB и ${textureKeys.length} текстур`);return glbs.length;
+ renderLibrary();renderTextureOptions();
+ if(!isProject)toast('ZIP: '+glbs.length+' моделей, '+plan.textures.length+
+  ' облицовок, '+plan.pictures.length+' картин, '+linked+' привязок');
+ return glbs.length;
 }
 async function loadDependencies(project){
  const need=new Set(project.objects.map(o=>o.kind).filter(k=>!BUILTINS.some(x=>x[0]===k)));
@@ -741,7 +786,10 @@ async function exportPack(){try{toast('Создаю пакет карты…');c
  for(const id of assetIds){const binding=await dbOp('bindings',id);for(const slot of binding?.slots||[])if(slot.texture)texIds.add(slot.texture)}for(const id of texIds){const row=await dbOp('textures',id);if(row){const path='textures/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.'+(row.mime.split('/')[1]||'png');items[path]=row.bytes;manifest[path]=id;}}
  const bindings={};for(const id of assetIds){const row=await dbOp('bindings',id);if(row)bindings[id]=row;}
  const exportCatalog={};for(const id of assetIds)if(catalogMeta[id])exportCatalog[id]=catalogMeta[id];
-  items['catalog.json']=JSON.stringify(exportCatalog);items['bindings.json']=JSON.stringify(bindings);items['assets_manifest.json']=JSON.stringify(manifest);let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
+  items['catalog.json']=JSON.stringify(exportCatalog);items['bindings.json']=JSON.stringify(bindings);items['assets_manifest.json']=JSON.stringify(manifest);
+ items['metadata.json']=JSON.stringify({version:1,
+  models:Object.entries(manifest).filter(([path])=>/\.glb$/i.test(path)).map(([path,id])=>({path,category:catalogMeta[id]?.category||savedMeta.get(id)?.category||groupType(id)})),
+  images:Object.entries(manifest).filter(([path])=>/\.(png|jpe?g|webp)$/i.test(path)).map(([path,id])=>({path,role:textureMeta.get(id)?.role||(id.startsWith('emblem:')?'painting':'texture')}))});let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
 async function exportHouse(){try{toast('Собираю дом без земли и персонажа…');const blob=await SceneExporter.build(w,{houseOnly:true});await saveToDevice('phoenix_house.glb',blob)}catch(e){toast('Ошибка экспорта дома: '+e.message);console.error(e)}}
 async function exportGlb(){try{toast('Экспорт 3D-карты…');const blob=await SceneExporter.build(w);await saveToDevice('phoenix_map.glb',blob)}catch(e){toast('Ошибка GLB: '+e.message);console.error(e)}}
 function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared=false;
@@ -789,7 +837,7 @@ async function init(){
  renderLibrary();w.animate(0);
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
-  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||''})}renderTextureOptions();
+  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||'',role:row.role||(id.startsWith('emblem:')?'painting':'texture')})}renderTextureOptions();
   catalogMeta=await dbOp('catalog','metadata')||{};
   const storedPresets=await dbOp('catalog',PRESET_KEY)||[];
   modulePresets=new Map(Array.isArray(storedPresets)?storedPresets.filter(x=>x?.id&&x?.sourceKind).map(x=>[x.id,x]):[]);

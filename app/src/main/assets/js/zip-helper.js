@@ -16,20 +16,44 @@ const ZipUtils=(()=>{
   const cb=join(central),end=new Uint8Array(22),dv=new DataView(end.buffer);u32(dv,0,0x06054b50);u16(dv,8,count);u16(dv,10,count);u32(dv,12,cb.length);u32(dv,16,pos);return new Blob([...local,cb,end],{type:'application/zip'});
  }
  async function extract(file,{maxEntries=5000,maxTotal=170000000}={}){
-  const ab=await file.arrayBuffer(), v=new DataView(ab), bytes=new Uint8Array(ab), out={};let offset=0,total=0,count=0;
-  while(offset+30<=bytes.length){if(v.getUint32(offset,true)!==0x04034b50)break;
-   if(++count>maxEntries)throw Error('Слишком много файлов в ZIP');
-   let flags=v.getUint16(offset+6,true),method=v.getUint16(offset+8,true),compressed=v.getUint32(offset+18,true),nameLen=v.getUint16(offset+26,true),extra=v.getUint16(offset+28,true);
-   if(flags&8)throw Error('ZIP с data descriptor пока не поддерживается: распакуй архив на планшете');
+  const ab=await file.arrayBuffer(),v=new DataView(ab),bytes=new Uint8Array(ab),out=Object.create(null);
+  // Read the central directory, not just local file headers: common Android,
+  // Windows and 7-Zip archives put sizes after each compressed stream
+  // (general-purpose bit 3 / data descriptor).
+  let eocd=-1;
+  for(let p=bytes.length-22;p>=Math.max(0,bytes.length-65557);p--)
+   if(v.getUint32(p,true)===0x06054b50){eocd=p;break}
+  if(eocd<0)throw Error('Не найден каталог ZIP');
+  const totalEntries=v.getUint16(eocd+10,true),centralOffset=v.getUint32(eocd+16,true);
+  if(totalEntries>maxEntries)throw Error('Слишком много файлов в ZIP');
+  if(centralOffset>=bytes.length)throw Error('Повреждён каталог ZIP');
+  let pos=centralOffset,total=0;
+  for(let n=0;n<totalEntries;n++){
+   if(pos+46>bytes.length||v.getUint32(pos,true)!==0x02014b50)throw Error('Повреждён каталог ZIP');
+   const method=v.getUint16(pos+10,true),flags=v.getUint16(pos+8,true);
+   const compressed=v.getUint32(pos+20,true),uncompressed=v.getUint32(pos+24,true);
+   const nameLen=v.getUint16(pos+28,true),extraLen=v.getUint16(pos+30,true),commentLen=v.getUint16(pos+32,true);
+   const local=v.getUint32(pos+42,true);
+   if(pos+46+nameLen+extraLen+commentLen>bytes.length)throw Error('Повреждено имя файла ZIP');
+   const name=dec.decode(bytes.subarray(pos+46,pos+46+nameLen));
+   pos+=46+nameLen+extraLen+commentLen;
+   if(name.endsWith('/')||!/\.(glb|png|jpg|jpeg|webp|json)$/i.test(name))continue;
    if(flags&1)throw Error('ZIP защищён паролем');
-   let name=dec.decode(bytes.slice(offset+30,offset+30+nameLen)),start=offset+30+nameLen+extra;if(start+compressed>bytes.length)throw Error('Повреждён архив');
-   const comp=bytes.slice(start,start+compressed);offset=start+compressed;
-   if(name.endsWith('/')||(!/\.(glb|png|jpg|jpeg|webp|json)$/i.test(name)))continue;
+   if(name.split(/[\\/]/).includes('..'))throw Error('Небезопасный путь внутри ZIP');
+   if(local+30>bytes.length||v.getUint32(local,true)!==0x04034b50)throw Error('Повреждён заголовок ZIP');
+   const dataStart=local+30+v.getUint16(local+26,true)+v.getUint16(local+28,true);
+   if(dataStart+compressed>bytes.length||uncompressed>maxTotal-total)throw Error('Архив слишком большой для памяти устройства');
+   const data=bytes.subarray(dataStart,dataStart+compressed);
    let contents;
-   if(method===0)contents=comp;
-   else if(method===8){if(!('DecompressionStream' in window))throw Error('Твой WebView не поддерживает распаковку ZIP — извлеки файлы через менеджер');const ds=new DecompressionStream('deflate-raw');const stream=new Blob([comp]).stream().pipeThrough(ds);contents=new Uint8Array(await new Response(stream).arrayBuffer());}
-   else continue;
-   total+=contents.length;if(total>maxTotal)throw Error('Архив слишком большой для памяти устройства');out[name]=contents;
+   if(method===0)contents=data.slice();
+   else if(method===8){
+    if(typeof DecompressionStream==='undefined')throw Error('Android WebView не поддерживает распаковку DEFLATE');
+    const stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    contents=new Uint8Array(await new Response(stream).arrayBuffer());
+   }else continue;
+   if(contents.length!==uncompressed)throw Error('Повреждены данные ZIP: '+name);
+   total+=contents.length;if(total>maxTotal)throw Error('Архив слишком большой для памяти устройства');
+   out[name.replace(/\\/g,'/')]=contents;
   }
   return out;
  }

@@ -3,7 +3,7 @@
  * Only module data changes when applying a decal: world map remains manual-save.
  */
 const DecalUI=(()=>{
- let api=null,active=0,lastEntry=null;
+ let api=null,active=0,lastEntry=null,muralNext=false;
  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
  const get=key=>document.getElementById(key);
  const DECAL_PREFIX='emblem:';
@@ -25,6 +25,14 @@ const DecalUI=(()=>{
    sel.value=list.length?String(active):'';
   }
   const d=list[active];
+  const muralButton=get('btnMural');
+  if(muralButton){
+   muralButton.textContent=muralNext?'🖼 Выбери картину для панно…':'🖼 Панно: одна картина на соседние стены';
+   muralButton.classList.toggle('active',muralNext);
+  }
+  if(get('muralHint'))get('muralHint').textContent=d?.muralId?
+   'Это часть общего панно. Прозрачность и удаление применяются ко всей картине.':
+   'Выдели стену → «Панно» → выбери изображение. Соседние стены найдутся автоматически.';
   if(!d&&entry){
    const cat=entry.data.category||entry.kind;
    const choice=get('decalFace');
@@ -47,14 +55,26 @@ const DecalUI=(()=>{
    'Выбрано эмблем: '+list.length+'/'+DecalLayer.MAX+'. Настройки сохранятся после нажатия 💾 для карты.':
    'Сначала выбери стену или пол на карте, затем открой вкладку «Эмблемы».';
   for(const id of ['decalActive','decalSize','decalRotation','decalOpacity','decalLeft','decalRight','decalUp','decalDown','btnDecalFit','btnDecalDelete']){
-   if(get(id))get(id).disabled=!d;
+   if(get(id))get(id).disabled=!d||(!!d.muralId&&['decalSize','decalRotation','decalLeft','decalRight','decalUp','decalDown','btnDecalFit'].includes(id));
   }
  }
  function change(patch){
   const entry=existing();if(!entry)return;
-  const list=value();if(!list[active])return;
-  list[active]={...list[active],...patch};
-  api.world.updateDecals(entry,list);
+  const list=value(),previous=list[active];if(!previous)return;
+  if(previous.muralId){
+   if(!Object.prototype.hasOwnProperty.call(patch,'opacity'))return;
+   api.world.remember();
+   for(const item of api.world.objects){
+    const current=DecalLayer.normalize(item.data.decals);
+    if(!current.some(x=>x.muralId===previous.muralId))continue;
+    item.data.decals=current.map(x=>x.muralId===previous.muralId?{...x,opacity:patch.opacity}:x);
+    api.world.applyAppearance(item);
+   }
+   api.world.onChanged();
+  }else{
+   list[active]={...previous,...patch};
+   api.world.updateDecals(entry,list);
+  }
   render();
  }
  function shift(dx,dy){
@@ -62,9 +82,34 @@ const DecalUI=(()=>{
   change({x:clamp(Math.round((d.x+dx)*100)/100,0,1),
    y:clamp(Math.round((d.y+dy)*100)/100,0,1)});
  }
+ async function applyMural(id,entry){
+  const face=get('decalFace').value||'front';
+  const group=MuralLayout.collect(api.world,entry,face);
+  if(!group.length)return api.toast('Для панно выбери установленную прямую стену');
+  if(group.some(({entry:item})=>DecalLayer.normalize(item.data.decals).length>=DecalLayer.MAX))
+   return api.toast('На одной из стен уже 3 рисунка. Освободи место для панно.');
+  const texture=await api.loadTexture(id);
+  if(!texture)return api.toast('Картина недоступна');
+  const muralId='mural:'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
+  api.world.remember();
+  for(const item of group){
+   const old=DecalLayer.normalize(item.entry.data.decals);
+   item.entry.data.decals=DecalLayer.normalize([...old,{
+    id:muralId,texture:id,face:item.face,muralId,crop:item.crop,
+    x:.5,y:.5,size:1,fit:'fill',rotation:0,opacity:1
+   }]);
+   api.world.applyAppearance(item.entry);
+  }
+  api.world.onChanged();
+  active=DecalLayer.normalize(entry.data.decals).length-1;
+  api.toast(group.length===1?'Картина растянута на всю стену':
+   'Одно панно размещено на '+group.length+' соседних стенах без повторений');
+  render();
+ }
  async function addImage(id){
   const entry=existing();
   if(!entry)return api.toast('Сначала выбери стену или пол. Затем нажми на эмблему.');
+  if(muralNext){muralNext=false;return applyMural(id,entry)}
   const list=value();
   if(list.length>=DecalLayer.MAX)return api.toast('На одной детали максимум 3 рисунка. Удали один, чтобы добавить новый.');
   const tex=await api.loadTexture(id);
@@ -200,10 +245,27 @@ const DecalUI=(()=>{
   };
   get('btnDecalDelete').onclick=()=>{
    const entry=existing();if(!entry)return;
-   const list=value();if(!list[active])return;
-   list.splice(active,1);active=Math.max(0,active-1);
-   api.world.updateDecals(entry,list);render();
-   api.toast('Эмблема удалена с детали');
+   const list=value(),decal=list[active];if(!decal)return;
+   if(decal.muralId){
+    api.world.remember();
+    for(const item of api.world.objects){
+     const old=DecalLayer.normalize(item.data.decals);
+     if(!old.some(x=>x.muralId===decal.muralId))continue;
+     item.data.decals=old.filter(x=>x.muralId!==decal.muralId);
+     api.world.applyAppearance(item);
+    }
+    api.world.onChanged();api.toast('Панно удалено со всех связанных стен');
+   }else{
+    list.splice(active,1);api.world.updateDecals(entry,list);
+    api.toast('Эмблема удалена с детали');
+   }
+   active=Math.max(0,active-1);render();
+  };
+  get('btnMural').onclick=async()=>{
+   const entry=existing();if(!entry)return api.toast('Сначала выдели стену для большого панно');
+   if(!MuralLayout.collect(api.world,entry,get('decalFace').value||'front').length)
+    return api.toast('Выбери прямую стену для панно');
+   muralNext=true;render();await openGallery();
   };
   get('btnDecalText').onclick=()=>createText().catch(err=>api.toast(err.message));
   get('btnImportEmblem').onclick=()=>get('fileEmblem').click();
