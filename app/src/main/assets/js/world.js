@@ -461,12 +461,13 @@ class WorldBuilder{
  select(entry){this.selected=entry||null;if(entry){this.highlight.setFromObject(entry.mesh);this.highlight.visible=true}else this.highlight.visible=false;this.onSelected(entry);}
  setDroneMode(enabled){
   // Independent camera in construction: character position is untouched.
-  if(enabled&&this.mode!=='playbuild')return false;
+  if(enabled&&this.mode!=='playbuild'&&this.mode!=='build')return false;
   const turnOn=!!enabled;
   if(turnOn===!!this.droneMode)return !!this.droneMode;
   if(turnOn){
    this.droneReturnView={yaw:this.yaw,pitch:this.pitch,distance:this.distance};
-   const x=this.player.position.x,z=this.player.position.z;
+   const x=this.mode==='build'?this.target.x:this.player.position.x;
+   const z=this.mode==='build'?this.target.z:this.player.position.z;
    this.target.set(x,this.placementHeight(x,z,'wall','wall')+.6,z);
    this.pitch=1.13;this.distance=20;this.droneMode=true;
   }else{
@@ -478,7 +479,7 @@ class WorldBuilder{
    this.droneReturnView=null;
   }
   this.joy={x:0,y:0};
-  this.player.visible=this.mode==='playbuild'?!turnOn:this.mode==='walk';
+  this.player.visible=this.mode==='playbuild'?!turnOn:false;
   this.updateCamera();this.updateGameGhost();
   return this.droneMode;
  }
@@ -510,7 +511,7 @@ class WorldBuilder{
  }
  setMode(mode){
   const wasGame=this.mode==='walk'||this.mode==='playbuild',isGame=mode==='walk'||mode==='playbuild';
-  if(mode!=='playbuild'&&this.droneMode)this.setDroneMode(false);
+  if(mode!==this.mode&&this.droneMode)this.setDroneMode(false);
   this.mode=mode;this.player.visible=isGame&&!this.droneMode;this.grid.visible=!isGame;this.highlight.visible=!isGame&&!!this.selected;
   if(isGame&&!wasGame){this.player.position.set(this.target.x,this.heightAt(this.target.x,this.target.z)+.85,this.target.z);this.distance=5.2;this.pitch=.34;}
   else if(!isGame&&wasGame){this.target.copy(this.player.position);this.target.y+=1;this.distance=17;this.pitch=.58;}
@@ -660,7 +661,7 @@ class WorldBuilder{
  updateCamera(){if(this.mode==='walk'||(this.mode==='playbuild'&&!this.droneMode)){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));this.target.copy(this.player.position).add(new THREE.Vector3(0,1.15,0));const range=THREE.MathUtils.clamp(this.distance,2.7,9);this.camera.position.copy(this.target).addScaledVector(forward,-Math.cos(this.pitch)*range).add(new THREE.Vector3(0,Math.sin(this.pitch)*range,0));}
   else{this.camera.position.set(this.target.x+Math.sin(this.yaw)*Math.cos(this.pitch)*this.distance,this.target.y+Math.sin(this.pitch)*this.distance,this.target.z+Math.cos(this.yaw)*Math.cos(this.pitch)*this.distance);}this.camera.lookAt(this.target);}
  updatePlayer(dt){
-  if(this.mode==='playbuild'&&this.droneMode){
+  if(this.droneMode&&(this.mode==='playbuild'||this.mode==='build')){
    const strafe=this.joy.x*(this.invertJoystickX?-1:1)+(this.keys.KeyD||this.keys.ArrowRight?1:0)-(this.keys.KeyA||this.keys.ArrowLeft?1:0);
    const forward=-this.joy.y*(this.invertJoystickY?-1:1)+(this.keys.KeyW||this.keys.ArrowUp?1:0)-(this.keys.KeyS||this.keys.ArrowDown?1:0);
    const length=Math.hypot(strafe,forward);
