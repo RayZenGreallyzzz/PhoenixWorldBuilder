@@ -66,6 +66,9 @@ const BuildCurves=(()=>{
   return sockets;
  }
  function sourceSockets(info){
+  // A 90-degree corner exposes two genuine arm-end sockets. Its AABB
+  // extrema describe a phantom diagonal and must not be used for arcs.
+  if(info.sockets?.length)return info.sockets.map(x=>({...x,point:x.point.clone(),out:x.out.clone()}));
   const local=localSockets(info.root,info.entry.kind);
   if(local)return local.map(s=>({name:s.name,point:localToWorld(info.root,s.point),out:direction(info.root,s.out),curved:true}));
   return [{name:'a',point:info.a.clone(),out:info.dir.clone().negate(),curved:false},
@@ -74,6 +77,13 @@ const BuildCurves=(()=>{
  function incomingSockets(w,box){
   const root=w.ghost||w.assetCache?.get(w.placement)||w.makeBuiltin?.(w.placement);
   if(!root)return null;
+  const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
+  if(cat==='corner'&&typeof BuildJoin!=='undefined'){
+   const arms=BuildJoin.cornerArms(root,w.placement,cat);
+   if(arms)return arms.map(x=>({name:x.name,point:x.tip.clone(),
+    out:x.tip.clone().sub(x.pivot).setY(0).normalize()}));
+   return null; // Unknown L-shaped GLB: do not guess endpoints.
+  }
   const curve=localSockets(root,w.placement);
   if(curve)return curve;
   // Standard walls and doors retain their real bounding-box end sockets.
