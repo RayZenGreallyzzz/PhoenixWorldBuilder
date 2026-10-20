@@ -150,11 +150,11 @@ body.playbuilding #gameBuildHud button{touch-action:manipulation}body.playbuildi
 /* Drone placement camera floats independently of the walking avatar. */
 #gameBuildHud #btnDroneToggle{border-color:#72b9e5;background:#274e69;text-align:center;min-height:36px;font-weight:650}
 body.droneOn #gameBuildHud #btnDroneToggle{background:#246a74;border-color:#87eed7}
-#droneControls{position:absolute;z-index:4;top:72px;right:10px;display:flex;flex-direction:column;gap:5px;width:min(248px,32vw);padding:7px;background:#112c3bea;border:1px solid #4d8a9b;border-radius:11px;box-shadow:0 4px 17px #0008}
+#droneControls{position:absolute;z-index:4;top:72px;right:clamp(220px,26vw,310px);display:flex;flex-direction:column;gap:5px;width:min(248px,32vw);padding:7px;background:#112c3bea;border:1px solid #4d8a9b;border-radius:11px;box-shadow:0 4px 17px #0008}
 #droneControls .droneBar{display:flex;gap:5px}
 #droneControls button{flex:1;min-width:0;min-height:35px;padding:6px 3px;border-radius:7px;font-size:11px;white-space:nowrap;touch-action:manipulation}
 #droneControls small{color:#b6e2df;font-size:10px;line-height:1.35;text-align:center}
 body.droneOn #joystick{border-color:#77e9d5;background:#3c96915c}
-@media(max-width:840px){#droneControls{top:58px;right:5px;width:min(224px,32vw);padding:5px}#droneControls button{min-height:32px;font-size:10px;padding:5px 2px}#droneControls small{font-size:9px}}
+@media(max-width:840px){#droneControls{top:58px;right:clamp(194px,29vw,235px);width:min(224px,32vw);padding:5px}#droneControls button{min-height:32px;font-size:10px;padding:5px 2px}#droneControls small{font-size:9px}}
 @media(max-height:510px){#droneControls{top:48px}#droneControls small{display:none}}
 body.droneOn .rightTools{display:none}
