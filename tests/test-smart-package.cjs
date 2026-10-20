@@ -60,4 +60,18 @@ assert.equal(ruMetadata.models[0].category,'wall',
  'The optional ZIP metadata may also use Russian category names');
 assert.equal(SmartPackage.normalizeCategory('Полы','001.glb'),'foundation');
 assert.equal(SmartPackage.normalizeCategory('Углы','001.glb'),'corner');
+// Screenshot/video showed an actual Android SD-card layout. Its top-level
+// folder "textures" must not override deeper "картины габилены" / "Декали".
+const actual=SmartPackage.analyze([
+ 'All_Building_Libraries_GLB_RU/textures/МоиТекстуры/плитка/Камень_001.jpg',
+ 'All_Building_Libraries_GLB_RU/textures/МоиТекстуры/Декали/Золотой_герб.png',
+ 'All_Building_Libraries_GLB_RU/textures/МоиТекстуры/картины габилены/Король.png',
+ 'All_Building_Libraries_GLB_RU/textures/МоиТекстуры/габилены/Знамя.jpg',
+ 'All_Building_Libraries_GLB_RU/XQCQ_255/Стена_угловая_90.glb'
+]);
+assert.equal(actual.textures.length,1,'Tile stays repeatable');
+assert.equal(actual.pictures.length,3,'Decals, pictures and user's variant габилены stay one-off artwork');
+assert.equal(actual.models.length,1);
+assert.equal(actual.models[0].category,'corner');
+assert.equal(SmartPackage.kind('габилены/Геральдика.png'),'painting');
 console.log('Automatic ZIP roles, metadata, nested paths and conservative model materials OK');
