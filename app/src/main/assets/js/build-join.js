@@ -34,14 +34,18 @@ const BuildJoin=(()=>{
   });
   if(!corners.length)return null;
   const xChoices=[local.min.x,local.max.x].map(value=>{
-   const transverse=corners.filter(pt=>abs(pt[0]-value)<=eps).map(pt=>pt[1]);
-   const min=Math.min(...transverse),max=Math.max(...transverse);
-   return {value,span:max-min,center:(max+min)/2,count:transverse.length};
+   let min=Infinity,max=-Infinity,count=0;
+   for(const pt of corners)if(abs(pt[0]-value)<=eps){
+    min=Math.min(min,pt[1]);max=Math.max(max,pt[1]);count++;
+   }
+   return {value,span:max-min,center:(max+min)/2,count};
   }).filter(a=>a.count>=2&&Number.isFinite(a.span));
   const zChoices=[local.min.z,local.max.z].map(value=>{
-   const transverse=corners.filter(pt=>abs(pt[1]-value)<=eps).map(pt=>pt[0]);
-   const min=Math.min(...transverse),max=Math.max(...transverse);
-   return {value,span:max-min,center:(max+min)/2,count:transverse.length};
+   let min=Infinity,max=-Infinity,count=0;
+   for(const pt of corners)if(abs(pt[1]-value)<=eps){
+    min=Math.min(min,pt[0]);max=Math.max(max,pt[0]);count++;
+   }
+   return {value,span:max-min,center:(max+min)/2,count};
   }).filter(a=>a.count>=2&&Number.isFinite(a.span));
   xChoices.sort((a,b)=>a.span-b.span);zChoices.sort((a,b)=>a.span-b.span);
   const xt=xChoices[0],zt=zChoices[0];
@@ -67,7 +71,7 @@ const BuildJoin=(()=>{
   if(cornerCache.has(root))return cornerCache.get(root)||null;
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert(),transform=new THREE.Matrix4();
-  const arms=[],box=new THREE.Box3(),worldBox=new THREE.Box3();
+  const arms=[],box=new THREE.Box3();
   root.traverse(mesh=>{
    if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
    if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();
