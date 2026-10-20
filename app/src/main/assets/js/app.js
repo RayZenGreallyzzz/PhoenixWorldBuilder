@@ -448,7 +448,7 @@ function updateStyle(key,value){
 }
 function applyEntry(e){const color=e.data.color?new THREE.Color(e.data.color):null;e.mesh.traverse(o=>{if(!o.isMesh)return;for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(m.color&&color&&!(e.kind==='window'&&m.transparent))m.color.copy(color);if(m.roughness!==undefined)m.roughness=e.data.roughness??.8;if(m.metalness!==undefined)m.metalness=e.data.metalness??0;if(e.data.texture&&w.textures.get(e.data.texture)){m.map=w.textures.get(e.data.texture);m.needsUpdate=true}}});}
 function syncDroneUI(){
- const enabled=w.mode==='playbuild'&&w.droneMode;
+ const enabled=(w.mode==='playbuild'||w.mode==='build')&&w.droneMode;
  document.body.classList.toggle('droneOn',enabled);
  $('droneControls').classList.toggle('hidden',!enabled);
  $('btnDroneToggle').textContent=enabled?'🛸 Дрон: вкл.':'🛸 Дрон: выкл.';
@@ -471,6 +471,7 @@ function wireButtons(){
   toast(result?'Режим дрона: вращай одним пальцем, двигай камеру джойстиком, ставь деталь по ✔':'Камера за персонажем');
  };
  $('btnDroneToggle').onclick=()=>toggleDrone(!w.droneMode);
+ $('btnDroneEditor').onclick=()=>toggleDrone(!w.droneMode);
  $('btnDroneExit').onclick=()=>toggleDrone(false);
  $('btnDroneTop').onclick=()=>w.setDroneView('top');
  $('btnDroneAngle').onclick=()=>w.setDroneView('angled');
@@ -820,19 +821,19 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   if(w.mode==='terrain'){let pos=w.hit(e.clientX,e.clientY);if(pos){w.remember();w.sculpt(pos.x,pos.z,1);strokePrepared=true;}}
  }});
  canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const old=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){const arr=[...pointers.values()];const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y);if(lastTouch)w.distance=THREE.MathUtils.clamp(w.distance*lastTouch/d,2,85);
-   if(w.mode==='playbuild'&&w.droneMode)w.panDrone((e.clientX-old.x)/2,(e.clientY-old.y)/2);
+   if((w.mode==='playbuild'||w.mode==='build')&&w.droneMode)w.panDrone((e.clientX-old.x)/2,(e.clientY-old.y)/2);
    lastTouch=d;return;}lastTouch=null;
   if(!down)return;let dx=e.clientX-down.px,dy=e.clientY-down.py;down.px=e.clientX;down.py=e.clientY;
   if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>7)down.drag=true;
   if(w.mode==='terrain'){const p=w.hit(e.clientX,e.clientY);if(p&&performance.now()-brushLast>32){if(!strokePrepared){w.remember();strokePrepared=true;}w.sculpt(p.x,p.z,.8);brushLast=performance.now()}return;}
-  if((w.mode==='build'||w.mode==='style')&&(w.placement||w.moveTarget)){const p=w.hit(e.clientX,e.clientY);if(p)w.updateGhost(p);return;}
+  if((w.mode==='build'||w.mode==='style')&&(w.placement||w.moveTarget)&&!w.droneMode){const p=w.hit(e.clientX,e.clientY);if(p)w.updateGhost(p);return;}
   if(down.drag){
-   if(w.mode==='playbuild'&&w.droneMode&&e.shiftKey)w.panDrone(dx,dy);
+   if(w.droneMode&&e.shiftKey)w.panDrone(dx,dy);
    else{
     w.yaw+=(w.invertCameraX?1:-1)*dx*.006;
     w.pitch=THREE.MathUtils.clamp(w.pitch+dy*.005,
-     (w.mode==='playbuild'&&w.droneMode)? .12 : ((w.mode==='playbuild'||w.mode==='walk')?-.65:.12),
-     w.mode==='playbuild'&&w.droneMode?1.535:1.32);
+     (w.droneMode)? .12 : ((w.mode==='playbuild'||w.mode==='walk')?-.65:.12),
+     w.droneMode?1.535:1.32);
    }
   }
  });
@@ -854,6 +855,7 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   }
   if((w.mode==='walk'||w.mode==='playbuild')&&dist<12){const id=w.hit(e.clientX,e.clientY,true),entry=w.objects.find(x=>x.data.id===id);if(entry&&entry.data.door&&entry.mesh.position.distanceTo(w.player.position)<5){w.toggleDoor(entry);toast(entry.data.open?'Дверь открыта':'Дверь закрыта')}down=null;return;}
   if(w.mode==='build'||w.mode==='style'){
+   if(w.droneMode&&dist>=12){down=null;return;}
    if(w.placement||w.moveTarget){const p=w.hit(e.clientX,e.clientY);if(p){const placed=w.placeAt(p);if(placed!==null)saveSoon();else toast(w.lastSnapResult?.reason||'Здесь установить нельзя')}}
    else if(dist<12){let id=w.hit(e.clientX,e.clientY,true);w.select(w.objects.find(x=>x.data.id===id)||null);if(id)toast('Деталь выделена')}
   }down=null;});
