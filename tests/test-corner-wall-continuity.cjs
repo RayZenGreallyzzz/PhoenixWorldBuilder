@@ -54,6 +54,37 @@ for(const yaw of [0,90,180,270]){
   }
  }
 }
+// Building a new corner after a straight wall must attach one of the
+// corner's FAR caps to the old wall. Previously the L pivot was placed on
+// the old cap and nearly 2m of the corner overlapped the straight panel.
+for(const yaw of [0,90,180,270])for(const story of [0,1]){
+ const w=fresh();w.floorLevel=story;
+ const start=w.instantiate('wall',{id:60,pos:[0,story*2.6,0],rot:yaw,scale:1,category:'wall',storey:story});
+ const source=BuildJoin.wallInfo(w,start);
+ const click=source.c.clone().add(source.dir.clone().multiplyScalar(1.1));
+ w.setPlacement('corner','corner');
+ const solved=w.solvePlacement(click);
+ assert(solved.corner&&solved.snapped,'Corner must connect to straight wall at real arm end');
+ assert.equal(solved.reference,60);
+ w.applyGhostPlacement(click);
+ const cornerInfo=BuildJoin.wallInfo(w,{kind:'corner',data:{category:'corner',storey:story},mesh:w.ghost});
+ const gap=Math.min(...cornerInfo.sockets.map(s=>dist(s.point,source.c)));
+ assert(gap<.025,'New L arm tip joins old wall cap, not central pivot. Angle '+yaw+' floor '+story+' gap '+gap);
+ assert(Math.hypot(solved.position.x-source.c.x,solved.position.z-source.c.z)>1.8,
+  'The corner pivot must not be incorrectly placed over the old wall end');
+ const entry=w.placeAt(click);
+ assert(entry,'Corner must be placeable without overlapping existing straight wall');
+ const free=BuildJoin.wallInfo(w,entry).sockets.filter(s=>dist(s.point,source.c)>.1);
+ assert.equal(free.length,1,'One L arm is still available for the next wall');
+ w.setPlacement('wall','wall');
+ const target=free[0].point.clone().add(free[0].out.clone().multiplyScalar(1));
+ const next=w.solvePlacement(target);
+ assert(next.wallEnd&&next.reference===entry.data.id,'Next straight wall joins the other L cap');
+ w.applyGhostPlacement(target);
+ const info=BuildJoin.wallInfo(w,{kind:'wall',data:{},mesh:w.ghost});
+ assert(Math.min(dist(info.a,free[0].point),dist(info.c,free[0].point))<.025,
+  'Straight → corner → straight joint remains continuous on active story');
+}
 // Same corner sockets can be recovered from a pivot-shifted custom GLB
 // whose L arms are separate geometry parts, even when the GLB is rotated.
 {
