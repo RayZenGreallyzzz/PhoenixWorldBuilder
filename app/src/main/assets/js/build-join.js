@@ -12,6 +12,50 @@ const BuildJoin=(()=>{
  };
  const angle=(a,b)=>Math.atan2(-(b.z-a.z),b.x-a.x);
  const rotate=(v,yaw)=>new THREE.Vector3(v.x*Math.cos(yaw)+v.z*Math.sin(yaw),0,-v.x*Math.sin(yaw)+v.z*Math.cos(yaw));
+ const cornerCache=new WeakMap();
+ // Some GLBs merge both L arms into ONE geometry. Infer only unmistakable
+ // thin exposed end caps from the mesh silhouette, not the outer AABB.
+ function mergedCornerArms(root){
+  const local=BuildSnap.attrBounds(root);
+  if(local.isEmpty())return null;
+  const sx=local.max.x-local.min.x,sz=local.max.z-local.min.z;
+  if(sx<.8||sz<.8)return null;
+  const eps=Math.max(.018,Math.min(.085,Math.min(sx,sz)*.025));
+  const inverse=root.matrixWorld.clone().invert(),transform=new THREE.Matrix4();
+  const point=new THREE.Vector3(),corners=[];
+  root.traverse(mesh=>{
+   const attr=mesh.isMesh&&mesh.geometry?.attributes?.position;
+   if(!attr||attr.count>120000)return;
+   transform.multiplyMatrices(inverse,mesh.matrixWorld);
+   for(let i=0;i<attr.count;i++){
+    point.set(attr.getX(i),attr.getY(i),attr.getZ(i)).applyMatrix4(transform);
+    corners.push([point.x,point.z]);
+   }
+  });
+  if(!corners.length)return null;
+  const xChoices=[local.min.x,local.max.x].map(value=>{
+   const transverse=corners.filter(pt=>abs(pt[0]-value)<=eps).map(pt=>pt[1]);
+   const min=Math.min(...transverse),max=Math.max(...transverse);
+   return {value,span:max-min,center:(max+min)/2,count:transverse.length};
+  }).filter(a=>a.count>=2&&Number.isFinite(a.span));
+  const zChoices=[local.min.z,local.max.z].map(value=>{
+   const transverse=corners.filter(pt=>abs(pt[1]-value)<=eps).map(pt=>pt[0]);
+   const min=Math.min(...transverse),max=Math.max(...transverse);
+   return {value,span:max-min,center:(max+min)/2,count:transverse.length};
+  }).filter(a=>a.count>=2&&Number.isFinite(a.span));
+  xChoices.sort((a,b)=>a.span-b.span);zChoices.sort((a,b)=>a.span-b.span);
+  const xt=xChoices[0],zt=zChoices[0];
+  const maxThin=Math.min(.55,Math.min(sx,sz)*.27);
+  if(!xt||!zt||xt.span>maxThin||zt.span>maxThin)return null;
+  const ix=zt.center,iz=xt.center;
+  if(abs(xt.value-ix)<.5||abs(zt.value-iz)<.5)return null;
+  if(!corners.some(pt=>Math.hypot(pt[0]-ix,pt[1]-iz)<=Math.max(.34,maxThin*1.5)))return null;
+  const y=local.min.y;
+  return [
+   {name:'corner-x',tip:new THREE.Vector3(xt.value,y,iz),pivot:new THREE.Vector3(ix,y,iz)},
+   {name:'corner-z',tip:new THREE.Vector3(ix,y,zt.value),pivot:new THREE.Vector3(ix,y,iz)}
+  ];
+ }
 
  // A corner is an L made of two perpendicular panels, not a straight wall.
  // Identify its ACTUAL exposed cap centre-lines from the child meshes.
@@ -20,6 +64,7 @@ const BuildJoin=(()=>{
  // from corner-end snapping instead of inventing a socket on the AABB diagonal.
  function cornerArms(root,kind,category){
   if(category!=='corner'&&kind!=='corner')return null;
+  if(cornerCache.has(root))return cornerCache.get(root)||null;
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert(),transform=new THREE.Matrix4();
   const arms=[],box=new THREE.Box3(),worldBox=new THREE.Box3();
@@ -47,7 +92,11 @@ const BuildJoin=(()=>{
    const score=x.length+z.length-nearX-nearZ;
    if(!best||score>best.score)best={x,z,ix,iz,score};
   }
-  if(!best)return null;
+  if(!best){
+   const joined=mergedCornerArms(root);
+   cornerCache.set(root,joined||false);
+   return joined;
+  }
   const {x,z,ix,iz}=best;
   const minY=Math.min(x.box.min.y,z.box.min.y);
   const xEnd=Math.abs(x.box.min.x-ix)>Math.abs(x.box.max.x-ix)?x.box.min.x:x.box.max.x;
@@ -56,7 +105,10 @@ const BuildJoin=(()=>{
    {name:'corner-x',tip:new THREE.Vector3(xEnd,minY,iz),pivot:new THREE.Vector3(ix,minY,iz)},
    {name:'corner-z',tip:new THREE.Vector3(ix,minY,zEnd),pivot:new THREE.Vector3(ix,minY,iz)}
   ];
-  if(local.some(a=>distXZ(a.tip,a.pivot)<.35))return null;
+  if(local.some(a=>distXZ(a.tip,a.pivot)<.35)){
+   cornerCache.set(root,false);return null;
+  }
+  cornerCache.set(root,local);
   return local;
  }
  function cornerSegments(root,kind,category){
