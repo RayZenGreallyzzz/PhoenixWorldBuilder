@@ -48,9 +48,22 @@ w.droneMode=true;w.grid={visible:true};w.highlight={visible:false};w.selected=nu
 w.setMode('build');
 assert.equal(w.droneMode,false,'Leaving game build must restore normal camera');
 assert.equal(w.player.visible,false,'Avatar hidden in desktop editor');
+// The original overhead editor also needs drone orbit, not only playbuild.
+const editorFocus=w.target.clone(),editorYaw=w.yaw;
+assert.equal(w.setDroneMode(true),true,'Free camera works in overhead editor');
+assert(Math.abs(w.target.x-editorFocus.x)<1e-9&&Math.abs(w.target.z-editorFocus.z)<1e-9,
+ 'Editor drone keeps focus on current building rather than jumping to the avatar');
+w.keys={KeyW:true};w.joy={x:0,y:0};
+w.updatePlayer(.3);
+assert(w.target.distanceTo(editorFocus)>.5,'Keyboard pans overhead camera');
+assert.deepEqual(w.player.position.toArray(),avatar.toArray(),'Editor camera does not affect avatar');
+w.keys={};
+assert.equal(w.setDroneMode(false),false);
+assert.equal(w.yaw,editorYaw,'Exiting editor drone restores camera orbit');
+assert.equal(w.player.visible,false);
 const html=fs.readFileSync(path.join(dir,'../index.html'),'utf8');
 const app=fs.readFileSync(path.join(dir,'app.js'),'utf8');
-for(const id of ['btnDroneToggle','btnDroneTop','btnDroneAngle','btnDroneZoomIn','btnDroneZoomOut','btnDroneCenter','btnDroneExit'])
+for(const id of ['btnDroneToggle','btnDroneTop','btnDroneAngle','btnDroneZoomIn','btnDroneZoomOut','btnDroneCenter','btnDroneExit','btnDroneEditor'])
  assert(html.includes('id="'+id+'"'),'Missing drone camera UI control '+id);
 for(const needle of ["w.panDrone((e.clientX-old.x)/2","if(w.mode==='playbuild'&&w.droneMode){","w.forwardPlacementPoint()","w.setDroneMode(enabled)"])
  assert(app.includes(needle),'Drone touch/placement wiring missing: '+needle);
