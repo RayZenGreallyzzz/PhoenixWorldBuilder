@@ -11,6 +11,10 @@ Object.assign(w,{scene:new THREE.Scene(),objects:[],assetCache:new Map(),texture
 w.heightAt=()=>0;w.onSelected=()=>{};w.onSnapChanged=()=>{};w.onChanged=()=>{};
 w.updateGameGhost=()=>{};w.highlight={setFromObject(){},visible:false};
 w.categoryForKind=k=>k==='floor'?'foundation':k;
+const terrainGeo=new THREE.BufferGeometry();
+terrainGeo.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,0,0,0],3));
+terrainGeo.setAttribute('color',new THREE.Float32BufferAttribute([1,1,1,1,1,1],3));
+w.terrain={geometry:terrainGeo};
 const tex=new THREE.DataTexture(new Uint8Array(4*4*4).fill(255),4,4,THREE.RGBAFormat);
 w.textures.set('tex:ornament',tex);
 const item=w.instantiate('floor',{id:1,pos:[3,0,6],rot:0,scale:1,
