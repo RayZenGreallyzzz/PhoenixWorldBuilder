@@ -37,7 +37,7 @@ const ZipUtils=(()=>{
    if(pos+46+nameLen+extraLen+commentLen>bytes.length)throw Error('Повреждено имя файла ZIP');
    const name=dec.decode(bytes.subarray(pos+46,pos+46+nameLen));
    pos+=46+nameLen+extraLen+commentLen;
-   if(name.endsWith('/')||!/.(glb|png|jpg|jpeg|webp|json)$/i.test(name))continue;
+   if(name.endsWith('/')||!/\.(glb|png|jpg|jpeg|webp|json)$/i.test(name))continue;
    if(flags&1)throw Error('ZIP защищён паролем');
    if(name.split(/[\\/]/).includes('..'))throw Error('Небезопасный путь внутри ZIP');
    if(local+30>bytes.length||v.getUint32(local,true)!==0x04034b50)throw Error('Повреждён заголовок ZIP');
