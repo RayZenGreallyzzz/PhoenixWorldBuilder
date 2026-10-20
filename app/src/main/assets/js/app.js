@@ -296,7 +296,10 @@ function setSurfaceScope(face){
 function changeSurfaceMode(mode){
  surfaceMode=SurfacePaint.modes.includes(mode)?mode:'repeat';
  if(surfaceMode==='joined'){
-  surfaceScope='top';updateSurfaceUI();
+  surfaceScope='top';
+  for(const id of ['surfaceScope','gameSurfaceScope'])$(id).value='top';
+  for(const id of ['surfaceMode','gameSurfaceMode'])$(id).value='joined';
+  for(const id of ['surfaceTileMeters','gameSurfaceTileMeters'])$(id).disabled=true;
   toast('Выдели плиту и выбери изображение: оно ляжет на весь соединённый пол');
   return;
  }
