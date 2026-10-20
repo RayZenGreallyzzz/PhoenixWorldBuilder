@@ -142,6 +142,29 @@ for(const yaw of [0,90,180,270])for(const story of [0,1]){
  const arcSockets=BuildCurves.sourceSockets(newInfo);
  assert(arcSockets.some(s=>dist(s.point,socket.point)<.025),'Physical L-to-arc end caps coincide');
 }
+// A real imported L may contain only one merged indexed mesh. Detect
+// its thin exposed end caps without assuming a two-mesh scene hierarchy.
+{
+ const w=fresh(),x=new THREE.BoxGeometry(2,2.6,.22),z=new THREE.BoxGeometry(.22,2.6,2);
+ x.translate(-.9,1.3,0);z.translate(0,1.3,-.9);
+ const combined=new THREE.BufferGeometry();
+ const xyz=[...x.attributes.position.array,...z.attributes.position.array];
+ combined.setAttribute('position',new THREE.Float32BufferAttribute(xyz,3));
+ const root=new THREE.Group();root.add(new THREE.Mesh(combined,new THREE.MeshStandardMaterial()));
+ w.assetCache.set('glb:L_corner',root);
+ const entry=instance(w,'glb:L_corner',42,[10,0,4],135,0);
+ const info=BuildJoin.wallInfo(w,entry);
+ assert.equal(info.segments?.length,2,'Merged one-mesh L has two real physical arm tips');
+ for(const arm of info.segments){
+  w.setPlacement('wall','wall');
+  const dest=outgoingTip(arm),s=w.solvePlacement(dest);
+  assert(s.wallEnd&&s.reference===42,'Merged GLB corner must accept straight wall at both exposed caps');
+  w.applyGhostPlacement(dest);
+  const next=BuildJoin.wallInfo(w,{kind:'wall',mesh:w.ghost,data:{}});
+  assert(Math.min(dist(next.a,arm.a),dist(next.c,arm.a))<.025,
+   'Merged GLB wall cap touches straight wall without inward/outward shift');
+ }
+}
 // Non-L shapes that merely have the category "corner" must not be
 // promoted to imaginary rectangular sockets.
 {
