@@ -13,6 +13,10 @@ world.onChanged=()=>{};world.onSelected=()=>{};world.highlight={setFromObject(){
 world.categoryForKind=kind=>kind==='wall'?'wall':'prop';
 const wall=(id,x,z=0,rot=0)=>world.instantiate('wall',{
  id,pos:[x,0,z],rot,scale:1,category:'wall',storey:0});
+const terrain=new THREE.BufferGeometry();
+terrain.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0],3));
+terrain.setAttribute('color',new THREE.Float32BufferAttribute([1,1,1],3));
+world.terrain={geometry:terrain};
 const first=wall(1,0),middle=wall(2,2),last=wall(3,4);
 const separate=wall(4,11),perp=wall(5,6,0,90);
 const result=MuralLayout.collect(world,first,'front');
