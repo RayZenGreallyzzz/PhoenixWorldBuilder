@@ -13,7 +13,10 @@ const DecalLayer=(()=>{
    size:clamp(Number(d.size)||.65,.05,2),
    rotation:clamp(Number(d.rotation)||0,-360,360),
    opacity:clamp(d.opacity===undefined?1:Number(d.opacity),0,1),
-   fit:d.fit==='fill'?'fill':'contain'
+   fit:d.fit==='fill'?'fill':'contain',
+   muralId:typeof d.muralId==='string'?d.muralId:null,
+   crop:Array.isArray(d.crop)&&d.crop.length===4&&d.crop.every(n=>Number.isFinite(Number(n)))?
+    d.crop.map(n=>clamp(Number(n),0,1)):[0,0,1,1]
   }));
  }
  function faceGeometry(root,face){
@@ -53,7 +56,7 @@ const DecalLayer=(()=>{
    'uniform vec3 pwbDecalU'+i+';','uniform vec3 pwbDecalV'+i+';',
    'uniform vec3 pwbDecalN'+i+';','uniform vec2 pwbDecalExtent'+i+';',
    'uniform vec2 pwbDecalAt'+i+';','uniform vec2 pwbDecalSize'+i+';',
-   'uniform vec2 pwbDecalRot'+i+';'].join('\n');
+   'uniform vec2 pwbDecalRot'+i+';','uniform vec4 pwbDecalCrop'+i+';'].join('\n');
  }
  function fragment(i){
   return [
@@ -63,7 +66,8 @@ const DecalLayer=(()=>{
    ' vec2 q=(uv-pwbDecalAt'+i+')/pwbDecalSize'+i+';',
    ' vec2 stamp=vec2(q.x*pwbDecalRot'+i+'.x+q.y*pwbDecalRot'+i+'.y,-q.x*pwbDecalRot'+i+'.y+q.y*pwbDecalRot'+i+'.x)+0.5;',
    ' if(stamp.x>=0.0&&stamp.x<=1.0&&stamp.y>=0.0&&stamp.y<=1.0){',
-   '  vec4 pixel=texture2D(pwbDecalMap'+i+',stamp);',
+   '  vec2 sampleUV=mix(pwbDecalCrop'+i+'.xy,pwbDecalCrop'+i+'.zw,stamp);',
+   '  vec4 pixel=texture2D(pwbDecalMap'+i+',sampleUV);',
    '  diffuseColor.rgb=mix(diffuseColor.rgb,pow(pixel.rgb,vec3(2.2)),clamp(pixel.a*pwbDecalOpacity'+i+',0.0,1.0));',
    ' }','}'
   ].join('\n');
@@ -101,6 +105,7 @@ const DecalLayer=(()=>{
      uniforms['pwbDecalAt'+i]={value:face?.at||new THREE.Vector2(.5,.5)};
      uniforms['pwbDecalSize'+i]={value:face?.size||new THREE.Vector2(1,1)};
      uniforms['pwbDecalRot'+i]={value:face?new THREE.Vector2(Math.cos(face.angle),Math.sin(face.angle)):new THREE.Vector2(1,0)};
+     uniforms['pwbDecalCrop'+i]={value:new THREE.Vector4(...(item?.d.crop||[0,0,1,1]))};
     }
     material.onBeforeCompile=shader=>{
      if(before)before(shader);
