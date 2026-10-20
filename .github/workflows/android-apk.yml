@@ -66,6 +66,7 @@ jobs:
           node tests/test-storey-quick-select.cjs
           node tests/test-joints-thickness.cjs
           node tests/test-surface-paint.cjs
+          node tests/test-surface-mapping.cjs
           node tests/test-save-recovery.cjs
           node tests/test-placement-validation.cjs
           node tests/test-wall-end-manual.cjs
