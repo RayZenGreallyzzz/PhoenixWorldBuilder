@@ -388,7 +388,10 @@ function setupPicker(){
   // In construction walk mode keep the character and preview where they are;
   // in overhead build mode bring the camera to the chosen storey.
   if(w.mode==='walk')setMode('build');
-  if(w.mode!=='playbuild')w.focusBuildFloor();
+  if(w.mode==='playbuild'&&w.droneMode){
+   w.target.y=w.placementHeight(w.target.x,w.target.z,'wall','wall')+.6;
+   w.updateCamera();w.updateGameGhost();
+  }else if(w.mode!=='playbuild')w.focusBuildFloor();
   const point=w.mode==='playbuild'?w.forwardPlacementPoint():w.target;
   const datum=w.floorDatumAt(point.x,point.z,w.placementCategory);
   toast('Этаж '+selected+' · основание '+datum.height.toFixed(2)+' м'+
@@ -444,6 +447,13 @@ function updateStyle(key,value){
  w.remember();e.data[key]=value;applyEntry(e);w.onChanged();
 }
 function applyEntry(e){const color=e.data.color?new THREE.Color(e.data.color):null;e.mesh.traverse(o=>{if(!o.isMesh)return;for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(m.color&&color&&!(e.kind==='window'&&m.transparent))m.color.copy(color);if(m.roughness!==undefined)m.roughness=e.data.roughness??.8;if(m.metalness!==undefined)m.metalness=e.data.metalness??0;if(e.data.texture&&w.textures.get(e.data.texture)){m.map=w.textures.get(e.data.texture);m.needsUpdate=true}}});}
+function syncDroneUI(){
+ const enabled=w.mode==='playbuild'&&w.droneMode;
+ document.body.classList.toggle('droneOn',enabled);
+ $('droneControls').classList.toggle('hidden',!enabled);
+ $('btnDroneToggle').textContent=enabled?'🛸 Дрон: вкл.':'🛸 Дрон: выкл.';
+ $('btnDroneToggle').setAttribute('aria-pressed',String(enabled));
+}
 function setMode(mode){w.setMode(mode);const game=mode==='walk'||mode==='playbuild';
  $all('.tab').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
  for(const m of ['build','terrain','style','walk'])$(m+'Panel').classList.toggle('hidden',mode==='playbuild'?m!=='build':mode!==m);
@@ -451,9 +461,22 @@ function setMode(mode){w.setMode(mode);const game=mode==='walk'||mode==='playbui
  $('joystick').classList.toggle('hidden',!game);$('walkHint').classList.toggle('hidden',mode!=='walk');$('actionbar').classList.toggle('hidden',mode==='terrain'||game);
  $('gameBuildHud').classList.toggle('hidden',mode!=='playbuild');$('btnBackEditor').classList.toggle('hidden',mode!=='walk');
  $('btnGameBuild').textContent=mode==='playbuild'?'🏗️ Строим':'🎮 Строить в игре';
+ syncDroneUI();
  }
 function wireButtons(){
  $('btnGameBuild').onclick=()=>setMode('playbuild');
+ const toggleDrone=enabled=>{
+  const result=w.setDroneMode(enabled);
+  syncDroneUI();
+  toast(result?'Режим дрона: вращай одним пальцем, двигай камеру джойстиком, ставь деталь по ✔':'Камера за персонажем');
+ };
+ $('btnDroneToggle').onclick=()=>toggleDrone(!w.droneMode);
+ $('btnDroneExit').onclick=()=>toggleDrone(false);
+ $('btnDroneTop').onclick=()=>w.setDroneView('top');
+ $('btnDroneAngle').onclick=()=>w.setDroneView('angled');
+ $('btnDroneZoomIn').onclick=()=>{w.distance=THREE.MathUtils.clamp(w.distance*.8,3,90);w.updateCamera()};
+ $('btnDroneZoomOut').onclick=()=>{w.distance=THREE.MathUtils.clamp(w.distance*1.25,3,90);w.updateCamera()};
+ $('btnDroneCenter').onclick=()=>w.centerDrone();
  $('btnBuildCatalog').onclick=()=>{document.body.classList.toggle('catalogOpen');if(document.body.classList.contains('catalogOpen'))renderLibrary()};
  $('btnGameTextureGallery').onclick=()=>{
   catalogMode='textures';catalogPage=0;
@@ -792,25 +815,49 @@ async function exportPack(){try{toast('Создаю пакет карты…');c
   images:Object.entries(manifest).filter(([path])=>/\.(png|jpe?g|webp)$/i.test(path)).map(([path,id])=>({path,role:textureMeta.get(id)?.role||(id.startsWith('emblem:')?'painting':'texture')}))});let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
 async function exportHouse(){try{toast('Собираю дом без земли и персонажа…');const blob=await SceneExporter.build(w,{houseOnly:true});await saveToDevice('phoenix_house.glb',blob)}catch(e){toast('Ошибка экспорта дома: '+e.message);console.error(e)}}
 async function exportGlb(){try{toast('Экспорт 3D-карты…');const blob=await SceneExporter.build(w);await saveToDevice('phoenix_map.glb',blob)}catch(e){toast('Ошибка GLB: '+e.message);console.error(e)}}
-function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared=false;
- canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){down={x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,drag:false};strokePrepared=false;
+function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared=false,multitouch=false;
+ canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size>1)multitouch=true;if(pointers.size===1){down={x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,drag:false};strokePrepared=false;
   if(w.mode==='terrain'){let pos=w.hit(e.clientX,e.clientY);if(pos){w.remember();w.sculpt(pos.x,pos.z,1);strokePrepared=true;}}
  }});
- canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const old=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){const arr=[...pointers.values()];const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y);if(lastTouch)w.distance=THREE.MathUtils.clamp(w.distance*lastTouch/d,2,85);lastTouch=d;return;}lastTouch=null;
+ canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const old=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){const arr=[...pointers.values()];const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y);if(lastTouch)w.distance=THREE.MathUtils.clamp(w.distance*lastTouch/d,2,85);
+   if(w.mode==='playbuild'&&w.droneMode)w.panDrone((e.clientX-old.x)/2,(e.clientY-old.y)/2);
+   lastTouch=d;return;}lastTouch=null;
   if(!down)return;let dx=e.clientX-down.px,dy=e.clientY-down.py;down.px=e.clientX;down.py=e.clientY;
   if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>7)down.drag=true;
   if(w.mode==='terrain'){const p=w.hit(e.clientX,e.clientY);if(p&&performance.now()-brushLast>32){if(!strokePrepared){w.remember();strokePrepared=true;}w.sculpt(p.x,p.z,.8);brushLast=performance.now()}return;}
   if((w.mode==='build'||w.mode==='style')&&(w.placement||w.moveTarget)){const p=w.hit(e.clientX,e.clientY);if(p)w.updateGhost(p);return;}
-  if(down.drag){w.yaw+=(w.invertCameraX?1:-1)*dx*.006;w.pitch=THREE.MathUtils.clamp(w.pitch+dy*.005,(w.mode==='playbuild'||w.mode==='walk')?-.65:.12,1.32);}
+  if(down.drag){
+   if(w.mode==='playbuild'&&w.droneMode&&e.shiftKey)w.panDrone(dx,dy);
+   else{
+    w.yaw+=(w.invertCameraX?1:-1)*dx*.006;
+    w.pitch=THREE.MathUtils.clamp(w.pitch+dy*.005,
+     w.mode==='playbuild'&&w.droneMode?.12:(w.mode==='playbuild'||w.mode==='walk')?-.65:.12,
+     w.mode==='playbuild'&&w.droneMode?1.535:1.32);
+   }
+  }
  });
  canvas.addEventListener('pointerup',e=>{const point=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(pointers.size!==0){lastTouch=null;return;}lastTouch=null;if(!down)return;
-  const dist=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(w.mode==='terrain'){down=null;saveSoon();return;}
+  const dist=Math.hypot(e.clientX-down.x,e.clientY-down.y);
+  if(multitouch){multitouch=false;down=null;return;}
+  if(w.mode==='terrain'){down=null;saveSoon();return;}
+  if(w.mode==='playbuild'&&w.droneMode){
+   if(dist<12){
+    const hit=w.hit(e.clientX,e.clientY);
+    if(hit){
+     w.target.x=THREE.MathUtils.clamp(hit.x,-62,62);
+     w.target.z=THREE.MathUtils.clamp(hit.z,-62,62);
+     w.target.y=w.placementHeight(w.target.x,w.target.z,'wall','wall')+.6;
+     w.updateCamera();w.updateGameGhost();
+    }
+   }
+   down=null;return;
+  }
   if((w.mode==='walk'||w.mode==='playbuild')&&dist<12){const id=w.hit(e.clientX,e.clientY,true),entry=w.objects.find(x=>x.data.id===id);if(entry&&entry.data.door&&entry.mesh.position.distanceTo(w.player.position)<5){w.toggleDoor(entry);toast(entry.data.open?'Дверь открыта':'Дверь закрыта')}down=null;return;}
   if(w.mode==='build'||w.mode==='style'){
    if(w.placement||w.moveTarget){const p=w.hit(e.clientX,e.clientY);if(p){const placed=w.placeAt(p);if(placed!==null)saveSoon();else toast(w.lastSnapResult?.reason||'Здесь установить нельзя')}}
    else if(dist<12){let id=w.hit(e.clientX,e.clientY,true);w.select(w.objects.find(x=>x.data.id===id)||null);if(id)toast('Деталь выделена')}
   }down=null;});
- canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);down=null;lastTouch=null});
+ canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);down=null;lastTouch=null;if(!pointers.size)multitouch=false});
  canvas.addEventListener('wheel',e=>{e.preventDefault();w.distance=THREE.MathUtils.clamp(w.distance*(e.deltaY>0?1.08:.92),2,90)},{passive:false});
  window.addEventListener('keydown',e=>{if(['INPUT','SELECT'].includes(document.activeElement?.tagName))return;w.keys[e.code]=true;if(w.mode==='playbuild'&&e.code==='KeyE'&&w.placement){const placed=w.placeAt(w.forwardPlacementPoint());if(placed)saveSoon();else toast(w.lastSnapResult?.reason||'Место занято')}if(w.mode==='playbuild'&&e.code==='KeyR')w.rotatePlacement();if(e.code==='Escape'){$('modal').classList.add('hidden');w.select(null)}if((e.ctrlKey||e.metaKey)&&e.code==='KeyS'){e.preventDefault();saveLocal(true)}});window.addEventListener('keyup',e=>w.keys[e.code]=false);
  const stick=$('joystick'),knob=$('joystickKnob');const update=e=>{const r=stick.getBoundingClientRect();let vx=(e.clientX-(r.left+r.width/2))/(r.width*.32),vy=(e.clientY-(r.top+r.height/2))/(r.height*.32);let l=Math.hypot(vx,vy);if(l>1){vx/=l;vy/=l}w.joy={x:vx,y:vy};knob.style.transform=`translate(${vx*36}px,${vy*36}px)`};
