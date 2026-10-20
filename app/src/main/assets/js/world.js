@@ -434,6 +434,22 @@ class WorldBuilder{
   entry.data.decals=DecalLayer.normalize(decals);
   this.applyAppearance(entry);this.onChanged();return entry.data.decals;
  }
+ applyJoinedFloorFinish(entry,texture,settings={}){
+  if(typeof SurfacePaint==='undefined')return 0;
+  const group=SurfacePaint.joinedFloors(this,entry);
+  if(!group.length)return 0;
+  this.remember();
+  for(const {entry:item,region} of group){
+   let skin=SurfacePaint.normalize(item.data.surfacePaint);
+   skin=SurfacePaint.update(skin,'top','texture',texture);
+   skin=SurfacePaint.update(skin,'top','mode','joined');
+   skin=SurfacePaint.update(skin,'top','region',region);
+   skin=SurfacePaint.update(skin,'top','faithful',settings.faithful===true);
+   item.data.surfacePaint=skin;
+   this.applyAppearance(item);
+  }
+  this.onChanged();return group.length;
+ }
  updateSurfacePaint(entry,face,kind,value){
   if(!entry||typeof SurfacePaint==='undefined')return null;
   this.remember();
