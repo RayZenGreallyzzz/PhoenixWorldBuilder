@@ -81,8 +81,19 @@ const SceneExporter=(()=>{
     const w=e.fit==='fill'?1:e.size;
     const h=e.fit==='fill'?1:Math.min(4,Math.max(.01,w*g.width/g.height*im.height/im.width));
     ctx.save();ctx.globalAlpha=e.opacity;
-    ctx.translate(e.x*bakeSize,(1-e.y)*bakeSize);ctx.rotate(e.rotation*Math.PI/180);
-    ctx.drawImage(im,-w*bakeSize/2,-h*bakeSize/2,w*bakeSize,h*bakeSize);ctx.restore();
+    if(e.muralId&&Array.isArray(e.crop)){
+     // Bake precisely this module's slice of the full image. Every wall
+     // remains an ordinary GLB mesh, while all slices form one tapestry.
+     const [u0,v0,u1,v1]=e.crop;
+     const sx=Math.round(u0*im.width),sy=Math.round((1-v1)*im.height);
+     const sw=Math.max(1,Math.round((u1-u0)*im.width));
+     const sh=Math.max(1,Math.round((v1-v0)*im.height));
+     ctx.drawImage(im,sx,sy,Math.min(sw,im.width-sx),Math.min(sh,im.height-sy),0,0,bakeSize,bakeSize);
+    }else{
+     ctx.translate(e.x*bakeSize,(1-e.y)*bakeSize);ctx.rotate(e.rotation*Math.PI/180);
+     ctx.drawImage(im,-w*bakeSize/2,-h*bakeSize/2,w*bakeSize,h*bakeSize);
+    }
+    ctx.restore();
    }
    const mat=source?.clone()||new THREE.MeshStandardMaterial();
    mat.name=(source?.name||'Материал')+' эмблема '+face;
