@@ -55,6 +55,7 @@ jobs:
           node tests/test-avatar.cjs
           node tests/test-game-input.cjs
           node tests/test-camera-scale.cjs
+          node tests/test-drone-building.cjs
           node tests/test-avatar-fit.cjs
           node tests/test-avatar-root.cjs
           node tests/test-skinned-bounds.cjs
