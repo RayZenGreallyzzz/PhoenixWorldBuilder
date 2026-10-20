@@ -19,6 +19,8 @@ const SurfacePaint=(()=>{
    if(modes.includes(item.mode))clean.mode=item.mode;
    if(Number.isFinite(Number(item.tileMeters)))clean.tileMeters=clamp(Number(item.tileMeters),.1,40);
    if(typeof item.faithful==='boolean')clean.faithful=item.faithful;
+   if(item.imageScale!==undefined&&item.imageScale!==null&&Number.isFinite(Number(item.imageScale)))
+    clean.imageScale=clamp(Number(item.imageScale),.25,4);
    if(Array.isArray(item.region)&&item.region.length===4&&item.region.every(n=>Number.isFinite(Number(n)))){
     const rect=item.region.map(Number);
     if(rect[2]>rect[0]&&rect[3]>rect[1])clean.region=rect;
@@ -29,7 +31,7 @@ const SurfacePaint=(()=>{
  }
  function update(p,face,property,value){
   const out=normalize(p);
-  if(!faces.includes(face)||!['texture','color','mode','tileMeters','faithful','region'].includes(property))return out;
+  if(!faces.includes(face)||!['texture','color','mode','tileMeters','faithful','imageScale','region'].includes(property))return out;
   if(value===null||value===''||value===undefined){
    if(out[face]){delete out[face][property];if(!Object.keys(out[face]).length)delete out[face]}
   }else{
@@ -98,6 +100,9 @@ uniform float pwbMetersbottom;
 uniform float pwbAspectall;
 uniform float pwbAspecttop;
 uniform float pwbAspectbottom;
+uniform float pwbImageScaleall;
+uniform float pwbImageScaletop;
+uniform float pwbImageScalebottom;
 uniform float pwbFaithfulall;
 uniform float pwbFaithfultop;
 uniform float pwbFaithfulbottom;
@@ -109,7 +114,7 @@ vec3 pwbSampleWrap(sampler2D image,vec3 coord,vec3 normal){
  vec3 c=texture2D(image,coord.xy).rgb;
  return a*weights.x+b*weights.y+c*weights.z;
 }
-vec3 pwbRead(sampler2D image, float mode,float meters,float aspect,vec4 region,vec3 pn){
+vec3 pwbRead(sampler2D image, float mode,float meters,float aspect,float imageScale,vec4 region,vec3 pn){
  if(mode<.5){
   return pwbSampleWrap(image,pwbWorldPosition/max(.1,meters),pn);
  }
@@ -127,6 +132,7 @@ vec3 pwbRead(sampler2D image, float mode,float meters,float aspect,vec4 region,v
   if(surfaceAspect>aspect)uv.y=.5+(uv.y-.5)*aspect/surfaceAspect;
   else uv.x=.5+(uv.x-.5)*surfaceAspect/max(.0001,aspect);
  }
+ uv=vec2(.5)+(uv-vec2(.5))/max(.25,imageScale);
  return texture2D(image,clamp(uv,vec2(.001),vec2(.999))).rgb;
 }
 vec3 pwbColor(vec3 rgb,float faithful){
@@ -142,14 +148,14 @@ vec3 pwbColor(vec3 rgb,float faithful){
   if(!gl_FrontFacing)pn=-pn;
   vec3 colour=diffuseColor.rgb;
   if(pwbEnabledall>0.5){
-    vec3 tex=pwbUseMapall>0.5?pwbRead(pwbTextureall,pwbModeall,pwbMetersall,pwbAspectall,pwbRegionall,pn):vec3(1.0);
+    vec3 tex=pwbUseMapall>0.5?pwbRead(pwbTextureall,pwbModeall,pwbMetersall,pwbAspectall,pwbImageScaleall,pwbRegionall,pn):vec3(1.0);
     colour=pwbColor(tex,pwbFaithfulall)*pwbTintall;
   }
   if(pn.y>0.55&&pwbEnabledtop>0.5){
-    vec3 tex=pwbUseMaptop>0.5?pwbRead(pwbTexturetop,pwbModetop,pwbMeterstop,pwbAspecttop,pwbRegiontop,pn):vec3(1.0);
+    vec3 tex=pwbUseMaptop>0.5?pwbRead(pwbTexturetop,pwbModetop,pwbMeterstop,pwbAspecttop,pwbImageScaletop,pwbRegiontop,pn):vec3(1.0);
     colour=pwbColor(tex,pwbFaithfultop)*pwbTinttop;
   }else if(pn.y< -0.55&&pwbEnabledbottom>0.5){
-    vec3 tex=pwbUseMapbottom>0.5?pwbRead(pwbTexturebottom,pwbModebottom,pwbMetersbottom,pwbAspectbottom,pwbRegionbottom,pn):vec3(1.0);
+    vec3 tex=pwbUseMapbottom>0.5?pwbRead(pwbTexturebottom,pwbModebottom,pwbMetersbottom,pwbAspectbottom,pwbImageScalebottom,pwbRegionbottom,pn):vec3(1.0);
     colour=pwbColor(tex,pwbFaithfulbottom)*pwbTintbottom;
   }
   if(pwbEnabledall+pwbEnabledtop+pwbEnabledbottom>0.5)diffuseColor.rgb=colour;
@@ -183,6 +189,7 @@ vec3 pwbColor(vec3 rgb,float faithful){
      uniforms['pwbMode'+key]={value:Math.max(0,modes.indexOf(info?.mode||'repeat'))};
      uniforms['pwbMeters'+key]={value:info?.tileMeters||1};
      uniforms['pwbAspect'+key]={value:aspect};
+     uniforms['pwbImageScale'+key]={value:info?.imageScale||1};
      uniforms['pwbRegion'+key]={value:new THREE.Vector4(...(info?.region||[0,0,1,1]))};
      uniforms['pwbFaithful'+key]={value:info?.faithful?1:0};
     }

@@ -15,7 +15,7 @@ try{
  $('textureDetail').value=String(quality);
 }catch(e){console.warn('Texture quality settings unavailable',e);w.setTextureQuality(4)}
 try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),modulePresets=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
-let statusMessage='';let surfaceScope='all',surfaceMode='repeat',surfaceTileMeters=1,surfaceFaithful=true;let pendingRecovery=null;let savedNatively=false;let initializing=true;
+let statusMessage='';let surfaceScope='all',surfaceMode='repeat',surfaceTileMeters=1,surfaceImageScale=1,surfaceFaithful=true;let pendingRecovery=null;let savedNatively=false;let initializing=true;
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
 function groupType(name){
@@ -256,6 +256,13 @@ function updateSurfaceUI(){
  for(const id of ['surfaceTileMeters','gameSurfaceTileMeters']){
   $(id).value=String(size);$(id).disabled=mode!=='repeat';
  }
+ const zoom=info.imageScale||surfaceImageScale;
+ for(const id of ['surfaceImageScale','gameSurfaceImageScale']){
+  $(id).value=String(Math.round(zoom*100));
+  $(id).disabled=mode==='repeat'||mode==='joined';
+ }
+ for(const id of ['surfaceImageScaleValue','gameSurfaceImageScaleValue'])
+  $(id).textContent=Math.round(zoom*100)+'%';
  for(const id of ['surfaceFaithful','gameSurfaceFaithful'])$(id).checked=faithful;
  $('textureSelect').value=info.texture||((surfaceScope==='all'&&entry?.data?.texture)||'');
  $('gameSurfaceColor').value=info.color||'#ffffff';
@@ -309,6 +316,11 @@ function changeSurfaceMeters(value){
  const n=Number(value);surfaceTileMeters=Number.isFinite(n)?Math.max(.1,Math.min(40,n)):1;
  assignSurfacePaint('tileMeters',surfaceTileMeters);
 }
+function changeSurfaceImageScale(value){
+ const v=Number(value);
+ surfaceImageScale=Number.isFinite(v)?Math.max(.25,Math.min(4,v/100)):1;
+ assignSurfacePaint('imageScale',surfaceImageScale);
+}
 function changeSurfaceFaithful(value){
  surfaceFaithful=!!value;assignSurfacePaint('faithful',surfaceFaithful);
 }
@@ -325,6 +337,7 @@ function selectTexture(id){
     let skin=SurfacePaint.normalize(entry.data.surfacePaint);
     skin=SurfacePaint.update(skin,surfaceScope,'mode',surfaceMode);
     skin=SurfacePaint.update(skin,surfaceScope,'tileMeters',surfaceTileMeters);
+    skin=SurfacePaint.update(skin,surfaceScope,'imageScale',surfaceImageScale);
     skin=SurfacePaint.update(skin,surfaceScope,'faithful',surfaceFaithful);
     // Do not call updateSurfacePaint three times (each would add an Undo).
     w.remember();
@@ -333,6 +346,7 @@ function selectTexture(id){
    }else if(w.placement&&w.ghost){
     w.updatePreviewSurfacePaint(surfaceScope,'mode',surfaceMode);
     w.updatePreviewSurfacePaint(surfaceScope,'tileMeters',surfaceTileMeters);
+    w.updatePreviewSurfacePaint(surfaceScope,'imageScale',surfaceImageScale);
     w.updatePreviewSurfacePaint(surfaceScope,'faithful',surfaceFaithful);
     w.updatePreviewSurfacePaint(surfaceScope,'texture',id);
    }else return toast('Выбери установленную деталь или новую деталь в каталоге');
@@ -482,6 +496,14 @@ function setupPicker(){
  for(const id of ['surfaceMode','gameSurfaceMode'])$(id).onchange=e=>changeSurfaceMode(e.target.value);
  for(const id of ['surfaceTileMeters','gameSurfaceTileMeters'])$(id).onchange=e=>changeSurfaceMeters(e.target.value);
  for(const id of ['surfaceFaithful','gameSurfaceFaithful'])$(id).onchange=e=>changeSurfaceFaithful(e.target.checked);
+ for(const id of ['surfaceImageScale','gameSurfaceImageScale']){
+  $(id).oninput=e=>{
+   const v=Math.round(Number(e.target.value));
+   for(const label of ['surfaceImageScaleValue','gameSurfaceImageScaleValue'])
+    $(label).textContent=v+'%';
+  };
+  $(id).onchange=e=>changeSurfaceImageScale(e.target.value);
+ }
  const connectedClick=()=>{
   const entry=surfaceTarget();
   if(!entry)return toast('Выдели установленную плиту, затем выбери изображение');
@@ -496,7 +518,29 @@ function setupPicker(){
  $('btnSurfaceClear').onclick=clearSurface;
  $('btnSavePreset').onclick=saveModulePreset;
  $('textureSelect').onchange=e=>selectTexture(e.target.value);
- $('modelScale').oninput=e=>{let scale=+e.target.value/100;$('modelScaleValue').textContent=e.target.value+'%';if(!w.selected)return;w.selected.data.scale=scale;w.selected.mesh.scale.set(scale,scale*(w.selected.data.thicknessY||1),scale);w.onChanged()};
+ // This control is intentionally separated from texture mapping: it changes
+ // real geometry and cannot be confused with the image-only UV size slider.
+ let geometryDragBefore=null;
+ $('modelScale').onpointerdown=()=>{if(w.selected){w.remember();geometryDragBefore=w.selected.data.id}};
+ $('modelScale').onkeydown=()=>{if(w.selected&&!geometryDragBefore){w.remember();geometryDragBefore=w.selected.data.id}};
+ $('modelScale').onchange=()=>{geometryDragBefore=null};
+ $('modelScale').oninput=e=>{
+  const scale=+e.target.value/100;
+  $('modelScaleValue').textContent=e.target.value+'%';
+  if(!w.selected)return;
+  if(!geometryDragBefore){w.remember();geometryDragBefore=w.selected.data.id}
+  w.selected.data.scale=scale;
+  w.selected.mesh.scale.set(scale,scale*(w.selected.data.thicknessY||1),scale);
+  w.onChanged();
+ };
+ $('btnModelScaleReset').onclick=()=>{
+  const entry=w.selected;
+  if(!entry)return toast('Сначала выдели деталь, которую нужно восстановить');
+  w.remember();entry.data.scale=1;
+  entry.mesh.scale.set(1,entry.data.thicknessY||1,1);
+  $('modelScale').value=100;$('modelScaleValue').textContent='100%';
+  w.onChanged();toast('Размер детали возвращён к 100%. Текстура не менялась.');
+ };
  function updateAvatarSize(meters){
  w.setAvatarHeight(meters);
  const value=w.avatarHeight.toFixed(2);
