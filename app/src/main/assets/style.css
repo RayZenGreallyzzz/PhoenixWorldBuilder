@@ -157,3 +157,4 @@ body.droneOn #gameBuildHud #btnDroneToggle{background:#246a74;border-color:#87ee
 body.droneOn #joystick{border-color:#77e9d5;background:#3c96915c}
 @media(max-width:840px){#droneControls{top:58px;right:5px;width:min(224px,32vw);padding:5px}#droneControls button{min-height:32px;font-size:10px;padding:5px 2px}#droneControls small{font-size:9px}}
 @media(max-height:510px){#droneControls{top:48px}#droneControls small{display:none}}
+body.droneOn .rightTools{display:none}
