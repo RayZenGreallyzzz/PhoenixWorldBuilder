@@ -33,4 +33,31 @@ const explicit=SmartPackage.analyze(['pack/models/wall.glb','pack/images/a.png']
 assert.equal(explicit.pictures.length,1);
 assert.equal(explicit.bindings.get('pack/models/wall.glb').slots[0].name,'Main');
 assert.equal(explicit.bindings.get('pack/models/wall.glb').slots[0].path,'pack/images/a.png');
+// Real-world Russian folder names are descriptive and must not be renamed.
+const rus=SmartPackage.analyze([
+ 'Мой замок/Модели/Стены/Прямая белая стена.glb',
+ 'Мой замок/Модели/Углы/Угол_90.glb',
+ 'Мой замок/Материалы/Облицовка внутренняя/Белая штукатурка.png',
+ 'Мой замок/Материалы/Наружная облицовка/Серый кирпич.jpg',
+ 'Мой замок/Картины на стену/Рыцарь.jpg',
+ 'Мой замок/Большие гобелены/Гобелен дракона.png',
+ 'Мой замок/Настенные фрески/Солнце.webp',
+ 'Мой замок/Фото и постеры/Семья.png',
+ 'Мой замок/Обои/Орнамент.png'
+]);
+assert.equal(rus.models.length,2);
+assert.equal(rus.models[0].category,'wall');
+assert.equal(rus.models[1].category,'corner');
+assert.equal(rus.textures.length,3,'Russian inside/outside finishes and wallpaper stay repeating textures');
+assert.equal(rus.pictures.length,4,'Descriptive Russian painting and tapestry folders become single artwork');
+assert.equal(SmartPackage.kind('Картины/Гобелен.png'),'painting');
+assert.equal(SmartPackage.kind('Наружная облицовка/Камень.png'),'texture');
+assert.equal(SmartPackage.normalizedRole('Внутренняя облицовка'),'texture');
+const ruMetadata=SmartPackage.analyze(['Папка/Модели/001.glb'],{
+ models:[{path:'Модели/001.glb',category:'Стены'}]
+});
+assert.equal(ruMetadata.models[0].category,'wall',
+ 'The optional ZIP metadata may also use Russian category names');
+assert.equal(SmartPackage.normalizeCategory('Полы','001.glb'),'foundation');
+assert.equal(SmartPackage.normalizeCategory('Углы','001.glb'),'corner');
 console.log('Automatic ZIP roles, metadata, nested paths and conservative model materials OK');
