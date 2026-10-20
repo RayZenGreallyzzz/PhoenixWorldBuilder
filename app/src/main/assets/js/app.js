@@ -15,7 +15,7 @@ try{
  $('textureDetail').value=String(quality);
 }catch(e){console.warn('Texture quality settings unavailable',e);w.setTextureQuality(4)}
 try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),modulePresets=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
-let statusMessage='';let surfaceScope='all';let pendingRecovery=null;let savedNatively=false;let initializing=true;
+let statusMessage='';let surfaceScope='all',surfaceMode='repeat',surfaceTileMeters=1,surfaceFaithful=true;let pendingRecovery=null;let savedNatively=false;let initializing=true;
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
 function groupType(name){
@@ -250,12 +250,31 @@ function updateSurfaceUI(){
  $('gameSurfaceScope').value=surfaceScope;
  const entry=surfaceTarget(),skin=entry?.data?.surfacePaint||w.placementSurfacePaint||{};
  const info=skin[surfaceScope]||{};
+ const mode=info.mode||surfaceMode,size=info.tileMeters||surfaceTileMeters;
+ const faithful=typeof info.faithful==='boolean'?info.faithful:surfaceFaithful;
+ for(const id of ['surfaceMode','gameSurfaceMode'])$(id).value=mode;
+ for(const id of ['surfaceTileMeters','gameSurfaceTileMeters']){
+  $(id).value=String(size);$(id).disabled=mode!=='repeat';
+ }
+ for(const id of ['surfaceFaithful','gameSurfaceFaithful'])$(id).checked=faithful;
  $('textureSelect').value=info.texture||((surfaceScope==='all'&&entry?.data?.texture)||'');
  $('gameSurfaceColor').value=info.color||'#ffffff';
+}
+function applyJoinedFloor(id){
+ const entry=surfaceTarget();
+ if(!entry){toast('Для общего рисунка сначала выдели установленную плиту пола');return 0}
+ const n=w.applyJoinedFloorFinish(entry,id,{faithful:surfaceFaithful});
+ if(!n){toast('Выбери плиту пола (не стену): соседние плиты найдутся автоматически');return 0}
+ surfaceScope='top';surfaceMode='joined';updateSurfaceUI();
+ toast('Один рисунок нанесён на '+n+' соединённых плит без повторения');
+ return n;
 }
 function assignSurfacePaint(property,value){
  if(typeof SurfacePaint==='undefined')return toast('Режим поверхностей недоступен');
  const entry=surfaceTarget();
+ if(property==='texture'&&surfaceMode==='joined'&&value){
+  applyJoinedFloor(value);return;
+ }
  if(entry){w.updateSurfacePaint(entry,surfaceScope,property,value);}
  else if(w.placement&&w.ghost){w.updatePreviewSurfacePaint(surfaceScope,property,value);}
  else return toast('Выбери установленный модуль или новую деталь в каталоге');
@@ -274,12 +293,48 @@ function clearSurface(){
 function setSurfaceScope(face){
  surfaceScope=SurfacePaint.faces.includes(face)?face:'all';updateSurfaceUI();
 }
+function changeSurfaceMode(mode){
+ surfaceMode=SurfacePaint.modes.includes(mode)?mode:'repeat';
+ if(surfaceMode==='joined'){
+  surfaceScope='top';updateSurfaceUI();
+  toast('Выдели плиту и выбери изображение: оно ляжет на весь соединённый пол');
+  return;
+ }
+ assignSurfacePaint('mode',surfaceMode);
+}
+function changeSurfaceMeters(value){
+ const n=Number(value);surfaceTileMeters=Number.isFinite(n)?Math.max(.1,Math.min(40,n)):1;
+ assignSurfacePaint('tileMeters',surfaceTileMeters);
+}
+function changeSurfaceFaithful(value){
+ surfaceFaithful=!!value;assignSurfacePaint('faithful',surfaceFaithful);
+}
 function selectTexture(id){
  return (async()=>{
   if(!id)return assignSurfacePaint('texture',null);
   const tex=await loadTexture(id);
   if(!tex){toast('Не удалось открыть текстуру');return}
-  assignSurfacePaint('texture',id);
+  // Setting up a new surface records the selected repeat/stretch settings
+  // alongside the image, so later projects and GLBs can reproduce the mapping.
+  if(surfaceMode!=='joined'){
+   const entry=surfaceTarget();
+   if(entry){
+    let skin=SurfacePaint.normalize(entry.data.surfacePaint);
+    skin=SurfacePaint.update(skin,surfaceScope,'mode',surfaceMode);
+    skin=SurfacePaint.update(skin,surfaceScope,'tileMeters',surfaceTileMeters);
+    skin=SurfacePaint.update(skin,surfaceScope,'faithful',surfaceFaithful);
+    // Do not call updateSurfacePaint three times (each would add an Undo).
+    w.remember();
+    skin=SurfacePaint.update(skin,surfaceScope,'texture',id);
+    entry.data.surfacePaint=skin;w.applyAppearance(entry);w.onChanged();
+   }else if(w.placement&&w.ghost){
+    w.updatePreviewSurfacePaint(surfaceScope,'mode',surfaceMode);
+    w.updatePreviewSurfacePaint(surfaceScope,'tileMeters',surfaceTileMeters);
+    w.updatePreviewSurfacePaint(surfaceScope,'faithful',surfaceFaithful);
+    w.updatePreviewSurfacePaint(surfaceScope,'texture',id);
+   }else return toast('Выбери установленную деталь или новую деталь в каталоге');
+   updateSurfaceUI();
+  }else applyJoinedFloor(id);
   renderLibrary();
  })().catch(e=>toast('Ошибка текстуры: '+e.message));
 }
@@ -421,6 +476,19 @@ function setupPicker(){
  $('gameLevelGo').onkeydown=e=>{if(e.key==='Enter')goLevel('gameLevelGo')};
  $('surfaceScope').onchange=e=>setSurfaceScope(e.target.value);
  $('gameSurfaceScope').onchange=e=>setSurfaceScope(e.target.value);
+ for(const id of ['surfaceMode','gameSurfaceMode'])$(id).onchange=e=>changeSurfaceMode(e.target.value);
+ for(const id of ['surfaceTileMeters','gameSurfaceTileMeters'])$(id).onchange=e=>changeSurfaceMeters(e.target.value);
+ for(const id of ['surfaceFaithful','gameSurfaceFaithful'])$(id).onchange=e=>changeSurfaceFaithful(e.target.checked);
+ const connectedClick=()=>{
+  const entry=surfaceTarget();
+  if(!entry)return toast('Выдели установленную плиту, затем выбери изображение');
+  const current=entry.data.surfacePaint?.top?.texture||
+   entry.data.surfacePaint?.all?.texture;
+  if(!current)return toast('Сначала нанеси любую текстуру на выбранную плиту');
+  applyJoinedFloor(current);
+ };
+ $('btnJoinedFloor').onclick=connectedClick;
+ $('btnGameJoinedFloor').onclick=connectedClick;
  $('surfacePaintTarget').onchange=updateSurfaceUI;
  $('btnSurfaceClear').onclick=clearSurface;
  $('btnSavePreset').onclick=saveModulePreset;
