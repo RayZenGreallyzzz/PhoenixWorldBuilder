@@ -72,6 +72,8 @@ jobs:
           node tests/test-undo-magnetic-snap.cjs
           node tests/test-module-presets.cjs
           node tests/test-decals.cjs
+          node tests/test-smart-package.cjs
+          node tests/test-murals.cjs
           node tests/test-artwork-clarity.cjs
 
       - name: Configure Java 17
