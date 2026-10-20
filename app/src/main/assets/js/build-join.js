@@ -158,6 +158,44 @@ const BuildJoin=(()=>{
      }
    }
   }
+  // For a NEW L-shaped module on the end of one existing wall, attach
+  // the CORNER ARM TIP, not the L's middle pivot. Placing the pivot at the
+  // old wall endpoint made the corner overlap up to 1.9m of the wall.
+  if(!best&&(w.placementCategory==='corner'||w.placement==='corner')&&candidates.length){
+   const root=w.ghost||w.assetCache?.get(w.placement)||w.makeBuiltin?.(w.placement);
+   const arms=root?cornerArms(root,w.placement,'corner'):null;
+   if(arms?.length){
+    const scale=w.placementScale||1,cx=(box.min.x+box.max.x)/2,cz=(box.min.z+box.max.z)/2;
+    let match=null;
+    for(const wall of candidates.slice(0,10)){
+     for(const endpoint of (wall.tipOnly?['a']:['a','c'])){
+      const target=wall[endpoint];
+      const direction=wall.dir.clone().multiplyScalar(endpoint==='a'?-1:1);
+      for(const arm of arms){
+       const socketOut=arm.tip.clone().sub(arm.pivot).setY(0).normalize();
+       const yaw=angle(new THREE.Vector3(0,0,0),direction.clone().negate())-
+        angle(new THREE.Vector3(0,0,0),socketOut);
+       const rotatedTip=rotate(arm.tip,yaw).multiplyScalar(scale);
+       const at=new THREE.Vector3(target.x-rotatedTip.x,
+        wall.bottom-arm.tip.y*scale+(w.placementLift||0),target.z-rotatedTip.z);
+       const center=at.clone().add(rotate(new THREE.Vector3(cx,0,cz),yaw).multiplyScalar(scale));
+       const distance=distXZ(p,center);
+       if(distance>4.5)continue;
+       // Manual 90° turns choose among physically valid corner arms without
+       // breaking their actual cap-to-cap alignment.
+       const turn=Math.atan2(Math.sin(yaw-(w.placementRotation||0)*Math.PI/180),
+        Math.cos(yaw-(w.placementRotation||0)*Math.PI/180));
+       const score=distance+abs(turn)*.025;
+       if(!match||score<match.score)match={at,yaw,score,reference:wall.entry.data.id};
+      }
+     }
+    }
+    if(match)return {position:match.at,
+     rotation:((match.yaw*180/Math.PI)%360+360)%360,snapped:true,corner:true,
+     edge:true,wallEnd:true,joinedTo:'corner-socket',reference:match.reference,
+     category:w.placementCategory||'corner'};
+   }
+  }
   // A solitary wall end may also be a corner where the next wall isn't built yet.
   if(!best&&candidates.length){
    for(const entry of candidates.slice(0,10))
