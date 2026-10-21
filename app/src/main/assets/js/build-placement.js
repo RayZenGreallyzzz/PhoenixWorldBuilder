@@ -114,6 +114,64 @@ const BuildPlacementValidator=(()=>{
   }
   return false;
  }
+ // Precision indication even when the magnet is off: compare the
+ // physical end caps (walls), supporting top plane (roof) or coplanar
+ // slab edges (floors). A visual AABB overlap by itself is NOT enough.
+ function manualAlignment(w,root,cat){
+  if(!root||!['wall','corner','door','foundation','roof','ceiling'].includes(cat))return null;
+  const storey=w.floorLevel;
+  const current=rect(root);if(!current)return null;
+  const box=new THREE.Box3().setFromObject(root);
+  const wallLikeHere=wallLike.has(cat);
+  let incoming=null;
+  if(wallLikeHere&&typeof BuildJoin!=='undefined')
+   incoming=BuildJoin.wallInfo(w,{mesh:root,kind:w.placement||w.moveTarget?.kind,
+    data:{category:cat,storey}});
+  const endpoints=info=>info?.sockets?.map(s=>s.point)||
+   (info?[info.a,info.c]:[]);
+  for(const entry of w.objects||[]){
+   if(entry===w.moveTarget)continue;
+   if(Number.isInteger(entry.data?.storey)&&entry.data.storey!==storey)continue;
+   const typ=category(w,entry),other=rect(entry.mesh);if(!other)continue;
+   if(Math.hypot(current.cx-other.cx,current.cz-other.cz)>
+    Math.max(8,Math.max(current.width,current.length)+Math.max(other.width,other.length)+1))continue;
+   if(wallLikeHere&&wallLike.has(typ)&&incoming&&typeof BuildJoin!=='undefined'){
+    const prior=BuildJoin.wallInfo(w,entry);
+    if(!prior||Math.abs(incoming.bottom-prior.bottom)>.065)continue;
+    for(const a of endpoints(incoming))for(const b of endpoints(prior))
+     if(Math.hypot(a.x-b.x,a.z-b.z)<.055)
+      return {manualAligned:true,reason:'Торцы стен совпадают (ручная подгонка)'};
+   }
+   if((cat==='roof'||cat==='ceiling')&&
+    ['wall','corner','door','ceiling'].includes(typ)){
+    const top=other.top,bottom=box.min.y;
+    const x=Math.min(box.max.x,Math.max(...other.points.map(p=>p[0])))-
+     Math.max(box.min.x,Math.min(...other.points.map(p=>p[0])));
+    const z=Math.min(box.max.z,Math.max(...other.points.map(p=>p[1])))-
+     Math.max(box.min.z,Math.min(...other.points.map(p=>p[1])));
+    if(Math.abs(bottom-top)<=.065&&x>.08&&z>.08)
+     return {manualAligned:true,reason:'Крыша точно опирается на конструкцию'};
+   }
+   if(cat==='foundation'&&typ==='foundation'&&
+    Math.abs(current.top-other.top)<.06){
+    const edges=r=>[[0,1],[1,2],[2,3],[3,0]].map(([i,j])=>
+     [r.points[i],r.points[j]]);
+    for(const [a,b] of edges(current))for(const [c,d] of edges(other)){
+     const u=[b[0]-a[0],b[1]-a[1]],v=[d[0]-c[0],d[1]-c[1]];
+     const lu=Math.hypot(...u),lv=Math.hypot(...v);
+     if(lu<.1||lv<.1)continue;
+     u[0]/=lu;u[1]/=lu;v[0]/=lv;v[1]/=lv;
+     if(Math.abs(u[0]*v[0]+u[1]*v[1])<.998)continue;
+     const off=Math.abs((c[0]-a[0])*(-u[1])+(c[1]-a[1])*u[0]);
+     if(off>.055)continue;
+     const proj=[c,d].map(q=>(q[0]-a[0])*u[0]+(q[1]-a[1])*u[1]);
+     if(Math.min(lu,Math.max(...proj))-Math.max(0,Math.min(...proj))>.15)
+      return {manualAligned:true,reason:'Края плит совпадают (ручная подгонка)'};
+    }
+   }
+  }
+  return null;
+ }
  function validate(w,solved,root=w.ghost){
   if(!root)return {...solved,valid:false,reason:'Деталь ещё не загружена'};
   if(solved.valid===false)return {...solved,reason:solved.missingTarget||'Не найдено место для стыковки'};
@@ -186,6 +244,6 @@ const BuildPlacementValidator=(()=>{
    solved.snapped?'Магнитная привязка':
    'Установка по сетке'};
  }
- return {validate,rect,penetration};
+ return {validate,rect,penetration,manualAlignment};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildPlacementValidator;
