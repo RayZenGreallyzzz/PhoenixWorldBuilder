@@ -103,7 +103,7 @@ async function saveModulePreset(){
   name:name.trim().slice(0,64),sourceKind:kind,
   category:entry?.data?.category||w.placementCategory||w.categoryForKind(kind),
   surfacePaint:paint,color,scale:entry?.data?.scale||w.placementScale||1,
-  dimensionScale:WorldBuilder.normalizedAxes(entry?.data?.dimensionScale||w.placementAxes),
+  dimensionScale:{...{x:1,y:1,z:1},...(entry?.data?.dimensionScale||w.placementAxes||{})},
   texture:entry?.data?.texture||null,decals:Array.isArray(entry?.data?.decals||w.placementDecals)?copyPresetData(entry?.data?.decals||w.placementDecals):[],created:new Date().toISOString()};
  modulePresets.set(preset.id,preset);
  try{await dbOp('catalog',PRESET_KEY,[...modulePresets.values()])}
@@ -126,8 +126,8 @@ async function chooseModulePreset(id){
    return toast('Не найдена PNG эмблемы');
   w.setPlacement(preset.sourceKind,preset.category);w.select(null);
   w.placementScale=preset.scale||1;
-  w.placementAxes=WorldBuilder.normalizedAxes(preset.dimensionScale);
-  w.applyAxisScale(w.ghost,w.placementScale,w.placementAxes);
+  w.placementAxes={...{x:1,y:1,z:1},...(preset.dimensionScale||{})};
+  if(w.ghost)w.applyAxisScale(w.ghost,w.placementScale,w.placementAxes);
   w.placementSurfacePaint=copyPresetData(preset.surfacePaint);
   w.currentPaint=preset.color||w.currentPaint;w.textureId=preset.texture||null;
   w.placementDecals=copyPresetData(preset.decals||[]);
