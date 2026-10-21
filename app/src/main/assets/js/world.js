@@ -381,26 +381,52 @@ class WorldBuilder{
   return factor;
  }
  solvePlacement(p){
-  const fine=solved=>{
-   const cat=this.placementCategory||this.categoryForKind?.(this.placement)||this.placement;
-   if(solved&&['wall','corner','door','railing','stairs'].includes(cat)){
-    solved.position.x+=this.cornerOffsetX||0;
-    solved.position.z+=this.cornerOffsetZ||0;
+  const moving=this.moveTarget;
+  // A moved building module uses its real category, geometry and dimensions,
+  // never "prop" or the settings of the previously selected new module.
+  const old={placement:this.placement,category:this.placementCategory,
+   axes:this.placementAxes,scale:this.placementScale};
+  if(moving){
+   this.placement=moving.kind;this.placementCategory=moving.data.category||
+    this.categoryForKind?.(moving.kind)||'prop';
+   this.placementAxes=WorldBuilder.normalizedAxes(moving.data.dimensionScale);
+   this.placementScale=moving.data.scale||1;
+  }
+  try{
+   const fine=solved=>{
+    const cat=this.placementCategory||this.categoryForKind?.(this.placement)||this.placement;
+    if(solved&&['wall','corner','door','railing','stairs'].includes(cat)){
+     solved.position.x+=this.cornerOffsetX||0;
+     solved.position.z+=this.cornerOffsetZ||0;
+    }
+    return solved;
+   };
+   if(this.joinMode==='free'){
+    const x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap;
+    // Free placement also needs the true bottom pivot for imported GLBs.
+    const b=this.ghost&&typeof BuildSnap!=='undefined'?
+     BuildSnap.dimensionBounds(BuildSnap.attrBounds(this.ghost),this):null;
+    const bottom=b&&!b.isEmpty()?b.min.y*(this.placementScale||1):0;
+    return fine({position:new THREE.Vector3(x,
+     this.placementHeight(x,z)-bottom+(this.placementLift||0),z),
+     rotation:this.placementRotation||0,snapped:false,
+     category:this.placementCategory,manual:true});
    }
-   return solved;
-  };
-  if(this.joinMode==='free'){
+   if(typeof BuildJoin!=='undefined'&&this.placement&&this.smartSnap!==false){
+    const joined=BuildJoin.resolve(this,p);
+    if(joined)return fine(joined);
+   }
+   if(typeof BuildSnap!=='undefined'&&this.placement)return fine(BuildSnap.resolve(this,p));
    const x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap;
-   return fine({position:new THREE.Vector3(x,this.placementHeight(x,z)+(this.placementLift||0),z),
-    rotation:this.placementRotation||0,snapped:false});
+   return fine({position:new THREE.Vector3(x,
+    this.placementHeight(x,z)+(this.placementLift||0),z),
+    rotation:this.placementRotation||0,snapped:false,category:this.placementCategory});
+  }finally{
+   if(moving){
+    this.placement=old.placement;this.placementCategory=old.category;
+    this.placementAxes=old.axes;this.placementScale=old.scale;
+   }
   }
-  if(typeof BuildJoin!=='undefined'&&this.placement&&!this.moveTarget&&this.smartSnap!==false){
-   const joined=BuildJoin.resolve(this,p);
-   if(joined)return fine(joined);
-  }
-  if(typeof BuildSnap!=='undefined'&&this.placement&&!this.moveTarget)return fine(BuildSnap.resolve(this,p));
-  const x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap;
-  return fine({position:new THREE.Vector3(x,this.placementHeight(x,z)+(this.placementLift||0),z),rotation:this.placementRotation||0,snapped:false});
  }
  placeAt(p){
   if(!this.placement&&!this.moveTarget)return;
@@ -595,6 +621,7 @@ class WorldBuilder{
   if(!this.ghost)return null;
   const solved=this.solvePlacement(p);
   this.ghost.position.copy(solved.position);
+  this.ghost.userData.pwbCategory=solved.category||this.placementCategory||this.moveTarget?.data?.category;
   this.ghost.rotation.y=solved.rotation*Math.PI/180;
   this.applyAxisScale(this.ghost,this.moveTarget?.data?.scale||this.placementScale,
    this.moveTarget?.data?.dimensionScale||this.placementAxes,
@@ -602,7 +629,9 @@ class WorldBuilder{
   const checked=typeof BuildPlacementValidator!=='undefined'?
    BuildPlacementValidator.validate(this,solved,this.ghost):
    {...solved,valid:solved.valid!==false,reason:solved.missingTarget||(solved.snapped?'Привязано':'По сетке')};
-  const colour=checked.valid===false?'blocked':checked.snapped?'snapped':'manual';
+  const colour=checked.valid===false?'blocked':
+   checked.conflict?'blocked':
+   checked.snapped&&!this.cornerOffsetX&&!this.cornerOffsetZ&&!this.placementLift?'snapped':'manual';
   this.colorPlacementPreview(colour);
   if(this.placementOutline){
    this.placementOutline.update();
