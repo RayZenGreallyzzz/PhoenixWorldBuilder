@@ -125,7 +125,7 @@ const WallThickness=(()=>{
      if(r<.001)continue;
      const sign=Math.sign(r-radius);
      const nr=radius+sign*half*factor;
-     position.setXZ(i,c.x+(x-c.x)*nr/r,c.z+(z-c.z)*nr/r);
+     position.setX(i,c.x+(x-c.x)*nr/r);position.setZ(i,c.z+(z-c.z)*nr/r);
     }
    }else{
     for(let i=0;i<position.count;i++){
