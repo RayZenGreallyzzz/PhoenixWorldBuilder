@@ -158,3 +158,16 @@ body.droneOn #joystick{border-color:#77e9d5;background:#3c96915c}
 @media(max-width:840px){#droneControls{top:58px;right:clamp(194px,29vw,235px);width:min(224px,32vw);padding:5px}#droneControls button{min-height:32px;font-size:10px;padding:5px 2px}#droneControls small{font-size:9px}}
 @media(max-height:510px){#droneControls{top:48px}#droneControls small{display:none}}
 body.droneOn .rightTools{display:none}
+
+/* Explicit accuracy diagnostics: green = physical magnetic joint, amber =
+   unverified/manual target, red = invalid joint or intersecting parts. */
+.placementStatus.manual{background:#3b3020;border-color:#b98835;color:#ffe1a5}
+#gameBuildHud .snapStatus.manual{color:#f6c66f}
+.dimensionRow{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0}
+.dimensionRow label{flex:1 1 60px;min-width:60px;font-size:10px}
+.dimensionRow input{display:block;width:100%;min-height:33px;margin-top:3px;padding:5px 2px;
+ border-radius:6px;border:1px solid #436672;background:#19313b;color:#eaf4eb;text-align:center}
+.dimensionGame summary,.geometrySizeControls summary{cursor:pointer;user-select:none;padding:5px 2px}
+.dimensionEditor{margin-top:9px;padding:8px;border:1px solid #385966;border-radius:7px}
+.dimensionGame{margin-top:6px}
+.dimensionEditor .hint,.dimensionGame small{display:block;font-size:10px;line-height:1.3;color:#b9c6c4}
