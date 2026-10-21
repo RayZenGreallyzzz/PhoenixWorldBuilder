@@ -13,7 +13,7 @@ const start=app.indexOf("const PRESET_KEY='my-module-presets-v1';");
 const end=app.indexOf('const GALLERY_SIZE=20;',start);
 assert(start>=0&&end>start);
 let record=[],feedback=[],viewRender=0;
-const entry={kind:'wall',data:{category:'wall',scale:1.2,surfacePaint:{all:{color:'#ffffff'},top:{texture:'tex:wood.png'},bottom:{texture:'tex:marble.png'}}}};
+const entry={kind:'wall',data:{category:'wall',scale:1.2,dimensionScale:{x:1.5,y:1,z:.55},surfacePaint:{all:{color:'#ffffff'},top:{texture:'tex:wood.png'},bottom:{texture:'tex:marble.png'}}}};
 const state={
  localStore:{},modulePresets:new Map(),surfaceTarget:()=>entry,
  w:{placement:'wall',placementCategory:'wall',placementScale:1,placementSurfacePaint:{},currentPaint:'#cccccc',
@@ -50,6 +50,7 @@ vm.runInContext(app.slice(start,end)+'\nthis.funcs={saveModulePreset,chooseModul
  assert.equal(record.length,1,'Preset persisted independently after button click');
  assert.equal(record[0].sourceKind,'wall');
  assert.equal(record[0].scale,1.2);
+ assert.equal(record[0].dimensionScale.z,.55,'Fitted wall thickness saved in My Modules');
  assert.equal(record[0].surfacePaint.top.texture,'tex:wood.png');
  assert.equal(record[0].surfacePaint.bottom.texture,'tex:marble.png');
  const id=record[0].id;
@@ -58,6 +59,8 @@ vm.runInContext(app.slice(start,end)+'\nthis.funcs={saveModulePreset,chooseModul
  await context.funcs.chooseModulePreset(id);
  assert.equal(state.w.placement,'wall');
  assert.equal(state.w.placementScale,1.2);
+ assert.equal(state.w.placementAxes.x,1.5);
+ assert.equal(state.w.placementAxes.z,.55,'Fitted dimensions reapplied when picking saved module');
  assert.equal(state.w.placementSurfacePaint.bottom.texture,'tex:marble.png');
  assert.equal(state.w.placementSurfacePaint.top.texture,'tex:wood.png');
  await context.funcs.deleteModulePreset(id);
