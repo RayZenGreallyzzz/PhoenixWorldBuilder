@@ -93,7 +93,7 @@ assert(v.valid,'Existing wall itself is excluded from move validation when appli
  assert.equal(hand.manualAligned,undefined,'A one-wall gap must not be treated as aligned');
  assert.equal(m.placementOutline.material.color.getHex(),0xffc36a);
  // The roof is moved to the exact physical support height of the wall.
- m.setPlacement('roof','roof');m.placementLift=2.6;
+ m.setPlacement('roof','roof');m.placementLift=0; // the roof's nominal 2.6m height already meets this wall
  hand=m.applyGhostPlacement(new THREE.Vector3(0,0,0));
  assert.equal(hand.manualAligned,true,'Roof bottom on wall top should turn green in manual mode');
  assert.equal(m.placementOutline.material.color.getHex(),0x50f4a0);
