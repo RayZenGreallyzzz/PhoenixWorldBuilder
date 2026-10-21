@@ -104,6 +104,7 @@ async function saveModulePreset(){
   category:entry?.data?.category||w.placementCategory||w.categoryForKind(kind),
   surfacePaint:paint,color,scale:entry?.data?.scale||w.placementScale||1,
   dimensionScale:{...{x:1,y:1,z:1},...(entry?.data?.dimensionScale||w.placementAxes||{})},
+  wallThicknessMeters:entry?.data?.wallThicknessMeters||w.wallThicknessMeters||undefined,
   texture:entry?.data?.texture||null,decals:Array.isArray(entry?.data?.decals||w.placementDecals)?copyPresetData(entry?.data?.decals||w.placementDecals):[],created:new Date().toISOString()};
  modulePresets.set(preset.id,preset);
  try{await dbOp('catalog',PRESET_KEY,[...modulePresets.values()])}
@@ -128,6 +129,9 @@ async function chooseModulePreset(id){
   w.placementScale=preset.scale||1;
   w.placementAxes={...{x:1,y:1,z:1},...(preset.dimensionScale||{})};
   if(w.ghost)w.applyAxisScale(w.ghost,w.placementScale,w.placementAxes);
+  w.wallThicknessMeters=preset.wallThicknessMeters||null;
+  if(w.wallThicknessMeters&&w.ghost&&typeof WallThickness!=='undefined')
+   WallThickness.apply(w.ghost,preset.sourceKind,preset.category,w.wallThicknessMeters);
   w.placementSurfacePaint=copyPresetData(preset.surfacePaint);
   w.currentPaint=preset.color||w.currentPaint;w.textureId=preset.texture||null;
   w.placementDecals=copyPresetData(preset.decals||[]);
@@ -427,7 +431,30 @@ function syncDimensionInputs(){
    selected?.data?.dimensionScale||w.placementAxes);
   for(const axis of ['X','Y','Z'])$(prefix+axis).value=
    String(Math.round(axes[axis.toLowerCase()]*100));
+  const root=selected?.mesh||w.ghost,kind=selected?.kind||w.placement;
+  const category=selected?.data?.category||w.placementCategory;
+  const recognized=typeof WallThickness!=='undefined'&&root?
+   WallThickness.info(root,kind,category):null;
+  const field=$(mode?'wallThicknessGame':'wallThicknessEditor');
+  const hint=$(mode?'wallThicknessGameHint':'wallThicknessEditorHint');
+  field.disabled=!recognized;
+  field.value=recognized?String(Math.round(1000*(selected?.data?.wallThicknessMeters||
+   w.wallThicknessMeters||recognized.meters))/10):'';
+  hint.textContent=recognized?
+   'Отдельно меняет поперечную толщину без изменения длины и изгиба ('+
+   recognized.type+').':
+   'Толщина не распознана. Для этой модели используй X/Y/Z или проверь её GLB.';
  }
+}
+function changeWallThickness(cm,game=false){
+ const value=Number(cm);
+ if(!Number.isFinite(value)||value<2.5||value>80)
+  return toast('Толщина стенки должна быть от 2,5 до 80 см');
+ const target=editedDimensionTarget(game);
+ if(!w.setWallThickness(value/100,target))
+  return toast('У этой модели не удалось надёжно определить толщину. Геометрия не изменена.');
+ syncDimensionInputs();
+ toast('Толщина стенки: '+value.toFixed(1)+' см. Радиус, длина и высота сохранены.');
 }
 function changeDimension(axis,percent,game=false){
  const n=Number(percent);
@@ -561,6 +588,8 @@ function setupPicker(){
   w.onChanged();
  };
  for(const [prefix,game] of [['dimEditor',false],['dimGame',true]]){
+  $(game?'wallThicknessGame':'wallThicknessEditor').onchange=e=>
+   changeWallThickness(e.target.value,game);
   for(const axis of ['X','Y','Z']){
    $(prefix+axis).onchange=e=>changeDimension(axis.toLowerCase(),e.target.value,game);
   }

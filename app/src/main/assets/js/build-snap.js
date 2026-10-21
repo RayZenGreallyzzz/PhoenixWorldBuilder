@@ -218,7 +218,51 @@ const BuildSnap=(()=>{
   return {position:point,rotation:(w.placementRotation||0),snapped:true,slab:true,edge:true,
    reference:ref.entry.data.id,category:cat,thicknessY:factor,referenceThickness:choice.thickness};
  }
- function resolve(w,p){
+ // Roof section -> roof section along the roof's local longitudinal Z axis.
+ // Only the same source module and matching transverse dimensions may join;
+ // the snap does not alter pitch, height, or shape of either section.
+ function roofSection(w,p,model,modelBox){
+  if(!model||!modelBox||modelBox.isEmpty()||!w.placement)return null;
+  const scale=w.placementScale||1,axes=w.placementAxes||{};
+  const width=(modelBox.max.x-modelBox.min.x)*scale;
+  const depth=(modelBox.max.z-modelBox.min.z)*scale;
+  const centerNew=new THREE.Vector3((modelBox.min.x+modelBox.max.x)/2,0,
+   (modelBox.min.z+modelBox.max.z)/2);
+  if(width<.2||depth<.2)return null;
+  const possible=[];
+  for(const old of w.objects||[]){
+   if(old.kind!==w.placement||old===w.moveTarget)continue;
+   if(storyOf(old)!==null&&storyOf(old)!==w.floorLevel)continue;
+   const oldCategory=kindOf(w,old);if(oldCategory!=='roof')continue;
+   const base=attrBounds(old.mesh);if(base.isEmpty())continue;
+   const oldScale=old.data.scale||1;
+   const oldWidth=(base.max.x-base.min.x)*oldScale*(old.data.dimensionScale?.x||1);
+   const oldDepth=(base.max.z-base.min.z)*oldScale*(old.data.dimensionScale?.z||1);
+   if(Math.abs(oldWidth-width)>.08||Math.abs(old.mesh.scale.y-model.scale.y)>.08)continue;
+   const yaw=(old.data.rot||0)*Math.PI/180;
+   const rotation=((w.placementRotation||0)%360+360)%360;
+   if(rotation!==0)continue; // manual rotation opts out of automatic section linking
+   old.mesh.updateMatrixWorld(true);
+   const oldCenter=new THREE.Vector3((base.min.x+base.max.x)/2,0,
+    (base.min.z+base.max.z)/2).applyMatrix4(old.mesh.matrixWorld);
+   const newRotated=rotated(centerNew,yaw).multiplyScalar(scale);
+   const direction=rotated(new THREE.Vector3(0,0,1),yaw);
+   for(const side of [-1,1]){
+    const desired=oldCenter.clone().addScaledVector(direction,side*(oldDepth+depth)/2);
+    const position=new THREE.Vector3(desired.x-newRotated.x,
+     old.mesh.position.y,desired.z-newRotated.z);
+    const distance=Math.hypot(desired.x-p.x,desired.z-p.z);
+    if(distance<=Math.max(1.15,Math.min(2.5,depth*.75)))
+     possible.push({position,rotation:((yaw*180/Math.PI)%360+360)%360,
+      snapped:true,roofSection:true,reference:old.data.id,category:'roof',distance});
+   }
+  }
+  possible.sort((a,b)=>a.distance-b.distance);
+  if(!possible.length)return null;
+  const {distance,...result}=possible[0];
+  return result;
+ }
+  function resolve(w,p){
   const kind=w.placement||'',cat=w.placementCategory||w.categoryForKind?.(kind)||'prop';
   const aligned=edgable(cat,kind),useSnap=w.smartSnap!==false;
   const raw=new THREE.Vector3(Math.round(p.x/w.snap)*w.snap,w.placementHeight(p.x,p.z),Math.round(p.z/w.snap)*w.snap);
@@ -239,6 +283,10 @@ const BuildSnap=(()=>{
   }
   // Roofs and ceilings use the actual wall tops, slab thickness and storey datum.
   if(cat==='roof'||cat==='ceiling'){
+   if(cat==='roof'&&useSnap&&w.objects.length){
+    const section=roofSection(w,p,model,modelBox);
+    if(section)return lifted(section);
+   }
    if(useSnap&&w.objects.length){
     const overhead=resolveOverhead(w,p,cat,model,modelBox);
     if(overhead)return lifted(overhead);
@@ -307,6 +355,6 @@ const BuildSnap=(()=>{
   const degrees=((yaw*180/Math.PI)%360+360)%360;
   return lifted({position:anchor,rotation:degrees,snapped:true,edge:aligned,reference:chosen.entry.data.id,category:cat});
  }
- return {resolve,attrBounds,nearestEdge,matchSlab,dimensionBounds};
+ return {resolve,attrBounds,nearestEdge,matchSlab,dimensionBounds,roofSection};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildSnap;
