@@ -629,10 +629,17 @@ class WorldBuilder{
   const checked=typeof BuildPlacementValidator!=='undefined'?
    BuildPlacementValidator.validate(this,solved,this.ghost):
    {...solved,valid:solved.valid!==false,reason:solved.missingTarget||(solved.snapped?'Привязано':'По сетке')};
-  if(!checked.snapped)checked.manual=true;
-  const colour=checked.valid===false?'blocked':
-   checked.conflict?'blocked':
-   checked.snapped&&!this.cornerOffsetX&&!this.cornerOffsetZ&&!this.placementLift?'snapped':'manual';
+  if(!checked.snapped){
+   checked.manual=true;
+   if(checked.valid!==false&&!checked.conflict&&
+    typeof BuildPlacementValidator?.manualAlignment==='function'){
+    const actual=BuildPlacementValidator.manualAlignment(this,this.ghost,checked.category||
+     this.moveTarget?.data?.category||this.placementCategory);
+    if(actual)Object.assign(checked,actual);
+   }
+  }
+  const colour=checked.valid===false||checked.conflict?'blocked':
+   checked.manualAligned||checked.snapped&&!this.cornerOffsetX&&!this.cornerOffsetZ&&!this.placementLift?'snapped':'manual';
   this.colorPlacementPreview(colour);
   if(this.placementOutline){
    this.placementOutline.update();
@@ -644,7 +651,9 @@ class WorldBuilder{
   if(previous?.valid!==checked.valid||previous?.reason!==checked.reason||
      previous?.reference!==checked.reference||previous?.joinedTo!==checked.joinedTo||
      previous?.snapped!==checked.snapped||previous?.overhead!==checked.overhead||
-     previous?.thicknessY!==checked.thicknessY)this.onSnapChanged?.(checked);
+     previous?.thicknessY!==checked.thicknessY||
+     previous?.manualAligned!==checked.manualAligned||
+     previous?.conflict!==checked.conflict)this.onSnapChanged?.(checked);
   return checked;
  }
  colorPlacementPreview(state){
