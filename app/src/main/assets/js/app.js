@@ -412,6 +412,28 @@ function renderLibrary(){
    CatalogPreview.observeCards(el,(id,builtin)=>builtin?w.makeBuiltin(id):cacheFromDB(id),dbOp,dbOp);
  }
 }
+function editedDimensionTarget(game=false){
+ // Build-mode new modules can be resized before placement. In decoration /
+ // selection mode change the saved object's dimensions instead.
+ return !game&&w.selected&&(!w.placement||w.mode==='style')?w.selected:null;
+}
+function syncDimensionInputs(){
+ for(const [mode,prefix] of [[false,'dimEditor'],[true,'dimGame']]){
+  const selected=editedDimensionTarget(mode),axes=WorldBuilder.normalizedAxes(
+   selected?.data?.dimensionScale||w.placementAxes);
+  for(const axis of ['X','Y','Z'])$(prefix+axis).value=
+   String(Math.round(axes[axis.toLowerCase()]*100));
+ }
+}
+function changeDimension(axis,percent,game=false){
+ const n=Number(percent);
+ if(!Number.isFinite(n)||n<20||n>500)return toast('Размер по оси: от 20% до 500%');
+ const selected=editedDimensionTarget(game);
+ const factor=w.setDimensionFactor(axis,n/100,selected);
+ if(factor===null)return toast('Не удалось изменить размер детали');
+ syncDimensionInputs();
+ toast((selected?'Выбранный модуль: ':'Новый модуль: ')+axis.toUpperCase()+' '+Math.round(factor*100)+'%');
+}
 function refreshConstructionUI(){
  const height=(w.storeyHeight||2.6).toFixed(2);
  $('storeyHeightInput').value=height;$('buildStoreyHeight').value=height;
@@ -441,6 +463,7 @@ function refreshConstructionUI(){
  $('cornerZValue').textContent=Math.round((w.cornerOffsetZ||0)*100)+' см';
  $('btnOverheadCenter').textContent=w.centerOverhead?'⌂ Центрировать крышу: вкл.':'⌂ Центрировать крышу: выкл.';
  $('btnOverheadCenter').setAttribute('aria-pressed',String(!!w.centerOverhead));
+ syncDimensionInputs();
 }
 function setupPicker(){
  $('btnCatalogModels').onclick=()=>{catalogMode='models';catalogPage=0;renderLibrary()};
@@ -532,6 +555,19 @@ function setupPicker(){
   w.selected.data.scale=scale;
   w.selected.mesh.scale.set(scale,scale*(w.selected.data.thicknessY||1),scale);
   w.onChanged();
+ };
+ for(const [prefix,game] of [['dimEditor',false],['dimGame',true]]){
+  for(const axis of ['X','Y','Z']){
+   $(prefix+axis).onchange=e=>changeDimension(axis.toLowerCase(),e.target.value,game);
+  }
+ }
+ $('btnDimsEditorReset').onclick=()=>{
+  for(const axis of ['x','y','z'])w.setDimensionFactor(axis,1,editedDimensionTarget(false));
+  syncDimensionInputs();toast('Размеры выбранной детали X/Y/Z восстановлены');
+ };
+ $('btnDimsGameReset').onclick=()=>{
+  for(const axis of ['x','y','z'])w.setDimensionFactor(axis,1,null);
+  syncDimensionInputs();toast('Размеры новой детали X/Y/Z восстановлены');
  };
  $('btnModelScaleReset').onclick=()=>{
   const entry=w.selected;
@@ -650,15 +686,24 @@ function wireButtons(){
    result.slab?'Толщина соседнего пола: '+Math.round((result.referenceThickness||0)*100)+' см':
    result.overhead?'Перекрытие выровнено':
    result.snapped?'Привязано к детали':'По сетке');
-  const status=(good?'✓ Можно установить: ':'✕ Нельзя установить: ')+(detail||'Нет опоры');
+  const adjusted=!!(w.cornerOffsetX||w.cornerOffsetZ||w.placementLift);
+  const tier=!good?'blocked':good&&result.snapped&&!adjusted?'allowed':'manual';
+  const prefix=tier==='allowed'?'✓ Магнит: ':tier==='blocked'?'✕ Конфликт: ':'◇ Ручная подгонка: ';
+  const status=prefix+(detail||'Проверь положение детали перед установкой');
   for(const name of ['placementStatus','buildPlacementStatus']){
    const el=$(name);if(!el)continue;
    el.textContent=status;
-   el.classList.toggle('allowed',good);
-   el.classList.toggle('blocked',!good);
+   el.classList.toggle('allowed',tier==='allowed');
+   el.classList.toggle('blocked',tier==='blocked');
+   el.classList.toggle('manual',tier==='manual');
   }
   const snap=$('snapStatus');
-  if(snap){snap.textContent=detail||'';snap.classList.toggle('snapped',good&&!!result.snapped);snap.classList.toggle('blocked',!good)}
+  if(snap){
+   snap.textContent=detail||'';
+   snap.classList.toggle('snapped',tier==='allowed');
+   snap.classList.toggle('blocked',tier==='blocked');
+   snap.classList.toggle('manual',tier==='manual');
+  }
   const place=$('btnBuildPlace');
   if(place){place.classList.toggle('placementBlocked',!good);place.setAttribute('aria-disabled',String(!good))}
  };
@@ -997,7 +1042,7 @@ async function init(){
   }
  });
  setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
- w.onSelected=e=>{DecalUI.render();if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
+ w.onSelected=e=>{DecalUI.render();syncDimensionInputs();if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
