@@ -12,6 +12,9 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.graphics.Color;
 import android.widget.Toast;
 import android.webkit.ValueCallback;
 import java.io.File;
@@ -30,6 +33,7 @@ public class MainActivity extends Activity {
     private static final int PICK_FILE = 41;
     private static final int SAVE_FILE = 42;
     private WebView webView;
+    private ImageView splashView;
     private ValueCallback<Uri[]> fileCallback;
     private File tempExport;
     private OutputStream tempStream;
@@ -44,7 +48,23 @@ public class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         webView = new WebView(this);
-        setContentView(webView);
+        // Separate Android splash overlay: keeps PHOENIX BUILDER visible
+        // until local editor HTML is ready. FIT_CENTER never crops the title
+        // on 16:9 / 16:10 phones and tablets.
+        FrameLayout content = new FrameLayout(this);
+        content.setBackgroundColor(Color.rgb(6, 20, 33));
+        webView.setBackgroundColor(Color.rgb(6, 20, 33));
+        content.addView(webView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        splashView = new ImageView(this);
+        splashView.setImageResource(R.drawable.phoenix_splash);
+        splashView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        splashView.setBackgroundColor(Color.rgb(6, 20, 33));
+        content.addView(splashView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(content);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -57,6 +77,23 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v, String url) {
                 return !url.startsWith("file:///android_asset/");
+            }
+            @Override public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (url != null && url.startsWith("file:///android_asset/index.html")) {
+                    view.post(() -> {
+                        if (splashView != null) {
+                            ImageView shownSplash = splashView;
+                            splashView = null;
+                            shownSplash.animate().alpha(0f).setDuration(220).withEndAction(() -> {
+                                android.view.ViewParent parent = shownSplash.getParent();
+                                if (parent instanceof FrameLayout) {
+                                    ((FrameLayout) parent).removeView(shownSplash);
+                                }
+                            }).start();
+                        }
+                    });
+                }
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {

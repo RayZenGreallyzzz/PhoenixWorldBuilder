@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="PhoenixTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/phoenix_dark</item>
+        <item name="android:windowSplashScreenBackground">@color/phoenix_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/phoenix_dark</item>
+        <item name="android:colorAccent">#30D8F0</item>
+    </style>
+</resources>

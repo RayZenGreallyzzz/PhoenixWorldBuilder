@@ -80,6 +80,7 @@ jobs:
           node tests/test-smart-package.cjs
           node tests/test-murals.cjs
           node tests/test-artwork-clarity.cjs
+          node tests/test-android-branding.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4
