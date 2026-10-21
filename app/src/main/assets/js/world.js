@@ -632,7 +632,8 @@ class WorldBuilder{
   if(!checked.snapped){
    checked.manual=true;
    if(checked.valid!==false&&!checked.conflict&&
-    typeof BuildPlacementValidator?.manualAlignment==='function'){
+    typeof BuildPlacementValidator!=='undefined'&&
+    typeof BuildPlacementValidator.manualAlignment==='function'){
     const actual=BuildPlacementValidator.manualAlignment(this,this.ghost,checked.category||
      this.moveTarget?.data?.category||this.placementCategory);
     if(actual)Object.assign(checked,actual);
