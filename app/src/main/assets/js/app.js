@@ -692,8 +692,10 @@ function wireButtons(){
    result.snapped?'Привязано к детали':'По сетке');
   const adjusted=!!(w.cornerOffsetX||w.cornerOffsetZ||w.placementLift);
   const tier=(!good||result.conflict)?'blocked':
-   good&&result.snapped&&!adjusted?'allowed':'manual';
-  const prefix=tier==='allowed'?'✓ Магнит: ':tier==='blocked'?'✕ Конфликт: ':'◇ Ручная подгонка: ';
+   result.manualAligned||good&&result.snapped&&!adjusted?'allowed':'manual';
+  const prefix=tier==='allowed'?
+   (result.manualAligned?'✓ Точный ручной стык: ':'✓ Магнит: '):
+   tier==='blocked'?'✕ Конфликт: ':'◇ Ручная подгонка: ';
   const status=prefix+(detail||'Проверь положение детали перед установкой');
   for(const name of ['placementStatus','buildPlacementStatus']){
    const el=$(name);if(!el)continue;
