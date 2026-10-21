@@ -701,7 +701,10 @@ class WorldBuilder{
  }
 
  setPlacement(kind,category=null){
-  if(kind!==this.placement){this.placementSurfacePaint={};this.placementDecals=[];}
+  if(kind!==this.placement){
+   this.placementSurfacePaint={};this.placementDecals=[];
+   this.placementAxes={x:1,y:1,z:1};
+  }
   this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
   if(this.ghost)this.ghost.removeFromParent();
   if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline.geometry.dispose();this.placementOutline.material.dispose();this.placementOutline=null;}
