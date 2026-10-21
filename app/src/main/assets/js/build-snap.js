@@ -25,6 +25,16 @@ const BuildSnap=(()=>{
   if(!result.isEmpty())boundsCache.set(root,result.clone());
   return result;
  };
+ // Resolve with physical per-axis dimensions without modifying the imported
+ // GLB's vertices. All legacy uniform-scale models retain identical bounds.
+ const dimensionBounds=(box,w)=>{
+  if(!box||box.isEmpty())return box;
+  const axes=w.placementAxes||{},x=Number(axes.x)||1,y=Number(axes.y)||1,z=Number(axes.z)||1;
+  const b=box.clone();
+  b.min.multiply(new THREE.Vector3(x,y,z));
+  b.max.multiply(new THREE.Vector3(x,y,z));
+  return b;
+ };
  const worldPoint=(root,x,y,z)=>new THREE.Vector3(x,y,z).applyMatrix4(root.matrixWorld);
  const surface=(entry)=>{
   const root=entry.mesh,box=attrBounds(root);
@@ -79,61 +89,69 @@ const BuildSnap=(()=>{
  };
  const storyOf=(entry)=>Number.isInteger(entry.data?.storey)?entry.data.storey:null;
  function resolveOverhead(w,p,cat,model,modelBox){
-  const storyHeight=w.storeyHeight||2.6,ground=w.heightAt(p.x,p.z),nominal=ground+w.floorLevel*storyHeight;
-  const foot=w.mode==='playbuild'&&w.floorLevel===0&&w.player?
-   w.player.position.y-.85:nominal;
-  const candidates=[];
-  for(const entry of w.objects){
-   if(kindOf(w,entry)!=='foundation')continue;
-   if(storyOf(entry)!==null&&storyOf(entry)!==w.floorLevel)continue;
-   const s=surface(entry);if(!s)continue;
-   const d=areaDistance(s,p);
-   if(d>1.3)continue;
-   const vertical=Math.min(Math.abs(s.top-nominal),Math.abs(s.top-foot));
-   // Older projects may have elevated decks without an assigned storey.
-   if(storyOf(entry)===null&&vertical>4.5)continue;
-   candidates.push({s,score:d+vertical*.25});
-  }
-  candidates.sort((a,b)=>a.score-b.score);
-  let base=candidates[0]?.s||null,baseY=base?base.top:nominal;
-  let walls=[],ceilings=[];
-  for(const entry of w.objects){
+  // Roofs span walls; the cursor can be many metres from every bearing wall.
+  // Detect all supports intersecting the intended roof footprint, not just
+  // those within the old 1.5m radius of the character/cursor.
+  const storyHeight=w.storeyHeight||2.6,nominal=w.heightAt(p.x,p.z)+w.floorLevel*storyHeight;
+  const roof=cat==='roof',scale=w.placementScale||1;
+  const extentX=modelBox?.isEmpty()?1:(modelBox.max.x-modelBox.min.x)*scale/2;
+  const extentZ=modelBox?.isEmpty()?1:(modelBox.max.z-modelBox.min.z)*scale/2;
+  const radius=roof?Math.min(22,Math.max(2.4,Math.hypot(extentX,extentZ)+1.2)):3.5;
+  const validStorey=entry=>{
+   const story=storyOf(entry);
+   return story===null||story===w.floorLevel;
+  };
+  const nearby=(s,margin=radius)=>areaDistance(s,p)<=margin;
+  const foundations=[],walls=[],ceilings=[];
+  for(const entry of w.objects||[]){
+   if(entry===w.moveTarget||!validStorey(entry))continue;
    const typ=kindOf(w,entry);
-   if(!['wall','door','ceiling'].includes(typ))continue;
-   if(storyOf(entry)!==null&&storyOf(entry)!==w.floorLevel)continue;
-   const s=surface(entry);if(!s)continue;
-   const proximity=base?areaDistance(base,worldCenter(s)):areaDistance(s,p);
-   const near=base?proximity<=1.5:proximity<=4;
-   if(!near)continue;
-   // Do not borrow a roof or a wall belonging to another vertical storey.
-   if(typ==='ceiling'){
-    if(s.top>=baseY+.3&&s.top<=baseY+8)ceilings.push(s);
-   }else if((storyOf(entry)===w.floorLevel||Math.abs(s.bottom-baseY)<=Math.max(1.7,storyHeight*.55))&&
-     s.top>baseY+.65&&s.top<baseY+9){
-    walls.push(s);
-   }
+   if(!['foundation','wall','corner','door','ceiling'].includes(typ))continue;
+   const s=surface(entry);if(!s||!nearby(s,typ==='foundation'?radius+1:radius))continue;
+   if(storyOf(entry)===null&&Math.abs(s.bottom-nominal)>Math.max(1.8,storyHeight*.65)&&
+    Math.abs(s.top-nominal)>Math.max(1.8,storyHeight*.65))continue;
+   if(typ==='foundation')foundations.push(s);
+   else if(typ==='ceiling')ceilings.push(s);
+   else walls.push(s);
   }
-  // A wall is a measured height reference. Do not force it to the catalogue's 2.6 m preset.
+  const orderedBase=foundations.map(s=>({s,d:areaDistance(s,p),
+   delta:Math.abs(s.top-nominal)})).sort((a,b)=>a.d-b.d+a.delta*.1-b.delta*.1);
+  const base=orderedBase[0]?.s||null;
+  const baseY=base?.top??(walls.length?Math.min(...walls.map(s=>s.bottom)):nominal);
+  const validWalls=walls.filter(s=>s.top>baseY+.35&&
+   Math.abs(s.bottom-baseY)<Math.max(.4,storyHeight*.25));
+  const validCeilings=ceilings.filter(s=>s.top>=baseY-.1&&s.top<=baseY+Math.max(9,storyHeight*2));
+  if(!base&&!validWalls.length&&!validCeilings.length)return null;
+  // Prefer the highest compatible top, preserving real GLB heights instead of
+  // placing a roof at the nominal building level with a visible gap.
   let target=baseY+storyHeight;
-  if(walls.length)target=Math.max(...walls.map(s=>s.top));
-  if(cat==='roof'&&ceilings.length)target=Math.max(target,...ceilings.map(s=>s.top));
-  if(!base&&!walls.length&&!ceilings.length)return null;
+  if(validWalls.length)target=Math.max(...validWalls.map(s=>s.top));
+  if(roof&&validCeilings.length)target=Math.max(target,...validCeilings.map(s=>s.top));
+  if(!validWalls.length&&validCeilings.length)target=Math.max(...validCeilings.map(s=>s.top));
+  if(!validWalls.length&&!validCeilings.length&&!base)return null;
   let x=p.x,z=p.z;
-  if(base&&w.centerOverhead){
-   const center=worldCenter(base);x=center.x;z=center.z;
+  const support=validCeilings.length&&roof?validCeilings:validWalls.length?validWalls:base?[base]:[];
+  if(w.centerOverhead&&support.length){
+   // Use the footprint of all nearby supports, not the center of an arbitrary
+   // floor segment (which moves a roof half a room off the correct center).
+   const centers=support.map(s=>worldCenter(s));
+   x=(Math.min(...centers.map(s=>s.x))+Math.max(...centers.map(s=>s.x)))/2;
+   z=(Math.min(...centers.map(s=>s.z))+Math.max(...centers.map(s=>s.z)))/2;
   }
-  let yaw=(base?localFrameYaw(base.root):0)+(w.placementRotation||0)*Math.PI/180;
-  let anchor=new THREE.Vector3(x,target,z);
+  const orientation=base||support[0];
+  const yaw=(orientation?localFrameYaw(orientation.root):0)+
+   (w.placementRotation||0)*Math.PI/180;
+  const anchor=new THREE.Vector3(x,target,z);
   if(model&&!modelBox.isEmpty()){
-   const centerX=(modelBox.min.x+modelBox.max.x)/2,centerZ=(modelBox.min.z+modelBox.max.z)/2;
-   const centerShift=rotated(new THREE.Vector3(centerX,0,centerZ),yaw).multiplyScalar(w.placementScale||1);
-   anchor.x-=centerShift.x;anchor.z-=centerShift.z;
-   anchor.y-=modelBox.min.y*(w.placementScale||1);
+   const middle=new THREE.Vector3((modelBox.min.x+modelBox.max.x)/2,0,
+    (modelBox.min.z+modelBox.max.z)/2);
+   const shift=rotated(middle,yaw).multiplyScalar(scale);
+   anchor.x-=shift.x;anchor.z-=shift.z;anchor.y-=modelBox.min.y*scale;
   }
   return {position:anchor,rotation:((yaw*180/Math.PI)%360+360)%360,
    snapped:true,overhead:true,edge:false,
-   reference:base?.entry.data.id||walls[0]?.entry.data.id||ceilings[0]?.entry.data.id,
-   targetHeight:target,category:cat};
+   reference:base?.entry.data.id||support[0]?.entry.data.id,
+   targetHeight:target,category:cat,supportCount:support.length};
  }
  function matchSlab(w,p,cat,model,box){
   // Floors share a top plane and, optionally, thickness without scaling X or Z.
@@ -203,7 +221,7 @@ const BuildSnap=(()=>{
   const raw=new THREE.Vector3(Math.round(p.x/w.snap)*w.snap,w.placementHeight(p.x,p.z),Math.round(p.z/w.snap)*w.snap);
   const basic={position:raw,rotation:w.placementRotation||0,snapped:false,edge:false,reference:null,category:cat};
   const model=w.ghost||w.makeBuiltin(kind)||w.assetCache?.get(kind);
-  const modelBox=model?attrBounds(model):new THREE.Box3().makeEmpty();
+  const modelBox=model?dimensionBounds(attrBounds(model),w):new THREE.Box3().makeEmpty();
   // GLB origins are often at the mesh centre rather than the sole. The
   // selected storey represents the contact plane, not the GLB pivot.
   if(!modelBox.isEmpty()&&['foundation','wall','corner','door','railing'].includes(cat))
@@ -286,6 +304,6 @@ const BuildSnap=(()=>{
   const degrees=((yaw*180/Math.PI)%360+360)%360;
   return lifted({position:anchor,rotation:degrees,snapped:true,edge:aligned,reference:chosen.entry.data.id,category:cat});
  }
- return {resolve,attrBounds,nearestEdge,matchSlab};
+ return {resolve,attrBounds,nearestEdge,matchSlab,dimensionBounds};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildSnap;
