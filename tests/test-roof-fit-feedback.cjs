@@ -79,6 +79,30 @@ assert.equal(check.conflict,undefined,'Non-overlapping free model stays amber');
 freeWorld.moveTarget=first;
 const v=BuildPlacementValidator.validate(freeWorld,{valid:true,snapped:true,category:'wall'},first.mesh);
 assert(v.valid,'Existing wall itself is excluded from move validation when applicable');
+// Exact manual contact becomes GREEN, not forever yellow. Test independent
+// of magnetic detection for walls, floors and roofs.
+{
+ const m=create();m.smartSnap=false;
+ const old=m.instantiate('wall',{id:200,pos:[0,0,0],rot:0,scale:1,category:'wall',storey:0});
+ m.setPlacement('wall','wall');
+ let hand=m.applyGhostPlacement(new THREE.Vector3(2,0,0));
+ assert.equal(hand.snapped,false);
+ assert.equal(hand.manualAligned,true,'Manual wall endpoints should turn green at real cap contact');
+ assert.equal(m.placementOutline.material.color.getHex(),0x50f4a0);
+ hand=m.applyGhostPlacement(new THREE.Vector3(6,0,0));
+ assert.equal(hand.manualAligned,undefined,'A one-wall gap must not be treated as aligned');
+ assert.equal(m.placementOutline.material.color.getHex(),0xffc36a);
+ // The roof is moved to the exact physical support height of the wall.
+ m.setPlacement('roof','roof');m.placementLift=2.6;
+ hand=m.applyGhostPlacement(new THREE.Vector3(0,0,0));
+ assert.equal(hand.manualAligned,true,'Roof bottom on wall top should turn green in manual mode');
+ assert.equal(m.placementOutline.material.color.getHex(),0x50f4a0);
+ const lone=create();lone.smartSnap=false;
+ lone.instantiate('floor',{id:301,pos:[0,0,0],rot:0,scale:1,category:'foundation',storey:0});
+ lone.setPlacement('floor','foundation');
+ hand=lone.applyGhostPlacement(new THREE.Vector3(2,0,0));
+ assert.equal(hand.manualAligned,true,'Manually flush adjacent floor tiles should show green contact');
+}
 const html=fs.readFileSync(path.join(root,'../index.html'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 for(const name of ['dimEditorX','dimEditorY','dimEditorZ','dimGameX','dimGameY','dimGameZ',
