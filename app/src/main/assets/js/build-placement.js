@@ -120,8 +120,24 @@ const BuildPlacementValidator=(()=>{
   const cat=solved.category||w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
   // Paint/decor should not be blocked by deliberate layering on existing
   // surfaces. Also respect the already exposed "Free" placement mode.
-  if(w.joinMode==='free'||decorative.has(cat)||!structural.has(cat))
-   return {...solved,valid:true,reason:w.joinMode==='free'?'Свободная установка':'Декор можно накладывать поверх основы'};
+  if(w.joinMode==='free'){
+   // Free placement must be possible, but do not falsely paint collisions
+   // green as if a magnetic joint had been confirmed.
+   const current=rect(root);
+   if(current&&structural.has(cat))for(const entry of w.objects||[]){
+    if(entry===w.moveTarget)continue;
+    const typ=category(w,entry);
+    if(!(cat===typ||(wallLike.has(cat)&&wallLike.has(typ))))continue;
+    const other=rect(entry.mesh);if(!other)continue;
+    if(collisionCandidate(current,other,cat,typ,solved,entry))
+     return {...solved,valid:true,conflict:true,manual:true,
+      reason:'Сильное пересечение с другой деталью (свободная установка разрешена)'};
+   }
+   return {...solved,valid:true,manual:true,
+    reason:'Свободная установка — точность стыка не подтверждена'};
+  }
+  if(decorative.has(cat)||!structural.has(cat))
+   return {...solved,valid:true,reason:'Декор можно накладывать поверх основы'};
   if((cat==='roof'||cat==='ceiling')&&w.smartSnap!==false&&!solved.snapped&&w.objects?.length){
    return {...solved,valid:false,reason:cat==='roof'?'Не найдена опора для крыши':'Не найдены стены или опора для перекрытия'};
   }
