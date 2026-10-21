@@ -131,9 +131,12 @@ const BuildSnap=(()=>{
   if(!validWalls.length&&!validCeilings.length&&!base)return null;
   let x=p.x,z=p.z;
   const support=validCeilings.length&&roof?validCeilings:validWalls.length?validWalls:base?[base]:[];
-  if(w.centerOverhead&&support.length){
-   // Use the footprint of all nearby supports, not the center of an arbitrary
-   // floor segment (which moves a roof half a room off the correct center).
+  if(w.centerOverhead&&base){
+   // Preserve the user's explicit "center above the chosen floor" option.
+   // On custom rotated GLB decks this is more stable than averaging walls.
+   const center=worldCenter(base);x=center.x;z=center.z;
+  }else if(w.centerOverhead&&support.length){
+   // Without a floor, center between the load-bearing walls of the room.
    const centers=support.map(s=>worldCenter(s));
    x=(Math.min(...centers.map(s=>s.x))+Math.max(...centers.map(s=>s.x)))/2;
    z=(Math.min(...centers.map(s=>s.z))+Math.max(...centers.map(s=>s.z)))/2;
