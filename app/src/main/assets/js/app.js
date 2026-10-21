@@ -691,7 +691,8 @@ function wireButtons(){
    result.overhead?'Перекрытие выровнено':
    result.snapped?'Привязано к детали':'По сетке');
   const adjusted=!!(w.cornerOffsetX||w.cornerOffsetZ||w.placementLift);
-  const tier=!good?'blocked':good&&result.snapped&&!adjusted?'allowed':'manual';
+  const tier=(!good||result.conflict)?'blocked':
+   good&&result.snapped&&!adjusted?'allowed':'manual';
   const prefix=tier==='allowed'?'✓ Магнит: ':tier==='blocked'?'✕ Конфликт: ':'◇ Ручная подгонка: ';
   const status=prefix+(detail||'Проверь положение детали перед установкой');
   for(const name of ['placementStatus','buildPlacementStatus']){
