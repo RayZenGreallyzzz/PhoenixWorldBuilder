@@ -151,6 +151,7 @@ const BuildJoin=(()=>{
    Math.hypot(b.max.x-b.min.x,b.max.z-b.min.z)*(w.placementScale||1)+2)):5.5;
   const possible=[];
   for(const entry of w.objects||[]){
+   if(entry===w.moveTarget)continue;
    if(!wallCategory(catOf(w,entry))&&!(typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind)))continue;
    const root=entry.mesh;
    // Fast world-space rejection based on geometry bounding sphere after pivot shift.
@@ -178,7 +179,7 @@ const BuildJoin=(()=>{
  }
  function modelBounds(w){
   const model=w.ghost||w.makeBuiltin?.(w.placement)||w.assetCache?.get(w.placement);
-  const b=model?BuildSnap.attrBounds(model):new THREE.Box3().makeEmpty();
+  const b=model?BuildSnap.dimensionBounds(BuildSnap.attrBounds(model),w):new THREE.Box3().makeEmpty();
   return b.isEmpty()?new THREE.Box3(new THREE.Vector3(-.5,0,-.5),new THREE.Vector3(.5,1,.5)):b;
  }
  function corner(w,p,candidates,box){

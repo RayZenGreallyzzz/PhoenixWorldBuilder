@@ -63,6 +63,7 @@ jobs:
           node tests/test-catalog-visual.cjs
           node tests/test-glb-edge-snap.cjs
           node tests/test-roof-ceiling-levels.cjs
+          node tests/test-roof-fit-feedback.cjs
           node tests/test-storey-quick-select.cjs
           node tests/test-joints-thickness.cjs
           node tests/test-corner-wall-continuity.cjs
