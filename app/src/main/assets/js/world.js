@@ -629,6 +629,7 @@ class WorldBuilder{
   const checked=typeof BuildPlacementValidator!=='undefined'?
    BuildPlacementValidator.validate(this,solved,this.ghost):
    {...solved,valid:solved.valid!==false,reason:solved.missingTarget||(solved.snapped?'Привязано':'По сетке')};
+  if(!checked.snapped)checked.manual=true;
   const colour=checked.valid===false?'blocked':
    checked.conflict?'blocked':
    checked.snapped&&!this.cornerOffsetX&&!this.cornerOffsetZ&&!this.placementLift?'snapped':'manual';
