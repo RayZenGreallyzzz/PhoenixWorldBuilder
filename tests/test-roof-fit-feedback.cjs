@@ -76,13 +76,13 @@ assert.equal(check.valid,true,'Free placement can deliberately intersect');
 assert.equal(check.conflict,true,'Severe free-mode wall overlap turns preview red');
 check=freeWorld.applyGhostPlacement(new THREE.Vector3(10,0,0));
 assert.equal(check.conflict,undefined,'Non-overlapping free model stays amber');
-freeWorld.action('move'); // select the source first!
+freeWorld.moveTarget=first;
 const v=BuildPlacementValidator.validate(freeWorld,{valid:true,snapped:true,category:'wall'},first.mesh);
 assert(v.valid,'Existing wall itself is excluded from move validation when applicable');
 const html=fs.readFileSync(path.join(root,'../index.html'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 for(const name of ['dimEditorX','dimEditorY','dimEditorZ','dimGameX','dimGameY','dimGameZ',
  'btnDimsEditorReset','btnDimsGameReset'])assert(html.includes('id="'+name+'"'),'UI missing '+name);
-assert(app.includes('changeDimension(axis,n/100')===false||app.includes('setDimensionFactor('));
+assert(app.includes("w.setDimensionFactor(axis,n/100,selected)"),'Axis controls must not scale textures');
 assert(app.includes("result.snapped&&!adjusted"),'Only truly snapped unadjusted placements are green');
 console.log('Roof supports far away, nonuniform dimensions, save/restore and red/amber/green preview diagnostics OK');
