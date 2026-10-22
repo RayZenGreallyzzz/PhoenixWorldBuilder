@@ -63,10 +63,11 @@ const BuildCurves=(()=>{
  }
  function localSockets(root,kind){
   if(!isArc(kind,root))return null;
+  const signature=BuildSnap.geometrySignature(root);
   const previous=cache.get(root);
-  if(previous&&previous.kind===kind)return previous.sockets;
+  if(previous&&previous.kind===kind&&previous.signature===signature)return previous.sockets;
   const sockets=rawArcSockets(root,kind);
-  if(sockets)cache.set(root,{kind,sockets});
+  cache.set(root,{kind,signature,sockets});
   return sockets;
  }
  function sourceSockets(info){
