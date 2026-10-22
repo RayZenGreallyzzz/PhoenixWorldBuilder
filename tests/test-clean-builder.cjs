@@ -48,6 +48,34 @@ for(const kind of ['arc90','arc180']){
 const arc=G.create('arc90',.3);
 const b=G.localBounds(arc);
 close(b.min.x,0-.15,'Arc shape inner boundary roughly x near zero',.16);
+// User-visible centimetre thickness must stay physically constant when
+// overall/axis scale changes, not silently inherit X/Z dimension multipliers.
+{
+ const scaledWall=G.create('wall',.28,2.5,1.4);
+ scaledWall.scale.set(2.5,1,1.4);
+ const size=G.bbox(scaledWall).getSize(V());
+ close(size.x,5,'Independently wider wall is five metres long');
+ close(size.z,.28,'World thickness remains exactly 28 cm');
+ const corner=G.create('corner',.34,1.3,2.2);
+ corner.scale.set(1.3,1,2.2);
+ const first=G.bbox(corner.children[0]).getSize(V()),
+  second=G.bbox(corner.children[1]).getSize(V());
+ close(first.z,.34,'L-corner X arm physically 34 cm thick');
+ close(second.x,.34,'L-corner Z arm physically 34 cm thick');
+ const ellipse=G.create('arc90',.26,2.2,.65);
+ ellipse.scale.set(2.2,1,.65);
+ const attr=ellipse.children[0].geometry.attributes.position;
+ const atStart=[],atEnd=[];
+ for(let i=0;i<attr.count;i++){
+  const x=attr.getX(i),y=attr.getY(i),z=attr.getZ(i);
+  if(Math.abs(y)>.00001)continue;
+  if(Math.abs(z)<.000001)atStart.push(x);
+  if(Math.abs(x)<.05)atEnd.push(z);
+ }
+ close((Math.max(...atStart)-Math.min(...atStart))*2.2,.26,
+  'Quarter-circle start cap stays 26 cm despite X scale');
+ assert(atEnd.length>0,'Quarter-circle end cap has geometry');
+}
 const feet=G.sockets('arc90',arc);
 close(feet[0].point.distanceTo(V(2,0,0)),0,'Arc actual start centerline');
 close(feet[1].point.distanceTo(V(0,0,2)),0,'Arc actual end centerline');
