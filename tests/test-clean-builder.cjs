@@ -63,6 +63,44 @@ const unknown=new THREE.Group();
 unknown.add(new THREE.Mesh(new THREE.BoxGeometry(2,2.6,2),new THREE.MeshBasicMaterial()));
 assert.equal(G.sockets('glb:unidentified',unknown,null,'wall').length,0,
  'No fictional AABB corner joins on unrecognized imported GLB');
+// Real imported GLB quarter and semicircle strips: infer sockets from actual
+// concentric cross-sections, not the diagonal bounding box.
+for(const half of [Math.PI/4,Math.PI/2]){
+ const radius=2.5,vertices=[];
+ for(let i=0;i<=16;i++){
+  const a=-half+(2*half*i/16);
+  for(const r of [radius-.11,radius+.11]){
+   vertices.push(r*Math.sin(a),0,r*Math.cos(a));
+   vertices.push(r*Math.sin(a),2.6,r*Math.cos(a));
+  }
+ }
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+ const imported=new THREE.Group();imported.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial()));
+ const ends=G.sockets('glb:custom-curve',imported,null,'wall');
+ assert.equal(ends.length,2,'Imported arc GLB must yield actual end sockets at '+half);
+ for(let i=0;i<2;i++)close(ends[i].out.length(),1,'Imported socket tangent normalized');
+ const middleRadius=Math.hypot((ends[0].point.x+ends[1].point.x)/2,
+  (ends[0].point.z+ends[1].point.z)/2);
+ assert(middleRadius>.2,'Arc sockets follow the geometry centreline');
+ const onGround=entry(100,'wall');
+ imported.position.set(4,0,0);imported.updateMatrixWorld(true);
+ const shape={id:101,kind:'glb:custom-curve',category:'wall',root:imported,storey:0};
+ const targets=G.worldSockets(shape);
+ close(targets[0].point.y,0,'Imported arc socket lies on base');
+ assert(targets.every(s=>s.out.lengthSq()>.99),'Imported arc orientations are usable');
+}
+{
+ const cornerGLB=new THREE.Group();
+ const first=new THREE.Mesh(new THREE.BoxGeometry(2,2.6,.22),new THREE.MeshBasicMaterial());
+ first.position.set(-.9,1.3,0);
+ const second=new THREE.Mesh(new THREE.BoxGeometry(.22,2.6,2),new THREE.MeshBasicMaterial());
+ second.position.set(0,1.3,-.9);
+ cornerGLB.add(first,second);
+ const caps=G.sockets('glb:custom-corner',cornerGLB,null,'wall');
+ assert.equal(caps.length,2,'Imported L corner with two arms yields correct end caps');
+ close(caps[0].point.x,-1.9,'L-corner X cap');
+ close(caps[1].point.z,-1.9,'L-corner Z cap');
+}
 const ui=fs.readFileSync(path.join(dir,'index.html'),'utf8');
 for(const id of ['modeBuild','modeCharacter','modeDrone','magnet','sizeX','sizeY','sizeZ',
  'scaleAll','thickness','posX','posY','posZ','socketAX','socketBZ','btnSave','btnLoad'])
