@@ -861,19 +861,45 @@ class WorldBuilder{
  }
  snapshot(){const pos=this.terrain.geometry.attributes.position,col=this.terrain.geometry.attributes.color;let heights=[];for(let i=0;i<pos.count;i++)heights.push(Math.round(pos.getZ(i)*1000)/1000);return {version:1,size:128,heights,colors:Array.from(col.array).map(x=>Math.round(x*1000)/1000),construction:{storeyHeight:this.storeyHeight||2.6,floorLevel:this.floorLevel||0,smartSnap:this.smartSnap!==false,autoThickness:this.autoThickness!==false},objects:this.objects.map(e=>({kind:e.kind,...JSON.parse(JSON.stringify(e.data))})),updated:new Date().toISOString()};}
  async restore(s){
-   if(!s||!Array.isArray(s.objects)||!Array.isArray(s.heights))throw Error('Неверный формат проекта');
-   const cfg=s.construction||{};
-   this.storeyHeight=THREE.MathUtils.clamp(Number(cfg.storeyHeight)||2.6,1.8,6);
-   this.floorLevel=Number.isSafeInteger(Number(cfg.floorLevel))&&Number(cfg.floorLevel)>=0?Number(cfg.floorLevel):0;
-   this.smartSnap=cfg.smartSnap!==false;this.autoThickness=cfg.autoThickness!==false;this.joinMode='auto';
-   this.objects.forEach(e=>e.mesh.removeFromParent());this.objects=[];this.select(null);this.nextId=1;
+  if(!s||!Array.isArray(s.objects)||!Array.isArray(s.heights))
+   throw Error('Неверный формат проекта');
+  // Assemble into a staging scene. A missing/corrupted GLB must NOT result in
+  // an apparently successful load followed by a save of a truncated building.
+  const previous=this.objects,previousNextId=this.nextId,previousSelection=this.selected;
+  this.objects=[];this.nextId=1;
+  try{
+   for(const e of s.objects){
+    if(!e||!e.kind||!Array.isArray(e.pos)||e.pos.length!==3||
+       !e.pos.every(Number.isFinite))
+     throw Error('Некорректный объект в сохранении: '+String(e?.kind||'?'));
+    this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,
+     thicknessY:e.thicknessY||1,dimensionScale:e.dimensionScale,
+     wallThicknessMeters:e.wallThicknessMeters,moduleShape:e.moduleShape,moduleUse:e.moduleUse,
+     category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},
+     decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,
+     texture:e.texture,door:e.door,open:e.open});
+   }
+  }catch(error){
+   for(const item of this.objects)item.mesh.removeFromParent();
+   this.objects=previous;this.nextId=previousNextId;
+   this.select(previousSelection);
+   throw Error('Проект не заменён: '+error.message);
+  }
+  const staged=this.objects;
+  for(const item of previous)item.mesh.removeFromParent();
+  this.objects=staged;this.select(null);
+  const cfg=s.construction||{};
+  this.storeyHeight=THREE.MathUtils.clamp(Number(cfg.storeyHeight)||2.6,1.8,6);
+  this.floorLevel=Number.isSafeInteger(Number(cfg.floorLevel))&&Number(cfg.floorLevel)>=0?Number(cfg.floorLevel):0;
+  this.smartSnap=cfg.smartSnap!==false;this.autoThickness=cfg.autoThickness!==false;this.joinMode='auto';
   const pos=this.terrain.geometry.attributes.position,col=this.terrain.geometry.attributes.color;
-  for(let i=0;i<Math.min(pos.count,s.heights.length);i++)pos.setZ(i,s.heights[i]);if(s.colors&&s.colors.length===col.array.length)col.array.set(s.colors);
-  pos.needsUpdate=true;col.needsUpdate=true;this.terrain.geometry.computeVertexNormals();this.terrain.geometry.computeBoundingBox();this.terrain.geometry.computeBoundingSphere();
-  for(const e of s.objects){if(this.makeBuiltin(e.kind)||this.assetCache.has(e.kind)){try{this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,thicknessY:e.thicknessY||1,dimensionScale:e.dimensionScale,
-   wallThicknessMeters:e.wallThicknessMeters,moduleShape:e.moduleShape,moduleUse:e.moduleUse,
-   category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,texture:e.texture,door:e.door,open:e.open})}catch(err){console.warn(err)}}}
-  this.onChanged();}
+  for(let i=0;i<Math.min(pos.count,s.heights.length);i++)pos.setZ(i,s.heights[i]);
+  if(s.colors&&s.colors.length===col.array.length)col.array.set(s.colors);
+  pos.needsUpdate=true;col.needsUpdate=true;
+  this.terrain.geometry.computeVertexNormals();
+  this.terrain.geometry.computeBoundingBox();this.terrain.geometry.computeBoundingSphere();
+  this.onChanged();
+ }
  updateCamera(){if(this.mode==='walk'||(this.mode==='playbuild'&&!this.droneMode)){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));this.target.copy(this.player.position).add(new THREE.Vector3(0,1.15,0));const range=THREE.MathUtils.clamp(this.distance,2.7,9);this.camera.position.copy(this.target).addScaledVector(forward,-Math.cos(this.pitch)*range).add(new THREE.Vector3(0,Math.sin(this.pitch)*range,0));}
   else{this.camera.position.set(this.target.x+Math.sin(this.yaw)*Math.cos(this.pitch)*this.distance,this.target.y+Math.sin(this.pitch)*this.distance,this.target.z+Math.cos(this.yaw)*Math.cos(this.pitch)*this.distance);}this.camera.lookAt(this.target);}
  updatePlayer(dt){
