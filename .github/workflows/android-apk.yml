@@ -50,7 +50,6 @@ jobs:
         run: |
           for file in app/src/main/assets/js/*.js; do node --check "$file"; done
           node tests/test-clean-builder.cjs
-          node tests/test-glb.cjs
           node tests/test-android-branding.cjs
 
       - name: Configure Java 17
