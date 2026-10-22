@@ -135,7 +135,9 @@ const CleanGeometry=(()=>{
   const outgoingA=tangent(first,cross[1]);
   const outgoingB=tangent(last,cross[cross.length-2]);
   if(!outgoingA||!outgoingB)return [];
-  return [{point:first.at,out:outgoingA},{point:last.at,out:outgoingB}];
+  const sockets=[{point:first.at,out:outgoingA},{point:last.at,out:outgoingB}];
+  sockets.profile={cx,cz,radius,thickness:width};
+  return sockets;
  }
  function lCornerSockets(root){
   root.updateWorldMatrix(true,true);
@@ -187,6 +189,85 @@ const CleanGeometry=(()=>{
    ];
   }
   return [];
+ }
+ // Optional true mesh thickness for imported GLBs with verifiable geometry.
+ // It moves only material across the wall cross-section in root-local space.
+ // Arbitrary sculptures/merged non-annular shapes remain unmodified.
+ function importedProfile(obj){
+  if(!obj||obj.category!=='wall'||isBuiltIn(obj.kind))return null;
+  const root=obj.root;root.updateWorldMatrix(true,true);
+  const meshes=[];root.traverse(m=>{if(m.isMesh&&m.geometry?.attributes?.position)meshes.push(m)});
+  const meshBox=mesh=>{
+   if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();
+   const inv=root.matrixWorld.clone().invert();
+   const matrix=new THREE.Matrix4().multiplyMatrices(inv,mesh.matrixWorld);
+   return mesh.geometry.boundingBox.clone().applyMatrix4(matrix);
+  };
+  const slab=mesh=>{
+   const b=meshBox(mesh),size=b.getSize(V());
+   const thin=Math.min(size.x,size.z),long=Math.max(size.x,size.z);
+   if(size.y<.4||thin<.01||thin>.9||long<.65||long/thin<3.3)return null;
+   const axis=size.x>size.z?'z':'x';
+   return {mesh,axis,centre:(b.min[axis]+b.max[axis])/2,sourceThickness:thin};
+  };
+  if(meshes.length===1){
+   const curved=arcSockets(root);
+   if(curved.profile){
+    if(Math.abs(root.scale.x-root.scale.z)>Math.max(.01,root.scale.x*.03))return null;
+    return {type:'arc',parts:[{mesh:meshes[0],axis:'radial',
+     cx:curved.profile.cx,cz:curved.profile.cz,radius:curved.profile.radius,
+     sourceThickness:curved.profile.thickness}]};
+   }
+   const line=slab(meshes[0]);
+   return line?{type:'straight',parts:[line]}:null;
+  }
+  if(meshes.length===2){
+   const parts=meshes.map(slab);
+   if(parts.every(Boolean)&&parts[0].axis!==parts[1].axis&&lCornerSockets(root).length===2)
+    return {type:'corner',parts};
+  }
+  return null;
+ }
+ function thicknessInfo(obj){
+  const p=importedProfile(obj);
+  if(!p)return null;
+  const lengths=p.parts.map(part=>{
+   const axis=part.axis==='radial'?'x':part.axis;
+   return Math.abs(obj.root.scale[axis])*part.sourceThickness;
+  });
+  return {type:p.type,meters:lengths.reduce((s,x)=>s+x,0)/lengths.length};
+ }
+ function resizeImportedThickness(obj,metres){
+  const target=Number(metres),p=importedProfile(obj);
+  if(!p||!Number.isFinite(target)||target<.025||target>.8)return false;
+  const prepared=[];
+  const root=obj.root;root.updateMatrixWorld(true,true);
+  for(const part of p.parts){
+   const axis=part.axis==='radial'?'x':part.axis;
+   const unit=Math.abs(root.scale[axis]);
+   const factor=target/(part.sourceThickness*unit);
+   if(!Number.isFinite(factor)||factor<.1||factor>8)return false;
+   const geo=part.mesh.geometry.clone(),attr=geo.attributes.position;
+   const inv=root.matrixWorld.clone().invert();
+   const toRoot=new THREE.Matrix4().multiplyMatrices(inv,part.mesh.matrixWorld);
+   const toMesh=toRoot.clone().invert(),point=V();
+   for(let i=0;i<attr.count;i++){
+    point.set(attr.getX(i),attr.getY(i),attr.getZ(i)).applyMatrix4(toRoot);
+    if(part.axis==='radial'){
+     const dx=point.x-part.cx,dz=point.z-part.cz,r=Math.hypot(dx,dz);
+     if(r>.00001){
+      const next=part.radius+(r-part.radius)*factor;
+      point.x=part.cx+dx*next/r;point.z=part.cz+dz*next/r;
+     }
+    }else point[part.axis]=part.centre+(point[part.axis]-part.centre)*factor;
+    point.applyMatrix4(toMesh);attr.setXYZ(i,point.x,point.y,point.z);
+   }
+   attr.needsUpdate=true;geo.computeBoundingBox();geo.computeBoundingSphere();
+   geo.computeVertexNormals();
+   prepared.push({mesh:part.mesh,geo});
+  }
+  for(const item of prepared)item.mesh.geometry=item.geo;
+  root.updateMatrixWorld(true);return true;
  }
  function sockets(kind,root,custom=null,category='wall'){
   if(Array.isArray(custom)&&custom.length===2)
@@ -252,6 +333,6 @@ const CleanGeometry=(()=>{
   return Math.max(...supporters)-roofMin;
  }
  return {catalog,isBuiltIn,create,builtinSockets,sockets,worldSockets,solveSnap,
-   localBounds,bbox,autoRoofHeight,rotate};
+   localBounds,bbox,autoRoofHeight,rotate,thicknessInfo,resizeImportedThickness};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=CleanGeometry;
