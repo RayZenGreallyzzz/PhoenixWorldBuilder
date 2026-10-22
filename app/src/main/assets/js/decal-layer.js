@@ -16,7 +16,7 @@ const DecalLayer=(()=>{
    fit:d.fit==='fill'?'fill':'contain',
    muralId:typeof d.muralId==='string'?d.muralId:null,
    crop:Array.isArray(d.crop)&&d.crop.length===4&&d.crop.every(n=>Number.isFinite(Number(n)))?
-    d.crop.map(n=>clamp(Number(n),0,1)):[0,0,1,1]
+    d.crop.map(n=>clamp(Number(n),-10000,10000)):[0,0,1,1]
   }));
  }
  function faceGeometry(root,face){
@@ -67,9 +67,10 @@ const DecalLayer=(()=>{
    ' vec2 stamp=vec2(q.x*pwbDecalRot'+i+'.x+q.y*pwbDecalRot'+i+'.y,-q.x*pwbDecalRot'+i+'.y+q.y*pwbDecalRot'+i+'.x)+0.5;',
    ' if(stamp.x>=0.0&&stamp.x<=1.0&&stamp.y>=0.0&&stamp.y<=1.0){',
    '  vec2 sampleUV=mix(pwbDecalCrop'+i+'.xy,pwbDecalCrop'+i+'.zw,stamp);',
-   '  vec4 pixel=texture2D(pwbDecalMap'+i+',sampleUV);',
-   '  diffuseColor.rgb=mix(diffuseColor.rgb,pow(pixel.rgb,vec3(2.2)),clamp(pixel.a*pwbDecalOpacity'+i+',0.0,1.0));',
-   ' }','}'
+   '  if(sampleUV.x>=0.0&&sampleUV.x<=1.0&&sampleUV.y>=0.0&&sampleUV.y<=1.0){',
+   '   vec4 pixel=texture2D(pwbDecalMap'+i+',sampleUV);',
+   '   diffuseColor.rgb=mix(diffuseColor.rgb,pow(pixel.rgb,vec3(2.2)),clamp(pixel.a*pwbDecalOpacity'+i+',0.0,1.0));',
+   '  }',' }','}'
   ].join('\n');
  }
  const uniformsCode=Array.from({length:MAX},(_,i)=>declarations(i)).join('\n');
