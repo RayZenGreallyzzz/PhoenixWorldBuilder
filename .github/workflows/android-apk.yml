@@ -52,6 +52,7 @@ jobs:
           node tests/test-clean-builder.cjs
           node tests/test-clean-mesh-edit.cjs
           node tests/test-clean-browser-smoke.cjs
+          node tests/test-clean-interactions.cjs
           node tests/test-android-branding.cjs
 
       - name: Configure Java 17
