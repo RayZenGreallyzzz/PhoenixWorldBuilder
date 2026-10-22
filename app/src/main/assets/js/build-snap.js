@@ -7,9 +7,24 @@ const BuildSnap=(()=>{
   if(['wall','door','stairs','railing'].includes(cat))return true;
   return /(?:rail|railing|fence|balustrade|перил|огражд|забор)/i.test(String(kind));
  };
- const attrBounds=(root)=>{
-  if(boundsCache.has(root))return boundsCache.get(root).clone();
+ // Bounds depend on the actual geometry and relative child transforms.
+ // A root-only WeakMap gives stale snaps after trim, bend, wall-thickness
+ // and imported GLB edits. Signature check avoids rescanning stable geometry.
+ const geometrySignature=(root)=>{
   root.updateWorldMatrix(true,true);
+  const inverse=root.matrixWorld.clone().invert(),relative=new THREE.Matrix4(),parts=[];
+  root.traverse(obj=>{
+   if(!obj.isMesh||!obj.geometry?.attributes?.position)return;
+   const geo=obj.geometry,position=geo.attributes.position;
+   relative.multiplyMatrices(inverse,obj.matrixWorld);
+   parts.push(geo.uuid,position.count,position.version,
+    ...relative.elements.map(n=>Math.round(n*1e5)/1e5));
+  });
+  return parts.join('|');
+ };
+ const attrBounds=(root)=>{
+  const signature=geometrySignature(root),cached=boundsCache.get(root);
+  if(cached?.signature===signature)return cached.box.clone();
   const inv=root.matrixWorld.clone().invert();
   const result=new THREE.Box3().makeEmpty(),m=new THREE.Matrix4(),p=new THREE.Vector3();
   root.traverse(obj=>{
@@ -22,7 +37,7 @@ const BuildSnap=(()=>{
     p.set(x,y,z).applyMatrix4(m);result.expandByPoint(p);
    }
   });
-  if(!result.isEmpty())boundsCache.set(root,result.clone());
+  boundsCache.set(root,{signature,box:result.clone()});
   return result;
  };
  // Resolve with physical per-axis dimensions without modifying the imported
@@ -355,6 +370,6 @@ const BuildSnap=(()=>{
   const degrees=((yaw*180/Math.PI)%360+360)%360;
   return lifted({position:anchor,rotation:degrees,snapped:true,edge:aligned,reference:chosen.entry.data.id,category:cat});
  }
- return {resolve,attrBounds,nearestEdge,matchSlab,dimensionBounds,roofSection};
+ return {resolve,attrBounds,geometrySignature,nearestEdge,matchSlab,dimensionBounds,roofSection};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildSnap;
