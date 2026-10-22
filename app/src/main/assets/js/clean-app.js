@@ -166,11 +166,11 @@ class CleanBuilder{
    notify('Модель импортирована и сохранена на устройстве: '+safeName(file.name),'success');
   }catch(err){console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')}
  }
- async ensureTemplate(kind){
+ async ensureTemplate(kind,category='wall'){
   if(CleanGeometry.isBuiltIn(kind)||this.assets.has(kind))return true;
   const buf=await getAsset(kind);
   if(!buf)return false;
-  await this.cacheModel(kind,buf,'wall',kind,false);
+  await this.cacheModel(kind,buf,category,kind,false);
   return true;
  }
  cloneTemplate(kind,thickness=.22,scale=1,axes={x:1,y:1,z:1}){
@@ -190,7 +190,7 @@ class CleanBuilder{
    const btn=document.createElement('button');
    btn.textContent=module.name;
    const second=document.createElement('span');second.textContent=module.category==='wall'?
-    'Стена / магнитные торцы':module.category==='roof'?'Кровля':'Модуль';
+    'Стена / магнитные торцы':module.category==='roof'?'Кровля':module.category==='decor'?'Настенный декор':module.category==='prop'?'Декор на полу':'Модуль';
    btn.append(second);
    btn.classList.toggle('active',this.preview?.kind===module.kind);
    btn.onclick=()=>this.selectKind(module.kind);
@@ -205,7 +205,7 @@ class CleanBuilder{
   const obj={id:config.id||this.nextId++,kind,category:config.category||meta?.category||
     categoryOf(kind),root,sockets:config.sockets||null,
     storey:Number.isInteger(config.storey)?config.storey:this.floor,
-    scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot};
+    scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot,meshEdit:CleanMeshEdit.normalize(config.meshEdit)};
   this.applyTransform(obj);
   if(!CleanGeometry.isBuiltIn(kind)&&obj.category==='wall'){
    const detected=CleanGeometry.thicknessInfo(obj);
@@ -215,6 +215,11 @@ class CleanBuilder{
     else obj.thickness=detected.meters;
     obj.thicknessEditable=true;
    }else obj.thicknessEditable=false;
+  }
+  if(!CleanGeometry.isBuiltIn(kind)&&CleanMeshEdit.active(obj.meshEdit)){
+   const changed=CleanMeshEdit.apply(obj.root,obj.meshEdit);
+   if(!changed.ok)throw Error('Не удалось восстановить изгиб/обрезку: '+changed.reason);
+   obj.thicknessEditable=false;
   }
   if(config.position)obj.root.position.fromArray(config.position);
   return obj;
@@ -240,14 +245,14 @@ class CleanBuilder{
     mat.transparent=true;mat.opacity=.55;mat.depthWrite=false;
    }
   });
-  this.preview.root.visible=this.mode==='build';
+  this.preview.root.visible=true;
   this.setTool('place');this.syncInspector();this.renderCatalog();this.updatePreview(this.cursor);
  }
  setTool(tool){
   this.tool=tool;
   $('btnPick').classList.toggle('active',tool==='pick');
   $('btnPlace').classList.toggle('active',tool==='place');
-  if(this.preview)this.preview.root.visible=this.mode==='build'&&tool==='place';
+  if(this.preview)this.preview.root.visible=tool==='place';
   notify(tool==='pick'?'Коснись готовой детали, чтобы изменить её':
    'Коснись места на земле для установки детали','neutral');
  }
@@ -259,6 +264,14 @@ class CleanBuilder{
    'Настройки выбранной детали':'Параметры нового модуля';
   const read=(id,v)=>{if(document.activeElement!==$(id))$(id).value=String(v)};
   const a=obj?.axes||defaultSettings().axes;
+  $('moduleCategory').disabled=!obj;
+  $('moduleCategory').value=obj?.category||'wall';
+  $('meshPanel').style.display=obj&&!CleanGeometry.isBuiltIn(obj.kind)?'block':'none';
+  const meshEdit=CleanMeshEdit.normalize(obj?.meshEdit);
+  const fields={trimAxis:meshEdit.axis,trimStart:meshEdit.cutStart,
+   trimEnd:meshEdit.cutEnd,bendAxis:meshEdit.bendAxis,bendAngle:meshEdit.bend};
+  for(const [id,v] of Object.entries(fields))
+   if(document.activeElement!==$(id))$(id).value=String(v);
   read('scaleAll',Math.round((obj?.scale||1)*100));
   for(const [key,axis] of [['sizeX','x'],['sizeY','y'],['sizeZ','z']])
    read(key,Math.round(a[axis]*100));
@@ -327,10 +340,71 @@ class CleanBuilder{
    this.updateGeometry(obj);
   this.applyTransform(obj);
   if(['scaleAll','sizeX','sizeY','sizeZ'].includes(id)&&obj.thicknessEditable)
-   CleanGeometry.resizeImportedThickness(obj,obj.thickness);
+   this.rebuildImported(obj);
   if(obj===this.preview)this.updatePreview(this.cursor,false);
   if(this.outline){this.outline.setFromObject(obj.root)}
   this.syncInspector();
+ }
+ // Rebuild from a pristine asset copy so edits never accumulate or damage GLB.
+ rebuildImported(obj,newEdit=obj.meshEdit){
+  if(!obj||CleanGeometry.isBuiltIn(obj.kind))return false;
+  const template=this.cloneTemplate(obj.kind);if(!template)return false;
+  const old=obj.root;
+  template.position.copy(old.position);template.rotation.copy(old.rotation);
+  template.scale.copy(old.scale);
+  const temp={...obj,root:template};
+  const requested=CleanMeshEdit.normalize(newEdit);
+  if(obj.category==='wall'){
+   const info=CleanGeometry.thicknessInfo(temp);
+   if(info&&obj.thickness&&Math.abs(info.meters-obj.thickness)>.002)
+    CleanGeometry.resizeImportedThickness(temp,obj.thickness);
+  }
+  if(CleanMeshEdit.active(requested)){
+   const result=CleanMeshEdit.apply(template,requested);
+   if(!result.ok){notify('Правка модели: '+result.reason,'error');return false}
+  }
+  if(obj===this.preview){
+   template.traverse(mesh=>{if(!mesh.isMesh)return;
+    mesh.material=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
+    for(const mat of(Array.isArray(mesh.material)?mesh.material:[mesh.material])){
+     mat.transparent=true;mat.opacity=.55;mat.depthWrite=false;
+    }
+   });
+  }
+  this.scene.add(template);old.removeFromParent();
+  obj.root=template;obj.meshEdit=requested;
+  obj.thicknessEditable=!CleanMeshEdit.active(requested)&&
+   !!CleanGeometry.thicknessInfo(obj);
+  if(this.outline&&obj===this.selected)this.outline.setFromObject(obj.root);
+  return true;
+ }
+ applyMeshSettings(reset=false){
+  const obj=this.target();
+  if(!obj||CleanGeometry.isBuiltIn(obj.kind))
+   return notify('Выбери импортированную GLB-модель','warn');
+  const raw=reset?{}:{
+   axis:$('trimAxis').value,cutStart:Number($('trimStart').value),
+   cutEnd:Number($('trimEnd').value),bendAxis:$('bendAxis').value,
+   bend:Number($('bendAngle').value)
+  };
+  const edit=CleanMeshEdit.normalize(raw);
+  if(edit.cutStart+edit.cutEnd>94)
+   return notify('Нельзя срезать больше 94% длины модели','error');
+  if(!this.rebuildImported(obj,edit))return;
+  if(obj===this.preview)this.updatePreview(this.cursor);
+  this.syncInspector();
+  notify(reset?'Исходная форма восстановлена (GLB в библиотеке не изменён)':
+   'Изгиб и обрезка применены к выбранной детали. Сохранение проекта запомнит форму.','success');
+ }
+ changeCategory(){
+  const obj=this.target();if(!obj)return;
+  obj.category=$('moduleCategory').value;
+  if(this.assets.has(obj.kind))this.assets.get(obj.kind).category=obj.category;
+  if(obj.category==='wall'&&!CleanGeometry.isBuiltIn(obj.kind))
+   obj.thicknessEditable=!!CleanGeometry.thicknessInfo(obj);
+  if(obj===this.preview)this.updatePreview(this.cursor);
+  this.syncInspector();
+  notify('Назначение детали изменено: '+$('moduleCategory').selectedOptions[0].textContent,'success');
  }
  setSockets(){
   const obj=this.target();if(!obj||CleanGeometry.isBuiltIn(obj.kind))return;
@@ -440,7 +514,8 @@ class CleanBuilder{
   return {id:obj.id,kind:obj.kind,category:obj.category,
    position:obj.root.position.toArray().map(rounded),rot:obj.rot,
    displayRotation:obj.root.rotation.y,storey:obj.storey,
-   scale:obj.scale,axes:obj.axes,thickness:obj.thickness,sockets:obj.sockets};
+   scale:obj.scale,axes:obj.axes,thickness:obj.thickness,sockets:obj.sockets,
+   meshEdit:CleanMeshEdit.normalize(obj.meshEdit)};
  }
  project(){
   return {version:2,app:'Phoenix Builder Clean',
@@ -472,7 +547,7 @@ class CleanBuilder{
   if(doc?.version!==2||!Array.isArray(doc.objects))throw Error('Нужен проект Phoenix Builder 2.0');
   const staged=[];
   for(const item of doc.objects){
-   if(!CleanGeometry.isBuiltIn(item.kind)&&!await this.ensureTemplate(item.kind))
+   if(!CleanGeometry.isBuiltIn(item.kind)&&!await this.ensureTemplate(item.kind,item.category||'wall'))
     throw Error('Не найден импортированный GLB: '+item.kind);
    const e=this.createEntry(item.kind,item);
    if(!e)throw Error('Невозможно загрузить модуль: '+item.kind);
