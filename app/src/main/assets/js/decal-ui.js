@@ -25,14 +25,23 @@ const DecalUI=(()=>{
    sel.value=list.length?String(active):'';
   }
   const d=list[active];
+  const muralFields=get('muralEditors');
+  if(muralFields)muralFields.style.display=d?.muralId?'block':'none';
+  if(d?.muralId){
+   for(const [id,value] of [['muralWidth',d.widthMeters||1],['muralHeight',d.heightMeters||1],
+    ['muralOffsetX',d.offsetX||0],['muralOffsetY',d.offsetY||0]]){
+    const field=get(id);
+    if(field&&document.activeElement!==field)field.value=String(Math.round(value*100)/100);
+   }
+  }
   const muralButton=get('btnMural');
   if(muralButton){
-   muralButton.textContent=muralNext?'🖼 Выбери картину для панно…':'🖼 Панно: одна картина на соседние стены';
+   muralButton.textContent=muralNext?'🖼 Выбери изображение из каталога…':'🖼 Одно изображение на соединённую поверхность';
    muralButton.classList.toggle('active',muralNext);
   }
   if(get('muralHint'))get('muralHint').textContent=d?.muralId?
-   'Это часть общего панно. Прозрачность и удаление применяются ко всей картине.':
-   'Выдели стену → «Панно» → выбери изображение. Соседние стены найдутся автоматически.';
+   'Общий рисунок: ширина и высота задаются в метрах, размер деталей не меняется.':
+   'Выдели стену, пол или потолок → выбери сторону → изображение.';
   if(!d&&entry){
    const cat=entry.data.category||entry.kind;
    const choice=get('decalFace');
@@ -50,7 +59,7 @@ const DecalUI=(()=>{
   get('decalSizeValue').textContent=d?Math.round(d.size*100)+'%':'—';
   get('decalRotationValue').textContent=d?d.rotation+'°':'—';
   get('decalOpacityValue').textContent=d?Math.round(d.opacity*100)+'%':'—';
-  get('btnDecalFit').textContent=d?.fit==='fill'?'▣ Вписать с пропорциями':'▣ На всю поверхность';
+  get('btnDecalFit').textContent=d?.fit==='fill'?'▣ Вписать с пропорциями':'▣ На одну деталь';
   get('decalHint').textContent=entry?
    'Выбрано эмблем: '+list.length+'/'+DecalLayer.MAX+'. Настройки сохранятся после нажатия 💾 для карты.':
    'Сначала выбери стену или пол на карте, затем открой вкладку «Эмблемы».';
@@ -62,13 +71,21 @@ const DecalUI=(()=>{
   const entry=existing();if(!entry)return;
   const list=value(),previous=list[active];if(!previous)return;
   if(previous.muralId){
-   if(!Object.prototype.hasOwnProperty.call(patch,'opacity'))return;
+   const combined={...previous,...patch};
+   const pieces=MuralLayout.collect(api.world,entry,previous.face);
+   const updated=pieces.filter(({entry:item})=>
+    DecalLayer.normalize(item.data.decals).some(x=>x.muralId===previous.muralId));
+   if(!updated.length)return api.toast('Поверхность картины не найдена');
    api.world.remember();
-   for(const item of api.world.objects){
-    const current=DecalLayer.normalize(item.data.decals);
-    if(!current.some(x=>x.muralId===previous.muralId))continue;
-    item.data.decals=current.map(x=>x.muralId===previous.muralId?{...x,opacity:patch.opacity}:x);
-    api.world.applyAppearance(item);
+   for(const piece of updated){
+    const current=DecalLayer.normalize(piece.entry.data.decals);
+    piece.entry.data.decals=current.map(x=>x.muralId===previous.muralId?{
+     ...x,opacity:combined.opacity,widthMeters:combined.widthMeters,
+     heightMeters:combined.heightMeters,offsetX:combined.offsetX,offsetY:combined.offsetY,
+     crop:MuralLayout.imageCrop(piece,combined.widthMeters,combined.heightMeters,
+      combined.offsetX,combined.offsetY)
+    }:x);
+    api.world.applyAppearance(piece.entry);
    }
    api.world.onChanged();
   }else{
@@ -96,14 +113,15 @@ const DecalUI=(()=>{
    const old=DecalLayer.normalize(item.entry.data.decals);
    item.entry.data.decals=DecalLayer.normalize([...old,{
     id:muralId,texture:id,face:item.face,muralId,crop:item.crop,
-    x:.5,y:.5,size:1,fit:'fill',rotation:0,opacity:1
+    x:.5,y:.5,size:1,fit:'fill',rotation:0,opacity:1,
+    widthMeters:item.width,heightMeters:item.height,offsetX:0,offsetY:0
    }]);
    api.world.applyAppearance(item.entry);
   }
   api.world.onChanged();
   active=DecalLayer.normalize(entry.data.decals).length-1;
-  api.toast(group.length===1?'Картина растянута на всю стену':
-   'Одно панно размещено на '+group.length+' соседних стенах без повторений');
+  api.toast('Одно изображение на '+group.length+' деталях. Настрой ширину и высоту ниже.');
+  api.onImagePlaced?.();
   render();
  }
  async function addImage(id){
@@ -261,12 +279,17 @@ const DecalUI=(()=>{
    }
    active=Math.max(0,active-1);render();
   };
-  get('btnMural').onclick=async()=>{
-   const entry=existing();if(!entry)return api.toast('Сначала выдели стену для большого панно');
-   if(!MuralLayout.collect(api.world,entry,get('decalFace').value||'front').length)
-    return api.toast('Выбери прямую стену для панно');
-   muralNext=true;render();await openGallery();
-  };
+  get('btnMural').onclick=()=>beginSurfacePainting();
+  for(const [id,field] of [['muralWidth','widthMeters'],['muralHeight','heightMeters'],
+   ['muralOffsetX','offsetX'],['muralOffsetY','offsetY']]){
+   get(id).onchange=e=>{
+    const n=Number(e.target.value);
+    if(!Number.isFinite(n)||((field==='widthMeters'||field==='heightMeters')&&n<.05)){
+     render();return api.toast('Проверь размер или смещение изображения в метрах');
+    }
+    change({[field]:Math.max(-1000,Math.min(1000,n))});
+   };
+  }
   get('btnDecalText').onclick=()=>createText().catch(err=>api.toast(err.message));
   get('btnImportEmblem').onclick=()=>get('fileEmblem').click();
   get('fileEmblem').onchange=e=>{const file=e.target.files?.[0];e.target.value='';importFile(file)};
@@ -274,11 +297,20 @@ const DecalUI=(()=>{
   get('btnGameEmblems').onclick=()=>openGallery(true);
   render();
  }
+ async function beginSurfacePainting(face=null){
+  const entry=existing();
+  if(!entry)return api.toast('Сначала коснись стены, пола или потолка');
+  if(face)get('decalFace').value=face;
+  if(!MuralLayout.collect(api.world,entry,get('decalFace').value||'front').length)
+   return api.toast('Не удалось определить поверхность для изображения');
+  muralNext=true;render();
+  await openGallery();
+ }
  async function openGallery(fromGame=false){
-  if(!existing())api.toast('Выбери стену или пол, затем эмблему');
+  if(!existing())api.toast('Выбери поверхность, затем изображение');
   await ensureStarter().catch(err=>console.warn('Starter emblems',err));
   api.openGallery(fromGame);
  }
- return {init,render,addImage,importFile,importDimensions,createText,ensureStarter,openGallery};
+ return {init,render,addImage,importFile,importDimensions,createText,ensureStarter,openGallery,beginSurfacePainting};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=DecalUI;
