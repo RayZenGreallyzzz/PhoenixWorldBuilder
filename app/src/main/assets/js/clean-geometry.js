@@ -86,11 +86,90 @@ const CleanGeometry=(()=>{
   });
   return bounds;
  }
+ // Recognize arc GLB cross-sections in root-local space. The importer does
+ // not need names: the geometry itself must prove two radial edges, uniform
+ // thickness and a consistent centreline circle. Ambiguous meshes remain manual.
+ function arcSockets(root){
+  root.updateWorldMatrix(true,true);
+  const meshes=[];root.traverse(m=>{if(m.isMesh&&m.geometry?.attributes?.position)meshes.push(m)});
+  if(meshes.length!==1)return [];
+  const mesh=meshes[0],attr=mesh.geometry.attributes.position;
+  if(attr.count<16||attr.count>150000)return [];
+  const inverse=root.matrixWorld.clone().invert(),toRoot=new THREE.Matrix4()
+   .multiplyMatrices(inverse,mesh.matrixWorld);
+  const bounds=localBounds(root),base=bounds.min.y,points=[],temp=V();
+  for(let i=0;i<attr.count;i++){
+   temp.set(attr.getX(i),attr.getY(i),attr.getZ(i)).applyMatrix4(toRoot);
+   if(Math.abs(temp.y-base)>.014)continue;
+   if(!points.length||points[points.length-1].distanceToSquared(temp)>1e-8)
+    points.push(temp.clone());
+  }
+  if(points.length<8||points.length%2!==0)return [];
+  const mid=(a,b)=>a.clone().add(b).multiplyScalar(.5);
+  const cross=[];
+  for(let i=0;i<points.length;i+=2){
+   const thick=points[i].distanceTo(points[i+1]);
+   if(thick<.015||thick>1.2)return [];
+   cross.push({at:mid(points[i],points[i+1]),thick,a:points[i],b:points[i+1]});
+  }
+  const first=cross[0],last=cross[cross.length-1],
+   middle=cross[Math.floor(cross.length/2)];
+  const a=first.at,b=middle.at,d=last.at;
+  const den=2*(a.x*(b.z-d.z)+b.x*(d.z-a.z)+d.x*(a.z-b.z));
+  if(Math.abs(den)<1e-6)return [];
+  const aa=a.x*a.x+a.z*a.z,bb=b.x*b.x+b.z*b.z,dd=d.x*d.x+d.z*d.z;
+  const cx=(aa*(b.z-d.z)+bb*(d.z-a.z)+dd*(a.z-b.z))/den;
+  const cz=(aa*(d.x-b.x)+bb*(a.x-d.x)+dd*(b.x-a.x))/den;
+  const radius=Math.hypot(a.x-cx,a.z-cz),width=cross.reduce((s,x)=>s+x.thick,0)/cross.length;
+  if(radius<.5||radius>120||width>radius*.7)return [];
+  if(cross.some(s=>Math.abs(s.thick-width)>.06||
+   Math.abs(Math.hypot(s.at.x-cx,s.at.z-cz)-radius)>.065))return [];
+  const tangent=(section,near)=>{
+   const capVec=section.b.clone().sub(section.a).setY(0);
+   if(capVec.lengthSq()<.00001)return null;
+   const normal=V(-capVec.z,0,capVec.x).normalize();
+   const rough=section.at.clone().sub(near.at).setY(0);
+   if(normal.dot(rough)<0)normal.negate();
+   return normal;
+  };
+  const outgoingA=tangent(first,cross[1]);
+  const outgoingB=tangent(last,cross[cross.length-2]);
+  if(!outgoingA||!outgoingB)return [];
+  return [{point:first.at,out:outgoingA},{point:last.at,out:outgoingB}];
+ }
+ function lCornerSockets(root){
+  root.updateWorldMatrix(true,true);
+  const inv=root.matrixWorld.clone().invert();
+  const slabs=[];
+  root.traverse(mesh=>{
+   if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
+   if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();
+   const trans=new THREE.Matrix4().multiplyMatrices(inv,mesh.matrixWorld);
+   const box=mesh.geometry.boundingBox.clone().applyMatrix4(trans);
+   const sx=box.max.x-box.min.x,sz=box.max.z-box.min.z,
+    thin=Math.min(sx,sz),long=Math.max(sx,sz);
+   if(long>.65&&thin>.012&&thin<.7&&long/thin>3.5)
+    slabs.push({box,axis:sx>sz?'x':'z'});
+  });
+  if(slabs.length!==2||slabs[0].axis===slabs[1].axis)return [];
+  const x=slabs.find(s=>s.axis==='x'),z=slabs.find(s=>s.axis==='z');
+  const ix=(z.box.min.x+z.box.max.x)/2,iz=(x.box.min.z+x.box.max.z)/2;
+  if(ix<x.box.min.x-.13||ix>x.box.max.x+.13||
+    iz<z.box.min.z-.13||iz>z.box.max.z+.13)return [];
+  const xEnd=Math.abs(x.box.min.x-ix)>Math.abs(x.box.max.x-ix)?x.box.min.x:x.box.max.x;
+  const zEnd=Math.abs(z.box.min.z-iz)>Math.abs(z.box.max.z-iz)?z.box.min.z:z.box.max.z;
+  if(Math.abs(xEnd-ix)<.4||Math.abs(zEnd-iz)<.4)return [];
+  const y=Math.min(x.box.min.y,z.box.min.y);
+  return [{point:V(xEnd,y,iz),out:V(Math.sign(xEnd-ix),0,0)},
+   {point:V(ix,y,zEnd),out:V(0,0,Math.sign(zEnd-iz))}];
+ }
  function extractedSockets(root,category){
   if(category!=='wall'&&category!=='roof')return [];
-  // GLB can contain dozens of decoration meshes. Only infer when there is
-  // one unambiguous thick linear slab. Arcs/Ls need explicit endpoint authoring
-  // or deliberate builtin templates to avoid phantom AABB magnet points.
+  // Use actual curved cross-sections and separate L-arms when recognizable.
+  if(category==='wall'){
+   const curved=arcSockets(root);if(curved.length===2)return curved;
+   const angle=lCornerSockets(root);if(angle.length===2)return angle;
+  }
   const children=[];root.traverse(c=>{if(c.isMesh&&c.geometry)children.push(c)});
   if(children.length!==1)return [];
   const box=localBounds(root),sz=box.getSize(V());
