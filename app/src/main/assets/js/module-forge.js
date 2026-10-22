@@ -89,7 +89,11 @@ const ModuleForge=(()=>{
   const acrossAxis=use==='roof'?'x':'z';
   const length=dimensions[alongAxis],centre=(bounds.min[acrossAxis]+bounds.max[acrossAxis])/2;
   const uOf=p=>(p[alongAxis]-bounds.min[alongAxis])/length;
-  const vOf=p=>(p.y-bounds.min.y)/dimensions.y;
+  const heightOf=p=>(p.y-bounds.min.y)/dimensions.y;
+  // Wall image spans length/height; roof/tile image spans the actual top
+  // length/width (never the tiny thickness of a floor slab).
+  const vOf=p=>use==='wall'?heightOf(p):
+   (p[acrossAxis]-bounds.min[acrossAxis])/dimensions[acrossAxis];
   const acOf=p=>(p[acrossAxis]-centre)/dimensions[acrossAxis];
   // A curved wall must be smoothly tessellated even if source is just a
   // six-sided cuboid. Splitting triangles avoids straight polygon bridges.
@@ -115,14 +119,16 @@ const ModuleForge=(()=>{
    const read=i=>{
     temp.set(position.getX(i),position.getY(i),position.getZ(i)).applyMatrix4(cache);
     const p=temp.clone();
-    return {p,u:clamp(uOf(p),0,1),v:clamp(vOf(p),0,1),a:clamp(acOf(p),-.5,.5),
+    return {p,u:clamp(uOf(p),0,1),v:clamp(vOf(p),0,1),
+     h:clamp(heightOf(p),0,1),a:clamp(acOf(p),-.5,.5),
      uv:uv?[uv.getX(i),uv.getY(i)]:null,
      color:color?[color.getX(i),color.getY(i),color.getZ(i)]:null};
    };
    const midpoint=(a,b)=>{
     const blend=(x,y)=>x&&y?x.map((v,i)=>(v+y[i])/2):null;
     return {p:a.p.clone().add(b.p).multiplyScalar(.5),u:(a.u+b.u)/2,
-     v:(a.v+b.v)/2,a:(a.a+b.a)/2,uv:blend(a.uv,b.uv),color:blend(a.color,b.color)};
+     v:(a.v+b.v)/2,h:(a.h+b.h)/2,a:(a.a+b.a)/2,
+     uv:blend(a.uv,b.uv),color:blend(a.color,b.color)};
    };
    const split=(tri,depth)=>{
     if(depth<=0)return [tri];
@@ -141,7 +147,7 @@ const ModuleForge=(()=>{
     if(total++>190000)throw Error('Получилось слишком много полигонов для планшета');
     const start=vertices.length/3;
     for(const vertex of tri){
-     const [x,y,z]=modelPoint(use,shape,vertex.u,vertex.v,vertex.a);
+     const [x,y,z]=modelPoint(use,shape,vertex.u,vertex.h,vertex.a);
      temp.set(x,y,z).applyMatrix4(localToMesh);
      vertices.push(temp.x,temp.y,temp.z);
      // One original image spans the entire fitted module, not copies.
