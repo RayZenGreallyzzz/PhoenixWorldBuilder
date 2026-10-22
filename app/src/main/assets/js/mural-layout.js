@@ -44,7 +44,9 @@ const MuralLayout=(()=>{
   const minX=Math.min(...group.map(x=>x.left)),maxX=Math.max(...group.map(x=>x.right));
   const minY=Math.min(...group.map(x=>x.bottom)),maxY=Math.max(...group.map(x=>x.top));
   const width=Math.max(.001,maxX-minX),height=Math.max(.001,maxY-minY);
-  return group.map(x=>({entry:x.entry,face,width,height,
+  const center=anchor.center.clone().addScaledVector(anchor.u,(minX+maxX)/2)
+   .addScaledVector(anchor.v,(minY+maxY)/2);
+  return group.map(x=>({entry:x.entry,face,width,height,center,u:anchor.u,v:anchor.v,
    crop:[clamp((x.left-minX)/width,0,1),clamp((x.bottom-minY)/height,0,1),
     clamp((x.right-minX)/width,0,1),clamp((x.top-minY)/height,0,1)]}));
  }
