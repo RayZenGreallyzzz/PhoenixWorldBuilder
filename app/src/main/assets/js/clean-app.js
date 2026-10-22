@@ -430,10 +430,72 @@ class CleanBuilder{
   const plane=new THREE.Plane(V(0,1,0),-planeY);
   const hit=V();return this.ray.ray.intersectPlane(plane,hit)?hit:null;
  }
+ // Mounted decorations live on real wall faces, never imaginary wall sockets.
+ wallHit(ray){
+  const walls=this.entries.filter(e=>e.category==='wall');
+  if(!walls.length)return null;
+  const hits=ray.intersectObjects(walls.map(e=>e.root),true);
+  for(const hit of hits){
+   const entry=walls.find(e=>{
+    let parent=hit.object;
+    while(parent){if(parent===e.root)return true;parent=parent.parent}return false;
+   });
+   if(!entry||!hit.face)continue;
+   const normal=hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+   if(Math.abs(normal.y)>.25)continue;
+   return {point:hit.point.clone(),normal,entry};
+  }
+  return null;
+ }
+ locatePointer(event){
+  const r=this.canvas.getBoundingClientRect();
+  this.pointer.set((event.clientX-r.left)/r.width*2-1,
+   -(event.clientY-r.top)/r.height*2+1);
+  this.ray.setFromCamera(this.pointer,this.camera);
+  this.surfaceHit=this.wallHit(this.ray);
+  const ground=new THREE.Plane(V(0,1,0),-this.floor*2.6),where=V();
+  const found=this.ray.ray.intersectPlane(ground,where);
+  if(this.preview?.category==='decor')return this.surfaceHit?.point.clone()||null;
+  return found?where:null;
+ }
+ aimPlacement(){
+  if(!this.preview||this.tool!=='place')return;
+  const ray=new THREE.Raycaster(),dir=V();
+  this.camera.getWorldDirection(dir);
+  ray.set(this.camera.position.clone(),dir.normalize());
+  this.surfaceHit=this.wallHit(ray);
+  const plane=new THREE.Plane(V(0,1,0),-this.floor*2.6),point=V();
+  const hit=ray.ray.intersectPlane(plane,point);
+  if(this.preview.category==='decor'&&this.surfaceHit)
+   this.cursor.copy(this.surfaceHit.point);
+  else if(hit&&hit.distanceTo(this.camera.position)<75)this.cursor.copy(hit);
+  else if(this.mode==='character')this.cursor.copy(this.player.position)
+   .addScaledVector(dir.setY(0).normalize(),3);
+  else this.cursor.copy(this.controls.target);
+  this.updatePreview(this.cursor);
+ }
+ attachDecor(obj,hit){
+  if(!hit)return false;
+  const bounds=CleanGeometry.localBounds(obj.root),center=bounds.getCenter(V()),
+   size=bounds.getSize(V()),scale=obj.root.scale;
+  const yaw=Math.atan2(hit.normal.x,hit.normal.z);
+  const rotated=center.clone().multiply(scale).applyAxisAngle(V(0,1,0),yaw);
+  const offset=size.z*Math.abs(scale.z)/2+.015;
+  obj.root.position.copy(hit.point).addScaledVector(hit.normal,offset).sub(rotated);
+  obj.root.rotation.y=yaw;obj._snapRotation=yaw;
+  return true;
+ }
  updatePreview(cursor,snapAllowed=true){
   const obj=this.preview;if(!obj||this.tool!=='place')return;
   const pos=cursor||V(),q=(x)=>Math.round(x*4)/4;
   obj.root.position.set(q(pos.x),this.floor*2.6,q(pos.z));
+  if(obj.category==='decor'){
+   obj._hasWallTarget=this.attachDecor(obj,this.surfaceHit);
+   if(!obj._hasWallTarget){
+    this.previewStatus=null;notify('Коснись стены, чтобы закрепить настенный декор','warn');
+   }else notify('🟢 Декор прикреплён к поверхности стены','success');
+   obj.root.updateMatrixWorld(true);this.syncInspector();return;
+  }
   if(obj.category==='roof')
    obj.root.position.y=CleanGeometry.autoRoofHeight(obj,this.entries,pos,this.floor*2.6);
   obj.storey=this.floor;
