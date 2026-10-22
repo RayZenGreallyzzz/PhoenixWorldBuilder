@@ -15,6 +15,12 @@ const DecalLayer=(()=>{
    opacity:clamp(d.opacity===undefined?1:Number(d.opacity),0,1),
    fit:d.fit==='fill'?'fill':'contain',
    muralId:typeof d.muralId==='string'?d.muralId:null,
+   widthMeters:Number.isFinite(Number(d.widthMeters))&&Number(d.widthMeters)>.049?
+    clamp(Number(d.widthMeters),.05,1000):null,
+   heightMeters:Number.isFinite(Number(d.heightMeters))&&Number(d.heightMeters)>.049?
+    clamp(Number(d.heightMeters),.05,1000):null,
+   offsetX:Number.isFinite(Number(d.offsetX))?clamp(Number(d.offsetX),-1000,1000):0,
+   offsetY:Number.isFinite(Number(d.offsetY))?clamp(Number(d.offsetY),-1000,1000):0,
    crop:Array.isArray(d.crop)&&d.crop.length===4&&d.crop.every(n=>Number.isFinite(Number(n)))?
     d.crop.map(n=>clamp(Number(n),-10000,10000)):[0,0,1,1]
   }));
