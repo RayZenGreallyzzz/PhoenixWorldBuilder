@@ -15,6 +15,7 @@ try{
  $('textureDetail').value=String(quality);
 }catch(e){console.warn('Texture quality settings unavailable',e);w.setTextureQuality(4)}
 try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),modulePresets=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
+let choosingImageSurface=false;
 let statusMessage='';let surfaceScope='all',surfaceMode='repeat',surfaceTileMeters=1,surfaceImageScale=1,surfaceFaithful=true;let pendingRecovery=null;let savedNatively=false;let initializing=true;
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
@@ -402,7 +403,7 @@ function renderLibrary(){
  if(isImage){
   for(const [id,meta] of textureMeta){
    const painting=meta.role==='painting'||id.startsWith('emblem:');
-   if(isEmblem&&!painting)continue;
+   // The artwork gallery includes both imported textures and paintings.
    if(isTexture&&painting)continue;
    if(q&&!(meta.name+' '+(meta.sourcePath||id)).toLowerCase().includes(q))continue;
    items.push([id,meta]);
@@ -429,7 +430,7 @@ function renderLibrary(){
  $('galleryStatus').textContent='Стр. '+(catalogPage+1)+'/'+pages+' · '+items.length;
  $('galleryPrev').disabled=catalogPage===0;
  $('galleryNext').disabled=catalogPage>=pages-1;
- $('galleryHint').textContent=isEmblem?'Сначала выдели стену или пол, затем нажми на эмблему. На одну деталь можно наложить до трёх PNG без лишней геометрии.':isTexture?'Нажми на изображение, чтобы назначить покрытие выбранной детали или использовать его для новых.':'Картинки показывают реальную геометрию GLB. Неверное название исправь кнопкой ✎; материалы без привязки отмечены отдельно.';
+ $('galleryHint').textContent=isEmblem?'Выбери изображение для стены, пола или потолка. Общая картина не повторяется на соседних деталях.':isTexture?'Нажми на изображение, чтобы назначить покрытие выбранной детали или использовать его для новых.':'Картинки показывают реальную геометрию GLB. Неверное название исправь кнопкой ✎; материалы без привязки отмечены отдельно.';
  const page=items.slice(catalogPage*GALLERY_SIZE,(catalogPage+1)*GALLERY_SIZE);
  if(isImage){
   for(const [id,meta] of page){
@@ -803,7 +804,14 @@ function wireButtons(){
   $('btnGroundDown').onclick=()=>feetAdjust(-.05);
   $('btnGroundUp').onclick=()=>feetAdjust(.05);$('btnGameExit').onclick=()=>setMode('build');
  $('btnImport').onclick=$('importAssets').onclick=()=>$('fileAssets').click();$('btnTexture').onclick=()=>$('fileTexture').click();$('btnAvatar').onclick=()=>$('fileAvatar').click();
- $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{w.setPlacement(null);w.moveTarget=null;for(const id of ['placementStatus','buildPlacementStatus']){const el=$(id);if(el){el.textContent='◌ Выбери деталь';el.classList.remove('allowed','blocked')}}$('btnBuildPlace').classList.remove('placementBlocked');$('btnBuildPlace').setAttribute('aria-disabled','false');$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
+ $('btnPaintImage').onclick=()=>{
+  choosingImageSurface=true;
+  w.setPlacement(null);
+  w.moveTarget=null;
+  $('btnPaintImage').classList.add('active');
+  toast('Коснись стены, пола или потолка для нанесения изображения');
+ };
+ $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{choosingImageSurface=false;$('btnPaintImage').classList.remove('active');w.setPlacement(null);w.moveTarget=null;for(const id of ['placementStatus','buildPlacementStatus']){const el=$(id);if(el){el.textContent='◌ Выбери деталь';el.classList.remove('allowed','blocked')}}$('btnBuildPlace').classList.remove('placementBlocked');$('btnBuildPlace').setAttribute('aria-disabled','false');$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
  for(const action of ['Rotate','Copy','Move','Delete'])$('btn'+action).onclick=()=>{if(!w.action(action.toLowerCase()))toast('Сначала выбери объект');else toast({Rotate:'Поворот 90°',Copy:'Создана копия',Move:'Выбери новое место',Delete:'Удалено'}[action])};
  $('btnDoor').onclick=()=>{if(!w.selected)return toast('Выбери дверь или объект');w.remember();w.selected.data.door=!w.selected.data.door;toast(w.selected.data.door?'Дверь интерактивна':'Объект больше не дверь')};
  $('btnDoorOpen').onclick=()=>{if(w.selected){w.toggleDoor(w.selected);toast(w.selected.data.open?'Открыто':'Закрыто')}};
@@ -1080,7 +1088,26 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   if(w.mode==='build'||w.mode==='style'){
    if(w.droneMode&&dist>=12){down=null;return;}
    if(w.placement||w.moveTarget){const p=w.hit(e.clientX,e.clientY);if(p){const placed=w.placeAt(p);if(placed!==null)saveSoon();else toast(w.lastSnapResult?.reason||'Здесь установить нельзя')}}
-   else if(dist<12){let id=w.hit(e.clientX,e.clientY,true);w.select(w.objects.find(x=>x.data.id===id)||null);if(id)toast('Деталь выделена')}
+   else if(dist<12){
+    const id=w.hit(e.clientX,e.clientY,true),entry=w.objects.find(x=>x.data.id===id)||null;
+    w.select(entry);
+    if(choosingImageSurface&&entry){
+     choosingImageSurface=false;$('btnPaintImage').classList.remove('active');
+     const hit=w.ray.intersectObjects([entry.mesh],true)[0];
+     let side=null;
+     if(hit?.face){
+      const worldNormal=hit.face.normal.clone().applyMatrix3(
+       new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
+      const local=worldNormal.applyMatrix3(
+       new THREE.Matrix3().getNormalMatrix(entry.mesh.matrixWorld.clone().invert())).normalize();
+      const ax=Math.abs(local.x),ay=Math.abs(local.y),az=Math.abs(local.z);
+      side=ay>=ax&&ay>=az?(local.y>=0?'top':'bottom'):
+       ax>=az?(local.x>=0?'right':'left'):(local.z>=0?'front':'back');
+     }
+     setMode('style');
+     DecalUI.beginSurfacePainting(side).catch(err=>toast('Ошибка выбора изображения: '+err.message));
+    }else if(id)toast('Деталь выделена');
+   }
   }down=null;});
  canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);down=null;lastTouch=null;if(!pointers.size)multitouch=false});
  canvas.addEventListener('wheel',e=>{e.preventDefault();w.distance=THREE.MathUtils.clamp(w.distance*(e.deltaY>0?1.08:.92),2,90)},{passive:false});
@@ -1096,6 +1123,7 @@ function saveSoon(){
 async function init(){
  DecalUI.init({
   world:w,toast,loadTexture,textureMeta:()=>textureMeta,refreshGallery:renderLibrary,
+  onImagePlaced:()=>{setMode('style');document.body.classList.remove('catalogOpen');},
   saveTexture:(id,name,bytes,mime)=>rememberTexture(id,name,bytes,mime),
   openGallery:fromGame=>{
    catalogMode='emblems';catalogPage=0;
