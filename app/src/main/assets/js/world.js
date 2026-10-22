@@ -519,8 +519,11 @@ class WorldBuilder{
   entry.mesh.traverse(o=>{
    if(!o.isMesh)return;
    if(!this._pwbBaseMaterials.has(o))this._pwbBaseMaterials.set(o,o.material);
-   const old=this._pwbBaseMaterials.get(o);
+   const old=this._pwbBaseMaterials.get(o),previous=o.material;
    o.material=Array.isArray(old)?old.map(m=>m.clone()):old.clone();
+   // Repeated image slider edits must release the previous GPU materials.
+   if(previous!==old)for(const material of(Array.isArray(previous)?previous:[previous]))
+    material?.dispose?.();
    const mats=Array.isArray(o.material)?o.material:[o.material];mats.forEach(m=>{
    // Glass and metal accents in built-ins keep their characteristic surfaces.
    if(m.transparent&&entry.kind==='window')return;
