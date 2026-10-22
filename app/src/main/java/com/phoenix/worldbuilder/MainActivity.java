@@ -124,6 +124,9 @@ public class MainActivity extends Activity {
     private static final String SCENE_MAIN = "phoenix_scene_autosave.json";
     private static final String SCENE_PREVIOUS = "phoenix_scene_previous.json";
     private static final String SCENE_MANUAL = "phoenix_scene_manual.json";
+    // Version 2 uses independent storage. Existing manual and legacy projects
+    // must never be overwritten by the clean-builder migration.
+    private static final String CLEAN_SCENE = "phoenix_clean_scene_v2.json";
 
     private boolean isValidScene(String json) {
         if (json == null || json.isEmpty() || json.length() > MAX_PROJECT_CHARS) return false;
@@ -179,6 +182,15 @@ public class MainActivity extends Activity {
         }
     }
     public class ExportBridge {
+        @JavascriptInterface public synchronized boolean saveCleanProject(String json) {
+            try {
+                if (!isValidScene(json) || new JSONObject(json).optInt("version") != 2) return false;
+            } catch (JSONException ex) { return false; }
+            return writeScene(CLEAN_SCENE, json, false);
+        }
+        @JavascriptInterface public synchronized String loadCleanProject() {
+            return readScene(CLEAN_SCENE);
+        }
         @JavascriptInterface public synchronized boolean saveProject(String json) {
             return writeScene(SCENE_MAIN, json, true);
         }
