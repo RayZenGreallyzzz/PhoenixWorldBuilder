@@ -78,6 +78,19 @@ for(const half of [Math.PI/4,Math.PI/2]){
  const imported=new THREE.Group();imported.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial()));
  const ends=G.sockets('glb:custom-curve',imported,null,'wall');
  assert.equal(ends.length,2,'Imported arc GLB must yield actual end sockets at '+half);
+ const editable={id:900,kind:'glb:custom-curve',category:'wall',root:imported,storey:0};
+ const physical=G.thicknessInfo(editable);
+ assert(physical&&Math.abs(physical.meters-.22)<.02,'Imported curved wall source thickness detected');
+ const beforeEnds=G.sockets('glb:custom-curve',imported,null,'wall');
+ assert(G.resizeImportedThickness(editable,.35),'Imported curved wall thickens independently');
+ const resized=G.thicknessInfo(editable);
+ close(resized.meters,.35,'Imported curved wall target thickness measured');
+ const afterEnds=G.sockets('glb:custom-curve',imported,null,'wall');
+ for(let j=0;j<2;j++){
+  close(afterEnds[j].point.x,beforeEnds[j].point.x,'Arc world end X unchanged');
+  close(afterEnds[j].point.z,beforeEnds[j].point.z,'Arc world end Z unchanged');
+ }
+ assert(G.resizeImportedThickness(editable,.20),'Imported wall can also be made thinner');
  for(let i=0;i<2;i++)close(ends[i].out.length(),1,'Imported socket tangent normalized');
  for(const end of ends)
   close(Math.hypot(end.point.x,end.point.z),radius,'Imported arc ends on original radius');
@@ -99,6 +112,13 @@ for(const half of [Math.PI/4,Math.PI/2]){
  assert.equal(caps.length,2,'Imported L corner with two arms yields correct end caps');
  close(caps[0].point.x,-1.9,'L-corner X cap');
  close(caps[1].point.z,-1.9,'L-corner Z cap');
+ const cornerData={id:902,kind:'glb:custom-corner',category:'wall',root:cornerGLB,storey:0};
+ assert(G.thicknessInfo(cornerData),'Imported separate-arm 90° corner supports physical thickness');
+ assert(G.resizeImportedThickness(cornerData,.38),'Adjust both perpendicular corner panel widths');
+ close(G.thicknessInfo(cornerData).meters,.38,'Measured thickness of both corner arms');
+ const grown=G.sockets('glb:custom-corner',cornerGLB,null,'wall');
+ close(grown[0].point.x,caps[0].point.x,'Corner long arm endpoint does not move');
+ close(grown[1].point.z,caps[1].point.z,'Corner second arm endpoint does not move');
 }
 const ui=fs.readFileSync(path.join(dir,'index.html'),'utf8');
 for(const id of ['modeBuild','modeCharacter','modeDrone','magnet','sizeX','sizeY','sizeZ',
