@@ -811,6 +811,7 @@ function wireButtons(){
   $('btnPaintImage').classList.add('active');
   toast('Коснись стены, пола или потолка для нанесения изображения');
  };
+ $('btnGamePaintImage').onclick=$('btnPaintImage').onclick;
  $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{choosingImageSurface=false;$('btnPaintImage').classList.remove('active');w.setPlacement(null);w.moveTarget=null;for(const id of ['placementStatus','buildPlacementStatus']){const el=$(id);if(el){el.textContent='◌ Выбери деталь';el.classList.remove('allowed','blocked')}}$('btnBuildPlace').classList.remove('placementBlocked');$('btnBuildPlace').setAttribute('aria-disabled','false');$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
  for(const action of ['Rotate','Copy','Move','Delete'])$('btn'+action).onclick=()=>{if(!w.action(action.toLowerCase()))toast('Сначала выбери объект');else toast({Rotate:'Поворот 90°',Copy:'Создана копия',Move:'Выбери новое место',Delete:'Удалено'}[action])};
  $('btnDoor').onclick=()=>{if(!w.selected)return toast('Выбери дверь или объект');w.remember();w.selected.data.door=!w.selected.data.door;toast(w.selected.data.door?'Дверь интерактивна':'Объект больше не дверь')};
@@ -1047,6 +1048,25 @@ async function exportPack(){try{toast('Создаю пакет карты…');c
   images:Object.entries(manifest).filter(([path])=>/\.(png|jpe?g|webp)$/i.test(path)).map(([path,id])=>({path,role:textureMeta.get(id)?.role||(id.startsWith('emblem:')?'painting':'texture')}))});let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
 async function exportHouse(){try{toast('Собираю дом без земли и персонажа…');const blob=await SceneExporter.build(w,{houseOnly:true});await saveToDevice('phoenix_house.glb',blob)}catch(e){toast('Ошибка экспорта дома: '+e.message);console.error(e)}}
 async function exportGlb(){try{toast('Экспорт 3D-карты…');const blob=await SceneExporter.build(w);await saveToDevice('phoenix_map.glb',blob)}catch(e){toast('Ошибка GLB: '+e.message);console.error(e)}}
+function openPictureAt(x,y){
+ const id=w.hit(x,y,true),entry=w.objects.find(item=>item.data.id===id);
+ if(!entry){toast('Нажми именно на строительную поверхность');return}
+ w.select(entry);
+ choosingImageSurface=false;$('btnPaintImage').classList.remove('active');
+ const hit=w.ray.intersectObjects([entry.mesh],true)[0];
+ let side=null;
+ if(hit?.face){
+  const worldNormal=hit.face.normal.clone().applyMatrix3(
+   new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
+  const local=worldNormal.applyMatrix3(
+   new THREE.Matrix3().getNormalMatrix(entry.mesh.matrixWorld.clone().invert())).normalize();
+  const ax=Math.abs(local.x),ay=Math.abs(local.y),az=Math.abs(local.z);
+  side=ay>=ax&&ay>=az?(local.y>=0?'top':'bottom'):
+   ax>=az?(local.x>=0?'right':'left'):(local.z>=0?'front':'back');
+ }
+ setMode('style');
+ DecalUI.beginSurfacePainting(side,hit?.point).catch(err=>toast('Ошибка изображения: '+err.message));
+}
 function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared=false,multitouch=false;
  canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size>1)multitouch=true;if(pointers.size===1){down={x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,drag:false};strokePrepared=false;
   if(w.mode==='terrain'){let pos=w.hit(e.clientX,e.clientY);if(pos){w.remember();w.sculpt(pos.x,pos.z,1);strokePrepared=true;}}
@@ -1072,6 +1092,9 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   const dist=Math.hypot(e.clientX-down.x,e.clientY-down.y);
   if(multitouch){multitouch=false;down=null;return;}
   if(w.mode==='terrain'){down=null;saveSoon();return;}
+  if(choosingImageSurface&&dist<12){
+   openPictureAt(e.clientX,e.clientY);down=null;return;
+  }
   if(w.mode==='playbuild'&&w.droneMode){
    if(dist<12){
     const hit=w.hit(e.clientX,e.clientY);
@@ -1089,24 +1112,9 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
    if(w.droneMode&&dist>=12){down=null;return;}
    if(w.placement||w.moveTarget){const p=w.hit(e.clientX,e.clientY);if(p){const placed=w.placeAt(p);if(placed!==null)saveSoon();else toast(w.lastSnapResult?.reason||'Здесь установить нельзя')}}
    else if(dist<12){
-    const id=w.hit(e.clientX,e.clientY,true),entry=w.objects.find(x=>x.data.id===id)||null;
-    w.select(entry);
-    if(choosingImageSurface&&entry){
-     choosingImageSurface=false;$('btnPaintImage').classList.remove('active');
-     const hit=w.ray.intersectObjects([entry.mesh],true)[0];
-     let side=null;
-     if(hit?.face){
-      const worldNormal=hit.face.normal.clone().applyMatrix3(
-       new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
-      const local=worldNormal.applyMatrix3(
-       new THREE.Matrix3().getNormalMatrix(entry.mesh.matrixWorld.clone().invert())).normalize();
-      const ax=Math.abs(local.x),ay=Math.abs(local.y),az=Math.abs(local.z);
-      side=ay>=ax&&ay>=az?(local.y>=0?'top':'bottom'):
-       ax>=az?(local.x>=0?'right':'left'):(local.z>=0?'front':'back');
-     }
-     setMode('style');
-     DecalUI.beginSurfacePainting(side,hit?.point).catch(err=>toast('Ошибка выбора изображения: '+err.message));
-    }else if(id)toast('Деталь выделена');
+    const id=w.hit(e.clientX,e.clientY,true);
+    w.select(w.objects.find(x=>x.data.id===id)||null);
+    if(id)toast('Деталь выделена');
    }
   }down=null;});
  canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);down=null;lastTouch=null;if(!pointers.size)multitouch=false});
