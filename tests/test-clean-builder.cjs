@@ -79,9 +79,8 @@ for(const half of [Math.PI/4,Math.PI/2]){
  const ends=G.sockets('glb:custom-curve',imported,null,'wall');
  assert.equal(ends.length,2,'Imported arc GLB must yield actual end sockets at '+half);
  for(let i=0;i<2;i++)close(ends[i].out.length(),1,'Imported socket tangent normalized');
- const middleRadius=Math.hypot((ends[0].point.x+ends[1].point.x)/2,
-  (ends[0].point.z+ends[1].point.z)/2);
- assert(middleRadius>.2,'Arc sockets follow the geometry centreline');
+ for(const end of ends)
+  close(Math.hypot(end.point.x,end.point.z),radius,'Imported arc ends on original radius');
  const onGround=entry(100,'wall');
  imported.position.set(4,0,0);imported.updateMatrixWorld(true);
  const shape={id:101,kind:'glb:custom-curve',category:'wall',root:imported,storey:0};
