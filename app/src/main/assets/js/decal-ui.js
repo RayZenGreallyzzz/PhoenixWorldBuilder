@@ -300,10 +300,12 @@ const DecalUI=(()=>{
  async function beginSurfacePainting(face=null){
   const entry=existing();
   if(!entry)return api.toast('Сначала коснись стены, пола или потолка');
-  if(face)get('decalFace').value=face;
-  if(!MuralLayout.collect(api.world,entry,get('decalFace').value||'front').length)
+  const targetFace=face||get('decalFace').value||'front';
+  if(!MuralLayout.collect(api.world,entry,targetFace).length)
    return api.toast('Не удалось определить поверхность для изображения');
   muralNext=true;render();
+  // Rendering existing decal settings must not overwrite the tapped face.
+  get('decalFace').value=targetFace;
   await openGallery();
  }
  async function openGallery(fromGame=false){
