@@ -11,10 +11,10 @@
 <section id="catalog" class="panel left"><div class="panelTitle"><b>Детали</b><small>Нажми и установи на сцену</small></div><div id="catalogItems" class="parts"></div>
  <div class="importZone">
  <label for="importCategory">Импорт GLB как</label>
- <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор</option></select>
+ <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
  <label class="fileButton">＋ Загрузить свой GLB<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
  <label class="fileButton ghostButton">🧍 Загрузить персонажа GLB<input id="importAvatar" type="file" accept=".glb,model/gltf-binary" hidden></label>
- <p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
+ <p class="tip">Выбери правильный тип: декор свободно ставится на пол, а настенный декор закрепляется на поверхности стены.</p><p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
  </div>
 </section>
 <section id="inspector" class="panel right">
@@ -36,6 +36,15 @@
    <div class="cols2"><button id="btnRotate">⟳ Повернуть 90°</button><button id="btnDuplicate">▣ Копия</button></div>
    <button id="btnDelete" class="danger">✕ Удалить выбранное</button>
   </div>
+  <details class="rowSection" id="meshPanel"><summary>✂ Правка своего GLB: обрезать / согнуть</summary>
+    <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. Обрезка по плоскости оставляет открытый край; скелетные модели не деформируем.</p>
+    <label>Ось обрезки<select id="trimAxis"><option value="x">X — ширина</option><option value="y">Y — высота</option><option value="z">Z — длина</option></select></label>
+    <div class="cols2"><label>Срезать с начала, %<input id="trimStart" type="number" min="0" max="90" step="1" value="0"></label>
+    <label>Срезать с конца, %<input id="trimEnd" type="number" min="0" max="90" step="1" value="0"></label></div>
+    <label>Сгибать вдоль оси<select id="bendAxis"><option value="x">X — по ширине</option><option value="z">Z — по длине</option></select></label>
+    <label>Изгиб, градусы (-180…180)<input id="bendAngle" type="number" min="-180" max="180" step="5" value="0"></label>
+    <button id="btnApplyMeshEdit">✓ Применить к этой детали</button><button id="btnResetMeshEdit" class="alt">Вернуть исходную геометрию</button>
+  </details>
   <details class="rowSection" id="socketPanel"><summary>⚙ Торцы импортированной модели</summary>
    <p class="tip">Если GLB имеет нестандартную четверть круга, задай координаты центра двух торцов в метрах относительно модели и направления касательных наружу. Это позволяет соединять такие модели без угадывания по размеру.</p>
    <div class="socketFields">
@@ -55,6 +64,6 @@
 <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
-<script src="js/clean-geometry.js"></script>
+<script src="js/clean-geometry.js"></script><script src="js/clean-mesh-edit.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
