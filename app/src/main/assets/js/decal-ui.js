@@ -3,7 +3,7 @@
  * Only module data changes when applying a decal: world map remains manual-save.
  */
 const DecalUI=(()=>{
- let api=null,active=0,lastEntry=null,muralNext=false;
+ let api=null,active=0,lastEntry=null,muralNext=false,pendingPoint=null;
  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
  const get=key=>document.getElementById(key);
  const DECAL_PREFIX='emblem:';
@@ -108,13 +108,18 @@ const DecalUI=(()=>{
   const texture=await api.loadTexture(id);
   if(!texture)return api.toast('Картина недоступна');
   const muralId='mural:'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
+  // Position the graphic at the touched point. Width and height remain independent.
+  const delta=pendingPoint&&group[0]?.center?pendingPoint.clone().sub(group[0].center):null;
+  const offsetX=delta?delta.dot(group[0].u):0,offsetY=delta?delta.dot(group[0].v):0;
+  pendingPoint=null;
   api.world.remember();
   for(const item of group){
    const old=DecalLayer.normalize(item.entry.data.decals);
    item.entry.data.decals=DecalLayer.normalize([...old,{
-    id:muralId,texture:id,face:item.face,muralId,crop:item.crop,
+    id:muralId,texture:id,face:item.face,muralId,
+    crop:MuralLayout.imageCrop(item,item.width,item.height,offsetX,offsetY),
     x:.5,y:.5,size:1,fit:'fill',rotation:0,opacity:1,
-    widthMeters:item.width,heightMeters:item.height,offsetX:0,offsetY:0
+    widthMeters:item.width,heightMeters:item.height,offsetX,offsetY
    }]);
    api.world.applyAppearance(item.entry);
   }
@@ -297,12 +302,13 @@ const DecalUI=(()=>{
   get('btnGameEmblems').onclick=()=>openGallery(true);
   render();
  }
- async function beginSurfacePainting(face=null){
+ async function beginSurfacePainting(face=null,point=null){
   const entry=existing();
   if(!entry)return api.toast('Сначала коснись стены, пола или потолка');
   const targetFace=face||get('decalFace').value||'front';
   if(!MuralLayout.collect(api.world,entry,targetFace).length)
    return api.toast('Не удалось определить поверхность для изображения');
+  pendingPoint=point?.clone?point.clone():null;
   muralNext=true;render();
   // Rendering existing decal settings must not overwrite the tapped face.
   get('decalFace').value=targetFace;
