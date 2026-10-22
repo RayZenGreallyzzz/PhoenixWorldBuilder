@@ -14,7 +14,7 @@ android {
         debug {
             applicationIdSuffix '.legacytest'
             versionNameSuffix '-legacy-preview'
-            manifestPlaceholders = [appLabel: 'Phoenix Builder OLD TEST']
+            manifestPlaceholders = [appLabel: 'Phoenix Builder FIX']
         }
         release {
             minifyEnabled false
