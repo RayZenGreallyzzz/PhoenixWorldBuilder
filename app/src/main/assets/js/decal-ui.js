@@ -3,7 +3,7 @@
  * Only module data changes when applying a decal: world map remains manual-save.
  */
 const DecalUI=(()=>{
- let api=null,active=0,lastEntry=null,muralNext=false,pendingPoint=null;
+ let api=null,active=0,lastEntry=null,muralNext=false,pendingPoint=null,pendingArtwork=null;
  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
  const get=key=>document.getElementById(key);
  const DECAL_PREFIX='emblem:';
@@ -27,6 +27,12 @@ const DecalUI=(()=>{
   const d=list[active];
   const muralFields=get('muralEditors');
   if(muralFields)muralFields.style.display=d?.muralId?'block':'none';
+  const confirm=get('muralConfirm');
+  if(confirm)confirm.classList.toggle('hidden',!pendingArtwork||d?.muralId!==pendingArtwork.id);
+  const confirmHint=get('muralConfirmHint');
+  if(confirmHint)confirmHint.textContent=pendingArtwork&&d?.muralId===pendingArtwork.id?
+   'Предпросмотр: измени размер и положение, затем «Установить» или «Отмена».':
+   'Рисунок установлен. Нажми 💾 Сохранить для записи проекта.';
   if(d?.muralId){
    for(const [id,value] of [['muralWidth',d.widthMeters||1],['muralHeight',d.heightMeters||1],
     ['muralOffsetX',d.offsetX||0],['muralOffsetY',d.offsetY||0]]){
@@ -76,7 +82,7 @@ const DecalUI=(()=>{
    const updated=pieces.filter(({entry:item})=>
     DecalLayer.normalize(item.data.decals).some(x=>x.muralId===previous.muralId));
    if(!updated.length)return api.toast('Поверхность картины не найдена');
-   api.world.remember();
+   if(!pendingArtwork||pendingArtwork.id!==previous.muralId)api.world.remember();
    for(const piece of updated){
     const current=DecalLayer.normalize(piece.entry.data.decals);
     piece.entry.data.decals=current.map(x=>x.muralId===previous.muralId?{
@@ -94,6 +100,19 @@ const DecalUI=(()=>{
   }
   render();
  }
+ function cancelPendingArtwork(){
+  if(!pendingArtwork)return;
+  const session=pendingArtwork;pendingArtwork=null;
+  for(const item of session.original){
+   if(!api.world.objects.includes(item.entry))continue;
+   item.entry.data.decals=JSON.parse(JSON.stringify(item.decals));
+   api.world.applyAppearance(item.entry);
+  }
+  // Remove the preview undo frame only if the user has not interleaved edits.
+  if(session.undoBefore!==null&&api.world.undo?.length===session.undoBefore+1)
+   api.world.undo.pop();
+  api.world.onChanged();render();
+ }
  function shift(dx,dy){
   const d=value()[active];if(!d)return;
   change({x:clamp(Math.round((d.x+dx)*100)/100,0,1),
@@ -107,12 +126,17 @@ const DecalUI=(()=>{
    return api.toast('На одной из стен уже 3 рисунка. Освободи место для панно.');
   const texture=await api.loadTexture(id);
   if(!texture)return api.toast('Картина недоступна');
+  if(pendingArtwork)cancelPendingArtwork();
   const muralId='mural:'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
   // Position the graphic at the touched point. Width and height remain independent.
   const delta=pendingPoint&&group[0]?.center?pendingPoint.clone().sub(group[0].center):null;
   const offsetX=delta?delta.dot(group[0].u):0,offsetY=delta?delta.dot(group[0].v):0;
   pendingPoint=null;
+  const original=group.map(piece=>({entry:piece.entry,decals:
+   JSON.parse(JSON.stringify(piece.entry.data.decals||[]))}));
+  const undoBefore=api.world.undo?.length??null;
   api.world.remember();
+  pendingArtwork={id:muralId,original,undoBefore};
   for(const item of group){
    const old=DecalLayer.normalize(item.entry.data.decals);
    item.entry.data.decals=DecalLayer.normalize([...old,{
@@ -125,7 +149,7 @@ const DecalUI=(()=>{
   }
   api.world.onChanged();
   active=DecalLayer.normalize(entry.data.decals).length-1;
-  api.toast('Одно изображение на '+group.length+' деталях. Настрой ширину и высоту ниже.');
+  api.toast('Предпросмотр на '+group.length+' деталях. Настрой размеры и нажми «Установить».');
   api.onImagePlaced?.();
   render();
  }
@@ -285,6 +309,16 @@ const DecalUI=(()=>{
    active=Math.max(0,active-1);render();
   };
   get('btnMural').onclick=()=>beginSurfacePainting();
+  get('btnMuralApply').onclick=()=>{
+   if(!pendingArtwork)return;
+   pendingArtwork=null;
+   api.world.onChanged();render();
+   api.toast('Изображение установлено. Нажми 💾 Сохранить для записи в проект.');
+  };
+  get('btnMuralCancel').onclick=()=>{
+   if(!pendingArtwork)return;
+   cancelPendingArtwork();api.toast('Изображение не установлено. Предпросмотр удалён.');
+  };
   for(const [id,field] of [['muralWidth','widthMeters'],['muralHeight','heightMeters'],
    ['muralOffsetX','offsetX'],['muralOffsetY','offsetY']]){
    get(id).onchange=e=>{
@@ -303,6 +337,7 @@ const DecalUI=(()=>{
   render();
  }
  async function beginSurfacePainting(face=null,point=null){
+  if(pendingArtwork)cancelPendingArtwork();
   const entry=existing();
   if(!entry)return api.toast('Сначала коснись стены, пола или потолка');
   const targetFace=face||get('decalFace').value||'front';
