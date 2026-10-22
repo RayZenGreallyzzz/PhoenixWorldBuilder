@@ -558,6 +558,12 @@ class CleanBuilder{
   }
  }
 }
-window.addEventListener('DOMContentLoaded',()=>{try{window.PhoenixClean=new CleanBuilder()}
- catch(error){console.error(error);notify('Ошибка запуска 3D: '+error.message,'error')}});
+window.addEventListener('DOMContentLoaded',()=>{try{
+ window.PhoenixClean=new CleanBuilder();
+ document.body.dataset.cleanReady='true';
+ }catch(error){
+ console.error(error);
+ document.body.dataset.cleanReady='false';
+ notify('Ошибка запуска 3D: '+error.message,'error');
+ }});
 })();
