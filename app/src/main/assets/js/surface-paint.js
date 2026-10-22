@@ -62,6 +62,7 @@ varying vec3 pwbWorldNormal;
 varying vec3 pwbWorldPosition;
 varying vec3 pwbRootNormal;
 varying vec3 pwbRootPosition;
+varying vec2 pwbModuleUV;
 `;
  const beginVertex=String.raw`#include <begin_vertex>
 pwbWorldPosition=(modelMatrix*vec4(transformed,1.0)).xyz;
@@ -74,6 +75,8 @@ varying vec3 pwbWorldNormal;
 varying vec3 pwbWorldPosition;
 varying vec3 pwbRootNormal;
 varying vec3 pwbRootPosition;
+varying vec2 pwbModuleUV;
+uniform float pwbHasModuleUV;
 uniform sampler2D pwbTextureall;
 uniform sampler2D pwbTexturetop;
 uniform sampler2D pwbTexturebottom;
@@ -117,6 +120,10 @@ vec3 pwbSampleWrap(sampler2D image,vec3 coord,vec3 normal){
 vec3 pwbRead(sampler2D image, float mode,float meters,float aspect,float imageScale,vec4 region,vec3 pn){
  if(mode<.5){
   return pwbSampleWrap(image,pwbWorldPosition/max(.1,meters),pn);
+ }
+ if(mode>1.5&&mode<2.5&&pwbHasModuleUV>.5){
+  vec2 uv=vec2(.5)+(pwbModuleUV-vec2(.5))/max(.25,imageScale);
+  return texture2D(image,clamp(uv,vec2(.001),vec2(.999))).rgb;
  }
  if(mode>2.5){
   vec2 size=max(vec2(.0001),region.zw-region.xy);
@@ -173,7 +180,9 @@ vec3 pwbColor(vec3 rgb,float faithful){
    for(const mat of list){
     if(!mat||!(mat.isMeshStandardMaterial||mat.isMeshPhysicalMaterial||
        mat.isMeshBasicMaterial||mat.isMeshPhongMaterial))continue;
+    const useFitted=!!obj.geometry?.attributes?.pwbFittedUV;
     const uniforms={
+     pwbHasModuleUV:{value:useFitted?1:0},
      pwbToRoot:{value:inverse.clone().multiply(obj.matrixWorld)},
      pwbBoundMin:{value:bounds.min.clone()},
      pwbBoundSize:{value:ext}
@@ -195,12 +204,14 @@ vec3 pwbColor(vec3 rgb,float faithful){
     }
     mat.onBeforeCompile=shader=>{
      Object.assign(shader.uniforms,uniforms);
-     shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n'+commonVertex);
-     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',beginVertex);
+     shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n'+commonVertex+
+      (useFitted?'\nattribute vec2 pwbFittedUV;':''));
+     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',beginVertex+
+      (useFitted?'\npwbModuleUV=pwbFittedUV;':'\npwbModuleUV=vec2(0.0);'));
      shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\n'+commonFragment);
      shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n'+applyFragment.replace('#include <map_fragment>',''));
     };
-    mat.customProgramCacheKey=()=>has?'PWB_surface_4':'PWB_surface_clear_4';
+    mat.customProgramCacheKey=()=>has?(useFitted?'PWB_surface_forge_5':'PWB_surface_5'):'PWB_surface_clear_5';
     if(has&&['foundation','ceiling','ceiling_finish'].includes(root.userData?.pwbCategory))
      mat.side=THREE.DoubleSide;
     mat.needsUpdate=true;

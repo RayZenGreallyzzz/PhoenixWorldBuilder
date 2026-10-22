@@ -85,6 +85,26 @@ async function chooseAsset(id){
 
 const PRESET_KEY='my-module-presets-v1';
 const copyPresetData=data=>JSON.parse(JSON.stringify(data||{}));
+function fitOwnModel(){
+ const selected=w.selected?.kind?.startsWith('glb:')?w.selected:null;
+ const source=w.placement?.startsWith('glb:')?w.placement:selected?.kind;
+ if(!source)return toast('Сначала выбери свой GLB в библиотеке');
+ if(!w.assetCache.has(source))return toast('GLB ещё не загружен из каталога');
+ const use=$('forgeUse').value,shape=$('forgeShape').value;
+ const cat=use==='roof'?'roof':use==='foundation'?'foundation':
+  shape==='corner'?'corner':'wall';
+ if(w.placement!==source)w.setPlacement(source,cat);
+ w.select(null);
+ const result=w.setModuleShape(shape,use);
+ if(!result.ok)return toast('Модуль не создан: '+result.reason);
+ surfaceMode='module';surfaceScope='all';
+ w.updatePreviewSurfacePaint('all','mode','module');
+ const existing=w.placementSurfacePaint?.all?.texture||w.textureId;
+ if(existing)w.updatePreviewSurfacePaint('all','texture',existing);
+ updateSurfaceUI();refreshConstructionUI();
+ toast('✓ '+({straight:'Прямая',corner:'Угол 90°',arc90:'Четверть круга',arc180:'Полукруг'}[shape])+
+  ': исходный GLB подогнан под стандарт. Нажми «Сохранить в Мои».');
+}
 async function saveModulePreset(){
  if(!localStore)return toast('Библиотека ещё загружается');
  const entry=surfaceTarget(),kind=entry?.kind||w.placement;
@@ -98,13 +118,15 @@ async function saveModulePreset(){
   return toast('Исходный GLB не найден; сначала импортируй модель');
  const paint=copyPresetData(entry?.data?.surfacePaint||w.placementSurfacePaint);
  const color=entry?.data?.color||w.currentPaint||'#b7ac91';
- if(!Object.keys(paint).length)paint.all={color};
+ if(!Object.keys(paint).length&&!(entry?.data?.moduleShape||w.placementModuleShape))paint.all={color};
  const preset={id:'preset:'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7),
   name:name.trim().slice(0,64),sourceKind:kind,
   category:entry?.data?.category||w.placementCategory||w.categoryForKind(kind),
   surfacePaint:paint,color,scale:entry?.data?.scale||w.placementScale||1,
   dimensionScale:{...{x:1,y:1,z:1},...(entry?.data?.dimensionScale||w.placementAxes||{})},
   wallThicknessMeters:entry?.data?.wallThicknessMeters||w.wallThicknessMeters||undefined,
+  moduleShape:entry?.data?.moduleShape||w.placementModuleShape||undefined,
+  moduleUse:entry?.data?.moduleUse||w.placementModuleUse||undefined,
   texture:entry?.data?.texture||null,decals:Array.isArray(entry?.data?.decals||w.placementDecals)?copyPresetData(entry?.data?.decals||w.placementDecals):[],created:new Date().toISOString()};
  modulePresets.set(preset.id,preset);
  try{await dbOp('catalog',PRESET_KEY,[...modulePresets.values()])}
@@ -126,6 +148,10 @@ async function chooseModulePreset(id){
   for(const decal of(preset.decals||[]))if(decal.texture&&!await loadTexture(decal.texture))
    return toast('Не найдена PNG эмблемы');
   w.setPlacement(preset.sourceKind,preset.category);w.select(null);
+  if(preset.moduleShape){
+   const reshaped=w.setModuleShape(preset.moduleShape,preset.moduleUse);
+   if(!reshaped.ok)throw Error('Подгонка моего модуля: '+reshaped.reason);
+  }
   w.placementScale=preset.scale||1;
   w.placementAxes={...{x:1,y:1,z:1},...(preset.dimensionScale||{})};
   if(w.ghost)w.applyAxisScale(w.ghost,w.placementScale,w.placementAxes);
@@ -497,6 +523,7 @@ function refreshConstructionUI(){
  syncDimensionInputs();
 }
 function setupPicker(){
+  $('btnForgeModule').onclick=fitOwnModel;
  $('btnCatalogModels').onclick=()=>{catalogMode='models';catalogPage=0;renderLibrary()};
  $('btnCatalogTextures').onclick=()=>{catalogMode='textures';catalogPage=0;renderLibrary()};
  $('btnCatalogEmblems').onclick=()=>DecalUI.openGallery();
