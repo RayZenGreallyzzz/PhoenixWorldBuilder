@@ -68,7 +68,7 @@ class CleanBuilder{
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.settings=defaultSettings();this.clock=new THREE.Clock();
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
-  this.avatarMixer=null;this.avatarClips=[];this.avatarActions=[];this.playerMoving=false;
+  this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;
   this.setDefaultAvatar();
   this.keys=new Set();this.pointerStart=null;this.lastFrame=0;
   this.bind();this.setMode('build');this.selectKind('wall');
@@ -86,7 +86,7 @@ class CleanBuilder{
   this.camera.aspect=b.width/b.height;this.camera.updateProjectionMatrix();
  }
  setDefaultAvatar(){
-  this.player.clear();this.avatarMixer=null;this.avatarClips=[];
+  this.player.clear();this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';
   const cloth=new THREE.MeshStandardMaterial({color:0x355d82});
   const skin=new THREE.MeshStandardMaterial({color:0xe0b783});
   const dark=new THREE.MeshStandardMaterial({color:0x21384b});
@@ -114,9 +114,11 @@ class CleanBuilder{
    root.position.y-=low;fitted.add(root);this.player.add(fitted);
    this.avatarClips=scene.animations||[];
    this.avatarMixer=this.avatarClips.length?new THREE.AnimationMixer(root):null;
+   this.avatarActions={};this.avatarState='';
    if(this.avatarMixer){
-    let idle=this.avatarClips.find(c=>/idle|stand|rest|покой/i.test(c.name))||this.avatarClips[0];
-    this.avatarMixer.clipAction(idle).play();
+    for(const clip of this.avatarClips)this.avatarActions[clip.name]=
+     this.avatarMixer.clipAction(clip);
+    this.setAvatarAnimation(false);
    }
    notify('Персонаж загружен: '+safeName(file.name),'success');
   }catch(err){console.error(err);this.setDefaultAvatar();notify('Ошибка персонажа: '+err.message,'error')}
@@ -485,6 +487,21 @@ class CleanBuilder{
   this.selected=null;this.setTool('place');this.selectKind('wall');
   $('levelLabel').textContent=this.floor+1;
  }
+ setAvatarAnimation(moving){
+  if(!this.avatarMixer||!this.avatarClips.length)return;
+  const mode=moving?'walk':'idle';
+  if(this.avatarState===mode)return;
+  const clip=moving?
+   this.avatarClips.find(c=>/walk|move|run|ход|бег/i.test(c.name)):
+   this.avatarClips.find(c=>/idle|stand|rest|breath|покой/i.test(c.name));
+  const selected=clip||this.avatarClips[0];
+  if(!selected)return;
+  const action=this.avatarActions[selected.name];if(!action)return;
+  for(const [name,other] of Object.entries(this.avatarActions))
+   if(name!==selected.name&&other.isRunning())other.fadeOut(.18);
+  if(!action.isRunning())action.reset().fadeIn(.18).play();
+  this.avatarState=mode;
+ }
  updatePlayer(dt){
   if(this.avatarMixer)this.avatarMixer.update(dt);
   if(this.mode!=='character'&&this.mode!=='drone')return;
@@ -492,6 +509,11 @@ class CleanBuilder{
   const left=down('a','arrowleft','left'),right=down('d','arrowright','right'),
    up=down('w','arrowup','up'),back=down('s','arrowdown','down');
   const raw=V(Number(right)-Number(left),0,Number(back)-Number(up));
+  this.setAvatarAnimation(this.mode==='character'&&raw.lengthSq()>.1);
+  if(this.mode==='drone'){
+   const rise=(Number(down('e'))-Number(down('q')))*dt*7;
+   if(rise){const v=V(0,rise,0);this.controls.target.add(v);this.camera.position.add(v)}
+  }
   if(raw.lengthSq()<.1)return;
   raw.normalize().multiplyScalar(dt*(this.mode==='drone'?10:3));
   const facing=V();this.camera.getWorldDirection(facing);facing.y=0;facing.normalize();
