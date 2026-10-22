@@ -181,8 +181,7 @@ const ModuleForge=(()=>{
   root.userData.pwbModuleSockets=use==='wall'?
     shape==='straight'?[{point:[-1,0,0],out:[-1,0,0]},{point:[1,0,0],out:[1,0,0]}]:
     shape==='corner'?[{point:[-2,0,0],out:[-1,0,0]},{point:[0,0,-2],out:[0,0,-1]}]:
-    [{point:[2,0,0],out:[0,0,-1]},
-      point_unused:null},{point:[shape==='arc90'?0:-2,0,shape==='arc90'?2:0],
+    [{point:[2,0,0],out:[0,0,-1]},{point:[shape==='arc90'?0:-2,0,shape==='arc90'?2:0],
        out:[shape==='arc90'?-1:0,0,shape==='arc90'?0:-1]}]:null;
   if(root.userData.pwbModuleSockets)
    root.userData.pwbModuleSockets=root.userData.pwbModuleSockets.map(s=>({point:s.point,out:s.out}));
