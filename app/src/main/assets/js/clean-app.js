@@ -139,9 +139,9 @@ class CleanBuilder{
    notify('Дрон: вращай камеру, передвигайся двумя пальцами и приближай зумом');
   }else if(mode==='character')notify('Персонаж: WASD или стрелки на экране');
   else notify('Строительство: выбери деталь, затем коснись места установки');
-  $('inspector').classList.toggle('unavailable',mode==='character');
-  this.preview?.root&&(this.preview.root.visible=mode==='build');
-  this.controls.update();
+  $('inspector').classList.remove('unavailable');
+  this.preview?.root&&(this.preview.root.visible=this.tool==='place');
+  this.controls.update();this.aimPlacement();
  }
  async cacheModel(id,buffer,category='wall',name='GLB',keep=true){
   const parsed=await GLB.load(buffer),root=parsed.root;
@@ -431,7 +431,7 @@ class CleanBuilder{
   const hit=V();return this.ray.ray.intersectPlane(plane,hit)?hit:null;
  }
  updatePreview(cursor,snapAllowed=true){
-  const obj=this.preview;if(!obj||this.tool!=='place'||this.mode!=='build')return;
+  const obj=this.preview;if(!obj||this.tool!=='place')return;
   const pos=cursor||V(),q=(x)=>Math.round(x*4)/4;
   obj.root.position.set(q(pos.x),this.floor*2.6,q(pos.z));
   if(obj.category==='roof')
@@ -458,11 +458,13 @@ class CleanBuilder{
   this.syncInspector();
  }
  place(){
-  if(!this.preview||this.mode!=='build')return;
+  if(!this.preview)return;
+  if(this.preview.category==='decor'&&!this.preview._hasWallTarget)return notify('Коснись стены для настенного декора','warn');
   const source=this.preview;
   const data={category:source.category,storey:this.floor,scale:source.scale,
    axes:cloneJSON(source.axes),thickness:source.thickness,
    rot:source._snapRotation??source.rot,sockets:source.sockets?cloneJSON(source.sockets):null,
+   meshEdit:CleanMeshEdit.normalize(source.meshEdit),
    position:source.root.position.toArray()};
   const entry=this.createEntry(source.kind,data);
   if(!entry){notify('Не удалось разместить модуль','error');return}
@@ -471,7 +473,10 @@ class CleanBuilder{
   this.preview.root.position.fromArray(data.position);
   this.settings={scale:data.scale,axes:data.axes,thickness:data.thickness};
   this.preview.scale=data.scale;this.preview.axes=data.axes;this.preview.thickness=data.thickness;
-  this.updateGeometry(this.preview);this.applyTransform(this.preview);
+  this.preview.meshEdit=CleanMeshEdit.normalize(data.meshEdit);
+  if(CleanGeometry.isBuiltIn(this.preview.kind))this.updateGeometry(this.preview);
+  else this.rebuildImported(this.preview);
+  this.applyTransform(this.preview);
   this.updatePreview(V(data.position[0],0,data.position[2]));
   notify('Деталь установлена. Для редактирования нажми «Выделить».','success');
  }
@@ -589,7 +594,7 @@ class CleanBuilder{
    const rise=(Number(down('e'))-Number(down('q')))*dt*7;
    if(rise){const v=V(0,rise,0);this.controls.target.add(v);this.camera.position.add(v)}
   }
-  if(raw.lengthSq()<.1)return;
+  if(raw.lengthSq()<.1){if(this.tool==='place'&&this.mode==='drone')this.aimPlacement();return}
   raw.normalize().multiplyScalar(dt*(this.mode==='drone'?10:3));
   const facing=V();this.camera.getWorldDirection(facing);facing.y=0;facing.normalize();
   const side=V(-facing.z,0,facing.x);
@@ -601,6 +606,7 @@ class CleanBuilder{
    this.player.rotation.y=Math.atan2(step.x,step.z);
    this.controls.target.add(step);this.camera.position.add(step);
   }
+  if(this.tool==='place')this.aimPlacement();
  }
  bind(){
   $('modeBuild').onclick=()=>this.setMode('build');
@@ -611,13 +617,16 @@ class CleanBuilder{
   $('btnLoad').onclick=()=>this.load();
   $('btnPick').onclick=()=>{this.setTool('pick');this.syncInspector()};
   $('btnPlace').onclick=()=>{this.selected=null;this.setTool('place');this.syncInspector()};
-  $('btnConfirm').onclick=()=>this.place();
+  $('btnConfirm').onclick=()=>{if(this.mode!=='build')this.aimPlacement();this.place()};
   $('btnCancel').onclick=()=>{this.setTool('pick');this.syncInspector()};
   $('btnLevelDown').onclick=()=>{this.floor=clamp(this.floor-1,0,49);
    $('levelLabel').textContent=this.floor+1;this.updatePreview(this.cursor)};
   $('btnLevelUp').onclick=()=>{this.floor=clamp(this.floor+1,0,49);
    $('levelLabel').textContent=this.floor+1;this.updatePreview(this.cursor)};
   $('magnet').onchange=e=>{this.magnet=e.target.checked;this.updatePreview(this.cursor)};
+  $('moduleCategory').onchange=()=>this.changeCategory();
+  $('btnApplyMeshEdit').onclick=()=>this.applyMeshSettings();
+  $('btnResetMeshEdit').onclick=()=>this.applyMeshSettings(true);
   $('importModel').onchange=e=>{this.importGLB(e.target.files?.[0]);e.target.value=''};
   $('importAvatar').onchange=e=>{this.importAvatar(e.target.files?.[0]);e.target.value=''};
   for(const id of ['scaleAll','sizeX','sizeY','sizeZ','thickness','posX','posY','posZ','rotY'])
@@ -634,13 +643,13 @@ class CleanBuilder{
   this.canvas.addEventListener('pointerdown',e=>{this.pointerStart={x:e.clientX,y:e.clientY,time:performance.now()}});
   this.canvas.addEventListener('pointerup',e=>{
    const start=this.pointerStart;this.pointerStart=null;
-   if(!start||Math.hypot(e.clientX-start.x,e.clientY-start.y)>10||this.mode!=='build')return;
+   if(!start||Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)return;
    if(this.tool==='pick'){this.pick(e);return}
-   const point=this.rayPoint(e);if(!point)return;
+   const point=this.locatePointer(e);if(!point){this.updatePreview(this.cursor);return}
    this.cursor.copy(point);this.updatePreview(point);
   });
   this.canvas.addEventListener('pointermove',e=>{
-   if(e.buttons||this.tool!=='place'||this.mode!=='build')return;
+   if(e.buttons||this.tool!=='place')return;
    const point=this.rayPoint(e);if(!point)return;
    this.cursor.copy(point);this.updatePreview(point);
   });
