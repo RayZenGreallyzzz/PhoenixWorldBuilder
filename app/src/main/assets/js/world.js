@@ -263,7 +263,8 @@ class WorldBuilder{
   const level=this.floorLevel||0,height=this.storeyHeight||2.6;
   const nominal=this.heightAt(x,z)+level*height;
   const result={height:nominal,source:'configured'};
-  if(this.smartSnap===false||!this.objects?.length||typeof BuildSnap==='undefined')return result;
+  // Measured storey heights must also work when the magnet is disabled.
+  if(!this.objects?.length||typeof BuildSnap==='undefined')return result;
   const cat=category||this.categoryForKind?.(this.placement)||'prop';
   const isSlab=cat==='foundation';
   let best=null;
@@ -466,13 +467,19 @@ class WorldBuilder{
   const v=solved.position;
   this.remember();
   if(this.moveTarget){
-   this.moveTarget.mesh.position.copy(v);this.moveTarget.data.pos=v.toArray();
-   this.moveTarget.mesh.rotation.y=solved.rotation*Math.PI/180;
-   this.moveTarget.data.rot=solved.rotation;
+   const moved=this.moveTarget;
+   moved.mesh.position.copy(v);moved.data.pos=v.toArray();
+   moved.mesh.rotation.y=solved.rotation*Math.PI/180;
+   moved.data.rot=solved.rotation;
+   moved.data.storey=this.floorLevel;
    this.moveTarget=null;
    if(this.ghost){this.ghost.removeFromParent();this.ghost=null;}
-   if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline=null;}
-   this.select(null);this.onChanged();return;
+   if(this.placementOutline){
+    this.placementOutline.removeFromParent();
+    this.placementOutline.geometry?.dispose();this.placementOutline.material?.dispose();
+    this.placementOutline=null;
+   }
+   this.select(moved);this.onChanged();return moved;
   }
   const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.placementCategory==='ceiling_finish'?'#ffffff':this.currentPaint;
   const rec=this.instantiate(this.placement,{id:this.nextId++,pos:v.toArray(),rot:solved.rotation,scale:this.placementScale,thicknessY:solved.thicknessY||1,
@@ -752,9 +759,23 @@ class WorldBuilder{
  }
  movementBlocked(a,b,footY){
   const d=b.clone().sub(a);d.y=0;const length=d.length();if(length<.0001)return false;
-  const ray=new THREE.Raycaster(new THREE.Vector3(a.x,footY+1.05,a.z),d.normalize(),.02,length+.22);
-  const targets=this.objects.filter(e=>!['floor','stairs','roof','tree'].includes(e.kind)&&!(e.data.door&&e.data.open)).map(e=>e.mesh);
-  return ray.intersectObjects(targets,true).some(hit=>hit.distance<=length+.22);
+  // The previous single eye-height ray let the character clip walls with
+  // its shoulders, cross low obstacles and walk through slim corner seams.
+  // Use capsule-like forward samples at two heights and three lateral
+  // positions without requiring a heavyweight physics engine on Android.
+  const dir=d.clone().normalize(),side=new THREE.Vector3(-dir.z,0,dir.x);
+  const radius=.23;
+  const targets=this.objects.filter(e=>{
+   const cat=e.data?.category||this.categoryForKind?.(e.kind)||e.kind;
+   return !['floor','foundation','ceiling','stairs','roof','tree','foliage','ceiling_finish'].includes(cat)
+    &&!(e.data.door&&e.data.open);
+  }).map(e=>e.mesh);
+  for(const h of [.42,1.06,1.58])for(const lateral of [-radius,0,radius]){
+   const origin=new THREE.Vector3(a.x,footY+h,a.z).addScaledVector(side,lateral);
+   const ray=new THREE.Raycaster(origin,dir,.015,length+radius);
+   if(ray.intersectObjects(targets,true).some(hit=>hit.distance<=length+radius))return true;
+  }
+  return false;
  }
 
  // Build a standardized one-piece form from a selected/imported GLB.
