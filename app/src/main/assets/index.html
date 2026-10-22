@@ -30,7 +30,12 @@
   <label>Сдвиг вправо, м <input id="muralOffsetX" type="number" min="-1000" max="1000" step="0.1" value="0"></label>
   <label>Сдвиг вверх, м <input id="muralOffsetY" type="number" min="-1000" max="1000" step="0.1" value="0"></label>
  </div>
- <small class="note">Размер и смещение меняют только картинку, не стену. Настройки применяются сразу; нажми 💾, чтобы сохранить проект.</small>
+ <small class="note">Меняй параметры и смотри результат на постройке. Размеры стен не меняются.</small>
+ <div id="muralConfirm" class="decalrow hidden">
+  <button id="btnMuralApply" class="primary">✓ Установить</button>
+  <button id="btnMuralCancel">✕ Отмена</button>
+ </div>
+ <small id="muralConfirmHint" class="note">После установки нажми 💾 Сохранить, чтобы записать изменения в проект.</small>
 </div>
 <div class="decalrow"><button id="btnImportEmblem">＋ Своя PNG</button><button id="btnDecalText">✎ Создать надпись</button></div>
 <div class="decalrow"><label>Сторона <select id="decalFace"><option value="front">Спереди</option><option value="back">Сзади</option><option value="left">Слева</option><option value="right">Справа</option><option value="top">Сверху (пол)</option><option value="bottom">Снизу (потолок)</option></select></label><label>Эмблема <select id="decalActive"><option value="">Нет эмблем</option></select></label></div>
