@@ -263,8 +263,9 @@ class WorldBuilder{
   const level=this.floorLevel||0,height=this.storeyHeight||2.6;
   const nominal=this.heightAt(x,z)+level*height;
   const result={height:nominal,source:'configured'};
-  // Measured storey heights must also work when the magnet is disabled.
-  if(!this.objects?.length||typeof BuildSnap==='undefined')return result;
+  // In manual mode the user's configured storey height is authoritative.
+  // In magnetic mode inspect physical supports in the built scene.
+  if(this.smartSnap===false||!this.objects?.length||typeof BuildSnap==='undefined')return result;
   const cat=category||this.categoryForKind?.(this.placement)||'prop';
   const isSlab=cat==='foundation';
   let best=null;
