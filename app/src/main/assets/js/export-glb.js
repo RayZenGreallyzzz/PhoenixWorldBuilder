@@ -85,10 +85,17 @@ const SceneExporter=(()=>{
      // Bake precisely this module's slice of the full image. Every wall
      // remains an ordinary GLB mesh, while all slices form one tapestry.
      const [u0,v0,u1,v1]=e.crop;
-     const sx=Math.round(u0*im.width),sy=Math.round((1-v1)*im.height);
-     const sw=Math.max(1,Math.round((u1-u0)*im.width));
-     const sh=Math.max(1,Math.round((v1-v0)*im.height));
-     ctx.drawImage(im,sx,sy,Math.min(sw,im.width-sx),Math.min(sh,im.height-sy),0,0,bakeSize,bakeSize);
+     // Intersect image coordinates with [0,1]. Blank outside the painting
+     // stays transparent; do not stretch the edge pixels on export.
+     const loU=Math.max(0,Math.min(u0,u1)),hiU=Math.min(1,Math.max(u0,u1));
+     const loV=Math.max(0,Math.min(v0,v1)),hiV=Math.min(1,Math.max(v0,v1));
+     if(hiU>loU&&hiV>loV&&Math.abs(u1-u0)>1e-6&&Math.abs(v1-v0)>1e-6){
+      const sx=loU*im.width,sy=(1-hiV)*im.height;
+      const sw=(hiU-loU)*im.width,sh=(hiV-loV)*im.height;
+      const dx=(loU-u0)/(u1-u0)*bakeSize,dy=(v1-hiV)/(v1-v0)*bakeSize;
+      const dw=(hiU-loU)/(u1-u0)*bakeSize,dh=(hiV-loV)/(v1-v0)*bakeSize;
+      ctx.drawImage(im,sx,sy,sw,sh,dx,dy,dw,dh);
+     }
     }else{
      ctx.translate(e.x*bakeSize,(1-e.y)*bakeSize);ctx.rotate(e.rotation*Math.PI/180);
      ctx.drawImage(im,-w*bakeSize/2,-h*bakeSize/2,w*bakeSize,h*bakeSize);
