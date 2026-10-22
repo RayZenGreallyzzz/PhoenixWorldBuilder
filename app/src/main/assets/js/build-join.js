@@ -74,7 +74,9 @@ const BuildJoin=(()=>{
     tip:new THREE.Vector3(...s.point),pivot:new THREE.Vector3(0,0,0)
    }));
   }
-  if(cornerCache.has(root))return cornerCache.get(root)||null;
+  const signature=BuildSnap.geometrySignature(root);
+  const cached=cornerCache.get(root);
+  if(cached&&cached.signature===signature)return cached.arms;
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert(),transform=new THREE.Matrix4();
   const arms=[],box=new THREE.Box3();
@@ -104,7 +106,7 @@ const BuildJoin=(()=>{
   }
   if(!best){
    const joined=mergedCornerArms(root);
-   cornerCache.set(root,joined||false);
+   cornerCache.set(root,{signature,arms:joined||null});
    return joined;
   }
   const {x,z,ix,iz}=best;
@@ -116,9 +118,9 @@ const BuildJoin=(()=>{
    {name:'corner-z',tip:new THREE.Vector3(ix,minY,zEnd),pivot:new THREE.Vector3(ix,minY,iz)}
   ];
   if(local.some(a=>distXZ(a.tip,a.pivot)<.35)){
-   cornerCache.set(root,false);return null;
+   cornerCache.set(root,{signature,arms:null});return null;
   }
-  cornerCache.set(root,local);
+  cornerCache.set(root,{signature,arms:local});
   return local;
  }
  function cornerSegments(root,kind,category){
