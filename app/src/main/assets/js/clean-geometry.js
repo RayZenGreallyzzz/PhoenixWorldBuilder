@@ -18,42 +18,48 @@ const CleanGeometry=(()=>{
   {kind:'roof',name:'Крыша — секция',category:'roof'}
  ];
  const isBuiltIn=kind=>catalog.some(x=>x.kind===kind);
- function annularMesh(angle,width=2,height=2.6,thickness=.22){
+ function annularMesh(angle,width=2,height=2.6,thickness=.22,sx=1,sz=1){
   const segments=Math.max(12,Math.ceil(angle*24/Math.PI)),R=width;
   const verts=[],uv=[];
   const addTri=(a,b,c)=>{verts.push(...a,...b,...c);uv.push(0,0,1,0,0,1)};
   const quad=(a,b,c,d)=>{addTri(a,b,c);addTri(a,c,d)};
-  const pt=(r,t,y)=>[r*Math.cos(t),y,r*Math.sin(t)];
+  // The wall is built around its centreline, compensating for X/Z
+  // scaling so physical thickness remains constant even on an ellipse.
+  const pt=(side,t,y)=>{
+   const co=Math.cos(t),si=Math.sin(t);
+   const nx=co/sx,nz=si/sz,norm=Math.hypot(nx,nz)||1;
+   return [width*co+side*(thickness/2)*nx/norm/sx,y,
+    width*si+side*(thickness/2)*nz/norm/sz];
+  };
   for(let i=0;i<segments;i++){
    const a=i*angle/segments,b=(i+1)*angle/segments;
-   const inner=R-thickness/2,outer=R+thickness/2;
-   quad(pt(outer,a,0),pt(outer,b,0),pt(outer,b,height),pt(outer,a,height));
-   quad(pt(inner,b,0),pt(inner,a,0),pt(inner,a,height),pt(inner,b,height));
-   quad(pt(inner,a,height),pt(outer,a,height),pt(outer,b,height),pt(inner,b,height));
-   quad(pt(outer,a,0),pt(inner,a,0),pt(inner,b,0),pt(outer,b,0));
+   quad(pt(1,a,0),pt(1,b,0),pt(1,b,height),pt(1,a,height));
+   quad(pt(-1,b,0),pt(-1,a,0),pt(-1,a,height),pt(-1,b,height));
+   quad(pt(-1,a,height),pt(1,a,height),pt(1,b,height),pt(-1,b,height));
+   quad(pt(1,a,0),pt(-1,a,0),pt(-1,b,0),pt(1,b,0));
   }
-  const inn=R-thickness/2,out=R+thickness/2;
-  quad(pt(inn,0,0),pt(inn,0,height),pt(out,0,height),pt(out,0,0));
-  quad(pt(out,angle,0),pt(out,angle,height),pt(inn,angle,height),pt(inn,angle,0));
+  quad(pt(-1,0,0),pt(-1,0,height),pt(1,0,height),pt(1,0,0));
+  quad(pt(1,angle,0),pt(1,angle,height),pt(-1,angle,height),pt(-1,angle,0));
   const g=new THREE.BufferGeometry();
   g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
   g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();
   return g;
  }
- function create(kind,thickness=.22){
+ function create(kind,thickness=.22,sx=1,sz=1){
+  sx=Math.max(.1,Math.abs(sx));sz=Math.max(.1,Math.abs(sz));
   const mat=new THREE.MeshStandardMaterial({color:'#d2c5ac',roughness:.86,side:THREE.DoubleSide});
   const root=new THREE.Group();root.name=kind;
   const add=(g,x=0,y=0,z=0,rotationZ=0)=>{const m=new THREE.Mesh(g,mat);m.position.set(x,y,z);
    m.rotation.z=rotationZ;root.add(m);return m};
   const h=2.6;
   if(kind==='floor')add(new THREE.BoxGeometry(2,.18,2),0,.09,0);
-  if(kind==='wall')add(new THREE.BoxGeometry(2,h,thickness),0,h/2,0);
+  if(kind==='wall')add(new THREE.BoxGeometry(2,h,thickness/sz),0,h/2,0);
   if(kind==='corner'){
-   add(new THREE.BoxGeometry(2,h,thickness),-.9,h/2,0);
-   add(new THREE.BoxGeometry(thickness,h,2),0,h/2,-.9);
+   add(new THREE.BoxGeometry(2,h,thickness/sz),-.9,h/2,0);
+   add(new THREE.BoxGeometry(thickness/sx,h,2),0,h/2,-.9);
   }
-  if(kind==='arc90')add(annularMesh(Math.PI/2,2,h,thickness));
-  if(kind==='arc180')add(annularMesh(Math.PI,2,h,thickness));
+  if(kind==='arc90')add(annularMesh(Math.PI/2,2,h,thickness,sx,sz));
+  if(kind==='arc180')add(annularMesh(Math.PI,2,h,thickness,sx,sz));
   if(kind==='roof'){
    add(new THREE.BoxGeometry(2.5,.16,1.65),-.62,.65,0,-Math.PI/4);
    add(new THREE.BoxGeometry(2.5,.16,1.65), .62,.65,0, Math.PI/4);
@@ -301,7 +307,9 @@ const CleanGeometry=(()=>{
     if(src.out.lengthSq()<.5||tgt.out.lengthSq()<.5)continue;
     const desired=tgt.out.clone().negate();
     const theta=x=>Math.atan2(-x.z,x.x);
-    const yaw=theta(desired)-theta(src.out)+extraRotation;
+    // The magnet must always oppose the two end tangents. A user rotation
+    // may affect free positioning, but may never fake a green socket join.
+    const yaw=theta(desired)-theta(src.out);
     const scaled=V(src.point.x*preview.root.scale.x,src.point.y*preview.root.scale.y,
        src.point.z*preview.root.scale.z);
     const projected=rotate(scaled,yaw);
