@@ -43,14 +43,17 @@ function outgoingTip(line){return line.a.clone().add(line.a.clone().sub(line.c).
  const moved=BuildSnap.attrBounds(root);
  assert(moved.max.x>longer.max.x+1.4,'Moving a GLB child invalidates snap bounds');
 }
-// Disable magnetic snapping but still align the second floor to actual wall tops.
+// Automatic mode follows measured walls; manual mode respects the configured height.
 {
  const w=fresh();
  w.instantiate('wall',{id:84,pos:[0,0,0],rot:0,scale:1,category:'wall',storey:0});
- w.smartSnap=false;w.storeyHeight=3;
+ w.smartSnap=true;w.storeyHeight=3;
  w.floorLevel=1;
  const level=w.floorDatumAt(0,0,'wall');
- nearly(level.height,2.6,'Floor datum must use measured wall height with magnet off');
+ nearly(level.height,2.6,'Magnetic floor datum must use measured wall height');
+ w.smartSnap=false;
+ nearly(w.floorDatumAt(0,0,'wall').height,3,
+  'Manual placement must respect the configured 3m storey height');
 }
 // Moving an object must update the floor index and report success.
 {
