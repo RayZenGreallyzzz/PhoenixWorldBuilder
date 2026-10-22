@@ -97,8 +97,16 @@ vm.runInThisContext(fs.readFileSync(path.join(root,'export-glb.js'),'utf8')+'\ng
   'Each wall must export a cropped part of the original image');
  const html=fs.readFileSync(path.join(root,'../index.html'),'utf8');
  const ui=fs.readFileSync(path.join(root,'decal-ui.js'),'utf8');
- for(const s of ['btnMural','mural-layout.js'])assert(html.includes(s));
+ for(const s of ['btnMural','mural-layout.js','btnPaintImage',
+  'btnMuralApply','btnMuralCancel','muralWidth','muralHeight',
+  'muralOffsetX','muralOffsetY'])assert(html.includes(s));
  assert(ui.includes('MuralLayout.collect')&&ui.includes("api.world.remember()"),
-  'Mural application must use shared layout with a single Undo snapshot');
+  'Mural application must use shared layout with an Undo snapshot');
+ assert(ui.includes('cancelPendingArtwork()')&&ui.includes('pendingArtwork=null'),
+  'Preview can be cancelled before explicitly installing');
+ const snap=fs.readFileSync(path.join(root,'build-snap.js'),'utf8');
+ const place=fs.readFileSync(path.join(root,'build-placement.js'),'utf8');
+ assert(snap.includes('geometrySignature')&&place.includes('signature'),
+  'Geometry edits must invalidate cached joins and collisions');
  console.log('Continuous image across three walls, exclude detached panels, shader UVs, GLB crops OK');
 })().catch(err=>{console.error(err);process.exitCode=1});
