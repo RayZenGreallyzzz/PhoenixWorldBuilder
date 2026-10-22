@@ -68,6 +68,12 @@ const BuildJoin=(()=>{
  // from corner-end snapping instead of inventing a socket on the AABB diagonal.
  function cornerArms(root,kind,category){
   if(category!=='corner'&&kind!=='corner')return null;
+  if(root?.userData?.pwbModuleShape==='corner'&&root.userData.pwbModuleSockets?.length===2){
+   return root.userData.pwbModuleSockets.map((s,i)=>({
+    name:i===0?'corner-x':'corner-z',
+    tip:new THREE.Vector3(...s.point),pivot:new THREE.Vector3(0,0,0)
+   }));
+  }
   if(cornerCache.has(root))return cornerCache.get(root)||null;
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert(),transform=new THREE.Matrix4();
