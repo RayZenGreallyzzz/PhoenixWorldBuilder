@@ -1105,7 +1105,7 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
        ax>=az?(local.x>=0?'right':'left'):(local.z>=0?'front':'back');
      }
      setMode('style');
-     DecalUI.beginSurfacePainting(side).catch(err=>toast('Ошибка выбора изображения: '+err.message));
+     DecalUI.beginSurfacePainting(side,hit?.point).catch(err=>toast('Ошибка выбора изображения: '+err.message));
     }else if(id)toast('Деталь выделена');
    }
   }down=null;});
