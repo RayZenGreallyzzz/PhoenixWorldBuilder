@@ -171,8 +171,9 @@ class CleanBuilder{
   await this.cacheModel(kind,buf,'wall',kind,false);
   return true;
  }
- cloneTemplate(kind,thickness=.22){
-  if(CleanGeometry.isBuiltIn(kind))return CleanGeometry.create(kind,thickness);
+ cloneTemplate(kind,thickness=.22,scale=1,axes={x:1,y:1,z:1}){
+  if(CleanGeometry.isBuiltIn(kind))return CleanGeometry.create(kind,thickness,
+   scale*(axes?.x||1),scale*(axes?.z||1));
   const source=this.assets.get(kind)?.template;
   if(!source)return null;
   return THREE.SkeletonUtils?.clone?THREE.SkeletonUtils.clone(source):source.clone(true);
@@ -197,7 +198,7 @@ class CleanBuilder{
  createEntry(kind,config={}){
   const data={...defaultSettings(),...config};
   data.axes={...defaultSettings().axes,...(config.axes||{})};
-  const root=this.cloneTemplate(kind,data.thickness);if(!root)return null;
+  const root=this.cloneTemplate(kind,data.thickness,data.scale,data.axes);if(!root)return null;
   const meta=this.descriptor(kind);
   const obj={id:config.id||this.nextId++,kind,category:config.category||meta?.category||
     categoryOf(kind),root,sockets:config.sockets||null,
@@ -289,7 +290,7 @@ class CleanBuilder{
  }
  updateGeometry(obj){
   if(!obj||!CleanGeometry.isBuiltIn(obj.kind)||!['wall','corner','arc90','arc180'].includes(obj.kind))return;
-  const old=obj.root,newRoot=this.cloneTemplate(obj.kind,obj.thickness);
+  const old=obj.root,newRoot=this.cloneTemplate(obj.kind,obj.thickness,obj.scale,obj.axes);
   newRoot.position.copy(old.position);newRoot.rotation.copy(old.rotation);newRoot.scale.copy(old.scale);
   this.scene.add(newRoot);old.removeFromParent();
   if(obj===this.preview){
@@ -319,7 +320,12 @@ class CleanBuilder{
   for(const [field,axis] of [['posX','x'],['posY','y'],['posZ','z']])
    if(id===field)obj.root.position[axis]=clamp(value,-100,100);
   if(id==='rotY')obj.rot=value*Math.PI/180;
+  if(['scaleAll','sizeX','sizeY','sizeZ'].includes(id)&&
+    CleanGeometry.isBuiltIn(obj.kind)&&['wall','corner','arc90','arc180'].includes(obj.kind))
+   this.updateGeometry(obj);
   this.applyTransform(obj);
+  if(['scaleAll','sizeX','sizeY','sizeZ'].includes(id)&&obj.thicknessEditable)
+   CleanGeometry.resizeImportedThickness(obj,obj.thickness);
   if(obj===this.preview)this.updatePreview(this.cursor,false);
   if(this.outline){this.outline.setFromObject(obj.root)}
   this.syncInspector();
