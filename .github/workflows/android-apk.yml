@@ -46,41 +46,11 @@ jobs:
           cp /tmp/phoenix-three/node_modules/three/examples/js/controls/OrbitControls.js app/src/main/assets/js/OrbitControls.js
           cp /tmp/phoenix-three/node_modules/three/LICENSE THREEJS_LICENSE.txt
 
-      - name: Validate JavaScript
+      - name: Validate Phoenix Builder v2
         run: |
           for file in app/src/main/assets/js/*.js; do node --check "$file"; done
-          node tests/test-export.cjs
-          node tests/test-zip.cjs
-          node tests/test-build-physics.cjs
-          node tests/test-avatar.cjs
-          node tests/test-game-input.cjs
-          node tests/test-camera-scale.cjs
-          node tests/test-drone-building.cjs
-          node tests/test-avatar-fit.cjs
-          node tests/test-avatar-root.cjs
-          node tests/test-skinned-bounds.cjs
-          node tests/test-construction-tools.cjs
-          node tests/test-catalog-visual.cjs
-          node tests/test-glb-edge-snap.cjs
-          node tests/test-roof-ceiling-levels.cjs
-          node tests/test-roof-fit-feedback.cjs
-          node tests/test-physical-wall-thickness.cjs
-          node tests/test-storey-quick-select.cjs
-          node tests/test-joints-thickness.cjs
-          node tests/test-corner-wall-continuity.cjs
-          node tests/test-surface-paint.cjs
-          node tests/test-surface-mapping.cjs
-          node tests/test-texture-vs-model-scale.cjs
-          node tests/test-save-recovery.cjs
-          node tests/test-placement-validation.cjs
-          node tests/test-wall-end-manual.cjs
-          node tests/test-curved-wall-joins.cjs
-          node tests/test-undo-magnetic-snap.cjs
-          node tests/test-module-presets.cjs
-          node tests/test-decals.cjs
-          node tests/test-smart-package.cjs
-          node tests/test-murals.cjs
-          node tests/test-artwork-clarity.cjs
+          node tests/test-clean-builder.cjs
+          node tests/test-glb.cjs
           node tests/test-android-branding.cjs
 
       - name: Configure Java 17
