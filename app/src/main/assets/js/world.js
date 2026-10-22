@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.placementAxes={x:1,y:1,z:1};this.wallThicknessMeters=null;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.selected=null;this.ghost=null;this.placementOutline=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.placementAxes={x:1,y:1,z:1};this.wallThicknessMeters=null;this.placementModuleShape=null;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.selected=null;this.ghost=null;this.placementOutline=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;this.placementSurfacePaint={};
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -476,10 +476,16 @@ class WorldBuilder{
   }
   const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.placementCategory==='ceiling_finish'?'#ffffff':this.currentPaint;
   const rec=this.instantiate(this.placement,{id:this.nextId++,pos:v.toArray(),rot:solved.rotation,scale:this.placementScale,thicknessY:solved.thicknessY||1,
-   dimensionScale:{...this.placementAxes},wallThicknessMeters:this.wallThicknessMeters||undefined,surfacePaint:JSON.parse(JSON.stringify(this.placementSurfacePaint||{})),decals:JSON.parse(JSON.stringify(this.placementDecals||[])),category:this.placementCategory||this.categoryForKind?.(this.placement)||null,storey:this.floorLevel,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
+   dimensionScale:{...this.placementAxes},wallThicknessMeters:this.wallThicknessMeters||undefined,moduleShape:this.placementModuleShape||undefined,moduleUse:this.placementModuleUse||undefined,surfacePaint:JSON.parse(JSON.stringify(this.placementSurfacePaint||{})),decals:JSON.parse(JSON.stringify(this.placementDecals||[])),category:this.placementCategory||this.categoryForKind?.(this.placement)||null,storey:this.floorLevel,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
   this.select(rec);this.onChanged();return rec;
  }
  instantiate(kind,data){let obj=this.makeBuiltin(kind); if(!obj){const cache=this.assetCache.get(kind);if(!cache)throw Error('Сначала импортируй '+kind);obj=cache.clone(true)}
+  if(data.moduleShape&&typeof ModuleForge!=='undefined'){
+   const result=ModuleForge.build(obj,data.moduleShape,
+    ModuleForge.uses.includes(data.moduleUse)?data.moduleUse:
+     data.category==='roof'?'roof':['foundation','ceiling','ceiling_finish'].includes(data.category)?'foundation':'wall');
+   if(!result.ok)throw Error('Модуль из GLB: '+result.reason);
+  }
   let entry={kind,data:JSON.parse(JSON.stringify(data)),mesh:obj};obj.userData.objectId=data.id;obj.userData.pwbCategory=data.category||this.categoryForKind?.(kind)||kind;
   if(!('scale' in data))entry.data.scale=1;
   obj.position.fromArray(data.pos);obj.rotation.y=(data.rot||0)*Math.PI/180;this.applyAxisScale(obj,data.scale||1,data.dimensionScale,Number(data.thicknessY)||1);
@@ -748,11 +754,51 @@ class WorldBuilder{
   return ray.intersectObjects(targets,true).some(hit=>hit.distance<=length+.22);
  }
 
- setPlacement(kind,category=null){
+ // Build a standardized one-piece form from a selected/imported GLB.
+ // Geometry is rebuilt per instance; source GLB in the asset cache is safe.
+ setModuleShape(shape,use=null){
+  if(!this.placement||!this.placement.startsWith('glb:')||
+     typeof ModuleForge==='undefined')return {ok:false,reason:'Сначала выбери свой GLB'};
+  const type=ModuleForge.uses.includes(use)?use:
+   this.placementCategory==='roof'?'roof':
+   ['foundation','ceiling','ceiling_finish'].includes(this.placementCategory)?'foundation':'wall';
+  const root=this.assetCache.get(this.placement);
+  if(!root)return {ok:false,reason:'Исходный GLB не загружен'};
+  const built=root.clone(true),result=ModuleForge.build(built,shape,type);
+  if(!result.ok)return result;
+  this.placementModuleShape=shape;this.placementModuleUse=type;
+  this.placementCategory=type==='foundation'?'foundation':
+   type==='roof'?'roof':shape==='corner'?'corner':'wall';
+  if(this.ghost)this.ghost.removeFromParent();
+  this.ghost=built;
+  this.applyAxisScale(built,this.placementScale,this.placementAxes);
+  built.userData.pwbCategory=this.placementCategory;
+  built.userData.pwbPreview=true;
+  built.traverse(m=>{if(!m.isMesh)return;
+   m.material=Array.isArray(m.material)?m.material.map(a=>a.clone()):m.material.clone();
+   for(const mat of(Array.isArray(m.material)?m.material:[m.material])){
+    mat.transparent=true;mat.opacity=.47;mat.depthWrite=false;
+   }
+  });
+  if(typeof SurfacePaint!=='undefined'&&Object.keys(this.placementSurfacePaint||{}).length)
+   SurfacePaint.applyToRoot(built,this.placementSurfacePaint,this.textures);
+  this.scene.add(built);
+  if(this.placementOutline){
+   this.placementOutline.removeFromParent();
+   this.placementOutline.geometry?.dispose();this.placementOutline.material?.dispose();
+   this.placementOutline=null;
+  }
+  this.placementOutline=new THREE.BoxHelper(built,0x50f4a0);
+  this.placementOutline.material.depthTest=false;this.scene.add(this.placementOutline);
+  this.updateGameGhost();this.onChanged();
+  return result;
+ }
+  setPlacement(kind,category=null){
   if(kind!==this.placement){
    this.placementSurfacePaint={};this.placementDecals=[];
    this.placementAxes={x:1,y:1,z:1};this.wallThicknessMeters=null;
   }
+  this.placementModuleShape=null;this.placementModuleUse=null;
   this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
   if(this.ghost)this.ghost.removeFromParent();
   if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline.geometry.dispose();this.placementOutline.material.dispose();this.placementOutline=null;}
@@ -825,7 +871,7 @@ class WorldBuilder{
   for(let i=0;i<Math.min(pos.count,s.heights.length);i++)pos.setZ(i,s.heights[i]);if(s.colors&&s.colors.length===col.array.length)col.array.set(s.colors);
   pos.needsUpdate=true;col.needsUpdate=true;this.terrain.geometry.computeVertexNormals();this.terrain.geometry.computeBoundingBox();this.terrain.geometry.computeBoundingSphere();
   for(const e of s.objects){if(this.makeBuiltin(e.kind)||this.assetCache.has(e.kind)){try{this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,thicknessY:e.thicknessY||1,dimensionScale:e.dimensionScale,
-   wallThicknessMeters:e.wallThicknessMeters,
+   wallThicknessMeters:e.wallThicknessMeters,moduleShape:e.moduleShape,moduleUse:e.moduleUse,
    category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,texture:e.texture,door:e.door,open:e.open})}catch(err){console.warn(err)}}}
   this.onChanged();}
  updateCamera(){if(this.mode==='walk'||(this.mode==='playbuild'&&!this.droneMode)){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));this.target.copy(this.player.position).add(new THREE.Vector3(0,1.15,0));const range=THREE.MathUtils.clamp(this.distance,2.7,9);this.camera.position.copy(this.target).addScaledVector(forward,-Math.cos(this.pitch)*range).add(new THREE.Vector3(0,Math.sin(this.pitch)*range,0));}
