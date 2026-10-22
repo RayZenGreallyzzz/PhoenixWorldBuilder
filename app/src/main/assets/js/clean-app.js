@@ -204,6 +204,15 @@ class CleanBuilder{
     storey:Number.isInteger(config.storey)?config.storey:this.floor,
     scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot};
   this.applyTransform(obj);
+  if(!CleanGeometry.isBuiltIn(kind)&&obj.category==='wall'){
+   const detected=CleanGeometry.thicknessInfo(obj);
+   if(detected){
+    if(config.thickness!==undefined&&Math.abs(data.thickness-detected.meters)>.001)
+     CleanGeometry.resizeImportedThickness(obj,data.thickness);
+    else obj.thickness=detected.meters;
+    obj.thicknessEditable=true;
+   }else obj.thicknessEditable=false;
+  }
   if(config.position)obj.root.position.fromArray(config.position);
   return obj;
  }
@@ -255,10 +264,12 @@ class CleanBuilder{
   for(const [key,axis] of [['posX','x'],['posY','y'],['posZ','z']])read(key,rounded(pos[axis]));
   read('rotY',Math.round((obj?.rot||0)*180/Math.PI*10)/10);
   const builtin=obj&&CleanGeometry.isBuiltIn(obj.kind);
-  $('thickness').disabled=!obj||(!builtin&&obj.category!=='wall');
-  $('thicknessHint').textContent=builtin?'Толщина меняет только поперечное сечение стены':
-   'Для нестандартной импортной стены меняй X/Y/Z; настоящая толщина требует известной геометрии';
-  if(!builtin)$('thickness').disabled=true;
+  const wallBuiltin=builtin&&['wall','corner','arc90','arc180'].includes(obj.kind);
+  const physical=wallBuiltin||!!obj?.thicknessEditable;
+  $('thickness').disabled=!physical;
+  $('thicknessHint').textContent=physical?
+   'Точная толщина меняет только поперечное сечение, не радиус и не длину':
+   'Для этой формы толщина не определена. Можно менять X/Y/Z без повреждения исходного GLB.';
   const editable=!!obj;
   for(const id of ['scaleAll','sizeX','sizeY','sizeZ','posX','posY','posZ','rotY'])
    $(id).disabled=!editable;
@@ -297,8 +308,13 @@ class CleanBuilder{
   if(id==='sizeY')obj.axes.y=clamp(value/100,.1,10);
   if(id==='sizeZ')obj.axes.z=clamp(value/100,.1,10);
   if(id==='thickness'){
-   if(!CleanGeometry.isBuiltIn(obj.kind))return;
-   obj.thickness=clamp(value/100,.025,.8);this.updateGeometry(obj);
+   const desired=clamp(value/100,.025,.8);
+   if(CleanGeometry.isBuiltIn(obj.kind)){
+    if(!['wall','corner','arc90','arc180'].includes(obj.kind))return;
+    obj.thickness=desired;this.updateGeometry(obj);
+   }else if(obj.thicknessEditable&&CleanGeometry.resizeImportedThickness(obj,desired)){
+    obj.thickness=desired;
+   }else return notify('У этого GLB невозможно безопасно изменить реальную толщину','error');
   }
   for(const [field,axis] of [['posX','x'],['posY','y'],['posZ','z']])
    if(id===field)obj.root.position[axis]=clamp(value,-100,100);
