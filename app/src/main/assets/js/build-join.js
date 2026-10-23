@@ -68,7 +68,15 @@ const BuildJoin=(()=>{
  // from corner-end snapping instead of inventing a socket on the AABB diagonal.
  function cornerArms(root,kind,category){
   if(category!=='corner'&&kind!=='corner')return null;
-  if(cornerCache.has(root))return cornerCache.get(root)||null;
+  if(root?.userData?.pwbModuleShape==='corner'&&root.userData.pwbModuleSockets?.length===2){
+   return root.userData.pwbModuleSockets.map((s,i)=>({
+    name:i===0?'corner-x':'corner-z',
+    tip:new THREE.Vector3(...s.point),pivot:new THREE.Vector3(0,0,0)
+   }));
+  }
+  const signature=BuildSnap.geometrySignature(root);
+  const cached=cornerCache.get(root);
+  if(cached&&cached.signature===signature)return cached.arms;
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert(),transform=new THREE.Matrix4();
   const arms=[],box=new THREE.Box3();
@@ -98,7 +106,7 @@ const BuildJoin=(()=>{
   }
   if(!best){
    const joined=mergedCornerArms(root);
-   cornerCache.set(root,joined||false);
+   cornerCache.set(root,{signature,arms:joined||null});
    return joined;
   }
   const {x,z,ix,iz}=best;
@@ -110,9 +118,9 @@ const BuildJoin=(()=>{
    {name:'corner-z',tip:new THREE.Vector3(ix,minY,zEnd),pivot:new THREE.Vector3(ix,minY,iz)}
   ];
   if(local.some(a=>distXZ(a.tip,a.pivot)<.35)){
-   cornerCache.set(root,false);return null;
+   cornerCache.set(root,{signature,arms:null});return null;
   }
-  cornerCache.set(root,local);
+  cornerCache.set(root,{signature,arms:local});
   return local;
  }
  function cornerSegments(root,kind,category){
@@ -160,7 +168,14 @@ const BuildJoin=(()=>{
    const lines=info.segments||[info];
    const projections=lines.map(line=>({line,...nearest(line.a,line.c,p)}));
    projections.sort((a,b)=>distXZ(p,a.point)-distXZ(p,b.point));
-   const closest=projections[0],d=distXZ(p,closest.point);
+   const closest=projections[0];
+   // For a curved wall the AABB centreline is not a physical wall surface.
+   // Prefer the actual two tangent sockets when choosing nearby candidates.
+   const sockets=typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind,root)?
+    BuildCurves.sourceSockets(info):[];
+   const socketDistance=sockets.length?
+    Math.min(...sockets.map(slot=>distXZ(p,slot.point))):Infinity;
+   const d=Math.min(distXZ(p,closest.point),socketDistance);
    if(d>reach)continue;
    possible.push({...info,projected:{point:closest.point,t:closest.t},
     bestSegment:closest.line,d});

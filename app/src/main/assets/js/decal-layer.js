@@ -15,8 +15,20 @@ const DecalLayer=(()=>{
    opacity:clamp(d.opacity===undefined?1:Number(d.opacity),0,1),
    fit:d.fit==='fill'?'fill':'contain',
    muralId:typeof d.muralId==='string'?d.muralId:null,
+   baseWidthMeters:Number.isFinite(Number(d.baseWidthMeters))&&Number(d.baseWidthMeters)>.049?
+    clamp(Number(d.baseWidthMeters),.05,1000):null,
+   baseHeightMeters:Number.isFinite(Number(d.baseHeightMeters))&&Number(d.baseHeightMeters)>.049?
+    clamp(Number(d.baseHeightMeters),.05,1000):null,
+   scalePercent:Number.isFinite(Number(d.scalePercent))&&Number(d.scalePercent)>=10?
+    clamp(Number(d.scalePercent),10,600):100,
+   widthMeters:Number.isFinite(Number(d.widthMeters))&&Number(d.widthMeters)>.049?
+    clamp(Number(d.widthMeters),.05,1000):null,
+   heightMeters:Number.isFinite(Number(d.heightMeters))&&Number(d.heightMeters)>.049?
+    clamp(Number(d.heightMeters),.05,1000):null,
+   offsetX:Number.isFinite(Number(d.offsetX))?clamp(Number(d.offsetX),-1000,1000):0,
+   offsetY:Number.isFinite(Number(d.offsetY))?clamp(Number(d.offsetY),-1000,1000):0,
    crop:Array.isArray(d.crop)&&d.crop.length===4&&d.crop.every(n=>Number.isFinite(Number(n)))?
-    d.crop.map(n=>clamp(Number(n),0,1)):[0,0,1,1]
+    d.crop.map(n=>clamp(Number(n),-10000,10000)):[0,0,1,1]
   }));
  }
  function faceGeometry(root,face){
@@ -67,9 +79,10 @@ const DecalLayer=(()=>{
    ' vec2 stamp=vec2(q.x*pwbDecalRot'+i+'.x+q.y*pwbDecalRot'+i+'.y,-q.x*pwbDecalRot'+i+'.y+q.y*pwbDecalRot'+i+'.x)+0.5;',
    ' if(stamp.x>=0.0&&stamp.x<=1.0&&stamp.y>=0.0&&stamp.y<=1.0){',
    '  vec2 sampleUV=mix(pwbDecalCrop'+i+'.xy,pwbDecalCrop'+i+'.zw,stamp);',
-   '  vec4 pixel=texture2D(pwbDecalMap'+i+',sampleUV);',
-   '  diffuseColor.rgb=mix(diffuseColor.rgb,pow(pixel.rgb,vec3(2.2)),clamp(pixel.a*pwbDecalOpacity'+i+',0.0,1.0));',
-   ' }','}'
+   '  if(sampleUV.x>=0.0&&sampleUV.x<=1.0&&sampleUV.y>=0.0&&sampleUV.y<=1.0){',
+   '   vec4 pixel=texture2D(pwbDecalMap'+i+',sampleUV);',
+   '   diffuseColor.rgb=mix(diffuseColor.rgb,pow(pixel.rgb,vec3(2.2)),clamp(pixel.a*pwbDecalOpacity'+i+',0.0,1.0));',
+   '  }',' }','}'
   ].join('\n');
  }
  const uniformsCode=Array.from({length:MAX},(_,i)=>declarations(i)).join('\n');

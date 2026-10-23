@@ -27,7 +27,8 @@ const BuildPlacementValidator=(()=>{
  function rect(root) {
   root.updateMatrixWorld(true,true);
   const mat=root.matrixWorld.elements,prior=rectCache.get(root);
-  if(prior&&prior.matrix.every((v,i)=>v===mat[i]))return prior.rect;
+  const signature=BuildSnap.geometrySignature(root);
+  if(prior&&prior.signature===signature&&prior.matrix.every((v,i)=>v===mat[i]))return prior.rect;
   const box=localBounds(root);
   if(box.isEmpty())return null;
   const mx=root.matrixWorld,mid=(box.min.y+box.max.y)/2;
@@ -43,7 +44,7 @@ const BuildPlacementValidator=(()=>{
   const length=Math.hypot(points[3][0]-points[0][0],points[3][1]-points[0][1]);
   const area=Math.max(.00001,width*length);
   const value={points,cx,cz,top:Math.max(top,bottom),bottom:Math.min(top,bottom),width,length,area};
-  rectCache.set(root,{matrix:mat.slice(),rect:value});
+  rectCache.set(root,{matrix:mat.slice(),signature,rect:value});
   return value;
  }
  function projected(points,axis){

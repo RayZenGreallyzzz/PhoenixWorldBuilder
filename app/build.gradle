@@ -11,12 +11,10 @@ android {
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes {
-        // Preview APK installs alongside the existing debug application, so
-        // testing cannot overwrite or erase projects inside the old app.
         debug {
-            applicationIdSuffix '.preview'
-            versionNameSuffix '-preview'
-            manifestPlaceholders = [appLabel: 'Phoenix Builder TEST']
+            applicationIdSuffix '.legacytest'
+            versionNameSuffix '-legacy-preview'
+            manifestPlaceholders = [appLabel: 'Phoenix Builder FIX']
         }
         release {
             minifyEnabled false

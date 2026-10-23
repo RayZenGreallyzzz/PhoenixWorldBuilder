@@ -3,7 +3,7 @@
  */
 const BuildCurves=(()=>{
  const cache=new WeakMap();
- const isArc=kind=>/(?:^|[\/:_-])arc[_-]?r\d|полукругл|curved[_-]?wall|wall[_-]?curved|round[_-]?wall/i.test(String(kind||''));
+ const isArc=(kind,root)=>['arc90','arc180'].includes(root?.userData?.pwbModuleShape)||/(?:^|[\/:_-])arc(?:90|180|[_-]?r\d)|полукругл|четверть.?круг|quarter.?round|quarter.?circle|curved[_-]?wall|wall[_-]?curved|round[_-]?wall/i.test(String(kind||''));
  const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
  const avg=(a,b)=>a.clone().add(b).multiplyScalar(.5);
  const theta=v=>Math.atan2(-v.z,v.x);
@@ -11,7 +11,11 @@ const BuildCurves=(()=>{
  const localToWorld=(root,p)=>p.clone().applyMatrix4(root.matrixWorld);
  const direction=(root,vec)=>vec.clone().transformDirection(root.matrixWorld).setY(0).normalize();
  function rawArcSockets(root,kind){
-  if(!isArc(kind))return null;
+  if(!isArc(kind,root))return null;
+  if(root.userData?.pwbModuleSockets?.length===2)
+   return root.userData.pwbModuleSockets.map((s,i)=>({
+    name:i===0?'begin':'end',point:new THREE.Vector3(...s.point),out:new THREE.Vector3(...s.out)
+   }));
   root.updateWorldMatrix(true,true);
   const bounds=BuildSnap.attrBounds(root);
   if(bounds.isEmpty())return null;
@@ -58,16 +62,22 @@ const BuildCurves=(()=>{
   return [{name:'begin',point:first,out:beginOut},{name:'end',point:last,out:endOut}];
  }
  function localSockets(root,kind){
-  if(!isArc(kind))return null;
+  if(!isArc(kind,root))return null;
+  const signature=BuildSnap.geometrySignature(root);
   const previous=cache.get(root);
-  if(previous&&previous.kind===kind)return previous.sockets;
+  if(previous&&previous.kind===kind&&previous.signature===signature)return previous.sockets;
   const sockets=rawArcSockets(root,kind);
-  if(sockets)cache.set(root,{kind,sockets});
+  cache.set(root,{kind,signature,sockets});
   return sockets;
  }
  function sourceSockets(info){
   // A 90-degree corner exposes two genuine arm-end sockets. Its AABB
   // extrema describe a phantom diagonal and must not be used for arcs.
+  if(info.root?.userData?.pwbModuleSockets?.length===2)
+   return info.root.userData.pwbModuleSockets.map((s,i)=>({
+    name:i===0?'begin':'end',point:localToWorld(info.root,new THREE.Vector3(...s.point)),
+    out:direction(info.root,new THREE.Vector3(...s.out)),curved:isArc(info.entry.kind,info.root)
+   }));
   if(info.sockets?.length)return info.sockets.map(x=>({...x,point:x.point.clone(),out:x.out.clone()}));
   const local=localSockets(info.root,info.entry.kind);
   if(local)return local.map(s=>({name:s.name,point:localToWorld(info.root,s.point),out:direction(info.root,s.out),curved:true}));
@@ -77,6 +87,11 @@ const BuildCurves=(()=>{
  function incomingSockets(w,box){
   const root=w.ghost||w.assetCache?.get(w.placement)||w.makeBuiltin?.(w.placement);
   if(!root)return null;
+  if(root.userData?.pwbModuleSockets?.length===2)
+   return root.userData.pwbModuleSockets.map((s,i)=>({
+    name:i===0?'begin':'end',point:new THREE.Vector3(...s.point),
+    out:new THREE.Vector3(...s.out)
+   }));
   const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
   if(cat==='corner'&&typeof BuildJoin!=='undefined'){
    const arms=BuildJoin.cornerArms(root,w.placement,cat);
@@ -99,8 +114,8 @@ const BuildCurves=(()=>{
  }
  function connect(w,p,candidates,box){
   if(w.joinMode==='free'||w.joinMode==='stack')return null;
-  const isIncomingArc=isArc(w.placement);
-  if(!isIncomingArc&&!candidates.some(x=>isArc(x.entry.kind)))return null;
+  const isIncomingArc=isArc(w.placement,w.ghost);
+  if(!isIncomingArc&&!candidates.some(x=>isArc(x.entry.kind,x.root)))return null;
   const slots=incomingSockets(w,box);if(!slots)return null;
   const scale=w.placementScale||1;
   const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
@@ -112,7 +127,7 @@ const BuildCurves=(()=>{
    const otherStory=info.entry.data?.storey;
    if(Number.isInteger(otherStory)&&otherStory!==floorIndex)continue;
    if(!Number.isInteger(otherStory)&&floorIndex>0&&Math.abs(info.bottom-nominal)>2)continue;
-   if(!isIncomingArc&&!isArc(info.entry.kind))continue;
+   if(!isIncomingArc&&!isArc(info.entry.kind,info.root))continue;
    for(const target of sourceSockets(info)){
     for(const slot of slots){
      const desired=target.out.clone().negate();

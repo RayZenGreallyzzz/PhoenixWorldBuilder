@@ -27,6 +27,53 @@ function instance(w,kind,id,center,yaw,story){
  return w.instantiate(kind,{id,pos:center,rot:yaw,scale:1,category:'corner',storey:story});
 }
 function outgoingTip(line){return line.a.clone().add(line.a.clone().sub(line.c).normalize())}
+
+// A wall edited in-place must expose the NEW bounding box to snapping.
+{
+ const root=new THREE.Group();
+ const child=new THREE.Mesh(new THREE.BoxGeometry(2,2.6,.22),new THREE.MeshStandardMaterial());
+ root.add(child);
+ const first=BuildSnap.attrBounds(root);
+ assert(Math.abs(first.max.x-first.min.x-2)<.01);
+ child.geometry=new THREE.BoxGeometry(4,2.6,.22);
+ const longer=BuildSnap.attrBounds(root);
+ assert(Math.abs(longer.max.x-longer.min.x-4)<.01,
+  'Replacing the GLB geometry invalidates old snap bounds');
+ child.position.x=1.5;
+ const moved=BuildSnap.attrBounds(root);
+ assert(moved.max.x>longer.max.x+1.4,'Moving a GLB child invalidates snap bounds');
+}
+// Automatic mode follows measured walls; manual mode respects the configured height.
+{
+ const w=fresh();
+ w.instantiate('wall',{id:84,pos:[0,0,0],rot:0,scale:1,category:'wall',storey:0});
+ w.smartSnap=true;w.storeyHeight=3;
+ w.floorLevel=1;
+ const level=w.floorDatumAt(0,0,'wall');
+ nearly(level.height,2.6,'Magnetic floor datum must use measured wall height');
+ w.smartSnap=false;
+ nearly(w.floorDatumAt(0,0,'wall').height,3,
+  'Manual placement must respect the configured 3m storey height');
+}
+// Moving an object must update the floor index and report success.
+{
+ const w=fresh();
+ const entry=w.instantiate('wall',{id:90,pos:[0,0,0],rot:0,scale:1,category:'wall',storey:0});
+ w.select(entry);w.action('move');w.joinMode='free';w.floorLevel=1;
+ const placed=w.placeAt(new THREE.Vector3(6,3,6));
+ assert.strictEqual(placed,entry,'Move returns the existing moved module');
+ assert.equal(entry.data.storey,1,'Moving to second storey updates saved floor metadata');
+ assert.equal(w.objects.length,1,'Move does not clone building modules');
+}
+// Character radius check must block a shoulder clipping a wall edge.
+{
+ const w=fresh(),wall=w.instantiate('wall',{
+  id:94,pos:[0,0,-1],rot:0,scale:1,category:'wall',storey:0});
+ assert(w.movementBlocked(new THREE.Vector3(1.14,0,0),
+  new THREE.Vector3(1.14,0,-1.6),0),
+  'An offset body ray must detect an obstacle even when central ray misses');
+}
+
 for(const yaw of [0,90,180,270]){
  for(const floor of [0,1,2]){
   const w=fresh();w.floorLevel=floor;

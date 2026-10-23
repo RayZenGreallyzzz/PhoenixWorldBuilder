@@ -3,7 +3,7 @@
  * Only module data changes when applying a decal: world map remains manual-save.
  */
 const DecalUI=(()=>{
- let api=null,active=0,lastEntry=null,muralNext=false;
+ let api=null,active=0,lastEntry=null,muralNext=false,pendingPoint=null,pendingArtwork=null;
  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
  const get=key=>document.getElementById(key);
  const DECAL_PREFIX='emblem:';
@@ -25,14 +25,39 @@ const DecalUI=(()=>{
    sel.value=list.length?String(active):'';
   }
   const d=list[active];
+  const muralFields=get('muralEditors');
+  if(muralFields)muralFields.style.display=d?.muralId?'block':'none';
+  const confirm=get('muralConfirm');
+  if(confirm)confirm.classList.toggle('hidden',!pendingArtwork||d?.muralId!==pendingArtwork.id);
+  const confirmHint=get('muralConfirmHint');
+  if(confirmHint)confirmHint.textContent=pendingArtwork&&d?.muralId===pendingArtwork.id?
+   'Предпросмотр: измени размер и положение, затем «Установить» или «Отмена».':
+   'Рисунок установлен. Нажми 💾 Сохранить для записи проекта.';
+  const muralGroup=d?.muralId&&entry?
+   MuralLayout.collect(api.world,entry,d.face).filter(piece=>
+    DecalLayer.normalize(piece.entry.data.decals).some(x=>x.muralId===d.muralId)):[];
+  const groupInfo=get('muralGroupStatus');
+  if(groupInfo)groupInfo.textContent=muralGroup.length?
+   'Одна картинка на '+muralGroup.length+' деталях • все изменяются вместе':
+   'Выдели соединённые стены, чтобы настроить одну общую картинку';
+  if(d?.muralId){
+   const percent=d.scalePercent||100;
+   get('muralScale').value=String(percent);
+   get('muralScaleValue').textContent=Math.round(percent)+'%';
+   for(const [id,value] of [['muralWidth',d.widthMeters||1],['muralHeight',d.heightMeters||1],
+    ['muralOffsetX',d.offsetX||0],['muralOffsetY',d.offsetY||0]]){
+    const field=get(id);
+    if(field&&document.activeElement!==field)field.value=String(Math.round(value*100)/100);
+   }
+  }
   const muralButton=get('btnMural');
   if(muralButton){
-   muralButton.textContent=muralNext?'🖼 Выбери картину для панно…':'🖼 Панно: одна картина на соседние стены';
+   muralButton.textContent=muralNext?'🖼 Выбери изображение из каталога…':'🖼 Одно изображение на соединённую поверхность';
    muralButton.classList.toggle('active',muralNext);
   }
   if(get('muralHint'))get('muralHint').textContent=d?.muralId?
-   'Это часть общего панно. Прозрачность и удаление применяются ко всей картине.':
-   'Выдели стену → «Панно» → выбери изображение. Соседние стены найдутся автоматически.';
+   'Общий рисунок: ширина и высота задаются в метрах, размер деталей не меняется.':
+   'Выдели стену, пол или потолок → выбери сторону → изображение.';
   if(!d&&entry){
    const cat=entry.data.category||entry.kind;
    const choice=get('decalFace');
@@ -50,7 +75,7 @@ const DecalUI=(()=>{
   get('decalSizeValue').textContent=d?Math.round(d.size*100)+'%':'—';
   get('decalRotationValue').textContent=d?d.rotation+'°':'—';
   get('decalOpacityValue').textContent=d?Math.round(d.opacity*100)+'%':'—';
-  get('btnDecalFit').textContent=d?.fit==='fill'?'▣ Вписать с пропорциями':'▣ На всю поверхность';
+  get('btnDecalFit').textContent=d?.fit==='fill'?'▣ Вписать с пропорциями':'▣ На одну деталь';
   get('decalHint').textContent=entry?
    'Выбрано эмблем: '+list.length+'/'+DecalLayer.MAX+'. Настройки сохранятся после нажатия 💾 для карты.':
    'Сначала выбери стену или пол на карте, затем открой вкладку «Эмблемы».';
@@ -62,13 +87,23 @@ const DecalUI=(()=>{
   const entry=existing();if(!entry)return;
   const list=value(),previous=list[active];if(!previous)return;
   if(previous.muralId){
-   if(!Object.prototype.hasOwnProperty.call(patch,'opacity'))return;
-   api.world.remember();
-   for(const item of api.world.objects){
-    const current=DecalLayer.normalize(item.data.decals);
-    if(!current.some(x=>x.muralId===previous.muralId))continue;
-    item.data.decals=current.map(x=>x.muralId===previous.muralId?{...x,opacity:patch.opacity}:x);
-    api.world.applyAppearance(item);
+   const combined={...previous,...patch};
+   const pieces=MuralLayout.collect(api.world,entry,previous.face);
+   const updated=pieces.filter(({entry:item})=>
+    DecalLayer.normalize(item.data.decals).some(x=>x.muralId===previous.muralId));
+   if(!updated.length)return api.toast('Поверхность картины не найдена');
+   if(!pendingArtwork||pendingArtwork.id!==previous.muralId)api.world.remember();
+   for(const piece of updated){
+    const current=DecalLayer.normalize(piece.entry.data.decals);
+    piece.entry.data.decals=current.map(x=>x.muralId===previous.muralId?{
+     ...x,opacity:combined.opacity,widthMeters:combined.widthMeters,
+     heightMeters:combined.heightMeters,offsetX:combined.offsetX,offsetY:combined.offsetY,
+     baseWidthMeters:combined.baseWidthMeters,baseHeightMeters:combined.baseHeightMeters,
+     scalePercent:combined.scalePercent,
+     crop:MuralLayout.imageCrop(piece,combined.widthMeters,combined.heightMeters,
+      combined.offsetX,combined.offsetY)
+    }:x);
+    api.world.applyAppearance(piece.entry);
    }
    api.world.onChanged();
   }else{
@@ -76,6 +111,19 @@ const DecalUI=(()=>{
    api.world.updateDecals(entry,list);
   }
   render();
+ }
+ function cancelPendingArtwork(){
+  if(!pendingArtwork)return;
+  const session=pendingArtwork;pendingArtwork=null;
+  for(const item of session.original){
+   if(!api.world.objects.includes(item.entry))continue;
+   item.entry.data.decals=JSON.parse(JSON.stringify(item.decals));
+   api.world.applyAppearance(item.entry);
+  }
+  // Remove the preview undo frame only if the user has not interleaved edits.
+  if(session.undoBefore!==null&&api.world.undo?.length===session.undoBefore+1)
+   api.world.undo.pop();
+  api.world.onChanged();render();
  }
  function shift(dx,dy){
   const d=value()[active];if(!d)return;
@@ -90,20 +138,33 @@ const DecalUI=(()=>{
    return api.toast('На одной из стен уже 3 рисунка. Освободи место для панно.');
   const texture=await api.loadTexture(id);
   if(!texture)return api.toast('Картина недоступна');
+  if(pendingArtwork)cancelPendingArtwork();
   const muralId='mural:'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
+  // Start with one seamless full-wall texture, centred across the complete
+  // connected surface, even when the user tapped its leftmost module.
+  // Users can move it freely afterward without changing any module geometry.
+  const offsetX=0,offsetY=0;
+  pendingPoint=null;
+  const original=group.map(piece=>({entry:piece.entry,decals:
+   JSON.parse(JSON.stringify(piece.entry.data.decals||[]))}));
+  const undoBefore=api.world.undo?.length??null;
   api.world.remember();
+  pendingArtwork={id:muralId,original,undoBefore};
   for(const item of group){
    const old=DecalLayer.normalize(item.entry.data.decals);
    item.entry.data.decals=DecalLayer.normalize([...old,{
-    id:muralId,texture:id,face:item.face,muralId,crop:item.crop,
-    x:.5,y:.5,size:1,fit:'fill',rotation:0,opacity:1
+    id:muralId,texture:id,face:item.face,muralId,
+    crop:MuralLayout.imageCrop(item,item.width,item.height,offsetX,offsetY),
+    x:.5,y:.5,size:1,fit:'fill',rotation:0,opacity:1,
+    widthMeters:item.width,heightMeters:item.height,offsetX,offsetY,
+    baseWidthMeters:item.width,baseHeightMeters:item.height,scalePercent:100
    }]);
    api.world.applyAppearance(item.entry);
   }
   api.world.onChanged();
   active=DecalLayer.normalize(entry.data.decals).length-1;
-  api.toast(group.length===1?'Картина растянута на всю стену':
-   'Одно панно размещено на '+group.length+' соседних стенах без повторений');
+  api.toast('Предпросмотр на '+group.length+' деталях. Настрой размеры и нажми «Установить».');
+  api.onImagePlaced?.();
   render();
  }
  async function addImage(id){
@@ -225,8 +286,10 @@ const DecalUI=(()=>{
     ctx.drawImage(img,0,0,c.width,c.height);
     id=await saveCanvas(c,name);
    }
-   if(existing())await addImage(id);
-   else api.toast('PNG добавлена в каталог. Выбери стену и эмблему.');
+   // Import never silently paints some old selected module. Put the file
+   // visibly into Images, at the top, and let the user choose where to apply.
+   api.onImportedImage?.(id);
+   api.toast('Изображение сохранено в «Изображения». Выбери его в каталоге.');
   }catch(e){console.error(e);api.toast('Ошибка PNG: '+e.message)}
   finally{URL.revokeObjectURL(url)}
  }
@@ -261,12 +324,49 @@ const DecalUI=(()=>{
    }
    active=Math.max(0,active-1);render();
   };
-  get('btnMural').onclick=async()=>{
-   const entry=existing();if(!entry)return api.toast('Сначала выдели стену для большого панно');
-   if(!MuralLayout.collect(api.world,entry,get('decalFace').value||'front').length)
-    return api.toast('Выбери прямую стену для панно');
-   muralNext=true;render();await openGallery();
+  get('btnMural').onclick=()=>beginSurfacePainting();
+  get('muralScale').oninput=e=>get('muralScaleValue').textContent=e.target.value+'%';
+  get('muralScale').onchange=e=>{
+   const entry=existing(),d=value()[active];
+   if(!entry||!d?.muralId)return;
+   const parts=MuralLayout.collect(api.world,entry,d.face);
+   if(!parts.length)return;
+   const percent=clamp(Number(e.target.value)||100,10,600);
+   const baseW=d.baseWidthMeters||parts[0].width;
+   const baseH=d.baseHeightMeters||parts[0].height;
+   change({scalePercent:percent,baseWidthMeters:baseW,baseHeightMeters:baseH,
+    widthMeters:Math.max(.05,Math.min(1000,baseW*percent/100)),
+    heightMeters:Math.max(.05,Math.min(1000,baseH*percent/100))});
   };
+  get('btnMuralFit').onclick=()=>{
+   const entry=existing(),d=value()[active];if(!entry||!d?.muralId)return;
+   const parts=MuralLayout.collect(api.world,entry,d.face);
+   if(!parts.length)return;
+   change({widthMeters:parts[0].width,heightMeters:parts[0].height,
+    baseWidthMeters:parts[0].width,baseHeightMeters:parts[0].height,
+    scalePercent:100,offsetX:0,offsetY:0});
+   api.toast('Одна текстура снова занимает всю соединённую поверхность');
+  };
+  get('btnMuralApply').onclick=()=>{
+   if(!pendingArtwork)return;
+   pendingArtwork=null;
+   api.world.onChanged();render();
+   api.toast('Изображение установлено. Нажми 💾 Сохранить для записи в проект.');
+  };
+  get('btnMuralCancel').onclick=()=>{
+   if(!pendingArtwork)return;
+   cancelPendingArtwork();api.toast('Изображение не установлено. Предпросмотр удалён.');
+  };
+  for(const [id,field] of [['muralWidth','widthMeters'],['muralHeight','heightMeters'],
+   ['muralOffsetX','offsetX'],['muralOffsetY','offsetY']]){
+   get(id).onchange=e=>{
+    const n=Number(e.target.value);
+    if(!Number.isFinite(n)||((field==='widthMeters'||field==='heightMeters')&&n<.05)){
+     render();return api.toast('Проверь размер или смещение изображения в метрах');
+    }
+    change({[field]:Math.max(-1000,Math.min(1000,n))});
+   };
+  }
   get('btnDecalText').onclick=()=>createText().catch(err=>api.toast(err.message));
   get('btnImportEmblem').onclick=()=>get('fileEmblem').click();
   get('fileEmblem').onchange=e=>{const file=e.target.files?.[0];e.target.value='';importFile(file)};
@@ -274,11 +374,24 @@ const DecalUI=(()=>{
   get('btnGameEmblems').onclick=()=>openGallery(true);
   render();
  }
+ async function beginSurfacePainting(face=null,point=null){
+  if(pendingArtwork)cancelPendingArtwork();
+  const entry=existing();
+  if(!entry)return api.toast('Сначала коснись стены, пола или потолка');
+  const targetFace=face||get('decalFace').value||'front';
+  if(!MuralLayout.collect(api.world,entry,targetFace).length)
+   return api.toast('Не удалось определить поверхность для изображения');
+  pendingPoint=point?.clone?point.clone():null;
+  muralNext=true;render();
+  // Rendering existing decal settings must not overwrite the tapped face.
+  get('decalFace').value=targetFace;
+  await openGallery();
+ }
  async function openGallery(fromGame=false){
-  if(!existing())api.toast('Выбери стену или пол, затем эмблему');
+  if(!existing())api.toast('Выбери поверхность, затем изображение');
   await ensureStarter().catch(err=>console.warn('Starter emblems',err));
   api.openGallery(fromGame);
  }
- return {init,render,addImage,importFile,importDimensions,createText,ensureStarter,openGallery};
+ return {init,render,addImage,importFile,importDimensions,createText,ensureStarter,openGallery,beginSurfacePainting};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=DecalUI;

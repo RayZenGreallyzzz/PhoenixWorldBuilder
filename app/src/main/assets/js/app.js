@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id), $all=s=>[...document.querySelectorAll(s)];
-const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок / перекрытие 2×2','ceiling'],['wall','Стена 2×2,6','wall'],['corner','Угол стены 90°','corner'],['window','Стена с окном','wall'],['roof','Двускатная крыша','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
+const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок / перекрытие 2×2','ceiling'],['wall','Стена 2×2,6','wall'],['corner','Угол стены 90°','corner'],['arc90','Закруглённая стена 90° · R2','wall'],['arc180','Полукруглая стена 180° · R2','wall'],['arcFloor90','Закруглённый пол 90° · R2','foundation'],['arcCeiling90','Закруглённое перекрытие 90° · R2','ceiling'],['window','Стена с окном','wall'],['roof','Двускатная крыша (старая)','roof'],['roof1','Крыша 1 скат • односкатная','roof'],['roof2','Крыша 2 ската • двускатная','roof'],['roof3','Крыша 3 ската • трёхскатная','roof'],['roof4','Крыша 4 ската • шатровая','roof'],['roof5','Крыша 5 скатов • пятигранная','roof'],['roof6','Крыша 6 скатов • шестигранная','roof'],['roofSlope','Кровля • отдельный скат','roof'],['roofRidge','Кровля • конёк','roof'],['roofValley','Кровля • ендова','roof'],['roofHip','Кровля • диагональное ребро','roof'],['roofEave','Кровля • карниз','roof'],['roofInnerCorner','Кровля • внутренний угол','roof'],['roofOuterCorner','Кровля • наружный угол','roof'],['roofGable','Кровля • фронтон','roof'],['roofFlat','Кровля • плоский модуль','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
 const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['corner','Углы'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
@@ -15,6 +15,9 @@ try{
  $('textureDetail').value=String(quality);
 }catch(e){console.warn('Texture quality settings unavailable',e);w.setTextureQuality(4)}
 try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),modulePresets=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
+let choosingImageSurface=false,importOrder=0;
+const importedStamp=()=>Date.now()+(++importOrder)/1000;
+const uniqueImportedId=(prefix,name)=>prefix+name.toLowerCase()+':'+Date.now().toString(36)+'_'+(++importOrder).toString(36);
 let statusMessage='';let surfaceScope='all',surfaceMode='repeat',surfaceTileMeters=1,surfaceImageScale=1,surfaceFaithful=true;let pendingRecovery=null;let savedNatively=false;let initializing=true;
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
@@ -24,7 +27,7 @@ function groupType(name){
  if(/лест|ступен|stairs?|step(s)?/.test(s))return 'stairs';
  if(/кры|кровл|roof|shingles|gable/.test(s))return 'roof';
  if(/(?:угол|углов|corner|miter|mitre|косой|скошен)/.test(s)&&/(?:пол|floor|настил|плит|slab|foundation)/.test(s))return 'foundation';
- if(/(?:^|[\\/:_-])arc[_-]?r\d|полукругл|curved[_-]?wall|round[_-]?wall/.test(s))return 'wall';
+ if(/(?:^|[\\/:_-])arc[_-]?r\d|полукругл|четверть.?круг|quarter.?round|quarter.?circle|curved[_-]?wall|round[_-]?wall/.test(s))return 'wall';
  if(/(?:угол|углов|corner|miter|mitre|стык_стен|стыков|скошен)/.test(s))return 'corner';
  if(/двер|door|ворот|gate/.test(s))return 'door';
  if(/стен|окно|wall|window|колон|pillar|column/.test(s))return 'wall';
@@ -60,12 +63,18 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
 w.getAsset=cacheFromDB;
 // Old projects contain GLB IDs but may not yet contain a saved category.
 w.categoryForKind=kind=>BUILTINS.find(item=>item[0]===kind)?.[2]||savedMeta.get(kind)?.category||groupType(savedMeta.get(kind)?.name||kind);
-async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),...(catalogMeta[id]||{}),name});}
+async function rememberAsset(id,name,bytes){
+ const old=savedMeta.get(id)||{},importedAt=importedStamp();
+ await dbOp('assets',id,{name,bytes,importedAt});
+ savedMeta.set(id,{...old,...(catalogMeta[id]||{}),name,importedAt});
+ w.assetCache.delete(id);
+}
 async function rememberTexture(id,name,bytes,mime='image/png',sourcePath='',role=''){
  const resolved=role|| (id.startsWith('emblem:')?'painting':'texture');
- await dbOp('textures',id,{name,bytes,mime,sourcePath,role:resolved});
+ const importedAt=importedStamp();
+ await dbOp('textures',id,{name,bytes,mime,sourcePath,role:resolved,importedAt});
  if(w.textures.has(id)){w.textures.get(id)?.dispose?.();w.textures.delete(id)}
- textureMeta.set(id,{name,sourcePath,role:resolved});
+ textureMeta.set(id,{name,sourcePath,role:resolved,importedAt});
 }
 async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;t.wrapS=t.wrapT=(id.startsWith('emblem:')||textureMeta.get(id)?.role==='painting')?THREE.ClampToEdgeWrapping:THREE.RepeatWrapping;w.tuneTexture(t);w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,error=>{URL.revokeObjectURL(url);reject(error)})})}
 async function updateCatalog(id,patch){
@@ -85,6 +94,26 @@ async function chooseAsset(id){
 
 const PRESET_KEY='my-module-presets-v1';
 const copyPresetData=data=>JSON.parse(JSON.stringify(data||{}));
+function fitOwnModel(){
+ const selected=w.selected?.kind?.startsWith('glb:')?w.selected:null;
+ const source=w.placement?.startsWith('glb:')?w.placement:selected?.kind;
+ if(!source)return toast('Сначала выбери свой GLB в библиотеке');
+ if(!w.assetCache.has(source))return toast('GLB ещё не загружен из каталога');
+ const use=$('forgeUse').value,shape=$('forgeShape').value;
+ const cat=use==='roof'?'roof':use==='foundation'?'foundation':
+  shape==='corner'?'corner':'wall';
+ if(w.placement!==source)w.setPlacement(source,cat);
+ w.select(null);
+ const result=w.setModuleShape(shape,use);
+ if(!result.ok)return toast('Модуль не создан: '+result.reason);
+ surfaceMode='module';surfaceScope='all';
+ w.updatePreviewSurfacePaint('all','mode','module');
+ const existing=w.placementSurfacePaint?.all?.texture||w.textureId;
+ if(existing)w.updatePreviewSurfacePaint('all','texture',existing);
+ updateSurfaceUI();refreshConstructionUI();
+ toast('✓ '+({straight:'Прямая',corner:'Угол 90°',arc90:'Четверть круга',arc180:'Полукруг'}[shape])+
+  ': исходный GLB подогнан под стандарт. Нажми «Сохранить в Мои».');
+}
 async function saveModulePreset(){
  if(!localStore)return toast('Библиотека ещё загружается');
  const entry=surfaceTarget(),kind=entry?.kind||w.placement;
@@ -98,13 +127,15 @@ async function saveModulePreset(){
   return toast('Исходный GLB не найден; сначала импортируй модель');
  const paint=copyPresetData(entry?.data?.surfacePaint||w.placementSurfacePaint);
  const color=entry?.data?.color||w.currentPaint||'#b7ac91';
- if(!Object.keys(paint).length)paint.all={color};
+ if(!Object.keys(paint).length&&!(entry?.data?.moduleShape||w.placementModuleShape))paint.all={color};
  const preset={id:'preset:'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7),
   name:name.trim().slice(0,64),sourceKind:kind,
   category:entry?.data?.category||w.placementCategory||w.categoryForKind(kind),
   surfacePaint:paint,color,scale:entry?.data?.scale||w.placementScale||1,
   dimensionScale:{...{x:1,y:1,z:1},...(entry?.data?.dimensionScale||w.placementAxes||{})},
   wallThicknessMeters:entry?.data?.wallThicknessMeters||w.wallThicknessMeters||undefined,
+  moduleShape:entry?.data?.moduleShape||w.placementModuleShape||undefined,
+  moduleUse:entry?.data?.moduleUse||w.placementModuleUse||undefined,
   texture:entry?.data?.texture||null,decals:Array.isArray(entry?.data?.decals||w.placementDecals)?copyPresetData(entry?.data?.decals||w.placementDecals):[],created:new Date().toISOString()};
  modulePresets.set(preset.id,preset);
  try{await dbOp('catalog',PRESET_KEY,[...modulePresets.values()])}
@@ -126,6 +157,10 @@ async function chooseModulePreset(id){
   for(const decal of(preset.decals||[]))if(decal.texture&&!await loadTexture(decal.texture))
    return toast('Не найдена PNG эмблемы');
   w.setPlacement(preset.sourceKind,preset.category);w.select(null);
+  if(preset.moduleShape){
+   const reshaped=w.setModuleShape(preset.moduleShape,preset.moduleUse);
+   if(!reshaped.ok)throw Error('Подгонка моего модуля: '+reshaped.reason);
+  }
   w.placementScale=preset.scale||1;
   w.placementAxes={...{x:1,y:1,z:1},...(preset.dimensionScale||{})};
   if(w.ghost)w.applyAxisScale(w.ghost,w.placementScale,w.placementAxes);
@@ -375,9 +410,9 @@ function renderLibrary(){
  const items=[];
  if(isImage){
   for(const [id,meta] of textureMeta){
-   const painting=meta.role==='painting'||id.startsWith('emblem:');
-   if(isEmblem&&!painting)continue;
-   if(isTexture&&painting)continue;
+   // Both the materials tab and the image/decal tab show all imported
+   // PNG, JPG and WEBP files; roles only control what happens after tapping.
+   // Files no longer disappear into a different hidden catalogue.
    if(q&&!(meta.name+' '+(meta.sourcePath||id)).toLowerCase().includes(q))continue;
    items.push([id,meta]);
   }
@@ -398,19 +433,43 @@ function renderLibrary(){
    items.push({id,name:preset.name,kind:'preset',category:preset.category});
   }
  }
+ const sortMode=$('assetSort')?.value||'newest';
+ const sorter=(a,b)=>{
+  const ma=isImage?a[1]:a.kind==='preset'?modulePresets.get(a.id):savedMeta.get(a.id);
+  const mb=isImage?b[1]:b.kind==='preset'?modulePresets.get(b.id):savedMeta.get(b.id);
+  const an=isImage?a[1].name:a.name,bn=isImage?b[1].name:b.name;
+  if(sortMode==='name')return String(an).localeCompare(String(bn),'ru');
+  if(sortMode==='category'){
+   const ac=isImage?(ma?.role||''):a.category;
+   const bc=isImage?(mb?.role||''):b.category;
+   return String(ac).localeCompare(String(bc),'ru')||String(an).localeCompare(String(bn),'ru');
+  }
+  const at=Number(ma?.importedAt)||Date.parse(ma?.created||0)||0;
+  const bt=Number(mb?.importedAt)||Date.parse(mb?.created||0)||0;
+  return sortMode==='oldest'?at-bt:bt-at;
+ };
+ if(isImage){
+  items.sort(sorter);
+ }else{
+  // Starter white parts always stay first in their original order.
+  const start=items.filter(item=>item.kind==='builtin');
+  const imported=items.filter(item=>item.kind!=='builtin');
+  imported.sort(sorter);
+  items.splice(0,items.length,...start,...imported);
+ }
  const pages=Math.max(1,Math.ceil(items.length/GALLERY_SIZE));
  catalogPage=Math.min(Math.max(0,catalogPage),pages-1);
  $('galleryStatus').textContent='Стр. '+(catalogPage+1)+'/'+pages+' · '+items.length;
  $('galleryPrev').disabled=catalogPage===0;
  $('galleryNext').disabled=catalogPage>=pages-1;
- $('galleryHint').textContent=isEmblem?'Сначала выдели стену или пол, затем нажми на эмблему. На одну деталь можно наложить до трёх PNG без лишней геометрии.':isTexture?'Нажми на изображение, чтобы назначить покрытие выбранной детали или использовать его для новых.':'Картинки показывают реальную геометрию GLB. Неверное название исправь кнопкой ✎; материалы без привязки отмечены отдельно.';
+ $('galleryHint').textContent=isEmblem?'Выбери изображение для стены, пола или потолка. Общая картина не повторяется на соседних деталях.':isTexture?'Нажми на изображение, чтобы назначить покрытие выбранной детали или использовать его для новых.':'Картинки показывают реальную геометрию GLB. Неверное название исправь кнопкой ✎; материалы без привязки отмечены отдельно.';
  const page=items.slice(catalogPage*GALLERY_SIZE,(catalogPage+1)*GALLERY_SIZE);
  if(isImage){
   for(const [id,meta] of page){
    const card=document.createElement('button');card.className='textureCard';
    if(w.textureId===id)card.classList.add('active');
    const image=document.createElement('img');image.className='textureImage';image.alt=meta.name;
-   const title=document.createElement('b');title.textContent=(meta.sourcePath||id.replace(/^tex:/,'')).replace(/^Текстуры[\\/]/i,'');
+   const title=document.createElement('b');title.textContent=meta.name||id;
    card.append(image,title);card.onclick=()=>isEmblem?DecalUI.addImage(id):selectTexture(id);
    el.append(card);showTextureImage(image,id).catch(console.warn);
   }
@@ -497,9 +556,20 @@ function refreshConstructionUI(){
  syncDimensionInputs();
 }
 function setupPicker(){
+  $('btnForgeModule').onclick=fitOwnModel;
+ $('assetSort').onchange=()=>{catalogPage=0;renderLibrary()};
  $('btnCatalogModels').onclick=()=>{catalogMode='models';catalogPage=0;renderLibrary()};
  $('btnCatalogTextures').onclick=()=>{catalogMode='textures';catalogPage=0;renderLibrary()};
  $('btnCatalogEmblems').onclick=()=>DecalUI.openGallery();
+ $('btnSharedWallTexture').onclick=()=>{
+  const entry=w.selected;
+  if(!entry)return toast('Сначала выдели часть собранной стены');
+  const type=entry.data?.category||w.categoryForKind(entry.kind);
+  if(!['wall','corner','door','railing'].includes(type))
+   return toast('Выбери прямую стену: общая текстура работает на одной плоскости');
+  DecalUI.beginSurfacePainting($('decalFace').value||'front').catch(
+   err=>toast('Не удалось открыть текстуру: '+err.message));
+ };
  $('galleryPrev').onclick=()=>{catalogPage=Math.max(0,catalogPage-1);renderLibrary();$('buildPanel').scrollTop=0};
  $('galleryNext').onclick=()=>{catalogPage++;renderLibrary();$('buildPanel').scrollTop=0};const search=document.createElement('input');search.id='assetSearch';search.placeholder='Поиск по названию или ID';search.style.cssText='background:#203442;color:#fff;border:1px solid #486373;border-radius:7px;padding:10px;width:100%;margin-bottom:8px;font-size:12px';$('assetList').before(search);search.oninput=()=>{catalogPage=0;renderLibrary()};
  $all('.pill').forEach(b=>b.onclick=()=>{$all('.pill').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentFilter=b.dataset.filter;catalogPage=0;renderLibrary()});
@@ -776,7 +846,15 @@ function wireButtons(){
   $('btnGroundDown').onclick=()=>feetAdjust(-.05);
   $('btnGroundUp').onclick=()=>feetAdjust(.05);$('btnGameExit').onclick=()=>setMode('build');
  $('btnImport').onclick=$('importAssets').onclick=()=>$('fileAssets').click();$('btnTexture').onclick=()=>$('fileTexture').click();$('btnAvatar').onclick=()=>$('fileAvatar').click();
- $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{w.setPlacement(null);w.moveTarget=null;for(const id of ['placementStatus','buildPlacementStatus']){const el=$(id);if(el){el.textContent='◌ Выбери деталь';el.classList.remove('allowed','blocked')}}$('btnBuildPlace').classList.remove('placementBlocked');$('btnBuildPlace').setAttribute('aria-disabled','false');$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
+ $('btnPaintImage').onclick=()=>{
+  choosingImageSurface=true;
+  w.setPlacement(null);
+  w.moveTarget=null;
+  $('btnPaintImage').classList.add('active');
+  toast('Коснись стены, пола или потолка для нанесения изображения');
+ };
+ $('btnGamePaintImage').onclick=$('btnPaintImage').onclick;
+ $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{choosingImageSurface=false;$('btnPaintImage').classList.remove('active');w.setPlacement(null);w.moveTarget=null;for(const id of ['placementStatus','buildPlacementStatus']){const el=$(id);if(el){el.textContent='◌ Выбери деталь';el.classList.remove('allowed','blocked')}}$('btnBuildPlace').classList.remove('placementBlocked');$('btnBuildPlace').setAttribute('aria-disabled','false');$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
  for(const action of ['Rotate','Copy','Move','Delete'])$('btn'+action).onclick=()=>{if(!w.action(action.toLowerCase()))toast('Сначала выбери объект');else toast({Rotate:'Поворот 90°',Copy:'Создана копия',Move:'Выбери новое место',Delete:'Удалено'}[action])};
  $('btnDoor').onclick=()=>{if(!w.selected)return toast('Выбери дверь или объект');w.remember();w.selected.data.door=!w.selected.data.door;toast(w.selected.data.door?'Дверь интерактивна':'Объект больше не дверь')};
  $('btnDoorOpen').onclick=()=>{if(w.selected){w.toggleDoor(w.selected);toast(w.selected.data.open?'Открыто':'Закрыто')}};
@@ -807,7 +885,10 @@ function wireButtons(){
  $('exportHouse').onclick=()=>exportHouse();$('exportJson').onclick=()=>exportJson();$('exportPack').onclick=()=>exportPack();$('exportGlb').onclick=()=>exportGlb();
  $('settingsBtn').onclick=()=>$('settings').classList.toggle('hidden');$('fpsLimit').onchange=e=>{w.fpsLimit=+e.target.value;toast('Ограничение '+e.target.value+' FPS')};
  $('sceneExposure').oninput=e=>{const exp=+e.target.value/100;w.renderer.toneMappingExposure=exp;$('exposureValue').textContent=e.target.value+'%';try{localStorage.setItem('phoenix_scene_exposure',e.target.value)}catch(_){}};$('renderScale').onchange=e=>{w.setQuality(+e.target.value,$('shadows').checked);try{localStorage.setItem('pwb_render_scale',e.target.value)}catch(_){}toast('Разрешение '+Math.round(+e.target.value*100)+'%')};$('textureDetail').onchange=e=>{const n=w.setTextureQuality(+e.target.value);try{localStorage.setItem('pwb_texture_detail',String(n))}catch(_){}toast('Чёткость текстур: '+n+'×')};$('invertCameraX').onchange=e=>{w.invertCameraX=e.target.checked;try{localStorage.setItem('pwb_camera_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickX').onchange=e=>{w.invertJoystickX=e.target.checked;try{localStorage.setItem('pwb_joy_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickY').onchange=e=>{w.invertJoystickY=e.target.checked;try{localStorage.setItem('pwb_joy_y',e.target.checked?'1':'0')}catch(_){}};$('avatarFacing').onchange=e=>{w.avatarFacingOffset=Number(e.target.value)*Math.PI/180;try{localStorage.setItem('pwb_avatar_forward',e.target.value)}catch(_){}};$('shadows').onchange=e=>{w.setQuality(w.renderScale,e.target.checked);toast(e.target.checked?'Тени включены':'Тени выключены')};
- $('fileAssets').onchange=async e=>{let files=[...e.target.files];e.target.value='';if(!files.length)return;toast('Загружаю файлы…');let n=0;for(const f of files){try{if(/\.zip$/i.test(f.name)){n+=await importZip(f)}else if(/\.glb$/i.test(f.name)){let id='glb:'+f.name.toLowerCase();await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));n++}else toast('GLTF с внешними данными пока не поддерживается');}catch(err){toast('Ошибка импорта: '+err.message);console.error(err)}}renderLibrary();renderTextureOptions();toast('Загружено моделей: '+n)};
+ $('fileAssets').onchange=async e=>{let files=[...e.target.files];e.target.value='';if(!files.length)return;toast('Загружаю файлы…');let n=0;for(const f of files){try{if(/\.zip$/i.test(f.name)){n+=await importZip(f)}else if(/\.glb$/i.test(f.name)){let id=uniqueImportedId('glb:',f.name);await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));n++}else toast('GLTF с внешними данными пока не поддерживается');}catch(err){toast('Ошибка импорта: '+err.message);console.error(err)}}if(n>0){catalogMode='models';catalogPage=0;currentFilter='all';$('assetSort').value='newest';
+ $all('#categoryFilters .pill').forEach(btn=>btn.classList.toggle('active',btn.dataset?.filter==='all'));
+ document.body.classList.add('catalogOpen')}
+ renderLibrary();renderTextureOptions();toast('Загружено моделей: '+n)};
  $('fileProject').onchange=async e=>{let f=e.target.files?.[0];e.target.value='';if(!f)return;try{if(f.name.toLowerCase().endsWith('.zip')){await importZip(f,true)}else{const project=JSON.parse(await f.text());await restoreProject(project)}$('modal').classList.add('hidden');toast('Проект открыт')}catch(err){toast('Ошибка проекта: '+err.message);console.error(err)}};
  $('fileAvatar').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;
   try{
@@ -828,9 +909,11 @@ function wireButtons(){
  $('fileTexture').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{// Treat each import as a new image; reusing a filename must not silently
    // show a stale cached texture (or mutate pictures already on the wall).
    const id='tex:'+f.name.toLowerCase()+':'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
-   await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');await loadTexture(id);renderTextureOptions();$('textureSelect').value=id;
-   if(surfaceTarget()||(w.placement&&w.ghost))assignSurfacePaint('texture',id);
-   else toast('PNG/JPEG добавлена. Выбери деталь и сторону для нанесения')}catch(err){toast('Текстура не открыта: '+err.message)}};
+   await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');
+   await loadTexture(id);renderTextureOptions();
+   catalogMode='emblems';catalogPage=0;
+   document.body.classList.add('catalogOpen');renderLibrary();
+   toast('Изображение добавлено первым в каталоге «Изображения». Нажми его, чтобы нанести.')}catch(err){toast('Текстура не открыта: '+err.message)}};
 }
 async function importZip(file,isProject=false){
  const entries=await ZipUtils.extract(file),keys=Object.keys(entries);
@@ -841,7 +924,20 @@ async function importZip(file,isProject=false){
  const manifest=readJson('assets_manifest.json'),savedBindings=readJson('bindings.json');
  const importedCatalog=readJson('catalog.json'),packageMeta=readJson('metadata.json')||readJson('package.json')||{};
  const plan=SmartPackage.analyze(keys,packageMeta);
- const glbs=[],imageIds=new Map(),textureKeys=[];
+ const glbs=[],imageIds=new Map(),textureKeys=[],importedIds=new Map();
+ const originalModuleId=name=>manifest?.[name]||'glb:'+name.toLowerCase();
+ const moduleId=name=>{
+  if(importedIds.has(name))return importedIds.get(name);
+  const original=originalModuleId(name);
+  // Importing the same named GLB must never overwrite older library entries.
+  const id=!isProject&&savedMeta.has(original)?
+   uniqueImportedId('glb:',name):original;
+  importedIds.set(name,id);return id;
+ };
+ const remapId=id=>{
+  for(const [name,newId] of importedIds)if(originalModuleId(name)===id)return newId;
+  return id;
+ };
  // First save all source bytes. Images retain independent roles and cannot
  // accidentally enter the repeating-texture selector when they are paintings.
  for(let i=0;i<keys.length;i++){
@@ -849,7 +945,7 @@ async function importZip(file,isProject=false){
   const model=plan.models.find(x=>x.path===name);
   const image=[...plan.pictures,...plan.textures].find(x=>x.path===name);
   if(model){
-   const id=manifest?.[name]||'glb:'+name.toLowerCase();
+   const id=moduleId(name);
    await rememberAsset(id,base,bytes);glbs.push(id);
    const old=savedMeta.get(id)||{},prior=catalogMeta[id]||{};
    const explicit=model.metadata?.category||model.category;
@@ -859,7 +955,9 @@ async function importZip(file,isProject=false){
    catalogMeta[id]=next;savedMeta.set(id,{...old,...next});
   }else if(image){
    const role=image.role;
-   const id=manifest?.[name]||(role==='painting'?'emblem:':'tex:')+name.toLowerCase();
+   const proposed=manifest?.[name]||(role==='painting'?'emblem:':'tex:')+name.toLowerCase();
+   const id=!isProject&&textureMeta.has(proposed)?
+    uniqueImportedId(role==='painting'?'emblem:':'tex:',base):proposed;
    const ext=base.split('.').pop().toLowerCase();
    await rememberTexture(id,base,bytes,ext==='jpg'||ext==='jpeg'?'image/jpeg':'image/'+ext,name,role);
    imageIds.set(name,id);textureKeys.push(id);
@@ -869,12 +967,14 @@ async function importZip(file,isProject=false){
   if(i%60===0)await new Promise(resolve=>setTimeout(resolve,0));
  }
  // Explicit legacy project metadata must remain authoritative.
- if(importedCatalog&&typeof importedCatalog==='object')catalogMeta={...catalogMeta,...importedCatalog};
+ if(importedCatalog&&typeof importedCatalog==='object')
+  for(const [id,meta] of Object.entries(importedCatalog))catalogMeta[remapId(id)]={
+   ...(catalogMeta[remapId(id)]||{}),...meta};
  // Auto-bind only high-confidence filename matches, or explicit metadata.
  let linked=0;
  for(const [name,binding] of plan.bindings){
-  const id=manifest?.[name]||'glb:'+name.toLowerCase();
-  if(!glbs.includes(id)||savedBindings?.[id])continue;
+  const id=importedIds.get(name);
+  if(!id||!glbs.includes(id)||savedBindings?.[id]||savedBindings?.[originalModuleId(name)])continue;
   const slots=binding.slots.map(s=>({name:s.name||'',texture:imageIds.get(s.path)||null}))
    .filter(s=>s.texture);
   if(!slots.length)continue;
@@ -888,8 +988,8 @@ async function importZip(file,isProject=false){
   for(const [modelId,model] of Object.entries(lib.models||{})){
    const resolved=SmartPackage.lookup(keys,model.file||'');
    if(!resolved)continue;
-   const id=manifest?.[resolved]||'glb:'+resolved.toLowerCase();
-   if(!glbs.includes(id))continue;
+   const id=importedIds.get(resolved);
+   if(!id||!glbs.includes(id))continue;
    const slots=(model.material_slots||[]).map(slot=>{
     const raw=slot.fbx_linked_texture||slot.palette_texture;
     const found=raw&&SmartPackage.lookup([...imageIds.keys()],raw);
@@ -907,7 +1007,8 @@ async function importZip(file,isProject=false){
   }
  }
  if(savedBindings&&typeof savedBindings==='object')for(const [id,row] of Object.entries(savedBindings)){
-  await dbOp('bindings',id,row);w.assetCache.delete(id);
+  const target=remapId(id);
+  await dbOp('bindings',target,row);w.assetCache.delete(target);
  }
  for(const [id,meta] of Object.entries(catalogMeta)){
   if(savedMeta.has(id))savedMeta.set(id,{...savedMeta.get(id),...meta});
@@ -919,6 +1020,12 @@ async function importZip(file,isProject=false){
   const previous=pendingRecovery;
   try{await restoreProject(previous);saveSoon();toast('Постройка восстановлена. Нажми 💾, чтобы сохранить')}
   catch(err){console.warn('Still missing assets',err);toast('Нужны остальные модели для восстановления')}
+ }
+ if(!isProject){
+  catalogMode=glbs.length?'models':'emblems';catalogPage=0;
+  currentFilter='all';$('assetSort').value='newest';
+  $all('#categoryFilters .pill').forEach(btn=>btn.classList.toggle('active',btn.dataset?.filter==='all'));
+  document.body.classList.add('catalogOpen');
  }
  renderLibrary();renderTextureOptions();
  if(!isProject)toast('ZIP: '+glbs.length+' моделей, '+plan.textures.length+
@@ -1012,6 +1119,25 @@ async function exportPack(){try{toast('Создаю пакет карты…');c
   images:Object.entries(manifest).filter(([path])=>/\.(png|jpe?g|webp)$/i.test(path)).map(([path,id])=>({path,role:textureMeta.get(id)?.role||(id.startsWith('emblem:')?'painting':'texture')}))});let archive=await ZipUtils.build(items);await saveToDevice('phoenix_world_project.zip',archive);}catch(e){toast('Ошибка ZIP: '+e.message);console.error(e)}}
 async function exportHouse(){try{toast('Собираю дом без земли и персонажа…');const blob=await SceneExporter.build(w,{houseOnly:true});await saveToDevice('phoenix_house.glb',blob)}catch(e){toast('Ошибка экспорта дома: '+e.message);console.error(e)}}
 async function exportGlb(){try{toast('Экспорт 3D-карты…');const blob=await SceneExporter.build(w);await saveToDevice('phoenix_map.glb',blob)}catch(e){toast('Ошибка GLB: '+e.message);console.error(e)}}
+function openPictureAt(x,y){
+ const id=w.hit(x,y,true),entry=w.objects.find(item=>item.data.id===id);
+ if(!entry){toast('Нажми именно на строительную поверхность');return}
+ w.select(entry);
+ choosingImageSurface=false;$('btnPaintImage').classList.remove('active');
+ const hit=w.ray.intersectObjects([entry.mesh],true)[0];
+ let side=null;
+ if(hit?.face){
+  const worldNormal=hit.face.normal.clone().applyMatrix3(
+   new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
+  const local=worldNormal.applyMatrix3(
+   new THREE.Matrix3().getNormalMatrix(entry.mesh.matrixWorld.clone().invert())).normalize();
+  const ax=Math.abs(local.x),ay=Math.abs(local.y),az=Math.abs(local.z);
+  side=ay>=ax&&ay>=az?(local.y>=0?'top':'bottom'):
+   ax>=az?(local.x>=0?'right':'left'):(local.z>=0?'front':'back');
+ }
+ setMode('style');
+ DecalUI.beginSurfacePainting(side,hit?.point).catch(err=>toast('Ошибка изображения: '+err.message));
+}
 function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared=false,multitouch=false;
  canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size>1)multitouch=true;if(pointers.size===1){down={x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,drag:false};strokePrepared=false;
   if(w.mode==='terrain'){let pos=w.hit(e.clientX,e.clientY);if(pos){w.remember();w.sculpt(pos.x,pos.z,1);strokePrepared=true;}}
@@ -1037,6 +1163,9 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   const dist=Math.hypot(e.clientX-down.x,e.clientY-down.y);
   if(multitouch){multitouch=false;down=null;return;}
   if(w.mode==='terrain'){down=null;saveSoon();return;}
+  if(choosingImageSurface&&dist<12){
+   openPictureAt(e.clientX,e.clientY);down=null;return;
+  }
   if(w.mode==='playbuild'&&w.droneMode){
    if(dist<12){
     const hit=w.hit(e.clientX,e.clientY);
@@ -1053,7 +1182,11 @@ function attachTouches(){const canvas=$('viewport');let down=null,strokePrepared
   if(w.mode==='build'||w.mode==='style'){
    if(w.droneMode&&dist>=12){down=null;return;}
    if(w.placement||w.moveTarget){const p=w.hit(e.clientX,e.clientY);if(p){const placed=w.placeAt(p);if(placed!==null)saveSoon();else toast(w.lastSnapResult?.reason||'Здесь установить нельзя')}}
-   else if(dist<12){let id=w.hit(e.clientX,e.clientY,true);w.select(w.objects.find(x=>x.data.id===id)||null);if(id)toast('Деталь выделена')}
+   else if(dist<12){
+    const id=w.hit(e.clientX,e.clientY,true);
+    w.select(w.objects.find(x=>x.data.id===id)||null);
+    if(id)toast('Деталь выделена');
+   }
   }down=null;});
  canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);down=null;lastTouch=null;if(!pointers.size)multitouch=false});
  canvas.addEventListener('wheel',e=>{e.preventDefault();w.distance=THREE.MathUtils.clamp(w.distance*(e.deltaY>0?1.08:.92),2,90)},{passive:false});
@@ -1069,20 +1202,22 @@ function saveSoon(){
 async function init(){
  DecalUI.init({
   world:w,toast,loadTexture,textureMeta:()=>textureMeta,refreshGallery:renderLibrary,
+  onImagePlaced:()=>{setMode('style');document.body.classList.remove('catalogOpen');},
   saveTexture:(id,name,bytes,mime)=>rememberTexture(id,name,bytes,mime),
+  onImportedImage:()=>{catalogMode='emblems';catalogPage=0;document.body.classList.add('catalogOpen');renderLibrary();},
   openGallery:fromGame=>{
    catalogMode='emblems';catalogPage=0;
-   if(fromGame){document.body.classList.add('catalogOpen');}
-   else if(w.mode!=='build'&&w.mode!=='playbuild')setMode('build');
+   if(w.mode!=='build'&&w.mode!=='playbuild')setMode('build');
+   document.body.classList.add('catalogOpen');
    renderLibrary();
   }
  });
  setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
  w.onSelected=e=>{DecalUI.render();syncDimensionInputs();if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
- try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
+ try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name,importedAt:row.importedAt||0})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
-  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||'',role:row.role||(id.startsWith('emblem:')?'painting':'texture')})}renderTextureOptions();
+  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||'',role:row.role||(id.startsWith('emblem:')?'painting':'texture'),importedAt:row.importedAt||0})}renderTextureOptions();
   catalogMeta=await dbOp('catalog','metadata')||{};
   const storedPresets=await dbOp('catalog',PRESET_KEY)||[];
   modulePresets=new Map(Array.isArray(storedPresets)?storedPresets.filter(x=>x?.id&&x?.sourceKind).map(x=>[x.id,x]):[]);

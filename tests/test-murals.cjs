@@ -28,6 +28,46 @@ close(crops.get(2)[0],1/3);close(crops.get(2)[2],2/3);
 close(crops.get(3)[0],2/3);close(crops.get(3)[2],1);
 assert(!crops.has(4),'Detached wall cannot be painted');
 assert(!crops.has(5),'Perpendicular wall cannot share the flat picture');
+
+// Regression: a real 30+ module wall must never silently stop at 24.
+const largeWorld={objects:[]};
+for(let i=0;i<36;i++){
+ const mesh=world.makeBuiltin('wall');mesh.position.x=100+i*2;
+ largeWorld.objects.push({kind:'wall',mesh,data:{id:100+i,category:'wall',storey:0}});
+}
+const longWall=MuralLayout.collect(largeWorld,largeWorld.objects[0],'front');
+assert.equal(longWall.length,36,'All 36 touching wall modules share one image');
+close(longWall[0].crop[0],0);close(longWall[35].crop[2],1);
+// 200% scales ONE image across the same 36 modules, preserving the seam.
+const scaled=longWall.map(piece=>MuralLayout.imageCrop(piece,
+ piece.width*2,piece.height*2));
+close(scaled[0][0],.25);close(scaled[35][2],.75);
+for(let i=1;i<scaled.length;i++)
+ close(scaled[i-1][2],scaled[i][0]);
+const storedScale=DecalLayer.normalize([{id:'large',texture:'emblem:wall',face:'front',
+ muralId:'mural:large',crop:scaled[5],scalePercent:200,
+ baseWidthMeters:longWall[0].width,baseHeightMeters:longWall[0].height,
+ widthMeters:longWall[0].width*2,heightMeters:longWall[0].height*2}]);
+assert.equal(storedScale[0].scalePercent,200,'Wall scale persists in each module');
+assert.equal(storedScale[0].baseWidthMeters,longWall[0].width);
+// A single artwork layer also spans assembled floors and the underside of ceilings.
+const makeSlabs=(kind)=>({objects:Array.from({length:4},(_,i)=>{
+ const mesh=world.makeBuiltin(kind);mesh.position.set(i*2,kind==='ceiling'?2.6:0,0);
+ return {kind,mesh,data:{id:i,category:kind==='floor'?'foundation':'ceiling',storey:0}};
+})});
+const slabs=makeSlabs('floor'),ceilings=makeSlabs('ceiling');
+assert.equal(MuralLayout.collect(slabs,slabs.objects[0],'top').length,4,
+ 'One image covers adjoining floor slabs');
+assert.equal(MuralLayout.collect(ceilings,ceilings.objects[0],'bottom').length,4,
+ 'One image covers underside of ceiling slabs');
+const crop=MuralLayout.imageCrop(longWall[0],longWall[0].width/2,longWall[0].height,0,0);
+assert(crop[0]<0,'Shrinking an image leaves the surrounding wall transparent, not repeating');
+const normalized=DecalLayer.normalize([{id:'art',texture:'emblem:x',face:'front',
+ muralId:'mural:x',crop,widthMeters:3.4,heightMeters:2.1,offsetX:-.8,offsetY:.5}]);
+assert.equal(normalized[0].widthMeters,3.4);
+assert.equal(normalized[0].offsetX,-.8);
+assert(normalized[0].crop[0]<0,'Clipped UVs must survive project normalization');
+
 const tex=new THREE.DataTexture(new Uint8Array(4*4*4).fill(255),4,4,THREE.RGBAFormat);
 tex.needsUpdate=true;world.textures.set('emblem:panorama',tex);
 world.remember=()=>{};
@@ -59,13 +99,27 @@ global.document={createElement:tag=>{
 }};
 vm.runInThisContext(fs.readFileSync(path.join(root,'export-glb.js'),'utf8')+'\nglobal.SceneExporter=SceneExporter');
 (async()=>{
+ // A damaged GLB must never silently delete good buildings on restore.
+ const intact=world.snapshot();
+ const broken={...intact,objects:[...intact.objects,{id:999,kind:'missing-model.glb',pos:[0,0,0]}]};
+ await assert.rejects(world.restore(broken),/Проект не заменён/);
+ assert.equal(world.objects.length,5,'Failed restore preserves every existing module');
  await SceneExporter.build(world,{houseOnly:true});
  assert(cropsDuringExport.some(args=>args.length===9),
   'Each wall must export a cropped part of the original image');
  const html=fs.readFileSync(path.join(root,'../index.html'),'utf8');
  const ui=fs.readFileSync(path.join(root,'decal-ui.js'),'utf8');
- for(const s of ['btnMural','mural-layout.js'])assert(html.includes(s));
+ for(const s of ['btnMural','mural-layout.js','btnPaintImage',
+  'btnMuralApply','btnMuralCancel','muralWidth','muralHeight',
+  'muralOffsetX','muralOffsetY','muralScale','muralScaleValue','muralGroupStatus',
+  'btnMuralFit','btnSharedWallTexture'])assert(html.includes(s));
  assert(ui.includes('MuralLayout.collect')&&ui.includes("api.world.remember()"),
-  'Mural application must use shared layout with a single Undo snapshot');
+  'Mural application must use shared layout with an Undo snapshot');
+ assert(ui.includes('cancelPendingArtwork()')&&ui.includes('pendingArtwork=null'),
+  'Preview can be cancelled before explicitly installing');
+ const snap=fs.readFileSync(path.join(root,'build-snap.js'),'utf8');
+ const place=fs.readFileSync(path.join(root,'build-placement.js'),'utf8');
+ assert(snap.includes('geometrySignature')&&place.includes('signature'),
+  'Geometry edits must invalidate cached joins and collisions');
  console.log('Continuous image across three walls, exclude detached panels, shader UVs, GLB crops OK');
 })().catch(err=>{console.error(err);process.exitCode=1});
