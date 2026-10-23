@@ -75,6 +75,7 @@ jobs:
           node tests/test-placement-validation.cjs
           node tests/test-wall-end-manual.cjs
           node tests/test-curved-wall-joins.cjs
+          node tests/test-rounded-starters.cjs
           node tests/test-undo-magnetic-snap.cjs
           node tests/test-module-presets.cjs
           node tests/test-module-forge.cjs
