@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id), $all=s=>[...document.querySelectorAll(s)];
-const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок / перекрытие 2×2','ceiling'],['wall','Стена 2×2,6','wall'],['corner','Угол стены 90°','corner'],['window','Стена с окном','wall'],['roof','Двускатная крыша','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
+const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок / перекрытие 2×2','ceiling'],['wall','Стена 2×2,6','wall'],['corner','Угол стены 90°','corner'],['arc90','Закруглённая стена 90° · R2','wall'],['arc180','Полукруглая стена 180° · R2','wall'],['arcFloor90','Закруглённый пол 90° · R2','foundation'],['arcCeiling90','Закруглённое перекрытие 90° · R2','ceiling'],['window','Стена с окном','wall'],['roof','Двускатная крыша','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
 const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['corner','Углы'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
@@ -25,7 +25,7 @@ function groupType(name){
  if(/лест|ступен|stairs?|step(s)?/.test(s))return 'stairs';
  if(/кры|кровл|roof|shingles|gable/.test(s))return 'roof';
  if(/(?:угол|углов|corner|miter|mitre|косой|скошен)/.test(s)&&/(?:пол|floor|настил|плит|slab|foundation)/.test(s))return 'foundation';
- if(/(?:^|[\\/:_-])arc[_-]?r\d|полукругл|curved[_-]?wall|round[_-]?wall/.test(s))return 'wall';
+ if(/(?:^|[\\/:_-])arc[_-]?r\d|полукругл|четверть.?круг|quarter.?round|quarter.?circle|curved[_-]?wall|round[_-]?wall/.test(s))return 'wall';
  if(/(?:угол|углов|corner|miter|mitre|стык_стен|стыков|скошен)/.test(s))return 'corner';
  if(/двер|door|ворот|gate/.test(s))return 'door';
  if(/стен|окно|wall|window|колон|pillar|column/.test(s))return 'wall';
