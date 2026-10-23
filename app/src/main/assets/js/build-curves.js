@@ -3,7 +3,7 @@
  */
 const BuildCurves=(()=>{
  const cache=new WeakMap();
- const isArc=(kind,root)=>['arc90','arc180'].includes(root?.userData?.pwbModuleShape)||/(?:^|[\/:_-])arc[_-]?r\d|полукругл|curved[_-]?wall|wall[_-]?curved|round[_-]?wall/i.test(String(kind||''));
+ const isArc=(kind,root)=>['arc90','arc180'].includes(root?.userData?.pwbModuleShape)||/(?:^|[\/:_-])arc(?:90|180|[_-]?r\d)|полукругл|четверть.?круг|quarter.?round|quarter.?circle|curved[_-]?wall|wall[_-]?curved|round[_-]?wall/i.test(String(kind||''));
  const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
  const avg=(a,b)=>a.clone().add(b).multiplyScalar(.5);
  const theta=v=>Math.atan2(-v.z,v.x);
