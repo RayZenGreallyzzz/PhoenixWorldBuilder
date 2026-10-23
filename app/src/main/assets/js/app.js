@@ -561,6 +561,15 @@ function setupPicker(){
  $('btnCatalogModels').onclick=()=>{catalogMode='models';catalogPage=0;renderLibrary()};
  $('btnCatalogTextures').onclick=()=>{catalogMode='textures';catalogPage=0;renderLibrary()};
  $('btnCatalogEmblems').onclick=()=>DecalUI.openGallery();
+ $('btnSharedWallTexture').onclick=()=>{
+  const entry=w.selected;
+  if(!entry)return toast('Сначала выдели часть собранной стены');
+  const type=entry.data?.category||w.categoryForKind(entry.kind);
+  if(!['wall','corner','door','railing'].includes(type))
+   return toast('Выбери прямую стену: общая текстура работает на одной плоскости');
+  DecalUI.beginSurfacePainting($('decalFace').value||'front').catch(
+   err=>toast('Не удалось открыть текстуру: '+err.message));
+ };
  $('galleryPrev').onclick=()=>{catalogPage=Math.max(0,catalogPage-1);renderLibrary();$('buildPanel').scrollTop=0};
  $('galleryNext').onclick=()=>{catalogPage++;renderLibrary();$('buildPanel').scrollTop=0};const search=document.createElement('input');search.id='assetSearch';search.placeholder='Поиск по названию или ID';search.style.cssText='background:#203442;color:#fff;border:1px solid #486373;border-radius:7px;padding:10px;width:100%;margin-bottom:8px;font-size:12px';$('assetList').before(search);search.oninput=()=>{catalogPage=0;renderLibrary()};
  $all('.pill').forEach(b=>b.onclick=()=>{$all('.pill').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentFilter=b.dataset.filter;catalogPage=0;renderLibrary()});
