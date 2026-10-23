@@ -1,6 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('fs'),path=require('path'),vm=require('vm');
 const dir=path.join(__dirname,'../app/src/main/assets/js');
 const THREE=global.THREE=require(path.join(dir,'three.min.js'));
+global.RoundedModules=require(path.join(dir,'rounded-modules.js'));
 global.RoofModules=require(path.join(dir,'roof-modules.js'));
 global.BuildSnap=require(path.join(dir,'build-snap.js'));
 vm.runInThisContext(fs.readFileSync(path.join(dir,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
