@@ -272,8 +272,10 @@ const DecalUI=(()=>{
     ctx.drawImage(img,0,0,c.width,c.height);
     id=await saveCanvas(c,name);
    }
-   if(existing())await addImage(id);
-   else api.toast('PNG добавлена в каталог. Выбери стену и эмблему.');
+   // Import never silently paints some old selected module. Put the file
+   // visibly into Images, at the top, and let the user choose where to apply.
+   api.onImportedImage?.(id);
+   api.toast('Изображение сохранено в «Изображения». Выбери его в каталоге.');
   }catch(e){console.error(e);api.toast('Ошибка PNG: '+e.message)}
   finally{URL.revokeObjectURL(url)}
  }
