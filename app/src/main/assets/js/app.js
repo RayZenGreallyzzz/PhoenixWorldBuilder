@@ -15,7 +15,9 @@ try{
  $('textureDetail').value=String(quality);
 }catch(e){console.warn('Texture quality settings unavailable',e);w.setTextureQuality(4)}
 try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),modulePresets=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
-let choosingImageSurface=false;
+let choosingImageSurface=false,importOrder=0;
+const importedStamp=()=>Date.now()+(++importOrder)/1000;
+const uniqueImportedId=(prefix,name)=>prefix+name.toLowerCase()+':'+Date.now().toString(36)+'_'+(++importOrder).toString(36);
 let statusMessage='';let surfaceScope='all',surfaceMode='repeat',surfaceTileMeters=1,surfaceImageScale=1,surfaceFaithful=true;let pendingRecovery=null;let savedNatively=false;let initializing=true;
 function toast(s){const el=$('toast');el.textContent=s;el.classList.remove('hidden');clearTimeout(lastToast);lastToast=setTimeout(()=>el.classList.add('hidden'),3300)}
 function fmtName(n){return n.replace(/^\d+[_-]/,'').replace(/_/g,' ').replace(/\.glb$/i,'').slice(0,55)}
@@ -61,12 +63,18 @@ async function bindImportedMaterials(id,root){if(!localStore)return;const bindin
 w.getAsset=cacheFromDB;
 // Old projects contain GLB IDs but may not yet contain a saved category.
 w.categoryForKind=kind=>BUILTINS.find(item=>item[0]===kind)?.[2]||savedMeta.get(kind)?.category||groupType(savedMeta.get(kind)?.name||kind);
-async function rememberAsset(id,name,bytes){await dbOp('assets',id,{name,bytes});savedMeta.set(id,{...(savedMeta.get(id)||{}),...(catalogMeta[id]||{}),name});}
+async function rememberAsset(id,name,bytes){
+ const old=savedMeta.get(id)||{},importedAt=importedStamp();
+ await dbOp('assets',id,{name,bytes,importedAt});
+ savedMeta.set(id,{...old,...(catalogMeta[id]||{}),name,importedAt});
+ w.assetCache.delete(id);
+}
 async function rememberTexture(id,name,bytes,mime='image/png',sourcePath='',role=''){
  const resolved=role|| (id.startsWith('emblem:')?'painting':'texture');
- await dbOp('textures',id,{name,bytes,mime,sourcePath,role:resolved});
+ const importedAt=importedStamp();
+ await dbOp('textures',id,{name,bytes,mime,sourcePath,role:resolved,importedAt});
  if(w.textures.has(id)){w.textures.get(id)?.dispose?.();w.textures.delete(id)}
- textureMeta.set(id,{name,sourcePath,role:resolved});
+ textureMeta.set(id,{name,sourcePath,role:resolved,importedAt});
 }
 async function loadTexture(id){if(w.textures.has(id))return w.textures.get(id);const row=await dbOp('textures',id);if(!row)return null;const url=URL.createObjectURL(new Blob([row.bytes],{type:row.mime}));return await new Promise((resolve,reject)=>{new THREE.TextureLoader().load(url,t=>{t.encoding=THREE.sRGBEncoding;t.flipY=false;t.wrapS=t.wrapT=(id.startsWith('emblem:')||textureMeta.get(id)?.role==='painting')?THREE.ClampToEdgeWrapping:THREE.RepeatWrapping;w.tuneTexture(t);w.textures.set(id,t);URL.revokeObjectURL(url);resolve(t)},undefined,error=>{URL.revokeObjectURL(url);reject(error)})})}
 async function updateCatalog(id,patch){
@@ -402,9 +410,9 @@ function renderLibrary(){
  const items=[];
  if(isImage){
   for(const [id,meta] of textureMeta){
-   const painting=meta.role==='painting'||id.startsWith('emblem:');
-   // The artwork gallery includes both imported textures and paintings.
-   if(isTexture&&painting)continue;
+   // Both the materials tab and the image/decal tab show all imported
+   // PNG, JPG and WEBP files; roles only control what happens after tapping.
+   // Files no longer disappear into a different hidden catalogue.
    if(q&&!(meta.name+' '+(meta.sourcePath||id)).toLowerCase().includes(q))continue;
    items.push([id,meta]);
   }
@@ -425,6 +433,30 @@ function renderLibrary(){
    items.push({id,name:preset.name,kind:'preset',category:preset.category});
   }
  }
+ const sortMode=$('assetSort')?.value||'newest';
+ const sorter=(a,b)=>{
+  const ma=isImage?a[1]:a.kind==='preset'?modulePresets.get(a.id):savedMeta.get(a.id);
+  const mb=isImage?b[1]:b.kind==='preset'?modulePresets.get(b.id):savedMeta.get(b.id);
+  const an=isImage?a[1].name:a.name,bn=isImage?b[1].name:b.name;
+  if(sortMode==='name')return String(an).localeCompare(String(bn),'ru');
+  if(sortMode==='category'){
+   const ac=isImage?(ma?.role||''):a.category;
+   const bc=isImage?(mb?.role||''):b.category;
+   return String(ac).localeCompare(String(bc),'ru')||String(an).localeCompare(String(bn),'ru');
+  }
+  const at=Number(ma?.importedAt)||Date.parse(ma?.created||0)||0;
+  const bt=Number(mb?.importedAt)||Date.parse(mb?.created||0)||0;
+  return sortMode==='oldest'?at-bt:bt-at;
+ };
+ if(isImage){
+  items.sort(sorter);
+ }else{
+  // Starter white parts always stay first in their original order.
+  const start=items.filter(item=>item.kind==='builtin');
+  const imported=items.filter(item=>item.kind!=='builtin');
+  imported.sort(sorter);
+  items.splice(0,items.length,...start,...imported);
+ }
  const pages=Math.max(1,Math.ceil(items.length/GALLERY_SIZE));
  catalogPage=Math.min(Math.max(0,catalogPage),pages-1);
  $('galleryStatus').textContent='Стр. '+(catalogPage+1)+'/'+pages+' · '+items.length;
@@ -437,7 +469,7 @@ function renderLibrary(){
    const card=document.createElement('button');card.className='textureCard';
    if(w.textureId===id)card.classList.add('active');
    const image=document.createElement('img');image.className='textureImage';image.alt=meta.name;
-   const title=document.createElement('b');title.textContent=(meta.sourcePath||id.replace(/^tex:/,'')).replace(/^Текстуры[\\/]/i,'');
+   const title=document.createElement('b');title.textContent=meta.name||id;
    card.append(image,title);card.onclick=()=>isEmblem?DecalUI.addImage(id):selectTexture(id);
    el.append(card);showTextureImage(image,id).catch(console.warn);
   }
@@ -525,6 +557,7 @@ function refreshConstructionUI(){
 }
 function setupPicker(){
   $('btnForgeModule').onclick=fitOwnModel;
+ $('assetSort').onchange=()=>{catalogPage=0;renderLibrary()};
  $('btnCatalogModels').onclick=()=>{catalogMode='models';catalogPage=0;renderLibrary()};
  $('btnCatalogTextures').onclick=()=>{catalogMode='textures';catalogPage=0;renderLibrary()};
  $('btnCatalogEmblems').onclick=()=>DecalUI.openGallery();
@@ -843,7 +876,7 @@ function wireButtons(){
  $('exportHouse').onclick=()=>exportHouse();$('exportJson').onclick=()=>exportJson();$('exportPack').onclick=()=>exportPack();$('exportGlb').onclick=()=>exportGlb();
  $('settingsBtn').onclick=()=>$('settings').classList.toggle('hidden');$('fpsLimit').onchange=e=>{w.fpsLimit=+e.target.value;toast('Ограничение '+e.target.value+' FPS')};
  $('sceneExposure').oninput=e=>{const exp=+e.target.value/100;w.renderer.toneMappingExposure=exp;$('exposureValue').textContent=e.target.value+'%';try{localStorage.setItem('phoenix_scene_exposure',e.target.value)}catch(_){}};$('renderScale').onchange=e=>{w.setQuality(+e.target.value,$('shadows').checked);try{localStorage.setItem('pwb_render_scale',e.target.value)}catch(_){}toast('Разрешение '+Math.round(+e.target.value*100)+'%')};$('textureDetail').onchange=e=>{const n=w.setTextureQuality(+e.target.value);try{localStorage.setItem('pwb_texture_detail',String(n))}catch(_){}toast('Чёткость текстур: '+n+'×')};$('invertCameraX').onchange=e=>{w.invertCameraX=e.target.checked;try{localStorage.setItem('pwb_camera_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickX').onchange=e=>{w.invertJoystickX=e.target.checked;try{localStorage.setItem('pwb_joy_x',e.target.checked?'1':'0')}catch(_){}};$('invertJoystickY').onchange=e=>{w.invertJoystickY=e.target.checked;try{localStorage.setItem('pwb_joy_y',e.target.checked?'1':'0')}catch(_){}};$('avatarFacing').onchange=e=>{w.avatarFacingOffset=Number(e.target.value)*Math.PI/180;try{localStorage.setItem('pwb_avatar_forward',e.target.value)}catch(_){}};$('shadows').onchange=e=>{w.setQuality(w.renderScale,e.target.checked);toast(e.target.checked?'Тени включены':'Тени выключены')};
- $('fileAssets').onchange=async e=>{let files=[...e.target.files];e.target.value='';if(!files.length)return;toast('Загружаю файлы…');let n=0;for(const f of files){try{if(/\.zip$/i.test(f.name)){n+=await importZip(f)}else if(/\.glb$/i.test(f.name)){let id='glb:'+f.name.toLowerCase();await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));n++}else toast('GLTF с внешними данными пока не поддерживается');}catch(err){toast('Ошибка импорта: '+err.message);console.error(err)}}renderLibrary();renderTextureOptions();toast('Загружено моделей: '+n)};
+ $('fileAssets').onchange=async e=>{let files=[...e.target.files];e.target.value='';if(!files.length)return;toast('Загружаю файлы…');let n=0;for(const f of files){try{if(/\.zip$/i.test(f.name)){n+=await importZip(f)}else if(/\.glb$/i.test(f.name)){let id=uniqueImportedId('glb:',f.name);await rememberAsset(id,f.name,new Uint8Array(await f.arrayBuffer()));n++}else toast('GLTF с внешними данными пока не поддерживается');}catch(err){toast('Ошибка импорта: '+err.message);console.error(err)}}renderLibrary();renderTextureOptions();toast('Загружено моделей: '+n)};
  $('fileProject').onchange=async e=>{let f=e.target.files?.[0];e.target.value='';if(!f)return;try{if(f.name.toLowerCase().endsWith('.zip')){await importZip(f,true)}else{const project=JSON.parse(await f.text());await restoreProject(project)}$('modal').classList.add('hidden');toast('Проект открыт')}catch(err){toast('Ошибка проекта: '+err.message);console.error(err)}};
  $('fileAvatar').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;
   try{
@@ -864,9 +897,11 @@ function wireButtons(){
  $('fileTexture').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{// Treat each import as a new image; reusing a filename must not silently
    // show a stale cached texture (or mutate pictures already on the wall).
    const id='tex:'+f.name.toLowerCase()+':'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
-   await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');await loadTexture(id);renderTextureOptions();$('textureSelect').value=id;
-   if(surfaceTarget()||(w.placement&&w.ghost))assignSurfacePaint('texture',id);
-   else toast('PNG/JPEG добавлена. Выбери деталь и сторону для нанесения')}catch(err){toast('Текстура не открыта: '+err.message)}};
+   await rememberTexture(id,f.name,new Uint8Array(await f.arrayBuffer()),f.type||'image/png');
+   await loadTexture(id);renderTextureOptions();
+   catalogMode='emblems';catalogPage=0;
+   document.body.classList.add('catalogOpen');renderLibrary();
+   toast('Изображение добавлено первым в каталоге «Изображения». Нажми его, чтобы нанести.')}catch(err){toast('Текстура не открыта: '+err.message)}};
 }
 async function importZip(file,isProject=false){
  const entries=await ZipUtils.extract(file),keys=Object.keys(entries);
@@ -1133,19 +1168,20 @@ async function init(){
   world:w,toast,loadTexture,textureMeta:()=>textureMeta,refreshGallery:renderLibrary,
   onImagePlaced:()=>{setMode('style');document.body.classList.remove('catalogOpen');},
   saveTexture:(id,name,bytes,mime)=>rememberTexture(id,name,bytes,mime),
+  onImportedImage:()=>{catalogMode='emblems';catalogPage=0;document.body.classList.add('catalogOpen');renderLibrary();},
   openGallery:fromGame=>{
    catalogMode='emblems';catalogPage=0;
-   if(fromGame){document.body.classList.add('catalogOpen');}
-   else if(w.mode!=='build'&&w.mode!=='playbuild')setMode('build');
+   if(w.mode!=='build'&&w.mode!=='playbuild')setMode('build');
+   document.body.classList.add('catalogOpen');
    renderLibrary();
   }
  });
  setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
  w.onSelected=e=>{DecalUI.render();syncDimensionInputs();if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
- try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name})}
+ try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name,importedAt:row.importedAt||0})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
-  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||'',role:row.role||(id.startsWith('emblem:')?'painting':'texture')})}renderTextureOptions();
+  const textures=await dbKeys('textures');for(const id of textures){const row=await dbOp('textures',id);textureMeta.set(id,{name:row.name,sourcePath:row.sourcePath||'',role:row.role||(id.startsWith('emblem:')?'painting':'texture'),importedAt:row.importedAt||0})}renderTextureOptions();
   catalogMeta=await dbOp('catalog','metadata')||{};
   const storedPresets=await dbOp('catalog',PRESET_KEY)||[];
   modulePresets=new Map(Array.isArray(storedPresets)?storedPresets.filter(x=>x?.id&&x?.sourceKind).map(x=>[x.id,x]):[]);
