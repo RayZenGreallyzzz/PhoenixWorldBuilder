@@ -168,7 +168,14 @@ const BuildJoin=(()=>{
    const lines=info.segments||[info];
    const projections=lines.map(line=>({line,...nearest(line.a,line.c,p)}));
    projections.sort((a,b)=>distXZ(p,a.point)-distXZ(p,b.point));
-   const closest=projections[0],d=distXZ(p,closest.point);
+   const closest=projections[0];
+   // For a curved wall the AABB centreline is not a physical wall surface.
+   // Prefer the actual two tangent sockets when choosing nearby candidates.
+   const sockets=typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind,root)?
+    BuildCurves.sourceSockets(info):[];
+   const socketDistance=sockets.length?
+    Math.min(...sockets.map(slot=>distXZ(p,slot.point))):Infinity;
+   const d=Math.min(distXZ(p,closest.point),socketDistance);
    if(d>reach)continue;
    possible.push({...info,projected:{point:closest.point,t:closest.t},
     bestSegment:closest.line,d});
