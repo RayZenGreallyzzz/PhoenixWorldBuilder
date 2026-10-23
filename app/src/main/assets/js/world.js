@@ -426,7 +426,7 @@ class WorldBuilder{
   try{
    const fine=solved=>{
     const cat=this.placementCategory||this.categoryForKind?.(this.placement)||this.placement;
-    if(solved&&['wall','corner','door','railing','stairs'].includes(cat)){
+    if(solved&&!solved.floorOuterEdge&&!solved.floorOuterCorner&&['wall','corner','door','railing','stairs'].includes(cat)){
      solved.position.x+=this.cornerOffsetX||0;
      solved.position.z+=this.cornerOffsetZ||0;
     }
@@ -442,6 +442,12 @@ class WorldBuilder{
      this.placementHeight(x,z)-bottom+(this.placementLift||0),z),
      rotation:this.placementRotation||0,snapped:false,
      category:this.placementCategory,manual:true});
+   }
+   // Prefer the actual outside edge of a floor. End-to-end wall magnets
+   // must not pull the next side of a building off that outer perimeter.
+   if(typeof BuildOuterEdge!=='undefined'&&this.placement&&this.smartSnap!==false){
+    const outer=BuildOuterEdge.resolve(this,p);
+    if(outer)return fine(outer);
    }
    if(typeof BuildJoin!=='undefined'&&this.placement&&this.smartSnap!==false){
     const joined=BuildJoin.resolve(this,p);
