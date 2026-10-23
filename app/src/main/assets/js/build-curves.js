@@ -9,7 +9,12 @@ const BuildCurves=(()=>{
  const theta=v=>Math.atan2(-v.z,v.x);
  const rotate=(v,r)=>new THREE.Vector3(v.x*Math.cos(r)+v.z*Math.sin(r),0,-v.x*Math.sin(r)+v.z*Math.cos(r));
  const localToWorld=(root,p)=>p.clone().applyMatrix4(root.matrixWorld);
- const direction=(root,vec)=>vec.clone().transformDirection(root.matrixWorld).setY(0).normalize();
+ // End-cap normals must use inverse transpose for non-uniform X/Z scaling.
+ // Transforming a cap normal as a point or direction twists the joint on ellipses.
+ const direction=(root,vec)=>{
+  root.updateWorldMatrix(true,true);
+  return vec.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(root.matrixWorld)).setY(0).normalize();
+ };
  function rawArcSockets(root,kind){
   if(!isArc(kind,root))return null;
   if(root.userData?.pwbModuleSockets?.length===2)
@@ -117,6 +122,12 @@ const BuildCurves=(()=>{
   if(!isIncomingArc&&!candidates.some(x=>isArc(x.entry.kind,x.root)))return null;
   const slots=incomingSockets(w,box);if(!slots)return null;
   const scale=w.placementScale||1;
+  const axes=w.placementAxes||{};
+  const ax=Number(axes.x)||1,ay=Number(axes.y)||1,az=Number(axes.z)||1;
+  // Socket positions follow the scaled mesh, while cap normals use inverse
+  // transpose (a 90-degree arc stretched to an ellipse is still watertight).
+  const socketPoint=v=>new THREE.Vector3(v.x*ax,v.y*ay,v.z*az);
+  const socketNormal=v=>new THREE.Vector3(v.x/ax,0,v.z/az).normalize();
   const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
   const floorIndex=w.floorLevel||0;
   const nominal=w.heightAt(p.x,p.z)+floorIndex*(w.storeyHeight||2.6);
@@ -130,11 +141,12 @@ const BuildCurves=(()=>{
    for(const target of sourceSockets(info)){
     for(const slot of slots){
      const desired=target.out.clone().negate();
-     let yaw=theta(desired)-theta(slot.out);
+     let yaw=theta(desired)-theta(socketNormal(slot.out));
      yaw+=(w.placementRotation||0)*Math.PI/180;
-     const shifted=rotate(slot.point,yaw).multiplyScalar(scale);
+     const transformed=socketPoint(slot.point);
+     const shifted=rotate(transformed,yaw).multiplyScalar(scale);
      const position=new THREE.Vector3(target.point.x-shifted.x,
-       info.bottom-slot.point.y*scale+(w.placementLift||0),
+       info.bottom-transformed.y*scale+(w.placementLift||0),
        target.point.z-shifted.z);
      const visualCenter=position.clone().add(rotate(center,yaw).multiplyScalar(scale));
      const d=dist(visualCenter,p);
