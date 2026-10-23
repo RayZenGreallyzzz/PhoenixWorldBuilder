@@ -229,18 +229,20 @@ const BuildJoin=(()=>{
    const arms=root?cornerArms(root,w.placement,'corner'):null;
    if(arms?.length){
     const scale=w.placementScale||1,cx=(box.min.x+box.max.x)/2,cz=(box.min.z+box.max.z)/2;
+    const axes=w.placementAxes||{},ax=Number(axes.x)||1,ay=Number(axes.y)||1,az=Number(axes.z)||1;
     let match=null;
     for(const wall of candidates.slice(0,10)){
      for(const endpoint of (wall.tipOnly?['a']:['a','c'])){
       const target=wall[endpoint];
       const direction=wall.dir.clone().multiplyScalar(endpoint==='a'?-1:1);
       for(const arm of arms){
-       const socketOut=arm.tip.clone().sub(arm.pivot).setY(0).normalize();
+       const socketOut=new THREE.Vector3((arm.tip.x-arm.pivot.x)*ax,0,
+        (arm.tip.z-arm.pivot.z)*az).normalize();
        const yaw=angle(new THREE.Vector3(0,0,0),direction.clone().negate())-
         angle(new THREE.Vector3(0,0,0),socketOut);
-       const rotatedTip=rotate(arm.tip,yaw).multiplyScalar(scale);
+       const rotatedTip=rotate(new THREE.Vector3(arm.tip.x*ax,0,arm.tip.z*az),yaw).multiplyScalar(scale);
        const at=new THREE.Vector3(target.x-rotatedTip.x,
-        wall.bottom-arm.tip.y*scale+(w.placementLift||0),target.z-rotatedTip.z);
+        wall.bottom-arm.tip.y*ay*scale+(w.placementLift||0),target.z-rotatedTip.z);
        const center=at.clone().add(rotate(new THREE.Vector3(cx,0,cz),yaw).multiplyScalar(scale));
        const distance=distXZ(p,center);
        if(distance>4.5)continue;
