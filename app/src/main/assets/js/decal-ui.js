@@ -33,7 +33,17 @@ const DecalUI=(()=>{
   if(confirmHint)confirmHint.textContent=pendingArtwork&&d?.muralId===pendingArtwork.id?
    'Предпросмотр: измени размер и положение, затем «Установить» или «Отмена».':
    'Рисунок установлен. Нажми 💾 Сохранить для записи проекта.';
+  const muralGroup=d?.muralId&&entry?
+   MuralLayout.collect(api.world,entry,d.face).filter(piece=>
+    DecalLayer.normalize(piece.entry.data.decals).some(x=>x.muralId===d.muralId)):[];
+  const groupInfo=get('muralGroupStatus');
+  if(groupInfo)groupInfo.textContent=muralGroup.length?
+   'Одна картинка на '+muralGroup.length+' деталях • все изменяются вместе':
+   'Выдели соединённые стены, чтобы настроить одну общую картинку';
   if(d?.muralId){
+   const percent=d.scalePercent||100;
+   get('muralScale').value=String(percent);
+   get('muralScaleValue').textContent=Math.round(percent)+'%';
    for(const [id,value] of [['muralWidth',d.widthMeters||1],['muralHeight',d.heightMeters||1],
     ['muralOffsetX',d.offsetX||0],['muralOffsetY',d.offsetY||0]]){
     const field=get(id);
@@ -88,6 +98,8 @@ const DecalUI=(()=>{
     piece.entry.data.decals=current.map(x=>x.muralId===previous.muralId?{
      ...x,opacity:combined.opacity,widthMeters:combined.widthMeters,
      heightMeters:combined.heightMeters,offsetX:combined.offsetX,offsetY:combined.offsetY,
+     baseWidthMeters:combined.baseWidthMeters,baseHeightMeters:combined.baseHeightMeters,
+     scalePercent:combined.scalePercent,
      crop:MuralLayout.imageCrop(piece,combined.widthMeters,combined.heightMeters,
       combined.offsetX,combined.offsetY)
     }:x);
@@ -128,9 +140,10 @@ const DecalUI=(()=>{
   if(!texture)return api.toast('Картина недоступна');
   if(pendingArtwork)cancelPendingArtwork();
   const muralId='mural:'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
-  // Position the graphic at the touched point. Width and height remain independent.
-  const delta=pendingPoint&&group[0]?.center?pendingPoint.clone().sub(group[0].center):null;
-  const offsetX=delta?delta.dot(group[0].u):0,offsetY=delta?delta.dot(group[0].v):0;
+  // Start with one seamless full-wall texture, centred across the complete
+  // connected surface, even when the user tapped its leftmost module.
+  // Users can move it freely afterward without changing any module geometry.
+  const offsetX=0,offsetY=0;
   pendingPoint=null;
   const original=group.map(piece=>({entry:piece.entry,decals:
    JSON.parse(JSON.stringify(piece.entry.data.decals||[]))}));
@@ -143,7 +156,8 @@ const DecalUI=(()=>{
     id:muralId,texture:id,face:item.face,muralId,
     crop:MuralLayout.imageCrop(item,item.width,item.height,offsetX,offsetY),
     x:.5,y:.5,size:1,fit:'fill',rotation:0,opacity:1,
-    widthMeters:item.width,heightMeters:item.height,offsetX,offsetY
+    widthMeters:item.width,heightMeters:item.height,offsetX,offsetY,
+    baseWidthMeters:item.width,baseHeightMeters:item.height,scalePercent:100
    }]);
    api.world.applyAppearance(item.entry);
   }
@@ -311,6 +325,28 @@ const DecalUI=(()=>{
    active=Math.max(0,active-1);render();
   };
   get('btnMural').onclick=()=>beginSurfacePainting();
+  get('muralScale').oninput=e=>get('muralScaleValue').textContent=e.target.value+'%';
+  get('muralScale').onchange=e=>{
+   const entry=existing(),d=value()[active];
+   if(!entry||!d?.muralId)return;
+   const parts=MuralLayout.collect(api.world,entry,d.face);
+   if(!parts.length)return;
+   const percent=clamp(Number(e.target.value)||100,10,600);
+   const baseW=d.baseWidthMeters||parts[0].width;
+   const baseH=d.baseHeightMeters||parts[0].height;
+   change({scalePercent:percent,baseWidthMeters:baseW,baseHeightMeters:baseH,
+    widthMeters:Math.max(.05,Math.min(1000,baseW*percent/100)),
+    heightMeters:Math.max(.05,Math.min(1000,baseH*percent/100))});
+  };
+  get('btnMuralFit').onclick=()=>{
+   const entry=existing(),d=value()[active];if(!entry||!d?.muralId)return;
+   const parts=MuralLayout.collect(api.world,entry,d.face);
+   if(!parts.length)return;
+   change({widthMeters:parts[0].width,heightMeters:parts[0].height,
+    baseWidthMeters:parts[0].width,baseHeightMeters:parts[0].height,
+    scalePercent:100,offsetX:0,offsetY:0});
+   api.toast('Одна текстура снова занимает всю соединённую поверхность');
+  };
   get('btnMuralApply').onclick=()=>{
    if(!pendingArtwork)return;
    pendingArtwork=null;
