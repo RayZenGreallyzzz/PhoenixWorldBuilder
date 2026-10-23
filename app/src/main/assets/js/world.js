@@ -502,6 +502,8 @@ class WorldBuilder{
   this.scene.add(obj);obj.updateMatrixWorld(true);this.objects.push(entry);this.applyAppearance(entry);this.nextId=Math.max(this.nextId,entry.data.id+1);return entry;
  }
  makeBuiltin(kind){
+  if(typeof RoofModules!=='undefined'&&RoofModules.kinds.has(kind))
+   return RoofModules.create(kind);
   if(typeof RoundedModules!=='undefined'&&RoundedModules.kinds.has(kind))
    return RoundedModules.create(kind);
   const group=new THREE.Group();let m=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.85,side:THREE.DoubleSide}); const add=(geo,x,y,z,mat=m)=>{let mesh=new THREE.Mesh(geo,mat);mesh.position.set(x,y,z);mesh.receiveShadow=true;group.add(mesh);return mesh};
