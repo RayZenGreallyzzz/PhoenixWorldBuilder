@@ -38,6 +38,18 @@ for(let i=0;i<36;i++){
 const longWall=MuralLayout.collect(largeWorld,largeWorld.objects[0],'front');
 assert.equal(longWall.length,36,'All 36 touching wall modules share one image');
 close(longWall[0].crop[0],0);close(longWall[35].crop[2],1);
+// 200% scales ONE image across the same 36 modules, preserving the seam.
+const scaled=longWall.map(piece=>MuralLayout.imageCrop(piece,
+ piece.width*2,piece.height*2));
+close(scaled[0][0],.25);close(scaled[35][2],.75);
+for(let i=1;i<scaled.length;i++)
+ close(scaled[i-1][2],scaled[i][0]);
+const storedScale=DecalLayer.normalize([{id:'large',texture:'emblem:wall',face:'front',
+ muralId:'mural:large',crop:scaled[5],scalePercent:200,
+ baseWidthMeters:longWall[0].width,baseHeightMeters:longWall[0].height,
+ widthMeters:longWall[0].width*2,heightMeters:longWall[0].height*2}]);
+assert.equal(storedScale[0].scalePercent,200,'Wall scale persists in each module');
+assert.equal(storedScale[0].baseWidthMeters,longWall[0].width);
 // A single artwork layer also spans assembled floors and the underside of ceilings.
 const makeSlabs=(kind)=>({objects:Array.from({length:4},(_,i)=>{
  const mesh=world.makeBuiltin(kind);mesh.position.set(i*2,kind==='ceiling'?2.6:0,0);
@@ -99,7 +111,8 @@ vm.runInThisContext(fs.readFileSync(path.join(root,'export-glb.js'),'utf8')+'\ng
  const ui=fs.readFileSync(path.join(root,'decal-ui.js'),'utf8');
  for(const s of ['btnMural','mural-layout.js','btnPaintImage',
   'btnMuralApply','btnMuralCancel','muralWidth','muralHeight',
-  'muralOffsetX','muralOffsetY'])assert(html.includes(s));
+  'muralOffsetX','muralOffsetY','muralScale','muralScaleValue','muralGroupStatus',
+  'btnMuralFit','btnSharedWallTexture'])assert(html.includes(s));
  assert(ui.includes('MuralLayout.collect')&&ui.includes("api.world.remember()"),
   'Mural application must use shared layout with an Undo snapshot');
  assert(ui.includes('cancelPendingArtwork()')&&ui.includes('pendingArtwork=null'),
