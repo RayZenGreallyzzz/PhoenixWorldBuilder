@@ -76,6 +76,7 @@ jobs:
           node tests/test-wall-end-manual.cjs
           node tests/test-curved-wall-joins.cjs
           node tests/test-scaled-socket-joins.cjs
+          node tests/test-floor-outer-edge.cjs
           node tests/test-undo-magnetic-snap.cjs
           node tests/test-module-presets.cjs
           node tests/test-module-forge.cjs
