@@ -86,8 +86,8 @@ for(const floorRotation of [0,37,90]){
  if(result?.floorOuterEdge){
   w.applyGhostPlacement(clicked);
   const b=worldBoxIn(w.ghost,right.mesh);
-  assert(Math.abs(b.min.x+1)>.03&&Math.abs(b.max.x+1)>.03,
-   'Shared seam x=1 must not be treated as outside perimeter');
+  assert(b.max.x-b.min.x>b.max.z-b.min.z,
+   'Shared seam x=1 is internal: wall must align along an exposed Z edge');
  }
 }
 // Offset GLB pivot is corrected by the physical bounds, not guessed origin.
