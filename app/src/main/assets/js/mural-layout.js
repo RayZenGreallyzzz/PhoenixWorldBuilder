@@ -4,8 +4,17 @@
  */
 const MuralLayout=(()=>{
  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+ const family=(w,e)=>{
+  const cat=e?.data?.category||w?.categoryForKind?.(e?.kind)||e?.kind;
+  if(['wall','corner','door','railing'].includes(cat))return 'wall';
+  if(['foundation','floor'].includes(cat))return 'floor';
+  if(['ceiling','ceiling_finish'].includes(cat))return 'ceiling';
+  return null;
+ };
  function compatible(w,entry,selected){
   if(!entry?.mesh||!selected?.mesh)return false;
+  const a=family(w,entry),b=family(w,selected);
+  if(!a||a!==b)return false;
   const story=entry.data?.storey,other=selected.data?.storey;
   return !Number.isInteger(story)||!Number.isInteger(other)||story===other;
  }
