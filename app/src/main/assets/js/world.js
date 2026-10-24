@@ -428,7 +428,7 @@ class WorldBuilder{
   try{
    const fine=solved=>{
     const cat=this.placementCategory||this.categoryForKind?.(this.placement)||this.placement;
-    if(solved&&!solved.floorOuterEdge&&!solved.floorOuterCorner&&['wall','corner','door','railing','stairs'].includes(cat)){
+    if(solved&&!solved.floorOuterEdge&&!solved.floorOuterCorner&&!solved.roundedCorner&&['wall','corner','door','railing','stairs'].includes(cat)){
      solved.position.x+=this.cornerOffsetX||0;
      solved.position.z+=this.cornerOffsetZ||0;
     }
@@ -444,6 +444,12 @@ class WorldBuilder{
      this.placementHeight(x,z)-bottom+(this.placementLift||0),z),
      rotation:this.placementRotation||0,snapped:false,
      category:this.placementCategory,manual:true});
+   }
+   // Quarter-round corners use both physical edge planes or two exact wall
+   // end sockets; never guess a diagonal pivot for a curved shape.
+   if(typeof BuildRoundedSnap!=='undefined'&&this.placement&&this.smartSnap!==false){
+    const rounded=BuildRoundedSnap.resolve(this,p);
+    if(rounded)return fine(rounded);
    }
    // Existing perimeter alignment is more precise than end-snap for slabs.
    if(typeof BuildOuterEdge!=='undefined'&&this.placement&&this.smartSnap!==false){
