@@ -62,6 +62,13 @@ function testFloor(rotation,storey,axes){
   w.cornerOffsetX=.2;w.cornerOffsetZ=-.2; // Must not pollute an automatic rounded magnet.
   const at=V(sx*.83,b.max.y,sz*.83).applyMatrix4(fl.mesh.matrixWorld);
   const sol=w.solvePlacement(at);
+  if(!sol?.roundedOnFloor)console.log('DEBUG ROUND',{
+   corner:[sx,sz],rotation,storey,axes,
+   kind,wKind:w.placement,isArc:BuildCurves.isArc(w.placement,w.ghost),
+   sockets:BuildCurves.incomingSockets(w,BuildSnap.attrBounds(w.ghost))?.map(s=>({p:s.point.toArray(),o:s.out.toArray()})),
+   hull:BuildRoundedSnap.hull(w.ghost).length,raw:BuildRoundedSnap.resolve(w,at),
+   computed:sol?.joinedTo,position:sol?.position?.toArray()
+  });
   assert(sol?.roundedOnFloor,'Round corner must fit floor without a wall, rotated '+rotation+' storey '+storey);
   assert.equal(sol.reference,1);
   w.applyGhostPlacement(at);
