@@ -9,7 +9,7 @@ class WorldBuilder{
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
   this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.placementAxes={x:1,y:1,z:1};this.wallThicknessMeters=null;this.placementModuleShape=null;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.selected=null;this.ghost=null;this.placementOutline=null;this.moveTarget=null;
-  this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#b7ac91';this.textureId=null;this.placementSurfacePaint={};
+  this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#ffffff';this.textureId=null;this.placementSurfacePaint={};
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
   const ca=new Float32Array((65*65)*3);for(let i=0;i<ca.length;i+=3){ca[i]=.32;ca[i+1]=.48;ca[i+2]=.30;}
@@ -263,6 +263,8 @@ class WorldBuilder{
   const level=this.floorLevel||0,height=this.storeyHeight||2.6;
   const nominal=this.heightAt(x,z)+level*height;
   const result={height:nominal,source:'configured'};
+  // In manual mode the user's configured storey height is authoritative.
+  // In magnetic mode inspect physical supports in the built scene.
   if(this.smartSnap===false||!this.objects?.length||typeof BuildSnap==='undefined')return result;
   const cat=category||this.categoryForKind?.(this.placement)||'prop';
   const isSlab=cat==='foundation';
@@ -443,8 +445,7 @@ class WorldBuilder{
      rotation:this.placementRotation||0,snapped:false,
      category:this.placementCategory,manual:true});
    }
-   // Prefer the actual outside edge of a floor. End-to-end wall magnets
-   // must not pull the next side of a building off that outer perimeter.
+   // Existing perimeter alignment is more precise than end-snap for slabs.
    if(typeof BuildOuterEdge!=='undefined'&&this.placement&&this.smartSnap!==false){
     const outer=BuildOuterEdge.resolve(this,p);
     if(outer)return fine(outer);
@@ -472,13 +473,26 @@ class WorldBuilder{
   const v=solved.position;
   this.remember();
   if(this.moveTarget){
-   this.moveTarget.mesh.position.copy(v);this.moveTarget.data.pos=v.toArray();
-   this.moveTarget.mesh.rotation.y=solved.rotation*Math.PI/180;
-   this.moveTarget.data.rot=solved.rotation;
+   const moved=this.moveTarget;
+   // The solve may have matched a support of a different slab thickness
+   // (matchSlab returns thicknessY). The preview ghost is rescaled through
+   // applyAxisScale, so the moved object must be rescaled the same way,
+   // otherwise the placed part stays at its old thickness and sinks into
+   // or floats above the reference slab.
+   this.applyAxisScale(moved.mesh,moved.data.scale||1,moved.data.dimensionScale,solved.thicknessY||moved.data.thicknessY||1);
+   if(solved.thicknessY)moved.data.thicknessY=solved.thicknessY;
+   moved.mesh.position.copy(v);moved.data.pos=v.toArray();
+   moved.mesh.rotation.y=solved.rotation*Math.PI/180;
+   moved.data.rot=solved.rotation;
+   moved.data.storey=this.floorLevel;
    this.moveTarget=null;
    if(this.ghost){this.ghost.removeFromParent();this.ghost=null;}
-   if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline=null;}
-   this.select(null);this.onChanged();return;
+   if(this.placementOutline){
+    this.placementOutline.removeFromParent();
+    this.placementOutline.geometry?.dispose();this.placementOutline.material?.dispose();
+    this.placementOutline=null;
+   }
+   this.select(moved);this.onChanged();return moved;
   }
   const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.placementCategory==='ceiling_finish'?'#ffffff':this.currentPaint;
   const rec=this.instantiate(this.placement,{id:this.nextId++,pos:v.toArray(),rot:solved.rotation,scale:this.placementScale,thicknessY:solved.thicknessY||1,
@@ -499,7 +513,12 @@ class WorldBuilder{
    WallThickness.apply(obj,kind,data.category||this.categoryForKind?.(kind),data.wallThicknessMeters);
   this.scene.add(obj);obj.updateMatrixWorld(true);this.objects.push(entry);this.applyAppearance(entry);this.nextId=Math.max(this.nextId,entry.data.id+1);return entry;
  }
- makeBuiltin(kind){const group=new THREE.Group();let m=new THREE.MeshStandardMaterial({color:'#b7ac91',roughness:.85,side:THREE.DoubleSide}); const add=(geo,x,y,z,mat=m)=>{let mesh=new THREE.Mesh(geo,mat);mesh.position.set(x,y,z);mesh.receiveShadow=true;group.add(mesh);return mesh};
+ makeBuiltin(kind){
+  if(typeof RoofModules!=='undefined'&&RoofModules.kinds.has(kind))
+   return RoofModules.create(kind);
+  if(typeof RoundedModules!=='undefined'&&RoundedModules.kinds.has(kind))
+   return RoundedModules.create(kind);
+  const group=new THREE.Group();let m=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.85,side:THREE.DoubleSide}); const add=(geo,x,y,z,mat=m)=>{let mesh=new THREE.Mesh(geo,mat);mesh.position.set(x,y,z);mesh.receiveShadow=true;group.add(mesh);return mesh};
   if(kind==='floor'||kind==='ceiling')add(new THREE.BoxGeometry(2,.17,2),0,.08,0);
    else if(kind==='ceiling_finish')add(new THREE.BoxGeometry(2,.024,2),0,-.012,0);
   else if(kind==='wall')add(new THREE.BoxGeometry(2,2.6,.22),0,1.3,0);
@@ -525,8 +544,11 @@ class WorldBuilder{
   entry.mesh.traverse(o=>{
    if(!o.isMesh)return;
    if(!this._pwbBaseMaterials.has(o))this._pwbBaseMaterials.set(o,o.material);
-   const old=this._pwbBaseMaterials.get(o);
+   const old=this._pwbBaseMaterials.get(o),previous=o.material;
    o.material=Array.isArray(old)?old.map(m=>m.clone()):old.clone();
+   // Repeated image slider edits must release the previous GPU materials.
+   if(previous!==old)for(const material of(Array.isArray(previous)?previous:[previous]))
+    material?.dispose?.();
    const mats=Array.isArray(o.material)?o.material:[o.material];mats.forEach(m=>{
    // Glass and metal accents in built-ins keep their characteristic surfaces.
    if(m.transparent&&entry.kind==='window')return;
@@ -755,9 +777,23 @@ class WorldBuilder{
  }
  movementBlocked(a,b,footY){
   const d=b.clone().sub(a);d.y=0;const length=d.length();if(length<.0001)return false;
-  const ray=new THREE.Raycaster(new THREE.Vector3(a.x,footY+1.05,a.z),d.normalize(),.02,length+.22);
-  const targets=this.objects.filter(e=>!['floor','stairs','roof','tree'].includes(e.kind)&&!(e.data.door&&e.data.open)).map(e=>e.mesh);
-  return ray.intersectObjects(targets,true).some(hit=>hit.distance<=length+.22);
+  // The previous single eye-height ray let the character clip walls with
+  // its shoulders, cross low obstacles and walk through slim corner seams.
+  // Use capsule-like forward samples at two heights and three lateral
+  // positions without requiring a heavyweight physics engine on Android.
+  const dir=d.clone().normalize(),side=new THREE.Vector3(-dir.z,0,dir.x);
+  const radius=.23;
+  const targets=this.objects.filter(e=>{
+   const cat=e.data?.category||this.categoryForKind?.(e.kind)||e.kind;
+   return !['floor','foundation','ceiling','stairs','roof','tree','foliage','ceiling_finish'].includes(cat)
+    &&!(e.data.door&&e.data.open);
+  }).map(e=>e.mesh);
+  for(const h of [.42,1.06,1.58])for(const lateral of [-radius,0,radius]){
+   const origin=new THREE.Vector3(a.x,footY+h,a.z).addScaledVector(side,lateral);
+   const ray=new THREE.Raycaster(origin,dir,.015,length+radius);
+   if(ray.intersectObjects(targets,true).some(hit=>hit.distance<=length+radius))return true;
+  }
+  return false;
  }
 
  // Build a standardized one-piece form from a selected/imported GLB.
@@ -867,19 +903,45 @@ class WorldBuilder{
  }
  snapshot(){const pos=this.terrain.geometry.attributes.position,col=this.terrain.geometry.attributes.color;let heights=[];for(let i=0;i<pos.count;i++)heights.push(Math.round(pos.getZ(i)*1000)/1000);return {version:1,size:128,heights,colors:Array.from(col.array).map(x=>Math.round(x*1000)/1000),construction:{storeyHeight:this.storeyHeight||2.6,floorLevel:this.floorLevel||0,smartSnap:this.smartSnap!==false,autoThickness:this.autoThickness!==false},objects:this.objects.map(e=>({kind:e.kind,...JSON.parse(JSON.stringify(e.data))})),updated:new Date().toISOString()};}
  async restore(s){
-   if(!s||!Array.isArray(s.objects)||!Array.isArray(s.heights))throw Error('Неверный формат проекта');
-   const cfg=s.construction||{};
-   this.storeyHeight=THREE.MathUtils.clamp(Number(cfg.storeyHeight)||2.6,1.8,6);
-   this.floorLevel=Number.isSafeInteger(Number(cfg.floorLevel))&&Number(cfg.floorLevel)>=0?Number(cfg.floorLevel):0;
-   this.smartSnap=cfg.smartSnap!==false;this.autoThickness=cfg.autoThickness!==false;this.joinMode='auto';
-   this.objects.forEach(e=>e.mesh.removeFromParent());this.objects=[];this.select(null);this.nextId=1;
+  if(!s||!Array.isArray(s.objects)||!Array.isArray(s.heights))
+   throw Error('Неверный формат проекта');
+  // Assemble into a staging scene. A missing/corrupted GLB must NOT result in
+  // an apparently successful load followed by a save of a truncated building.
+  const previous=this.objects,previousNextId=this.nextId,previousSelection=this.selected;
+  this.objects=[];this.nextId=1;
+  try{
+   for(const e of s.objects){
+    if(!e||!e.kind||!Array.isArray(e.pos)||e.pos.length!==3||
+       !e.pos.every(Number.isFinite))
+     throw Error('Некорректный объект в сохранении: '+String(e?.kind||'?'));
+    this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,
+     thicknessY:e.thicknessY||1,dimensionScale:e.dimensionScale,
+     wallThicknessMeters:e.wallThicknessMeters,moduleShape:e.moduleShape,moduleUse:e.moduleUse,
+     category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},
+     decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,
+     texture:e.texture,door:e.door,open:e.open});
+   }
+  }catch(error){
+   for(const item of this.objects)item.mesh.removeFromParent();
+   this.objects=previous;this.nextId=previousNextId;
+   this.select(previousSelection);
+   throw Error('Проект не заменён: '+error.message);
+  }
+  const staged=this.objects;
+  for(const item of previous)item.mesh.removeFromParent();
+  this.objects=staged;this.select(null);
+  const cfg=s.construction||{};
+  this.storeyHeight=THREE.MathUtils.clamp(Number(cfg.storeyHeight)||2.6,1.8,6);
+  this.floorLevel=Number.isSafeInteger(Number(cfg.floorLevel))&&Number(cfg.floorLevel)>=0?Number(cfg.floorLevel):0;
+  this.smartSnap=cfg.smartSnap!==false;this.autoThickness=cfg.autoThickness!==false;this.joinMode='auto';
   const pos=this.terrain.geometry.attributes.position,col=this.terrain.geometry.attributes.color;
-  for(let i=0;i<Math.min(pos.count,s.heights.length);i++)pos.setZ(i,s.heights[i]);if(s.colors&&s.colors.length===col.array.length)col.array.set(s.colors);
-  pos.needsUpdate=true;col.needsUpdate=true;this.terrain.geometry.computeVertexNormals();this.terrain.geometry.computeBoundingBox();this.terrain.geometry.computeBoundingSphere();
-  for(const e of s.objects){if(this.makeBuiltin(e.kind)||this.assetCache.has(e.kind)){try{this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,thicknessY:e.thicknessY||1,dimensionScale:e.dimensionScale,
-   wallThicknessMeters:e.wallThicknessMeters,moduleShape:e.moduleShape,moduleUse:e.moduleUse,
-   category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,texture:e.texture,door:e.door,open:e.open})}catch(err){console.warn(err)}}}
-  this.onChanged();}
+  for(let i=0;i<Math.min(pos.count,s.heights.length);i++)pos.setZ(i,s.heights[i]);
+  if(s.colors&&s.colors.length===col.array.length)col.array.set(s.colors);
+  pos.needsUpdate=true;col.needsUpdate=true;
+  this.terrain.geometry.computeVertexNormals();
+  this.terrain.geometry.computeBoundingBox();this.terrain.geometry.computeBoundingSphere();
+  this.onChanged();
+ }
  updateCamera(){if(this.mode==='walk'||(this.mode==='playbuild'&&!this.droneMode)){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));this.target.copy(this.player.position).add(new THREE.Vector3(0,1.15,0));const range=THREE.MathUtils.clamp(this.distance,2.7,9);this.camera.position.copy(this.target).addScaledVector(forward,-Math.cos(this.pitch)*range).add(new THREE.Vector3(0,Math.sin(this.pitch)*range,0));}
   else{this.camera.position.set(this.target.x+Math.sin(this.yaw)*Math.cos(this.pitch)*this.distance,this.target.y+Math.sin(this.pitch)*this.distance,this.target.z+Math.cos(this.yaw)*Math.cos(this.pitch)*this.distance);}this.camera.lookAt(this.target);}
  updatePlayer(dt){

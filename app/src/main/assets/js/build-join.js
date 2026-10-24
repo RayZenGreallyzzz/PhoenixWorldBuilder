@@ -13,6 +13,24 @@ const BuildJoin=(()=>{
  const angle=(a,b)=>Math.atan2(-(b.z-a.z),b.x-a.x);
  const rotate=(v,yaw)=>new THREE.Vector3(v.x*Math.cos(yaw)+v.z*Math.sin(yaw),0,-v.x*Math.sin(yaw)+v.z*Math.cos(yaw));
  const cornerCache=new WeakMap();
+ // Original BuildSnap has no geometrySignature() API; track local mesh revisions
+ // so a manually resized corner doesn't reuse stale sockets.
+ function geometrySignature(root){
+  root.updateWorldMatrix(true,true);
+  const result=[];
+  root.traverse(o=>{
+   if(!o.isMesh||!o.geometry)return;
+   const pos=o.geometry.attributes?.position;
+   if(!pos)return;
+   if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();
+   const b=o.geometry.boundingBox;
+   result.push(o.geometry.uuid,pos.version,pos.count,
+    b.min.toArray().map(v=>v.toFixed(4)).join(','),
+    b.max.toArray().map(v=>v.toFixed(4)).join(','),
+    o.matrix.elements.map(v=>v.toFixed(4)).join(','));
+  });
+  return result.join('|');
+ }
  // Some GLBs merge both L arms into ONE geometry. Infer only unmistakable
  // thin exposed end caps from the mesh silhouette, not the outer AABB.
  function mergedCornerArms(root){
@@ -74,7 +92,9 @@ const BuildJoin=(()=>{
     tip:new THREE.Vector3(...s.point),pivot:new THREE.Vector3(0,0,0)
    }));
   }
-  if(cornerCache.has(root))return cornerCache.get(root)||null;
+  const signature=geometrySignature(root);
+  const cached=cornerCache.get(root);
+  if(cached&&cached.signature===signature)return cached.arms;
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert(),transform=new THREE.Matrix4();
   const arms=[],box=new THREE.Box3();
@@ -104,7 +124,7 @@ const BuildJoin=(()=>{
   }
   if(!best){
    const joined=mergedCornerArms(root);
-   cornerCache.set(root,joined||false);
+   cornerCache.set(root,{signature,arms:joined||null});
    return joined;
   }
   const {x,z,ix,iz}=best;
@@ -116,9 +136,9 @@ const BuildJoin=(()=>{
    {name:'corner-z',tip:new THREE.Vector3(ix,minY,zEnd),pivot:new THREE.Vector3(ix,minY,iz)}
   ];
   if(local.some(a=>distXZ(a.tip,a.pivot)<.35)){
-   cornerCache.set(root,false);return null;
+   cornerCache.set(root,{signature,arms:null});return null;
   }
-  cornerCache.set(root,local);
+  cornerCache.set(root,{signature,arms:local});
   return local;
  }
  function cornerSegments(root,kind,category){
@@ -166,7 +186,14 @@ const BuildJoin=(()=>{
    const lines=info.segments||[info];
    const projections=lines.map(line=>({line,...nearest(line.a,line.c,p)}));
    projections.sort((a,b)=>distXZ(p,a.point)-distXZ(p,b.point));
-   const closest=projections[0],d=distXZ(p,closest.point);
+   const closest=projections[0];
+   // For a curved wall the AABB centreline is not a physical wall surface.
+   // Prefer the actual two tangent sockets when choosing nearby candidates.
+   const sockets=typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind,root)?
+    BuildCurves.sourceSockets(info):[];
+   const socketDistance=sockets.length?
+    Math.min(...sockets.map(slot=>distXZ(p,slot.point))):Infinity;
+   const d=Math.min(distXZ(p,closest.point),socketDistance);
    if(d>reach)continue;
    possible.push({...info,projected:{point:closest.point,t:closest.t},
     bestSegment:closest.line,d});
@@ -221,6 +248,28 @@ const BuildJoin=(()=>{
      }
    }
   }
+  // A corner arm lying ON TOP of an existing wall duplicates built geometry
+  // instead of continuing it. Reject arm placements whose pivot->tip segment
+  // runs parallel to a nearby wall within half a wall thickness. Without this
+  // filter the closest-to-cursor variant could cover a whole 2m wall panel.
+  const pointSegDistXZ=(pt,a,b)=>{
+   const near=nearest(a,b,pt).point;return distXZ(pt,near);
+  };
+  const armOverlapsWall=(from,to,excludeId)=>{
+   for(const other of candidates){
+    if(other.entry?.data?.id===excludeId)continue;
+    for(const line of (other.segments||[other])){
+     const u=line.c.clone().sub(line.a).setY(0),v=to.clone().sub(from).setY(0);
+     const lu=u.length(),lv=v.length();
+     if(lu<1e-4||lv<1e-4)continue;
+     u.divideScalar(lu);v.divideScalar(lv);
+     if(abs(u.x*v.x+u.z*v.z)<.7)continue;
+     if(pointSegDistXZ(from,line.a,line.c)<.3||
+        pointSegDistXZ(to,line.a,line.c)<.3)return true;
+    }
+   }
+   return false;
+  };
   // For a NEW L-shaped module on the end of one existing wall, attach
   // the CORNER ARM TIP, not the L's middle pivot. Placing the pivot at the
   // old wall endpoint made the corner overlap up to 1.9m of the wall.
@@ -243,11 +292,13 @@ const BuildJoin=(()=>{
        const rotatedTip=rotate(new THREE.Vector3(arm.tip.x*ax,0,arm.tip.z*az),yaw).multiplyScalar(scale);
        const at=new THREE.Vector3(target.x-rotatedTip.x,
         wall.bottom-arm.tip.y*ay*scale+(w.placementLift||0),target.z-rotatedTip.z);
-       const center=at.clone().add(rotate(new THREE.Vector3(cx,0,cz),yaw).multiplyScalar(scale));
+       const center=at.clone().add(rotate(new THREE.Vector3(cx*ax,0,cz*az),yaw).multiplyScalar(scale));
        const distance=distXZ(p,center);
        if(distance>4.5)continue;
        // Manual 90° turns choose among physically valid corner arms without
        // breaking their actual cap-to-cap alignment.
+       // Never choose an arm that would duplicate an already built wall.
+       if(armOverlapsWall(at,target,wall.entry?.data?.id))continue;
        const turn=Math.atan2(Math.sin(yaw-(w.placementRotation||0)*Math.PI/180),
         Math.cos(yaw-(w.placementRotation||0)*Math.PI/180));
        const score=distance+abs(turn)*.025;
