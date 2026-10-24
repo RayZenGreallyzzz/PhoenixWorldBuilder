@@ -2,19 +2,38 @@
 const BuildSnap=(()=>{
  const clamp=THREE.MathUtils.clamp;
  const boundsCache=new WeakMap();
+ // A root can keep the exact same transform while a building edit replaces
+ // the vertices/geometry. Cache the geometry revision and child transforms,
+ // not just the root reference, or snapping uses pre-edit dimensions.
+ const geometryRevision=root=>{
+  const result=[];
+  root.traverse(obj=>{
+   const geo=obj.geometry,pos=geo?.attributes?.position;
+   if(!obj.isMesh||!pos)return;
+   result.push(geo.uuid,pos.version,pos.count);
+   result.push(...obj.matrix.elements);
+  });
+  return result;
+ };
+ const geometrySignature=root=>geometryRevision(root).join('|');
  const structural=(cat)=>cat==='foundation'||cat==='ceiling';
  const edgable=(cat,kind)=>{
   if(['wall','door','stairs','railing'].includes(cat))return true;
   return /(?:rail|railing|fence|balustrade|перил|огражд|забор)/i.test(String(kind));
  };
  const attrBounds=(root)=>{
-  if(boundsCache.has(root))return boundsCache.get(root).clone();
   root.updateWorldMatrix(true,true);
+  const signature=geometrySignature(root);
+  const cached=boundsCache.get(root);
+  if(cached&&cached.signature===signature)return cached.box.clone();
   const inv=root.matrixWorld.clone().invert();
   const result=new THREE.Box3().makeEmpty(),m=new THREE.Matrix4(),p=new THREE.Vector3();
   root.traverse(obj=>{
    if(!obj.isMesh||!obj.geometry?.attributes?.position)return;
-   const geo=obj.geometry;if(!geo.boundingBox)geo.computeBoundingBox();
+   const geo=obj.geometry;
+   // A position buffer may have changed without replacing the geometry.
+   // A stale geometry.boundingBox must not survive such an edit.
+   geo.computeBoundingBox();
    if(!geo.boundingBox)return;
    m.multiplyMatrices(inv,obj.matrixWorld);
    const b=geo.boundingBox;
@@ -22,7 +41,7 @@ const BuildSnap=(()=>{
     p.set(x,y,z).applyMatrix4(m);result.expandByPoint(p);
    }
   });
-  if(!result.isEmpty())boundsCache.set(root,result.clone());
+  if(!result.isEmpty())boundsCache.set(root,{signature,box:result.clone()});
   return result;
  };
  // Resolve with physical per-axis dimensions without modifying the imported
@@ -355,6 +374,6 @@ const BuildSnap=(()=>{
   const degrees=((yaw*180/Math.PI)%360+360)%360;
   return lifted({position:anchor,rotation:degrees,snapped:true,edge:aligned,reference:chosen.entry.data.id,category:cat});
  }
- return {resolve,attrBounds,nearestEdge,matchSlab,dimensionBounds,roofSection};
+ return {resolve,attrBounds,nearestEdge,matchSlab,dimensionBounds,roofSection,geometrySignature};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildSnap;
