@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/legacy-shape-from-own-glb, fix/phoenix-builder-precise-snap-20261024, test/chinese-snap-patch-20261024, fix/snap-code-audit-20261024]
+    branches: [main, feature/legacy-shape-from-own-glb, fix/phoenix-builder-precise-snap-20261024, test/chinese-snap-patch-20261024, fix/snap-code-audit-20261024, fix/rounded-corner-auto-fit-20261024]
   pull_request:
     branches: [main]
 
@@ -87,6 +87,7 @@ jobs:
           node tests/test-android-branding.cjs
           node tests/test-chinese-snap-integration.cjs
           node tests/test-geometry-cache-refresh.cjs
+          node tests/test-rounded-corner-auto-fit.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4
