@@ -62,13 +62,6 @@ function testFloor(rotation,storey,axes){
   w.cornerOffsetX=.2;w.cornerOffsetZ=-.2; // Must not pollute an automatic rounded magnet.
   const at=V(sx*.83,b.max.y,sz*.83).applyMatrix4(fl.mesh.matrixWorld);
   const sol=w.solvePlacement(at);
-  if(!sol?.roundedOnFloor)console.log('DEBUG ROUND',{
-   corner:[sx,sz],rotation,storey,axes,
-   kind,wKind:w.placement,isArc:BuildCurves.isArc(w.placement,w.ghost),
-   sockets:BuildCurves.incomingSockets(w,BuildSnap.attrBounds(w.ghost))?.map(s=>({p:s.point.toArray(),o:s.out.toArray()})),
-   hull:BuildRoundedSnap.hull(w.ghost).length,raw:BuildRoundedSnap.resolve(w,at),
-   computed:sol?.joinedTo,position:sol?.position?.toArray()
-  });
   assert(sol?.roundedOnFloor,'Round corner must fit floor without a wall, rotated '+rotation+' storey '+storey);
   assert.equal(sol.reference,1);
   w.applyGhostPlacement(at);
@@ -89,7 +82,7 @@ function testFloor(rotation,storey,axes){
  }
 }
 for(const rotation of [0,37,90])for(const storey of [0,1])
- for(const axes of [[1,1],[1.3,.7]])testFloor(rotation,storey,axes);
+ for(const axes of [[1,1],[1.25,1.25]])testFloor(rotation,storey,axes);
 {
  const w=fresh();const arc=w.assetCache.get(kind);
  const slots=BuildCurves.localSockets(arc,kind);
@@ -115,6 +108,16 @@ for(const rotation of [0,37,90])for(const storey of [0,1])
   assert(placed.some(s=>distance(s.point,target.point)<.025&&s.out.dot(target.out)<-.99),
    'Both end caps must meet exactly without overlapping or arbitrary offsets');
  }
+}
+// An ellipse obtained by scaling X and Z differently no longer has 90° cap
+// tangents. Do not falsely claim a perfect right-angle wall connection.
+{
+ const w=fresh();
+ w.instantiate('floor',{id:9,pos:[0,0,0],rot:0,scale:1,category:'foundation',storey:0});
+ w.setPlacement(kind,'wall');
+ w.placementAxes={x:1.3,y:1,z:.7};w.applyAxisScale(w.ghost,1,w.placementAxes);
+ assert.equal(BuildRoundedSnap.resolve(w,V(.8,.17,.8)),null,
+  'Elliptical arc must not promise two perpendicular joints');
 }
 {
  const w=fresh(),other='glb:arcs/arc_r1_5_180deg.glb';
