@@ -8,7 +8,7 @@ global.BuildCurves=require(path.join(src,'build-curves.js'));
 global.BuildOuterEdge=require(path.join(src,'build-outer-edge.js'));
 global.BuildPlacementValidator=require(path.join(src,'build-placement.js'));
 vm.runInThisContext(fs.readFileSync(path.join(src,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
-assert.equal(typeof BuildSnap.geometrySignature,'undefined','Test real BuildSnap without nonexistent API');
+assert.equal(typeof BuildSnap.geometrySignature,'function','Snap bounds expose the geometry revision required for cache invalidation');
 const corner=new THREE.Group();
 const armX=new THREE.Mesh(new THREE.BoxGeometry(2,2.6,.2),new THREE.MeshStandardMaterial());
 armX.position.set(-1,1.3,0);
