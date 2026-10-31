@@ -383,6 +383,10 @@ const BuildJoin=(()=>{
   const half=(box.max[main]-box.min[main])*scale/2;
   let best=null;
   for(const old of candidates){
+   // A horizontal wall-end joint is valid only on the same physical base
+   // plane as the pointed contact. Otherwise a lower-storey end can hijack
+   // a wall that should sit on a higher floor/ceiling.
+   if(Number.isFinite(p.y)&&abs(old.bottom-p.y)>.75)continue;
 
    for(const line of (old.segments||[old])){
    const baseline=angle(line.a,line.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
