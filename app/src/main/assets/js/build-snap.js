@@ -104,54 +104,51 @@ const BuildSnap=(()=>{
  };
  const storyOf=(entry)=>Number.isInteger(entry.data?.storey)?entry.data.storey:null;
  function resolveOverhead(w,p,cat,model,modelBox){
-  // Roofs span walls; the cursor can be many metres from every bearing wall.
-  // Detect all supports intersecting the intended roof footprint, not just
-  // those within the old 1.5m radius of the character/cursor.
-  const storyHeight=w.storeyHeight||2.6,nominal=w.heightAt(p.x,p.z)+w.floorLevel*storyHeight;
+  // Geometry-first vertical placement: ceiling/roof height comes only from
+  // the transformed physical top of existing supports. No storey × height math.
   const roof=cat==='roof',scale=w.placementScale||1;
   const extentX=modelBox?.isEmpty()?1:(modelBox.max.x-modelBox.min.x)*scale/2;
   const extentZ=modelBox?.isEmpty()?1:(modelBox.max.z-modelBox.min.z)*scale/2;
   const radius=roof?Math.min(22,Math.max(2.4,Math.hypot(extentX,extentZ)+1.2)):3.5;
-  const validStorey=entry=>{
-   const story=storyOf(entry);
-   return story===null||story===w.floorLevel;
-  };
   const nearby=(s,margin=radius)=>areaDistance(s,p)<=margin;
   const foundations=[],walls=[],ceilings=[];
   for(const entry of w.objects||[]){
-   if(entry===w.moveTarget||!validStorey(entry))continue;
+   if(entry===w.moveTarget)continue;
    const typ=kindOf(w,entry);
-   if(!['foundation','wall','corner','door','ceiling'].includes(typ))continue;
+   if(!['foundation','wall','corner','door','railing','ceiling'].includes(typ))continue;
    const s=surface(entry);if(!s||!nearby(s,typ==='foundation'?radius+1:radius))continue;
-   if(storyOf(entry)===null&&Math.abs(s.bottom-nominal)>Math.max(1.8,storyHeight*.65)&&
-    Math.abs(s.top-nominal)>Math.max(1.8,storyHeight*.65))continue;
    if(typ==='foundation')foundations.push(s);
    else if(typ==='ceiling')ceilings.push(s);
    else walls.push(s);
   }
-  const orderedBase=foundations.map(s=>({s,d:areaDistance(s,p),
-   delta:Math.abs(s.top-nominal)})).sort((a,b)=>a.d-b.d+a.delta*.1-b.delta*.1);
-  const base=orderedBase[0]?.s||null;
-  const baseY=base?.top??(walls.length?Math.min(...walls.map(s=>s.bottom)):nominal);
-  const validWalls=walls.filter(s=>s.top>baseY+.35&&
-   Math.abs(s.bottom-baseY)<Math.max(.4,storyHeight*.25));
-  const validCeilings=ceilings.filter(s=>s.top>=baseY-.1&&s.top<=baseY+Math.max(9,storyHeight*2));
-  if(!base&&!validWalls.length&&!validCeilings.length)return null;
-  // Prefer the highest compatible top, preserving real GLB heights instead of
-  // placing a roof at the nominal building level with a visible gap.
-  let target=baseY+storyHeight;
-  if(validWalls.length)target=Math.max(...validWalls.map(s=>s.top));
-  if(roof&&validCeilings.length)target=Math.max(target,...validCeilings.map(s=>s.top));
-  if(!validWalls.length&&validCeilings.length)target=Math.max(...validCeilings.map(s=>s.top));
-  if(!validWalls.length&&!validCeilings.length&&!base)return null;
+  if(!foundations.length&&!walls.length&&!ceilings.length)return null;
+  const cy=Number.isFinite(p.y)?p.y:null;
+  const chooseWallBand=list=>{
+   if(!list.length)return [];
+   if(roof)return list.filter(s=>s.top>=Math.max(...list.map(x=>x.top))-.18);
+   if(cy===null)return list;
+   const delta=Math.min(...list.map(s=>Math.abs(s.bottom-cy)));
+   return list.filter(s=>Math.abs(s.bottom-cy)<=delta+.22);
+  };
+  const chooseSurfaceBand=list=>{
+   if(!list.length)return [];
+   if(roof)return list.filter(s=>s.top>=Math.max(...list.map(x=>x.top))-.12);
+   if(cy===null)return list;
+   const delta=Math.min(...list.map(s=>Math.abs(s.top-cy)));
+   return list.filter(s=>Math.abs(s.top-cy)<=delta+.16);
+  };
+  let support=[];
+  if(roof&&ceilings.length)support=chooseSurfaceBand(ceilings);
+  else if(walls.length)support=chooseWallBand(walls);
+  else if(ceilings.length)support=chooseSurfaceBand(ceilings);
+  else support=chooseSurfaceBand(foundations);
+  if(!support.length)return null;
+  const target=Math.max(...support.map(s=>s.top));
   let x=p.x,z=p.z;
-  const support=validCeilings.length&&roof?validCeilings:validWalls.length?validWalls:base?[base]:[];
+  const base=foundations.length?chooseSurfaceBand(foundations)[0]||foundations[0]:null;
   if(w.centerOverhead&&base){
-   // Preserve the user's explicit "center above the chosen floor" option.
-   // On custom rotated GLB decks this is more stable than averaging walls.
    const center=worldCenter(base);x=center.x;z=center.z;
   }else if(w.centerOverhead&&support.length){
-   // Without a floor, center between the load-bearing walls of the room.
    const centers=support.map(s=>worldCenter(s));
    x=(Math.min(...centers.map(s=>s.x))+Math.max(...centers.map(s=>s.x)))/2;
    z=(Math.min(...centers.map(s=>s.z))+Math.max(...centers.map(s=>s.z)))/2;
@@ -164,38 +161,34 @@ const BuildSnap=(()=>{
    const middle=new THREE.Vector3((modelBox.min.x+modelBox.max.x)/2,0,
     (modelBox.min.z+modelBox.max.z)/2);
    const shift=rotated(middle,yaw).multiplyScalar(scale);
-   anchor.x-=shift.x;anchor.z-=shift.z;anchor.y-=modelBox.min.y*scale;
-  }
+   anchor.x-=shift.x;anchor.z-=shift.z;
+   anchor.y=(typeof BuildCore!=='undefined'?
+    BuildCore.contactPivotY(modelBox.min.y,target,scale,w.placementLift||0):
+    target-modelBox.min.y*scale+(w.placementLift||0));
+  }else anchor.y+=(w.placementLift||0);
   return {position:anchor,rotation:((yaw*180/Math.PI)%360+360)%360,
    snapped:true,overhead:true,edge:false,
-   reference:base?.entry.data.id||support[0]?.entry.data.id,
-   targetHeight:target,category:cat,supportCount:support.length};
+   reference:support[0]?.entry.data.id,targetHeight:target,category:cat,
+   supportCount:support.length,physicalContact:true};
  }
  function matchSlab(w,p,cat,model,box){
   // Floors share a top plane and, optionally, thickness without scaling X or Z.
   // 3D cut-corner geometry is kept intact: only the parent group's Y scale changes.
   if(cat!=='foundation'||!model||box.isEmpty())return null;
-  const baseLevel=w.floorLevel||0;
   const sourceThickness=box.max.y-box.min.y;
   const scale=w.placementScale||1;
   if(!Number.isFinite(sourceThickness)||sourceThickness<.012)return null;
   const possible=[];
   for(const entry of w.objects){
    if(kindOf(w,entry)!=='foundation')continue;
-   const tagged=storyOf(entry);
-   if(tagged!==null&&tagged!==baseLevel)continue;
    const ref=surface(entry);if(!ref)continue;
    const physicalThickness=ref.top-ref.bottom;
    if(!Number.isFinite(physicalThickness)||physicalThickness<.025||physicalThickness>1.5)continue;
    const edge=nearestEdge(ref,p),distance=edge.distance;
    if(distance>Math.max(3.5,Math.min(6,Math.max(box.max.x-box.min.x,box.max.z-box.min.z)*scale)))continue;
-   const nominal=w.heightAt(p.x,p.z)+baseLevel*(w.storeyHeight||2.6);
-   // Reject different floors in tall buildings, but accept raised non-standard decks.
-   const playerTop=w.mode==='playbuild'&&w.player?w.player.position.y-.85:nominal;
-   const delta=Math.min(Math.abs(ref.top-nominal),Math.abs(ref.top-playerTop));
-   if(tagged===null&&delta>3.4)continue;
+   const vertical=Number.isFinite(p.y)?Math.abs(ref.top-p.y):0;
    possible.push({ref,edge,distance,thickness:physicalThickness,
-    score:distance+(tagged===baseLevel?-2:0)+delta*.1});
+    score:distance+vertical*.8});
   }
   possible.sort((a,b)=>a.score-b.score);
   if(!possible.length)return null;
@@ -247,7 +240,6 @@ const BuildSnap=(()=>{
   const possible=[];
   for(const old of w.objects||[]){
    if(old.kind!==w.placement||old===w.moveTarget)continue;
-   if(storyOf(old)!==null&&storyOf(old)!==w.floorLevel)continue;
    const oldCategory=kindOf(w,old);if(oldCategory!=='roof')continue;
    const base=attrBounds(old.mesh);if(base.isEmpty())continue;
    const oldScale=old.data.scale||1;
@@ -280,7 +272,8 @@ const BuildSnap=(()=>{
   function resolve(w,p){
   const kind=w.placement||'',cat=w.placementCategory||w.categoryForKind?.(kind)||'prop';
   const aligned=edgable(cat,kind),useSnap=w.smartSnap!==false;
-  const raw=new THREE.Vector3(Math.round(p.x/w.snap)*w.snap,w.placementHeight(p.x,p.z),Math.round(p.z/w.snap)*w.snap);
+  const rawY=Number.isFinite(p.y)?p.y:w.heightAt(p.x,p.z);
+  const raw=new THREE.Vector3(Math.round(p.x/w.snap)*w.snap,rawY,Math.round(p.z/w.snap)*w.snap);
   const basic={position:raw,rotation:w.placementRotation||0,snapped:false,edge:false,reference:null,category:cat};
   const model=w.ghost||w.makeBuiltin(kind)||w.assetCache?.get(kind);
   const modelBox=model?dimensionBounds(attrBounds(model),w):new THREE.Box3().makeEmpty();
@@ -310,28 +303,22 @@ const BuildSnap=(()=>{
    return lifted(basic);
   }
   if(!useSnap||!w.objects.length)return lifted(basic);
-  // A floor is chosen from actual transformed geometry, not the global 2 m grid.
-  const refY=w.floorLevel>0?w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):
-   w.mode==='playbuild'&&w.player?.visible!==false?w.player.position.y-.85:p.y;
+  // Support is selected by the actual pointed physical surface, never by a
+  // floor number. This lets 12 cm floors, 40 cm slabs, 1.9 m or 4.1 m walls
+  // chain naturally: every new bottom touches the previous real top.
   const support=[];
   for(const entry of w.objects){
    const entryCat=entry.data.category||w.categoryForKind?.(entry.kind)||entry.kind;
    if(!structural(entryCat))continue;
-   // Existing slabs on other levels must not hijack the placement preview.
-   if(storyOf(entry)!==null&&storyOf(entry)!==w.floorLevel &&
-     !(entryCat==='ceiling'&&storyOf(entry)===w.floorLevel-1))continue;
    const s=surface(entry);if(!s)continue;
-   const delta=Math.abs(s.top-refY);
-   // Do not snap the ground floor to a completely different storey.
-   if(delta>3.8&&storyOf(entry)!==w.floorLevel&&
-    !(entryCat==='ceiling'&&storyOf(entry)===w.floorLevel-1))continue;
-   const local=p.clone().applyMatrix4(s.inv),b=s.box;
-   const inside=local.x>=b.min.x-.2&&local.x<=b.max.x+.2&&local.z>=b.min.z-.2&&local.z<=b.max.z+.2;
+   const local=p.clone().applyMatrix4(s.inv),bb=s.box;
+   const inside=local.x>=bb.min.x-.2&&local.x<=bb.max.x+.2&&
+    local.z>=bb.min.z-.2&&local.z<=bb.max.z+.2;
    const edge=nearestEdge(s,p);
    const eligible=aligned?edge.distance<=3.5:inside;
    if(!eligible)continue;
-   const grade=(aligned?edge.distance:Math.abs(s.top-p.y)*.06)+delta*.3-
-    (storyOf(entry)===w.floorLevel?10:0);
+   const vertical=Number.isFinite(p.y)?Math.abs(s.top-p.y):0;
+   const grade=(aligned?edge.distance:0)+vertical*.8;
    support.push({entry,s,edge,grade});
   }
   support.sort((a,b)=>a.grade-b.grade);
