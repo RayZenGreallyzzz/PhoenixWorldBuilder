@@ -43,17 +43,16 @@ function outgoingTip(line){return line.a.clone().add(line.a.clone().sub(line.c).
  const moved=BuildSnap.attrBounds(root);
  assert(moved.max.x>longer.max.x+1.4,'Moving a GLB child invalidates snap bounds');
 }
-// Automatic mode follows measured walls; manual mode respects the configured height.
+// Selecting a project layer must never manufacture a vertical support.
 {
  const w=fresh();
  w.instantiate('wall',{id:84,pos:[0,0,0],rot:0,scale:1,category:'wall',storey:0});
- w.smartSnap=true;w.storeyHeight=3;
- w.floorLevel=1;
- const level=w.floorDatumAt(0,0,'wall');
- nearly(level.height,2.6,'Magnetic floor datum must use measured wall height');
+ w.smartSnap=true;w.storeyHeight=3;w.floorLevel=1;
+ nearly(w.floorDatumAt(0,0,'wall').height,0,
+  'A bare wall top is not a virtual floor datum; stacking uses physical wall-top snapping');
  w.smartSnap=false;
- nearly(w.floorDatumAt(0,0,'wall').height,3,
-  'Manual placement must respect the configured 3m storey height');
+ nearly(w.floorDatumAt(0,0,'wall').height,0,
+  'Manual placement also ignores configured storey height');
 }
 // Moving an object must update the floor index and report success.
 {
