@@ -1,5 +1,5 @@
 // Regression: do not place a new straight or curved wall on an already
-// occupied, collinear physical socket. Preserve legal 90-degree connections.
+// occupied physical end socket. T-junctions need a dedicated side socket.
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const base=path.join(__dirname,'../app/src/main/assets/js');
@@ -33,10 +33,10 @@ assert(aEnd.point.distanceTo(bStart.point)<.00001,'The two wall end sockets meet
 assert(aEnd.out.dot(bStart.out)<-.999,'Existing connected ends point in opposite directions');
 assert(BuildJoin.socketDirectionOccupied(infos,infoA,aEnd.point,bStart.out),
  'Do not allow a third wall with identical outgoing orientation on a consumed endpoint');
-assert(!BuildJoin.socketDirectionOccupied(infos,infoA,aEnd.point,new THREE.Vector3(0,0,1)),
- 'Perpendicular third wall at a corner is allowed');
-assert(!BuildJoin.socketDirectionOccupied(infos,infoA,aEnd.point,aEnd.out),
- 'Reverse-facing end is not the same as overlapping an existing outgoing segment');
+assert(BuildJoin.socketDirectionOccupied(infos,infoA,aEnd.point,new THREE.Vector3(0,0,1)),
+ 'Consumed end socket stays occupied even for a perpendicular third wall');
+assert(BuildJoin.socketDirectionOccupied(infos,infoA,aEnd.point,aEnd.out),
+ 'Consumed end socket cannot be reused from the reverse direction either');
 assert(!BuildJoin.socketDirectionOccupied(infos,infoA,new THREE.Vector3(-1,0,0),
  new THREE.Vector3(-1,0,0)),'An unused end is still available');
 const upper=w.instantiate('wall',{id:3,pos:[2,2.6,0],rot:0,scale:1,category:'wall',storey:1});
@@ -74,4 +74,4 @@ assert(joinText.includes('socketDirectionOccupied(occupancyCandidates,old,join')
  'Straight wall placement must use occupancy guard');
 assert(curveText.includes('BuildJoin.socketDirectionOccupied?.(candidates,info,target.point,newOut)'),
  'Curved wall placement must use occupancy guard');
-console.log('Occupied straight/curved socket guard; legal perpendicular join; floors; offset pivot OK');
+console.log('Exclusive occupied straight/curved end sockets; floor isolation; offset pivot OK');
