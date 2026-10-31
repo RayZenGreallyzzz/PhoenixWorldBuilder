@@ -1,8 +1,10 @@
 const assert=require('node:assert/strict'),fs=require('fs'),path=require('path'),vm=require('vm');
 const root=path.join(__dirname,'../app/src/main/assets/js');
 const THREE=global.THREE=require(path.join(root,'three.min.js'));
+global.BuildCore=require(path.join(root,'build-core.js'));
 global.BuildSnap=require(path.join(root,'build-snap.js'));
 global.BuildJoin=require(path.join(root,'build-join.js'));
+global.BuildCurves=require(path.join(root,'build-curves.js'));
 global.BuildPlacementValidator=require(path.join(root,'build-placement.js'));
 vm.runInThisContext(fs.readFileSync(path.join(root,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
 function fresh(){
@@ -31,14 +33,19 @@ assert(Math.abs(result.position.x-2)<.02,'New wall center must connect exactly t
 let top=w.placeAt(p(2,0,0));assert(top,'Straight joint must be placeable despite overlap policy');
 const origInfo=BuildJoin.wallInfo(w,base),newInfo=BuildJoin.wallInfo(w,top);
 assert(Math.min(near(origInfo.c,newInfo.a),near(origInfo.c,newInfo.c))<.0001,'Wall world endpoints meet without gap');
-w.setPlacement('wall','wall'); // prevents copied fine offset
-result=w.solvePlacement(p(1,0,-1));
-assert(result.wallEnd&&result.wallCorner,'Placing new panel perpendicular chooses 90 degree end joint');
-assert(Math.abs(result.position.z+1)<.06,'Perpendicular wall ends at corner');
-const cornerPiece=w.placeAt(p(1,0,-1));
+// Turn from the FREE far end of the second wall. The shared socket between
+// the first two walls is already consumed and cannot be reused as a T-junction.
+const joinedPoint=origInfo.c;
+const farEnd=near(newInfo.a,joinedPoint)>near(newInfo.c,joinedPoint)?newInfo.a:newInfo.c;
+w.setPlacement('wall','wall');
+const turnTarget=farEnd.clone().add(new THREE.Vector3(0,0,-1));
+result=w.solvePlacement(turnTarget);
+assert(result.wallEnd&&result.wallCorner,'Placing new panel perpendicular chooses the free wall end');
+const cornerPiece=w.placeAt(turnTarget);
 assert(cornerPiece,'90-degree turn should install without false red collision');
 const cornerInfo=BuildJoin.wallInfo(w,cornerPiece);
-assert(Math.min(near(origInfo.c,cornerInfo.a),near(origInfo.c,cornerInfo.c))<.0001,'90-degree wall endpoint connects exactly');
+assert(Math.min(near(farEnd,cornerInfo.a),near(farEnd,cornerInfo.c))<.0001,
+ '90-degree wall endpoint connects exactly to the free physical end');
 w.setPlacement('wall','wall');w.shiftCorner(.1,-.2);
 result=w.solvePlacement(p(2,0,0));assert(result.wallEnd);
 assert(Math.abs(result.position.x-2.1)<.05,'Fine X offset may adjust wall joint');
