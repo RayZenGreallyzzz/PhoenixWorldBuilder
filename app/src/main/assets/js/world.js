@@ -647,7 +647,8 @@ class WorldBuilder{
    const x=THREE.MathUtils.clamp(this.target.x,-62,62),z=THREE.MathUtils.clamp(this.target.z,-62,62);
    return new THREE.Vector3(x,this.placementHeight(x,z),z);
   }
-  const d=4.0,fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw);
+  const d=4.0,safeYaw=Number.isFinite(this.yaw)?this.yaw:0;
+  const fx=-Math.sin(safeYaw),fz=-Math.cos(safeYaw);
   const x=THREE.MathUtils.clamp(this.player.position.x+fx*d,-62,62);
   const z=THREE.MathUtils.clamp(this.player.position.z+fz*d,-62,62);
   return new THREE.Vector3(x,this.placementHeight(x,z),z);
