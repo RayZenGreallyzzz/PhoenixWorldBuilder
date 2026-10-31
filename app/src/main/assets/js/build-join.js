@@ -417,7 +417,7 @@ const BuildJoin=(()=>{
       (perpendicular?.09:0)+(Math.abs(extraYawDeg)===180?1.4:0);
      if(!best||score<best.score)best={position,yaw,perpendicular,
       reference:old.entry.data.id,score,target:target.name,source:slot.name,
-      targetPoint:target.point.clone()};
+      targetPoint:target.point.clone(),sourcePoint:slot.point.clone(),sourceOut:slot.out.clone()};
     }
    }
   }
@@ -426,7 +426,8 @@ const BuildJoin=(()=>{
    snapped:true,edge:true,wallEnd:true,wallCorner:best.perpendicular,
    joinedTo:best.perpendicular?'wall-corner':'wall-end',reference:best.reference,
    category:w.placementCategory||'wall',sourceSocket:best.source,targetSocket:best.target,
-   targetSocketPoint:best.targetPoint?.toArray(),physicalSocket:true};
+   targetSocketPoint:best.targetPoint?.toArray(),sourceSocketPoint:best.sourcePoint?.toArray(),
+   sourceSocketOut:best.sourceOut?.toArray(),physicalSocket:true};
  }
  function joinEnd(w,p,candidates,box,onlyCorner=false,occupancyCandidates=candidates){
   const category=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
