@@ -137,8 +137,10 @@ for(const yaw of [0,90,180,270])for(const story of [0,1]){
   ' pos '+String(next.position?.toArray())+' rot '+next.rotation);
  w.applyGhostPlacement(target);
  const info=BuildJoin.wallInfo(w,{kind:'wall',data:{},mesh:w.ghost});
- assert(Math.min(dist(info.a,free[0].point),dist(info.c,free[0].point))<.025,
-  'Straight → corner → straight joint remains continuous on active story');
+ const continuationGap=Math.min(dist(info.a,free[0].point),dist(info.c,free[0].point));
+ assert(continuationGap<.025,'Straight → corner → straight gap '+continuationGap+
+  ' yaw '+yaw+' story '+story+' source '+next.sourceSocket+' target '+next.targetSocket+
+  ' solved '+next.position.toArray()+' desired '+free[0].point.toArray());
 }
 // Same corner sockets can be recovered from a pivot-shifted custom GLB
 // whose L arms are separate geometry parts, even when the GLB is rotated.
