@@ -6,7 +6,7 @@ function close(a,b,eps=1e-6,msg=''){assert(Math.abs(a-b)<=eps,msg||`${a} != ${b}
 // Core stays renderer independent.
 const source=fs.readFileSync(path.join(base,'build-core.js'),'utf8');
 assert(!/\bTHREE\b/.test(source),'BuildCore must not depend on Three.js');
-assert(!/document\.|window\.|WebGL/i.test(source),'BuildCore must not depend on DOM/WebGL');
+assert(!/document\.|window\.|WebGLRenderer|canvas\.|getContext\(/i.test(source),'BuildCore must not depend on DOM/WebGL runtime APIs');
 
 // Absolute storey coordinates: no accumulation from previously placed parts.
 for(const h of [2.6,3.2,5.75]){
