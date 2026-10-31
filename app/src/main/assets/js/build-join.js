@@ -367,7 +367,10 @@ const BuildJoin=(()=>{
     ]);
    for(const socket of sockets){
     if(Math.abs(socket.point.y-at.y)>.10||distXZ(socket.point,at)>.055)continue;
-    if(socket.out.clone().setY(0).normalize().dot(incomingOut)>.94)return true;
+    // End sockets are exclusive physical joints. A second part cannot reuse
+    // the same end from another direction; T-junctions need their own side
+    // socket instead of overloading an already occupied end.
+    return true;
    }
   }
   return false;
