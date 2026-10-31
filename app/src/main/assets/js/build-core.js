@@ -68,7 +68,28 @@ const BuildCore=(()=>{
   const point=vec3(socket.point),out=normalizeXZ(socket.out||socket.outward);
   if(lengthXZ(out)<.5)return null;
   return {id:String(socket.id??socket.name??index),point,out,
-   role:String(socket.role||'wall-end'),thickness:finite(socket.thickness)?Number(socket.thickness):null};
+   role:String(socket.role||'wall-end'),
+   accepts:Array.isArray(socket.accepts)?socket.accepts.map(String):null,
+   thickness:finite(socket.thickness)?Number(socket.thickness):null};
+ }
+ const DEFAULT_SOCKET_RULES={
+  'wall-end':['wall-end','corner-arm'],
+  'corner-arm':['wall-end','corner-arm'],
+  'floor-edge':['wall-base','railing-base','stair-base'],
+  'wall-base':['floor-edge','wall-top'],
+  'wall-top':['wall-base','roof-base'],
+  'roof-base':['wall-top'],
+  'roof-edge':['roof-edge'],
+  'railing-base':['floor-edge'],
+  'stair-base':['floor-edge','floor-top'],
+  'floor-top':['stair-base']
+ };
+ function socketCompatible(sourceSocket,targetSocket){
+  const source=normalizeSocket(sourceSocket),target=normalizeSocket(targetSocket);
+  if(!source||!target)return false;
+  const sourceAllowed=source.accepts||DEFAULT_SOCKET_RULES[source.role]||[source.role];
+  const targetAllowed=target.accepts||DEFAULT_SOCKET_RULES[target.role]||[target.role];
+  return sourceAllowed.includes(target.role)&&targetAllowed.includes(source.role);
  }
  function transformSocket(socket,{position=[0,0,0],yawDeg=0,scale=[1,1,1]}={}){
   const s=normalizeSocket(socket);if(!s)return null;
@@ -80,7 +101,7 @@ const BuildCore=(()=>{
  }
  function alignSockets(sourceSocket,targetSocket,{scale=[1,1,1],extraYawDeg=0}={}){
   const source=normalizeSocket(sourceSocket),target=normalizeSocket(targetSocket);
-  if(!source||!target)return null;
+  if(!source||!target||!socketCompatible(source,target))return null;
   const sc=Array.isArray(scale)?vec3(scale,[1,1,1]):[num(scale,1),num(scale,1),num(scale,1)];
   const desired=[-target.out[0],0,-target.out[2]];
   const yaw=angleXZ(desired)-angleXZ(source.out)+num(extraYawDeg,0)*Math.PI/180;
@@ -107,6 +128,7 @@ const BuildCore=(()=>{
   return false;
  }
  return {DEFAULT_STOREY,safeStoreyHeight,safeFloorLevel,nominalFloorY,supportPriority,
-  chooseFloorDatum,normalizeSocket,transformSocket,alignSockets,socketOccupied,rotateXZ,normalizeXZ};
+  chooseFloorDatum,normalizeSocket,socketCompatible,transformSocket,alignSockets,socketOccupied,
+  DEFAULT_SOCKET_RULES,rotateXZ,normalizeXZ};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildCore;
