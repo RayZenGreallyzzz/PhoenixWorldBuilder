@@ -52,6 +52,7 @@ jobs:
           node tests/test-export.cjs
           node tests/test-zip.cjs
           node tests/test-build-core.cjs
+          node tests/test-physical-contact-chain.cjs
           node tests/test-build-physics.cjs
           node tests/test-avatar.cjs
           node tests/test-game-input.cjs
