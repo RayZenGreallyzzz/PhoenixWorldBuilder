@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/legacy-shape-from-own-glb]
+    branches: [main, feature/legacy-shape-from-own-glb, stabilize/phoenix-builder-fix-20261031]
   pull_request:
     branches: [main]
 
