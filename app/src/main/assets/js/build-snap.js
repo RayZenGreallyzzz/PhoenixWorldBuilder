@@ -138,14 +138,18 @@ const BuildSnap=(()=>{
    return list.filter(s=>Math.abs(s.top-cy)<=delta+.16);
   };
   let support=[];
-  if(roof&&ceilings.length)support=chooseSurfaceBand(ceilings);
-  else if(walls.length)support=chooseWallBand(walls);
+  if(roof){
+   const all=[...walls,...ceilings,...foundations];
+   const highest=Math.max(...all.map(s=>s.top));
+   support=all.filter(s=>s.top>=highest-.18);
+  }else if(walls.length)support=chooseWallBand(walls);
   else if(ceilings.length)support=chooseSurfaceBand(ceilings);
   else support=chooseSurfaceBand(foundations);
   if(!support.length)return null;
   const target=Math.max(...support.map(s=>s.top));
   let x=p.x,z=p.z;
-  const base=foundations.length?chooseSurfaceBand(foundations)[0]||foundations[0]:null;
+  const supportFloor=support.find(s=>kindOf(w,s.entry)==='foundation');
+  const base=supportFloor||(foundations.length?chooseSurfaceBand(foundations)[0]||foundations[0]:null);
   if(w.centerOverhead&&base){
    const center=worldCenter(base);x=center.x;z=center.z;
   }else if(w.centerOverhead&&support.length){
