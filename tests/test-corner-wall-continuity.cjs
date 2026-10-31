@@ -237,15 +237,15 @@ for(const yaw of [0,90,180,270])for(const story of [0,1]){
  const snapped=w.solvePlacement(new THREE.Vector3(2,0,0));
  assert(!snapped.wallEnd,'Never snap to fake diagonal AABB endpoints');
 }
-// Test that choosing an L angle on the upper floor cannot snap to two
-// lower-floor orthogonal walls even if the cursor is over those walls.
+// A corner cannot be built from orthogonal walls on a different physical
+// Y plane, regardless of any saved project-layer metadata.
 {
  const w=fresh();w.floorLevel=1;w.joinMode='corner';
  w.instantiate('wall',{id:90,pos:[0,0,0],rot:0,scale:1,category:'wall',storey:0});
  w.instantiate('wall',{id:91,pos:[1,0,-1],rot:90,scale:1,category:'wall',storey:0});
  w.setPlacement('corner','corner');
  const solved=w.solvePlacement(new THREE.Vector3(1,2.6,-.9));
- assert(!solved.corner,'Corner placement must not use different storey wall pair');
+ assert(!solved.corner,'Corner placement must not use wall pair 2.6m below the pointed physical plane');
 }
 const html=fs.readFileSync(path.join(d,'../index.html'),'utf8');
 assert(html.includes('id="buildJoinMode"'));
