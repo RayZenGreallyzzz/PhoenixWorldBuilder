@@ -14,7 +14,8 @@ const BuildCurves=(()=>{
   if(!isArc(kind,root))return null;
   if(root.userData?.pwbModuleSockets?.length===2)
    return root.userData.pwbModuleSockets.map((s,i)=>({
-    name:i===0?'begin':'end',point:new THREE.Vector3(...s.point),out:new THREE.Vector3(...s.out)
+    name:i===0?'begin':'end',point:new THREE.Vector3(...s.point),out:new THREE.Vector3(...s.out),
+    role:s.role||'wall-end',accepts:Array.isArray(s.accepts)?[...s.accepts]:null
    }));
   root.updateWorldMatrix(true,true);
   const bounds=BuildSnap.attrBounds(root);
@@ -59,7 +60,8 @@ const BuildCurves=(()=>{
   };
   const beginOut=capOut(points[0],points[1],first.clone().sub(next));
   const endOut=capOut(points[n-2],points[n-1],last.clone().sub(before));
-  return [{name:'begin',point:first,out:beginOut},{name:'end',point:last,out:endOut}];
+  return [{name:'begin',point:first,out:beginOut,role:'wall-end',accepts:['wall-end','corner-arm']},
+   {name:'end',point:last,out:endOut,role:'wall-end',accepts:['wall-end','corner-arm']}];
  }
  function localSockets(root,kind){
   if(!isArc(kind,root))return null;
@@ -76,13 +78,15 @@ const BuildCurves=(()=>{
   if(info.root?.userData?.pwbModuleSockets?.length===2)
    return info.root.userData.pwbModuleSockets.map((s,i)=>({
     name:i===0?'begin':'end',point:localToWorld(info.root,new THREE.Vector3(...s.point)),
-    out:direction(info.root,new THREE.Vector3(...s.out)),curved:isArc(info.entry.kind,info.root)
+    out:direction(info.root,new THREE.Vector3(...s.out)),curved:isArc(info.entry.kind,info.root),
+    role:s.role||'wall-end',accepts:Array.isArray(s.accepts)?[...s.accepts]:null
    }));
   if(info.sockets?.length)return info.sockets.map(x=>({...x,point:x.point.clone(),out:x.out.clone()}));
   const local=localSockets(info.root,info.entry.kind);
-  if(local)return local.map(s=>({name:s.name,point:localToWorld(info.root,s.point),out:direction(info.root,s.out),curved:true}));
-  return [{name:'a',point:info.a.clone(),out:info.dir.clone().negate(),curved:false},
-   {name:'c',point:info.c.clone(),out:info.dir.clone(),curved:false}];
+  if(local)return local.map(s=>({name:s.name,point:localToWorld(info.root,s.point),out:direction(info.root,s.out),curved:true,
+   role:s.role||'wall-end',accepts:Array.isArray(s.accepts)?[...s.accepts]:null}));
+  return [{name:'a',point:info.a.clone(),out:info.dir.clone().negate(),curved:false,role:'wall-end',accepts:['wall-end','corner-arm']},
+   {name:'c',point:info.c.clone(),out:info.dir.clone(),curved:false,role:'wall-end',accepts:['wall-end','corner-arm']}];
  }
  function incomingSockets(w,box){
   const root=w.ghost||w.assetCache?.get(w.placement)||w.makeBuiltin?.(w.placement);
@@ -90,13 +94,15 @@ const BuildCurves=(()=>{
   if(root.userData?.pwbModuleSockets?.length===2)
    return root.userData.pwbModuleSockets.map((s,i)=>({
     name:i===0?'begin':'end',point:new THREE.Vector3(...s.point),
-    out:new THREE.Vector3(...s.out)
+    out:new THREE.Vector3(...s.out),role:s.role||'wall-end',
+    accepts:Array.isArray(s.accepts)?[...s.accepts]:null
    }));
   const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
   if(cat==='corner'&&typeof BuildJoin!=='undefined'){
    const arms=BuildJoin.cornerArms(root,w.placement,cat);
    if(arms)return arms.map(x=>({name:x.name,point:x.tip.clone(),
-    out:x.tip.clone().sub(x.pivot).setY(0).normalize()}));
+    out:x.tip.clone().sub(x.pivot).setY(0).normalize(),role:'corner-arm',
+    accepts:['wall-end','corner-arm']}));
    return null; // Unknown L-shaped GLB: do not guess endpoints.
   }
   const curve=localSockets(root,w.placement);
@@ -105,11 +111,11 @@ const BuildCurves=(()=>{
   const xWide=(box.max.x-box.min.x)>=(box.max.z-box.min.z);
   const cx=(box.min.x+box.max.x)/2,cz=(box.min.z+box.max.z)/2,y=box.min.y;
   return xWide?[
-   {name:'a',point:new THREE.Vector3(box.min.x,y,cz),out:new THREE.Vector3(-1,0,0)},
-   {name:'c',point:new THREE.Vector3(box.max.x,y,cz),out:new THREE.Vector3(1,0,0)}
+   {name:'a',point:new THREE.Vector3(box.min.x,y,cz),out:new THREE.Vector3(-1,0,0),role:'wall-end',accepts:['wall-end','corner-arm']},
+   {name:'c',point:new THREE.Vector3(box.max.x,y,cz),out:new THREE.Vector3(1,0,0),role:'wall-end',accepts:['wall-end','corner-arm']}
   ]:[
-   {name:'a',point:new THREE.Vector3(cx,y,box.min.z),out:new THREE.Vector3(0,0,-1)},
-   {name:'c',point:new THREE.Vector3(cx,y,box.max.z),out:new THREE.Vector3(0,0,1)}
+   {name:'a',point:new THREE.Vector3(cx,y,box.min.z),out:new THREE.Vector3(0,0,-1),role:'wall-end',accepts:['wall-end','corner-arm']},
+   {name:'c',point:new THREE.Vector3(cx,y,box.max.z),out:new THREE.Vector3(0,0,1),role:'wall-end',accepts:['wall-end','corner-arm']}
   ];
  }
  function connect(w,p,candidates,box){
@@ -130,18 +136,30 @@ const BuildCurves=(()=>{
    if(!isIncomingArc&&!isArc(info.entry.kind,info.root))continue;
    for(const target of sourceSockets(info)){
     for(const slot of slots){
-     const desired=target.out.clone().negate();
-     let yaw=theta(desired)-theta(slot.out);
-     yaw+=(w.placementRotation||0)*Math.PI/180;
+     let yaw,position;
+     if(typeof BuildCore!=='undefined'){
+      const pose=BuildCore.alignSockets(
+       {point:slot.point.toArray(),out:slot.out.toArray(),role:slot.role,accepts:slot.accepts},
+       {point:target.point.toArray(),out:target.out.toArray(),role:target.role,accepts:target.accepts},
+       {scale:[scale,scale,scale],extraYawDeg:w.placementRotation||0}
+      );
+      if(!pose)continue;
+      yaw=pose.rotation*Math.PI/180;
+      position=new THREE.Vector3(...pose.position);
+      position.y+=(w.placementLift||0);
+     }else{
+      const desired=target.out.clone().negate();
+      yaw=theta(desired)-theta(slot.out)+(w.placementRotation||0)*Math.PI/180;
+      const shifted=rotate(slot.point,yaw).multiplyScalar(scale);
+      position=new THREE.Vector3(target.point.x-shifted.x,
+       info.bottom-slot.point.y*scale+(w.placementLift||0),
+       target.point.z-shifted.z);
+     }
      // Never dock into an already occupied socket with the same outward
      // direction. A different/perpendicular heading can still form a corner.
      const newOut=rotate(slot.out,yaw);
      if(typeof BuildJoin!=='undefined'&&
         BuildJoin.socketDirectionOccupied?.(candidates,info,target.point,newOut))continue;
-     const shifted=rotate(slot.point,yaw).multiplyScalar(scale);
-     const position=new THREE.Vector3(target.point.x-shifted.x,
-       info.bottom-slot.point.y*scale+(w.placementLift||0),
-       target.point.z-shifted.z);
      const visualCenter=position.clone().add(rotate(center,yaw).multiplyScalar(scale));
      const d=dist(visualCenter,p);
      if(d>maxReach)continue;
