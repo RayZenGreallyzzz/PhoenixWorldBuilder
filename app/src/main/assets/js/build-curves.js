@@ -130,6 +130,7 @@ const BuildCurves=(()=>{
   for(const info of candidates){
    if(!isIncomingArc&&!isArc(info.entry.kind,info.root))continue;
    for(const target of sourceSockets(info)){
+    if(Number.isFinite(p.y)&&Math.abs(target.point.y-p.y)>.75)continue;
     for(const slot of slots){
      let yaw,position;
      if(typeof BuildCore!=='undefined'){
