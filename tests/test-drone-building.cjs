@@ -23,7 +23,7 @@ assert(w.camera.position.y>w.target.y,'Drone floats above construction plane');
 let point=w.forwardPlacementPoint();
 assert.equal(point.x,start.x);
 assert.equal(point.z,start.z);
-assert.equal(point.y,3,'Upper floor placement uses the active floor elevation');
+assert.equal(point.y,0,'Drone placement follows real geometry/terrain, not selected floor elevation');
 assert.equal(w.setDroneView('top'),true);
 assert(w.pitch>1.5,'Top view must be almost vertical');
 assert.equal(w.setDroneView('angled'),true);
@@ -67,6 +67,7 @@ for(const id of ['btnDroneToggle','btnDroneTop','btnDroneAngle','btnDroneZoomIn'
  assert(html.includes('id="'+id+'"'),'Missing drone camera UI control '+id);
 for(const needle of ["w.panDrone((e.clientX-old.x)/2","if(w.mode==='playbuild'&&w.droneMode){","w.forwardPlacementPoint()","w.setDroneMode(enabled)"])
  assert(app.includes(needle),'Drone touch/placement wiring missing: '+needle);
-assert(fs.readFileSync(path.join(dir,'world.js'),'utf8').includes("(this.mode==='playbuild'&&this.droneMode))&&this.floorLevel>0"),
- 'Upper-storey hit testing must work in drone construction mode');
-console.log('Drone camera independent of avatar, 1/2/3 floor targets, orbit/pan/zoom presets, normal controls and HUD OK');
+const worldSource=fs.readFileSync(path.join(dir,'world.js'),'utf8');
+assert(!worldSource.includes("this.floorLevel*(this.storeyHeight||2.6)"),
+ 'Drone/build hit testing must not create a virtual nominal floor plane');
+console.log('Drone camera independent of avatar; geometry-driven placement; orbit/pan/zoom presets and HUD OK');
