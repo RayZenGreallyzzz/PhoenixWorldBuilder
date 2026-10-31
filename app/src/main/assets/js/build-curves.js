@@ -133,6 +133,11 @@ const BuildCurves=(()=>{
      const desired=target.out.clone().negate();
      let yaw=theta(desired)-theta(slot.out);
      yaw+=(w.placementRotation||0)*Math.PI/180;
+     // Never dock into an already occupied socket with the same outward
+     // direction. A different/perpendicular heading can still form a corner.
+     const newOut=rotate(slot.out,yaw);
+     if(typeof BuildJoin!=='undefined'&&
+        BuildJoin.socketDirectionOccupied?.(candidates,info,target.point,newOut))continue;
      const shifted=rotate(slot.point,yaw).multiplyScalar(scale);
      const position=new THREE.Vector3(target.point.x-shifted.x,
        info.bottom-slot.point.y*scale+(w.placementLift||0),
