@@ -87,5 +87,9 @@ const html=fs.readFileSync(path.join(base,'../index.html'),'utf8');
 assert(html.indexOf('js/build-core.js')>=0,'BuildCore is bundled offline');
 assert(html.indexOf('js/build-core.js')<html.indexOf('js/world.js'),'BuildCore loads before WorldBuilder');
 const worldSource=fs.readFileSync(path.join(base,'world.js'),'utf8');
-assert(worldSource.includes('BuildCore.chooseFloorDatum'),'WorldBuilder delegates floor policy to BuildCore');
+const placementBlock=worldSource.slice(worldSource.indexOf(' placementHeight('),
+ worldSource.indexOf(' changeFloor(',worldSource.indexOf(' placementHeight(')));
+assert(!/storeyHeight|floorLevel/.test(placementBlock),
+ 'WorldBuilder physical placement fallback must not use nominal storey math');
+assert(source.includes('contactPivotY'),'BuildCore exposes physical contact placement math');
 console.log('BuildCore: renderer-free floors, sockets, alignment and occupancy OK');
