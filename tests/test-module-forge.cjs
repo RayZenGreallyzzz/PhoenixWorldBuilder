@@ -32,6 +32,8 @@ for(const kind of ['straight','corner','arc90','arc180'])for(const use of ['wall
  if(use==='wall'){
   assert(root.userData.pwbModuleSockets.length===2,'Wall has two attachment sockets');
   const s=root.userData.pwbModuleSockets;
+  assert(s.every(x=>x.role==='wall-end'||x.role==='corner-arm'),'Wall sockets carry typed construction roles');
+  assert(s.every(x=>Array.isArray(x.accepts)&&x.accepts.includes('wall-end')),'Wall sockets declare compatible module roles');
   if(kind==='straight'){near(s[0].point[0],-1,'Wall length 2m');near(s[1].point[0],1,'Wall length 2m')}
   if(kind==='arc90'){
    near(s[0].point[0],2,'Quarter radius 2m');near(s[1].point[2],2,'Quarter end radius');
