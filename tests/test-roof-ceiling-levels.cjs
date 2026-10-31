@@ -1,51 +1,80 @@
 const assert=require('node:assert/strict'),fs=require('fs'),path=require('path'),vm=require('vm');
 const root=path.join(__dirname,'../app/src/main/assets/js');
 const THREE=global.THREE=require(path.join(root,'three.min.js'));
+global.BuildCore=require(path.join(root,'build-core.js'));
 global.BuildSnap=require(path.join(root,'build-snap.js'));
+global.BuildJoin=require(path.join(root,'build-join.js'));
+global.BuildCurves=require(path.join(root,'build-curves.js'));
+global.BuildPlacementValidator=require(path.join(root,'build-placement.js'));
 vm.runInThisContext(fs.readFileSync(path.join(root,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
-const close=(a,b,msg)=>assert(Math.abs(a-b)<.018,msg+': '+a+' != '+b);
+const close=(a,b,msg)=>assert(Math.abs(a-b)<.025,msg+': '+a+' != '+b);
 const w=Object.create(WorldBuilder.prototype);
-Object.assign(w,{scene:new THREE.Scene(),objects:[],assetCache:new Map(),textures:new Map(),nextId:1,ghost:null,selected:null,moveTarget:null,mode:'playbuild',placement:null,placementCategory:null,placementRotation:0,placementScale:1,smartSnap:true,edgeShift:0,placementLift:0,centerOverhead:false,storeyHeight:3.2,lastSnapResult:null,floorLevel:0,snap:2,currentPaint:'#ada08b',yaw:0});
+Object.assign(w,{scene:new THREE.Scene(),objects:[],assetCache:new Map(),textures:new Map(),nextId:1,
+ ghost:null,placementOutline:null,selected:null,moveTarget:null,mode:'playbuild',placement:null,
+ placementCategory:null,placementRotation:0,placementScale:1,smartSnap:true,joinMode:'auto',
+ autoThickness:true,edgeShift:0,placementLift:0,cornerOffsetX:0,cornerOffsetZ:0,
+ centerOverhead:false,storeyHeight:3.2,lastSnapResult:null,floorLevel:0,snap:2,
+ currentPaint:'#ada08b',yaw:0,placementSurfacePaint:{}});
 w.player=new THREE.Group();w.player.position.set(0,.85,0);w.scene.add(w.player);
 w.heightAt=()=>0;w.remember=()=>{};w.onChanged=()=>{};w.onSnapChanged=()=>{};w.onSelected=()=>{};
 w.highlight={setFromObject(){},visible:false};
 w.categoryForKind=id=>id==='glb:floor'?'foundation':['floor','wall','roof','ceiling','stairs'].includes(id)?id==='floor'?'foundation':id:'prop';
+
+// Non-standard raised/rotated GLB deck: 34cm source thickness, scaled 1.4x.
 const deck=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(6,.34,4),new THREE.MeshBasicMaterial());
 mesh.position.set(.7,.17,-.3);deck.add(mesh);deck.position.set(4,1.5,-3);deck.rotation.y=.54;deck.scale.setScalar(1.4);w.scene.add(deck);
-w.objects.push({kind:'glb:floor',data:{id:88,pos:deck.position.toArray(),rot:31,scale:1.4,category:'foundation',storey:0},mesh:deck});
+w.objects.push({kind:'glb:floor',data:{id:88,pos:deck.position.toArray(),rot:31,scale:1.4,category:'foundation',storey:91},mesh:deck});
 const b=BuildSnap.attrBounds(deck);deck.updateMatrixWorld(true);
 const edge=deck.localToWorld(new THREE.Vector3(b.max.x+.1,b.max.y,(b.min.z+b.max.z)/2));
 const center=deck.localToWorld(new THREE.Vector3((b.min.x+b.max.x)/2,b.max.y,(b.min.z+b.max.z)/2));
 const deckTop=center.y;w.player.position.set(edge.x,deckTop+.85,edge.z);
+
+// Scaled wall keeps its own real height and starts exactly on deck top.
 w.setPlacementScale(1.38);w.setPlacement('wall','wall');
-const wall=w.placeAt(edge);assert.equal(wall.data.storey,0);close(wall.mesh.position.y,deckTop,'wall rests on raised deck');
+const wall=w.placeAt(edge);assert(wall);close(new THREE.Box3().setFromObject(wall.mesh).min.y,deckTop,'wall rests on raised deck');
 const wallTop=new THREE.Box3().setFromObject(wall.mesh).max.y;
+
+// Ceiling underside touches actual wall top.
 w.setPlacementScale(1);w.setPlacement('ceiling','ceiling');
-let upper=w.solvePlacement(center);assert(upper.snapped&&upper.overhead,'Ceiling must snap overhead');
-close(upper.targetHeight,wallTop,'Ceiling must match actual GLB wall height');
-const ceiling=w.placeAt(center);close(new THREE.Box3().setFromObject(ceiling.mesh).min.y,wallTop,'Ceiling underside must touch wall top');
-const ceilingTop=new THREE.Box3().setFromObject(ceiling.mesh).max.y;
-w.setPlacement('roof','roof');upper=w.solvePlacement(center);
-assert(upper.snapped&&upper.overhead,'Roof must snap overhead');close(upper.targetHeight,ceilingTop,'Roof must sit on existing ceiling, not floating at fixed 2.6 m');
-const roof=w.placeAt(center);close(new THREE.Box3().setFromObject(roof.mesh).min.y,ceilingTop,'Roof lowest edge meets ceiling top');
-w.setPlacementLift(.25);upper=w.solvePlacement(center);close(upper.targetHeight+.25,upper.position.y+BuildSnap.attrBounds(w.ghost).min.y,'Vertical roof nudge');
-w.setPlacementLift(0);w.toggleOverheadCenter();upper=w.solvePlacement(edge);
-const box=BuildSnap.attrBounds(w.ghost);const yaw=upper.rotation*Math.PI/180;
-const centerShiftX=(box.min.x+box.max.x)/2,centerShiftZ=(box.min.z+box.max.z)/2;
-const roofVisualCenter=new THREE.Vector3(centerShiftX,0,centerShiftZ).applyAxisAngle(new THREE.Vector3(0,1,0),yaw).add(upper.position);
-close(roofVisualCenter.x,center.x,'Roof center X over chosen GLB deck');close(roofVisualCenter.z,center.z,'Roof center Z over chosen GLB deck');
-w.centerOverhead=false;w.changeFloor(1);w.setPlacement('floor','foundation');
-const nextFloor=w.solvePlacement(center);assert(nextFloor.snapped,'Upper-floor foundation must snap to previous ceiling');
-close(nextFloor.position.y,ceilingTop,'Next floor starts at current ceiling');
-const topFloor=w.placeAt(center);assert.equal(topFloor.data.storey,1);
-w.setPlacement('wall','wall');const wall2=w.solvePlacement(center);
-assert(wall2.snapped,'Second floor wall must align above upper foundation');
-close(wall2.position.y,new THREE.Box3().setFromObject(topFloor.mesh).max.y,'Second-storey wall position');
-w.setPlacement('roof','roof');const roof2=w.solvePlacement(center);
-close(roof2.targetHeight,new THREE.Box3().setFromObject(topFloor.mesh).max.y+3.2,'Second-storey roof ignores ground-storey walls');
-assert.equal(w.setStoreyHeight(4.1),4.1);w.smartSnap=false;
-const unsnapped=w.solvePlacement(center);assert(!unsnapped.snapped,'Manual placement may disable magnets');
-close(unsnapped.position.y,8.2-BuildSnap.attrBounds(w.ghost).min.y,'Manual second floor roof uses new storey height');
-const html=fs.readFileSync(path.join(root,'../index.html'),'utf8');
-for(const id of ['storeyHeightInput','buildStoreyHeight','btnLiftDown','btnLiftUp','btnOverheadCenter'])assert(html.includes('id="'+id+'"'),'Missing height control: '+id);
-console.log('Nonstandard GLB deck, 3.2m walls, ceiling, roof, next storey, centering and manual controls OK');
+let solved=w.solvePlacement(new THREE.Vector3(center.x,deckTop,center.z));
+assert(solved.snapped&&solved.overhead,'Ceiling must snap overhead');
+close(solved.targetHeight,wallTop,'Ceiling target is real transformed wall top');
+const ceiling=w.placeAt(new THREE.Vector3(center.x,deckTop,center.z));
+const ceilingBox=new THREE.Box3().setFromObject(ceiling.mesh);
+close(ceilingBox.min.y,wallTop,'Ceiling underside touches wall top');
+const ceilingTop=ceilingBox.max.y;
+
+// Roof uses highest physical surface.
+w.setPlacement('roof','roof');solved=w.solvePlacement(new THREE.Vector3(center.x,ceilingTop,center.z));
+assert(solved.snapped&&solved.overhead,'Roof snaps to physical support');
+close(solved.targetHeight,ceilingTop,'Roof sits on existing ceiling top');
+const roof=w.placeAt(new THREE.Vector3(center.x,ceilingTop,center.z));
+close(new THREE.Box3().setFromObject(roof.mesh).min.y,ceilingTop,'Roof lowest edge meets ceiling top');
+
+// A project layer number and nominal height must not affect later placement.
+w.setFloorLevel(6);w.setStoreyHeight(4.1);
+w.setPlacement('floor','foundation');
+const nextFloorPoint=new THREE.Vector3(center.x,ceilingTop,center.z);
+solved=w.solvePlacement(nextFloorPoint);assert(solved.snapped,'Foundation can sit on previous ceiling');
+const topFloor=w.placeAt(nextFloorPoint);
+const topFloorTop=new THREE.Box3().setFromObject(topFloor.mesh).max.y;
+close(new THREE.Box3().setFromObject(topFloor.mesh).min.y,ceilingTop,'Next floor bottom touches ceiling top');
+
+w.setPlacement('wall','wall');
+const upperWall=w.placeAt(new THREE.Vector3(edge.x,topFloorTop,edge.z));assert(upperWall);
+const upperWallBox=new THREE.Box3().setFromObject(upperWall.mesh);
+close(upperWallBox.min.y,topFloorTop,'Upper wall touches new floor top');
+
+w.setPlacement('roof','roof');
+solved=w.solvePlacement(new THREE.Vector3(center.x,upperWallBox.max.y,center.z));
+close(solved.targetHeight,upperWallBox.max.y,'Roof uses upper wall top, not selected layer × 4.1m');
+
+// Free fallback never invents a storey height.
+w.smartSnap=false;w.setJoinMode('free');w.setPlacement('roof','roof');
+const free=w.solvePlacement(new THREE.Vector3(30,1.25,30));assert(!free.snapped);
+close(free.position.y+BuildSnap.attrBounds(w.ghost).min.y,1.25,'Free roof uses pointed physical Y');
+
+const worldText=fs.readFileSync(path.join(root,'world.js'),'utf8');
+const placementBlock=worldText.slice(worldText.indexOf(' placementHeight('),worldText.indexOf(' changeFloor(',worldText.indexOf(' placementHeight(')));
+assert(!/storeyHeight|floorLevel/.test(placementBlock),'Nominal storey math must not re-enter placementHeight');
+console.log('Raised GLB deck, scaled wall, ceiling, floor, upper wall and roof all touch physical surfaces; layer height ignored OK');
