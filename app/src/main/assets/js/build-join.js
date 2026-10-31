@@ -410,7 +410,11 @@ const BuildJoin=(()=>{
       // a perpendicular wall at the same corner is still valid.
       const newOut=new THREE.Vector3();
       newOut[main]=attachment==='min'?-1:1;
-      if(socketDirectionOccupied(occupancyCandidates,old,join,rotate(newOut,yaw)))continue;
+      // Manual X/Z corrections explicitly move the part away from the
+      // occupied socket and remain an intentional user override.
+      const manualShift=Math.hypot(w.cornerOffsetX||0,w.cornerOffsetZ||0);
+      if(manualShift<.055&&
+         socketDirectionOccupied(occupancyCandidates,old,join,rotate(newOut,yaw)))continue;
       const delta=rotate(local,yaw).multiplyScalar(scale);
       const at=new THREE.Vector3(join.x-delta.x,old.bottom-box.min.y*scale+(w.placementLift||0),join.z-delta.z);
       const middle=at.clone().add(rotate(center,yaw).multiplyScalar(scale));
