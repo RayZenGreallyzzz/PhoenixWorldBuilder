@@ -125,14 +125,9 @@ const BuildCurves=(()=>{
   const slots=incomingSockets(w,box);if(!slots)return null;
   const scale=w.placementScale||1;
   const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
-  const floorIndex=w.floorLevel||0;
-  const nominal=w.heightAt(p.x,p.z)+floorIndex*(w.storeyHeight||2.6);
   const maxReach=Math.max(3.25,Math.min(9,Math.hypot(box.max.x-box.min.x,box.max.z-box.min.z)*scale*.65+2.5));
   let best=null;
   for(const info of candidates){
-   const otherStory=info.entry.data?.storey;
-   if(Number.isInteger(otherStory)&&otherStory!==floorIndex)continue;
-   if(!Number.isInteger(otherStory)&&floorIndex>0&&Math.abs(info.bottom-nominal)>2)continue;
    if(!isIncomingArc&&!isArc(info.entry.kind,info.root))continue;
    for(const target of sourceSockets(info)){
     for(const slot of slots){
@@ -166,7 +161,8 @@ const BuildCurves=(()=>{
      const endpointDist=dist(target.point,p);
      // Cursor chooses the intended joint. Preserve the user's selected
      // rotation as a deliberate additional turn around the socket.
-     const score=d+endpointDist*.08+(isIncomingArc?0:.05);
+     const vertical=Number.isFinite(p.y)?Math.abs(target.point.y-p.y):0;
+     const score=d+endpointDist*.08+vertical*.35+(isIncomingArc?0:.05);
      if(best===null||score<best.score)best={score,position,yaw,reference:info.entry.data?.id,
       target:target.name,source:slot.name,curveJoin:true};
     }
