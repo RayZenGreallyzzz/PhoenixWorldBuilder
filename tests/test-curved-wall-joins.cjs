@@ -2,6 +2,7 @@ const assert=require('node:assert/strict'),fs=require('fs'),path=require('path')
 const base=path.join(__dirname,'../app/src/main/assets/js');
 const THREE=global.THREE=require(path.join(base,'three.min.js'));
 global.BuildSnap=require(path.join(base,'build-snap.js'));
+global.BuildCore=require(path.join(base,'build-core.js'));
 global.BuildJoin=require(path.join(base,'build-join.js'));
 global.BuildCurves=require(path.join(base,'build-curves.js'));
 global.BuildPlacementValidator=require(path.join(base,'build-placement.js'));
