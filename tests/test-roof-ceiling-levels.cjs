@@ -72,7 +72,7 @@ close(solved.targetHeight,upperWallBox.max.y,'Roof uses upper wall top, not sele
 // Free fallback never invents a storey height.
 w.smartSnap=false;w.setJoinMode('free');w.setPlacement('roof','roof');
 const free=w.solvePlacement(new THREE.Vector3(30,1.25,30));assert(!free.snapped);
-close(free.position.y+BuildSnap.attrBounds(w.ghost).min.y,1.25,'Free roof uses pointed physical Y');
+close(free.position.y+BuildSnap.attrBounds(w.ghost).min.y,0,'Free roof uses real ground/support, not selected floor height');
 
 const worldText=fs.readFileSync(path.join(root,'world.js'),'utf8');
 const placementBlock=worldText.slice(worldText.indexOf(' placementHeight('),worldText.indexOf(' changeFloor(',worldText.indexOf(' placementHeight(')));
