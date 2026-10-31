@@ -201,7 +201,9 @@ const BuildJoin=(()=>{
   let best=null;
   // Candidate level is selected from real geometry near the pointed height.
   // Stored floor numbers never participate in physical placement.
-  candidates=candidates.flatMap(item=>(item.segments||[item]).map(line=>({...item,...line})));
+  candidates=candidates.filter(item=>
+   !Number.isFinite(p.y)||abs(item.bottom-p.y)<=.75
+  ).flatMap(item=>(item.segments||[item]).map(line=>({...item,...line})));
   const maxReach=4.5;
   for(let i=0;i<candidates.length;i++)for(let j=i+1;j<candidates.length;j++){
    const a=candidates[i],b=candidates[j];
