@@ -12,9 +12,9 @@ android {
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes {
         debug {
-            applicationIdSuffix '.legacytest'
-            versionNameSuffix '-legacy-preview'
-            manifestPlaceholders = [appLabel: 'Phoenix Builder FIX']
+            applicationIdSuffix '.stabilizetest'
+            versionNameSuffix '-stability-preview'
+            manifestPlaceholders = [appLabel: 'Phoenix Builder SNAP TEST']
         }
         release {
             minifyEnabled false
