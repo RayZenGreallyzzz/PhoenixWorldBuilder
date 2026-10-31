@@ -120,19 +120,17 @@ const BuildPlacementValidator=(()=>{
  // slab edges (floors). A visual AABB overlap by itself is NOT enough.
  function manualAlignment(w,root,cat){
   if(!root||!['wall','corner','door','foundation','roof','ceiling'].includes(cat))return null;
-  const storey=w.floorLevel;
   const current=rect(root);if(!current)return null;
   const box=new THREE.Box3().setFromObject(root);
   const wallLikeHere=wallLike.has(cat);
   let incoming=null;
   if(wallLikeHere&&typeof BuildJoin!=='undefined')
    incoming=BuildJoin.wallInfo(w,{mesh:root,kind:w.placement||w.moveTarget?.kind,
-    data:{category:cat,storey}});
+    data:{category:cat}});
   const endpoints=info=>info?.sockets?.map(s=>s.point)||
    (info?[info.a,info.c]:[]);
   for(const entry of w.objects||[]){
    if(entry===w.moveTarget)continue;
-   if(Number.isInteger(entry.data?.storey)&&entry.data.storey!==storey)continue;
    const typ=category(w,entry),other=rect(entry.mesh);if(!other)continue;
    if(Math.hypot(current.cx-other.cx,current.cz-other.cz)>
     Math.max(8,Math.max(current.width,current.length)+Math.max(other.width,other.length)+1))continue;
