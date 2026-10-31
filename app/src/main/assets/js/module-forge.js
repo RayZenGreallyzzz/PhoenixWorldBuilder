@@ -185,12 +185,17 @@ const ModuleForge=(()=>{
   root.userData.pwbModuleShape=shape;root.userData.pwbModuleUse=use;
   const width=base[use].width;
   root.userData.pwbModuleSockets=use==='wall'?
-    shape==='straight'?[{point:[-1,0,0],out:[-1,0,0]},{point:[1,0,0],out:[1,0,0]}]:
-    shape==='corner'?[{point:[-2,0,0],out:[-1,0,0]},{point:[0,0,-2],out:[0,0,-1]}]:
-    [{point:[2,0,0],out:[0,0,-1]},{point:[shape==='arc90'?0:-2,0,shape==='arc90'?2:0],
-       out:[shape==='arc90'?-1:0,0,shape==='arc90'?0:-1]}]:null;
+    shape==='straight'?[{point:[-1,0,0],out:[-1,0,0],role:'wall-end',accepts:['wall-end','corner-arm']},
+      {point:[1,0,0],out:[1,0,0],role:'wall-end',accepts:['wall-end','corner-arm']}]:
+    shape==='corner'?[{point:[-2,0,0],out:[-1,0,0],role:'corner-arm',accepts:['wall-end','corner-arm']},
+      {point:[0,0,-2],out:[0,0,-1],role:'corner-arm',accepts:['wall-end','corner-arm']}]:
+    [{point:[2,0,0],out:[0,0,-1],role:'wall-end',accepts:['wall-end','corner-arm']},
+     {point:[shape==='arc90'?0:-2,0,shape==='arc90'?2:0],
+       out:[shape==='arc90'?-1:0,0,shape==='arc90'?0:-1],role:'wall-end',accepts:['wall-end','corner-arm']}]:null;
   if(root.userData.pwbModuleSockets)
-   root.userData.pwbModuleSockets=root.userData.pwbModuleSockets.map(s=>({point:s.point,out:s.out}));
+   root.userData.pwbModuleSockets=root.userData.pwbModuleSockets.map(s=>({
+    point:s.point,out:s.out,role:s.role,accepts:s.accepts
+   }));
   root.updateWorldMatrix(true,true);
   return {ok:true,triangles:total,shape,use,dimensions:base[use]};
  }
