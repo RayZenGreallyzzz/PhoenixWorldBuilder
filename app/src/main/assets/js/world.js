@@ -260,56 +260,37 @@ class WorldBuilder{
  // selected storey's floor, or on the previous storey's wall/ceiling top.
  // No scene objects are moved and manual magnet-off placement is unchanged.
  floorDatumAt(x,z,category=this.placementCategory){
-  const level=this.floorLevel||0,height=this.storeyHeight||2.6;
-  const terrainY=this.heightAt(x,z),nominal=terrainY+level*height;
-  const fallback={height:nominal,source:'configured'};
-  // Three.js measures candidate geometry; BuildCore decides which measured
-  // support belongs to this storey. This keeps construction policy renderer-free.
+  const terrainY=this.heightAt(x,z);
+  const fallback={height:terrainY,source:'terrain'};
   if(this.smartSnap===false||!this.objects?.length||typeof BuildSnap==='undefined')return fallback;
   const cat=category||this.categoryForKind?.(this.placement)||'prop';
-  const isSlab=cat==='foundation',candidates=[];
+  const allowed=cat==='roof'?new Set(['ceiling','wall','corner','door','railing','foundation']):
+   cat==='ceiling'?new Set(['wall','corner','door','railing','foundation']):
+   cat==='foundation'?new Set(['ceiling','wall','corner','door','railing','foundation']):
+   new Set(['foundation','ceiling']);
+  let best=null;
   for(const entry of this.objects){
-   const story=entry.data?.storey;
-   if(!Number.isInteger(story))continue;
    const type=entry.data?.category||this.categoryForKind?.(entry.kind)||entry.kind;
-   const priority=typeof BuildCore!=='undefined'?
-    BuildCore.supportPriority(type,story,level,isSlab):
-    (!isSlab&&story===level&&type==='foundation'?0:
-     level>0&&story===level-1&&type==='ceiling'?1:
-     level>0&&story===level-1&&['wall','corner','door','railing'].includes(type)?2:null);
-   if(priority===null)continue;
+   if(!allowed.has(type))continue;
    const mesh=entry.mesh;if(!mesh)continue;
    mesh.updateWorldMatrix(true,true);
    const bounds=BuildSnap.attrBounds(mesh);if(bounds.isEmpty())continue;
    const inverse=mesh.matrixWorld.clone().invert();
-   const local=new THREE.Vector3(x,nominal,z).applyMatrix4(inverse);
-   const near=new THREE.Vector3(
-    THREE.MathUtils.clamp(local.x,bounds.min.x,bounds.max.x),
-    bounds.max.y,
-    THREE.MathUtils.clamp(local.z,bounds.min.z,bounds.max.z)
-   ).applyMatrix4(mesh.matrixWorld);
-   candidates.push({story,type,top:near.y,distance:Math.hypot(near.x-x,near.z-z),priority});
+   const probeY=mesh.position?.y||terrainY;
+   const local=new THREE.Vector3(x,probeY,z).applyMatrix4(inverse);
+   if(local.x<bounds.min.x-.18||local.x>bounds.max.x+.18||
+      local.z<bounds.min.z-.18||local.z>bounds.max.z+.18)continue;
+   const centerX=(bounds.min.x+bounds.max.x)/2,centerZ=(bounds.min.z+bounds.max.z)/2;
+   const top=new THREE.Vector3(centerX,bounds.max.y,centerZ).applyMatrix4(mesh.matrixWorld).y;
+   if(!Number.isFinite(top))continue;
+   if(!best||top>best.height)best={height:top,source:type,id:entry.data?.id};
   }
-  if(typeof BuildCore!=='undefined'){
-   const result=BuildCore.chooseFloorDatum({terrainY,floorLevel:level,storeyHeight:height,
-    category:cat,smartSnap:true,candidates});
-   return {height:result.height,source:result.source};
-  }
-  let best=null;
-  for(const item of candidates){
-   if(item.distance>1.35||!Number.isFinite(item.top)||
-      Math.abs(item.top-nominal)>Math.max(2.5,height*.8))continue;
-   const score=item.priority*10+item.distance;
-   if(!best||score<best.score)best={height:item.top,
-    source:item.priority===0?'floor':item.priority===1?'ceiling':'wall',score};
-  }
-  return best?{height:best.height,source:best.source}:fallback;
+  return best||fallback;
  }
  placementHeight(x,z,kind=this.placement,category=this.placementCategory){
-  const cat=category||this.categoryForKind?.(kind)||'prop';
-  const raised=kind==='ceiling'||kind==='ceiling_finish'||kind==='roof'||cat==='ceiling'||cat==='ceiling_finish'||cat==='roof';
-  const base=this.floorDatumAt(x,z,cat).height;
-  return base+(raised?this.storeyHeight||2.6:0);
+  // Fallback contact plane only. Smart placement resolves exact physical
+  // support surfaces; no object is raised by a nominal storey height.
+  return this.floorDatumAt(x,z,category||this.categoryForKind?.(kind)).height;
  }
  changeFloor(delta){return this.setFloorLevel(this.floorLevel+(Number(delta)||0)+1);}
  setFloorLevel(value){
