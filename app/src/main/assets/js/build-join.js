@@ -372,9 +372,58 @@ const BuildJoin=(()=>{
   }
   return false;
  }
+ function joinBySockets(w,p,candidates,box,onlyCorner=false,occupancyCandidates=candidates){
+  if(typeof BuildCore==='undefined'||typeof BuildCurves==='undefined')return null;
+  const slots=BuildCurves.incomingSockets(w,box);
+  if(!slots?.length)return null;
+  const scale=w.placementScale||1;
+  const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
+  const turns=onlyCorner?[90,-90]:[0,90,-90,180];
+  const deckTop=currentDeckTop(w,p);
+  let best=null;
+  for(const old of candidates){
+   if(deckTop!==null&&abs(old.bottom-deckTop)>.09)continue;
+   const targets=BuildCurves.sourceSockets(old);
+   for(const target of targets||[]){
+    if(Number.isFinite(p.y)&&abs(target.point.y-p.y)>.75)continue;
+    for(const slot of slots)for(const extraYawDeg of turns){
+     const pose=BuildCore.alignSockets(
+      {point:slot.point.toArray(),out:slot.out.toArray()},
+      {point:target.point.toArray(),out:target.out.toArray()},
+      {scale,extraYawDeg:(w.placementRotation||0)+extraYawDeg}
+     );
+     if(!pose||!pose.position.every(Number.isFinite)||!Number.isFinite(pose.rotation))continue;
+     const yaw=pose.rotation*Math.PI/180;
+     const sourceOut=rotate(slot.out,yaw).normalize();
+     const manualShift=Math.hypot(w.cornerOffsetX||0,w.cornerOffsetZ||0);
+     if(manualShift<.055&&
+        socketDirectionOccupied(occupancyCandidates,old,target.point,sourceOut))continue;
+     const position=new THREE.Vector3(...pose.position);
+     const middle=position.clone().add(rotate(center,yaw).multiplyScalar(scale));
+     const distance=distXZ(p,middle);
+     const reach=Math.max(1.85,Math.min(4.5,
+      Math.hypot(box.max.x-box.min.x,box.max.z-box.min.z)*scale*.6+1.4));
+     if(distance>reach)continue;
+     const perpendicular=Math.abs(extraYawDeg)%180===90;
+     const score=distance+(Number.isFinite(p.y)?abs(target.point.y-p.y)*.45:0)+
+      (perpendicular?.09:0)+(Math.abs(extraYawDeg)===180?1.4:0);
+     if(!best||score<best.score)best={position,yaw,perpendicular,
+      reference:old.entry.data.id,score,target:target.name,source:slot.name};
+    }
+   }
+  }
+  if(!best)return null;
+  return {position:best.position,rotation:((best.yaw*180/Math.PI)%360+360)%360,
+   snapped:true,edge:true,wallEnd:true,wallCorner:best.perpendicular,
+   joinedTo:best.perpendicular?'wall-corner':'wall-end',reference:best.reference,
+   category:w.placementCategory||'wall',sourceSocket:best.source,targetSocket:best.target,
+   physicalSocket:true};
+ }
  function joinEnd(w,p,candidates,box,onlyCorner=false,occupancyCandidates=candidates){
   const category=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
   if(!['wall','door','railing'].includes(category))return null;
+  const socketResult=joinBySockets(w,p,candidates,box,onlyCorner,occupancyCandidates);
+  if(socketResult)return socketResult;
   const majorX=box.max.x-box.min.x>=box.max.z-box.min.z;
   const main=majorX?'x':'z',cross=majorX?'z':'x';
   const mid=(box.min[cross]+box.max[cross])/2;
@@ -469,6 +518,6 @@ const BuildJoin=(()=>{
    missingTarget:mode==='stack'?'Подойди к стене, на которую ставишь следующую':'Подойди к торцу стены или углу пола'};
   return null;
  }
- return {resolve,wallInfo,nearby,corner,stack,joinEnd,cornerArms,cornerSegments,socketDirectionOccupied};
+ return {resolve,wallInfo,nearby,corner,stack,joinEnd,joinBySockets,cornerArms,cornerSegments,socketDirectionOccupied};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildJoin;
