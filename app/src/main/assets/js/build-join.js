@@ -381,8 +381,13 @@ const BuildJoin=(()=>{
   const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
   const scale=w.placementScale||1;
   const half=(box.max[main]-box.min[main])*scale/2;
+  // If a real slab/ceiling is under the pointed place, its TOP plane is
+  // authoritative. A wall endpoint buried below that plane must not pull
+  // the next wall down through the slab thickness.
+  const deckTop=currentDeckTop(w,p);
   let best=null;
   for(const old of candidates){
+   if(deckTop!==null&&abs(old.bottom-deckTop)>.09)continue;
    // A horizontal wall-end joint is valid only on the same physical base
    // plane as the pointed contact. Otherwise a lower-storey end can hijack
    // a wall that should sit on a higher floor/ceiling.
