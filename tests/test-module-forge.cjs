@@ -2,6 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const dir=path.join(__dirname,'../app/src/main/assets/js'),THREE=global.THREE=require(path.join(dir,'three.min.js'));
 const Forge=require(path.join(dir,'module-forge.js'));global.ModuleForge=Forge;
 global.BuildSnap=require(path.join(dir,'build-snap.js'));
+global.BuildCore=require(path.join(dir,'build-core.js'));
 global.BuildJoin=require(path.join(dir,'build-join.js'));
 global.BuildCurves=require(path.join(dir,'build-curves.js'));
 global.BuildPlacementValidator=require(path.join(dir,'build-placement.js'));
