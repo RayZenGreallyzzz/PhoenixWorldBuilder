@@ -141,6 +141,7 @@ for(const yaw of [0,90,180,270])for(const story of [0,1]){
  assert(continuationGap<.025,'Straight → corner → straight gap '+continuationGap+
   ' yaw '+yaw+' story '+story+' free '+free[0].name+' source '+next.sourceSocket+
   ' target '+next.targetSocket+' targetPoint '+next.targetSocketPoint+
+  ' sourcePoint '+next.sourceSocketPoint+' sourceOut '+next.sourceSocketOut+
   ' solved '+next.position.toArray()+' desired '+free[0].point.toArray());
 }
 // Same corner sockets can be recovered from a pivot-shifted custom GLB
