@@ -191,6 +191,9 @@ const BuildSnap=(()=>{
    const edge=nearestEdge(ref,p),distance=edge.distance;
    if(distance>Math.max(3.5,Math.min(6,Math.max(box.max.x-box.min.x,box.max.z-box.min.z)*scale)))continue;
    const vertical=Number.isFinite(p.y)?Math.abs(ref.top-p.y):0;
+   // Adjacent slab snapping is only valid on the same physical Y plane.
+   // A lower floor must never hijack a new slab intended for a ceiling above.
+   if(Number.isFinite(p.y)&&vertical>.75)continue;
    possible.push({ref,edge,distance,thickness:physicalThickness,
     score:distance+vertical*.8});
   }
