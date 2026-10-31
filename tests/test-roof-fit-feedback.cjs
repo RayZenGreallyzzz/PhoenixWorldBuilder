@@ -92,10 +92,12 @@ assert(v.valid,'Existing wall itself is excluded from move validation when appli
  hand=m.applyGhostPlacement(new THREE.Vector3(6,0,0));
  assert.equal(hand.manualAligned,undefined,'A one-wall gap must not be treated as aligned');
  assert.equal(m.placementOutline.material.color.getHex(),0xffc36a);
- // The roof is moved to the exact physical support height of the wall.
- m.setPlacement('roof','roof');m.placementLift=0; // the roof's nominal 2.6m height already meets this wall
+ // In manual mode there is no implicit storey height. Move the roof to the
+ // actual measured wall top and only then confirm exact physical contact.
+ const wallTop=new THREE.Box3().setFromObject(old.mesh).max.y;
+ m.setPlacement('roof','roof');m.placementLift=wallTop;
  hand=m.applyGhostPlacement(new THREE.Vector3(0,0,0));
- assert.equal(hand.manualAligned,true,'Roof bottom on wall top should turn green in manual mode');
+ assert.equal(hand.manualAligned,true,'Roof bottom on measured wall top should turn green in manual mode');
  assert.equal(m.placementOutline.material.color.getHex(),0x50f4a0);
  const lone=create();lone.smartSnap=false;
  lone.instantiate('floor',{id:301,pos:[0,0,0],rot:0,scale:1,category:'foundation',storey:0});
