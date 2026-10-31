@@ -126,6 +126,9 @@ for(const yaw of [0,90,180,270])for(const story of [0,1]){
  const target=free[0].point.clone().add(free[0].out.clone().multiplyScalar(1));
  const next=w.solvePlacement(target);
  assert(next.wallEnd&&next.reference===entry.data.id,'Next straight wall joins the other L cap');
+ assert(next.position?.toArray().every(Number.isFinite)&&Number.isFinite(next.rotation),
+  'Corner-to-wall solve must remain finite; yaw '+yaw+' story '+story+
+  ' pos '+String(next.position?.toArray())+' rot '+next.rotation);
  w.applyGhostPlacement(target);
  const info=BuildJoin.wallInfo(w,{kind:'wall',data:{},mesh:w.ghost});
  assert(Math.min(dist(info.a,free[0].point),dist(info.c,free[0].point))<.025,
