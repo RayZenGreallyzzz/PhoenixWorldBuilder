@@ -413,7 +413,8 @@ const BuildJoin=(()=>{
       (Number.isFinite(p.y)?abs(target.point.y-p.y)*.45:0)+
       (perpendicular?.09:0)+(Math.abs(extraYawDeg)===180?1.4:0);
      if(!best||score<best.score)best={position,yaw,perpendicular,
-      reference:old.entry.data.id,score,target:target.name,source:slot.name};
+      reference:old.entry.data.id,score,target:target.name,source:slot.name,
+      targetPoint:target.point.clone()};
     }
    }
   }
@@ -422,7 +423,7 @@ const BuildJoin=(()=>{
    snapped:true,edge:true,wallEnd:true,wallCorner:best.perpendicular,
    joinedTo:best.perpendicular?'wall-corner':'wall-end',reference:best.reference,
    category:w.placementCategory||'wall',sourceSocket:best.source,targetSocket:best.target,
-   physicalSocket:true};
+   targetSocketPoint:best.targetPoint?.toArray(),physicalSocket:true};
  }
  function joinEnd(w,p,candidates,box,onlyCorner=false,occupancyCandidates=candidates){
   const category=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
