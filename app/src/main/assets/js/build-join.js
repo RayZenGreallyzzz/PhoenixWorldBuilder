@@ -357,7 +357,28 @@ const BuildJoin=(()=>{
  }
  function hasCurrentDeck(w,p){return currentDeckTop(w,p)!==null}
 
- function joinEnd(w,p,candidates,box,onlyCorner=false){
+ // Socket safety: when two real module ends already share a joint, an
+ // additional wall with the SAME incoming direction would duplicate a module.
+ // Perpendicular corner/T-junctions remain legal. All coordinates are world
+ // space, so rotated and offset-pivot imported GLBs use the same tolerance.
+ function socketDirectionOccupied(candidates,owner,at,incomingOut){
+  if(!incomingOut||incomingOut.lengthSq()<.5)return false;
+  for(const other of candidates||[]){
+   if(other===owner||other.entry===owner.entry)continue;
+   const sockets=typeof BuildCurves!=='undefined'?
+    BuildCurves.sourceSockets(other):
+    (other.segments||[other]).flatMap(line=>[
+     {point:line.a,out:line.dir.clone().negate()},
+     ...(line.tipOnly?[]:[{point:line.c,out:line.dir.clone()}])
+    ]);
+   for(const socket of sockets){
+    if(Math.abs(socket.point.y-at.y)>.10||distXZ(socket.point,at)>.055)continue;
+    if(socket.out.clone().setY(0).normalize().dot(incomingOut)>.94)return true;
+   }
+  }
+  return false;
+ }
+ function joinEnd(w,p,candidates,box,onlyCorner=false,occupancyCandidates=candidates){
   const category=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
   if(!['wall','door','railing'].includes(category))return null;
   const majorX=box.max.x-box.min.x>=box.max.z-box.min.z;
@@ -384,6 +405,12 @@ const BuildJoin=(()=>{
      for(const attachment of ['min','max']){
       const local=new THREE.Vector3();
       local[main]=box[attachment][main];local[cross]=mid;
+      // Reject a socket already consumed by an aligned neighboring wall.
+      // Check the proposed NEW socket heading, not just the existing target:
+      // a perpendicular wall at the same corner is still valid.
+      const newOut=new THREE.Vector3();
+      newOut[main]=attachment==='min'?-1:1;
+      if(socketDirectionOccupied(occupancyCandidates,old,join,rotate(newOut,yaw)))continue;
       const delta=rotate(local,yaw).multiplyScalar(scale);
       const at=new THREE.Vector3(join.x-delta.x,old.bottom-box.min.y*scale+(w.placementLift||0),join.z-delta.z);
       const middle=at.clone().add(rotate(center,yaw).multiplyScalar(scale));
@@ -425,11 +452,11 @@ const BuildJoin=(()=>{
   }
   const straightWalls=nearCurves?walls.filter(x=>!BuildCurves.isArc(x.entry.kind)):walls;
   if(isEnd&&!curved){
-   const end=joinEnd(w,p,straightWalls,box,false);
+   const end=joinEnd(w,p,straightWalls,box,false,walls);
    if(end)return end;
   }
   if(mode==='corner'&&['wall','door'].includes(cat)&&!curved){
-   const end=joinEnd(w,p,straightWalls,box,true);
+   const end=joinEnd(w,p,straightWalls,box,true,walls);
    if(end)return end;
   }
   if(mode==='auto'&&isStack&&hasCurrentDeck(w,p))return null;
@@ -440,6 +467,6 @@ const BuildJoin=(()=>{
    missingTarget:mode==='stack'?'Подойди к стене, на которую ставишь следующую':'Подойди к торцу стены или углу пола'};
   return null;
  }
- return {resolve,wallInfo,nearby,corner,stack,joinEnd,cornerArms,cornerSegments};
+ return {resolve,wallInfo,nearby,corner,stack,joinEnd,cornerArms,cornerSegments,socketDirectionOccupied};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildJoin;
