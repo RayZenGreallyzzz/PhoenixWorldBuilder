@@ -199,15 +199,9 @@ const BuildJoin=(()=>{
  }
  function corner(w,p,candidates,box){
   let best=null;
-  const targetY=w.floorLevel>0?w.floorDatumAt?.(p.x,p.z,'wall')?.height??
-   w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):p.y;
-  // A 1st-floor wall must never hijack corner snapping while working on
-  // the 2nd floor, even when both are close to the same screen cursor.
-  candidates=candidates.filter(item=>{
-   const story=item.entry.data?.storey;
-   return Number.isInteger(story)?story===w.floorLevel:
-    w.floorLevel===0||abs(item.bottom-targetY)<.35;
-  }).flatMap(item=>(item.segments||[item]).map(line=>({...item,...line})));
+  // Candidate level is selected from real geometry near the pointed height.
+  // Stored floor numbers never participate in physical placement.
+  candidates=candidates.flatMap(item=>(item.segments||[item]).map(line=>({...item,...line})));
   const maxReach=4.5;
   for(let i=0;i<candidates.length;i++)for(let j=i+1;j<candidates.length;j++){
    const a=candidates[i],b=candidates[j];
@@ -220,8 +214,8 @@ const BuildJoin=(()=>{
     let where=ap.clone().add(bp).multiplyScalar(.5);
     const d=distXZ(where,p);
     if(d>maxReach)continue;
-    const levelCost=w.floorLevel>0?abs(a.bottom-targetY)*.25:0;
-    const grade=d+distXZ(ap,bp)*.4+levelCost;
+    const vertical=Number.isFinite(p.y)?abs(a.bottom-p.y):0;
+    const grade=d+distXZ(ap,bp)*.4+vertical*.22;
     if(!best||grade<best.grade){
       const farA=ap===a.a?a.c:a.a,farB=bp===b.a?b.c:b.a;
       best={where,y:Math.max(a.bottom,b.bottom),yaw:angle(a.a,a.c),
@@ -316,15 +310,14 @@ const BuildJoin=(()=>{
  }
  function stack(w,p,candidates,box){
   let best=null;
-  const expectedStorey=w.floorLevel-1;
+  const auto=w.joinMode==='auto';
   for(const wall of candidates){
    if(wall.d>3.25)continue;
-   const story=wall.entry.data?.storey;
-   // Explicit upper storey selection prefers walls immediately below it.
-   const priority=w.floorLevel>0&&story===expectedStorey?-4:0;
-   const penalty=w.floorLevel>0&&story!==null&&story!==expectedStorey?2:0;
-   const vertical=abs(wall.top-p.y)*.03;
-   const grade=wall.d+priority+penalty+vertical;
+   const vertical=Number.isFinite(p.y)?abs(wall.top-p.y):0;
+   // Automatic stacking is only allowed when the cursor/support plane is
+   // physically near the wall top. Explicit Stack mode may reach farther.
+   if(auto&&vertical>.85)continue;
+   const grade=wall.d+vertical*.65;
    if(!best||grade<best.grade)best={wall,grade};
   }
   if(!best)return null;
@@ -333,25 +326,26 @@ const BuildJoin=(()=>{
   const anchor=new THREE.Vector3(line.a.x+(line.c.x-line.a.x)*t,old.top,
    line.a.z+(line.c.z-line.a.z)*t);
   const majorX=(box.max.x-box.min.x)>=(box.max.z-box.min.z);
-  let yaw=angle(line.a,line.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
+  const yaw=angle(line.a,line.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
   return {position:solvePivot(w,box,anchor,yaw,old.top),
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,stacked:true,edge:false,
-   reference:old.entry.data.id,category:w.placementCategory||'wall',joinedTo:'stack'};
+   reference:old.entry.data.id,category:w.placementCategory||'wall',
+   joinedTo:'physical-top',physicalContact:true};
  }
  function currentDeckTop(w,p){
-  const nominal=w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6);
-  let best=null;
+  let best=null,bestDelta=Infinity;
   for(const entry of w.objects||[]){
-   if(catOf(w,entry)!=='foundation')continue;
-   const story=entry.data?.storey;
+   if(!['foundation','ceiling'].includes(catOf(w,entry)))continue;
    const root=entry.mesh;root.updateWorldMatrix(true,true);
    const box=BuildSnap.attrBounds(root);if(box.isEmpty())continue;
-   const y=byLocal(root,0,box.max.y,0).y;
-   if(story!==w.floorLevel&&(Number.isInteger(story)||abs(y-nominal)>1.25))continue;
    const local=p.clone().applyMatrix4(root.matrixWorld.clone().invert());
    if(local.x<box.min.x-.35||local.x>box.max.x+.35||
       local.z<box.min.z-.35||local.z>box.max.z+.35)continue;
-   if(best===null||y>best)best=y;
+   const y=byLocal(root,0,box.max.y,0).y;
+   const delta=Number.isFinite(p.y)?abs(y-p.y):0;
+   if(best===null||delta<bestDelta-.001||(abs(delta-bestDelta)<.001&&y>best)){
+    best=y;bestDelta=delta;
+   }
   }
   return best;
  }
@@ -387,15 +381,9 @@ const BuildJoin=(()=>{
   const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
   const scale=w.placementScale||1;
   const half=(box.max[main]-box.min[main])*scale/2;
-  const deckTop=w.floorLevel>0?currentDeckTop(w,p):null;
   let best=null;
   for(const old of candidates){
-   const floor=old.entry.data?.storey;
-   if(floor!==undefined&&floor!==null&&floor!==w.floorLevel)continue;
-   if(deckTop!==null&&abs(old.bottom-deckTop)>.09)continue;
-   const expected=w.floorLevel>0?w.heightAt(p.x,p.z)+w.floorLevel*(w.storeyHeight||2.6):
-    w.mode==='playbuild'&&w.player?w.player.position.y-.85:p.y;
-   if(floor==null&&abs(old.bottom-expected)>2.2)continue;
+
    for(const line of (old.segments||[old])){
    const baseline=angle(line.a,line.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
    for(const endpoint of (line.tipOnly?['a']:['a','c'])){
@@ -425,7 +413,8 @@ const BuildJoin=(()=>{
       if(dot>.77)continue; // Do not return inside the already built wall.
       const perpendicular=abs(dot)<.38;
       if(onlyCorner&&!perpendicular)continue;
-      const score=distance+(perpendicular?.09:0);
+      const vertical=Number.isFinite(p.y)?abs(old.bottom-p.y):0;
+      const score=distance+vertical*.45+(perpendicular?.09:0);
       if(!best||score<best.score)
        best={position:at,yaw,perpendicular,reference:old.entry.data.id,score};
      }
@@ -442,7 +431,7 @@ const BuildJoin=(()=>{
   const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
   const mode=w.joinMode||'auto';
   const isCorner=mode==='corner'||(mode==='auto'&&cat==='corner');
-  const isStack=mode==='stack'||(mode==='auto'&&cat==='wall'&&w.floorLevel>0);
+  const isStack=mode==='stack'||(mode==='auto'&&cat==='wall');
   const isEnd=mode==='auto'&&(['wall','door','railing'].includes(cat)||typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement));
   if(!isCorner&&!isStack&&!isEnd)return null;
   const walls=nearby(w,p),box=modelBounds(w);
@@ -466,7 +455,7 @@ const BuildJoin=(()=>{
   if(mode==='auto'&&isStack&&hasCurrentDeck(w,p))return null;
   const result=isCorner&&!curved?corner(w,p,straightWalls,box):isStack&&!curved?stack(w,p,straightWalls,box):null;
   if(result)return result;
-  if(mode!=='auto')return {position:new THREE.Vector3(p.x,w.placementHeight(p.x,p.z),p.z),
+  if(mode!=='auto')return {position:new THREE.Vector3(p.x,Number.isFinite(p.y)?p.y:w.heightAt(p.x,p.z),p.z),
    rotation:w.placementRotation||0,snapped:false,valid:false,category:cat,
    missingTarget:mode==='stack'?'Подойди к стене, на которую ставишь следующую':'Подойди к торцу стены или углу пола'};
   return null;
