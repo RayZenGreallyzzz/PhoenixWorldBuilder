@@ -405,7 +405,12 @@ const BuildJoin=(()=>{
       Math.hypot(box.max.x-box.min.x,box.max.z-box.min.z)*scale*.6+1.4));
      if(distance>reach)continue;
      const perpendicular=Math.abs(extraYawDeg)%180===90;
-     const score=distance+(Number.isFinite(p.y)?abs(target.point.y-p.y)*.45:0)+
+     // Cursor intent must choose the physical joint, not merely a wall
+     // orientation whose centre happens to pass near the cursor. This is
+     // essential at L-corners where one socket is already occupied.
+     const endpointDistance=distXZ(p,target.point);
+     const score=distance+endpointDistance*.75+
+      (Number.isFinite(p.y)?abs(target.point.y-p.y)*.45:0)+
       (perpendicular?.09:0)+(Math.abs(extraYawDeg)===180?1.4:0);
      if(!best||score<best.score)best={position,yaw,perpendicular,
       reference:old.entry.data.id,score,target:target.name,source:slot.name};
