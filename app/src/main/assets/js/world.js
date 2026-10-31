@@ -261,23 +261,23 @@ class WorldBuilder{
  // No scene objects are moved and manual magnet-off placement is unchanged.
  floorDatumAt(x,z,category=this.placementCategory){
   const level=this.floorLevel||0,height=this.storeyHeight||2.6;
-  const nominal=this.heightAt(x,z)+level*height;
-  const result={height:nominal,source:'configured'};
-  // In manual mode the user's configured storey height is authoritative.
-  // In magnetic mode inspect physical supports in the built scene.
-  if(this.smartSnap===false||!this.objects?.length||typeof BuildSnap==='undefined')return result;
+  const terrainY=this.heightAt(x,z),nominal=terrainY+level*height;
+  const fallback={height:nominal,source:'configured'};
+  // Three.js measures candidate geometry; BuildCore decides which measured
+  // support belongs to this storey. This keeps construction policy renderer-free.
+  if(this.smartSnap===false||!this.objects?.length||typeof BuildSnap==='undefined')return fallback;
   const cat=category||this.categoryForKind?.(this.placement)||'prop';
-  const isSlab=cat==='foundation';
-  let best=null;
+  const isSlab=cat==='foundation',candidates=[];
   for(const entry of this.objects){
    const story=entry.data?.storey;
    if(!Number.isInteger(story))continue;
    const type=entry.data?.category||this.categoryForKind?.(entry.kind)||entry.kind;
-   let priority;
-   if(!isSlab&&story===level&&type==='foundation')priority=0;
-   else if(level>0&&story===level-1&&type==='ceiling')priority=1;
-   else if(level>0&&story===level-1&&['wall','corner','door','railing'].includes(type))priority=2;
-   else continue;
+   const priority=typeof BuildCore!=='undefined'?
+    BuildCore.supportPriority(type,story,level,isSlab):
+    (!isSlab&&story===level&&type==='foundation'?0:
+     level>0&&story===level-1&&type==='ceiling'?1:
+     level>0&&story===level-1&&['wall','corner','door','railing'].includes(type)?2:null);
+   if(priority===null)continue;
    const mesh=entry.mesh;if(!mesh)continue;
    mesh.updateWorldMatrix(true,true);
    const bounds=BuildSnap.attrBounds(mesh);if(bounds.isEmpty())continue;
@@ -288,14 +288,22 @@ class WorldBuilder{
     bounds.max.y,
     THREE.MathUtils.clamp(local.z,bounds.min.z,bounds.max.z)
    ).applyMatrix4(mesh.matrixWorld);
-   const distance=Math.hypot(near.x-x,near.z-z);
-   if(distance>1.35)continue;
-   const top=near.y;
-   if(!Number.isFinite(top)||Math.abs(top-nominal)>Math.max(2.5,height*.8))continue;
-   const score=priority*10+distance;
-   if(!best||score<best.score)best={height:top,source:priority===0?'floor':priority===1?'ceiling':'wall',score};
+   candidates.push({story,type,top:near.y,distance:Math.hypot(near.x-x,near.z-z),priority});
   }
-  return best?{height:best.height,source:best.source}:result;
+  if(typeof BuildCore!=='undefined'){
+   const result=BuildCore.chooseFloorDatum({terrainY,floorLevel:level,storeyHeight:height,
+    category:cat,smartSnap:true,candidates});
+   return {height:result.height,source:result.source};
+  }
+  let best=null;
+  for(const item of candidates){
+   if(item.distance>1.35||!Number.isFinite(item.top)||
+      Math.abs(item.top-nominal)>Math.max(2.5,height*.8))continue;
+   const score=item.priority*10+item.distance;
+   if(!best||score<best.score)best={height:item.top,
+    source:item.priority===0?'floor':item.priority===1?'ceiling':'wall',score};
+  }
+  return best?{height:best.height,source:best.source}:fallback;
  }
  placementHeight(x,z,kind=this.placement,category=this.placementCategory){
   const cat=category||this.categoryForKind?.(kind)||'prop';
