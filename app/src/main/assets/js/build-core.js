@@ -112,6 +112,36 @@ const BuildCore=(()=>{
   const error=world?Math.hypot(world.point[0]-target.point[0],world.point[1]-target.point[1],world.point[2]-target.point[2]):Infinity;
   return {position:position.map(v=>round(v)),rotation:round(((yaw*180/Math.PI)%360+360)%360),error};
  }
+ // Physical contact placement. Height comes from the measured surfaces,
+ // never from a nominal storey height. This is the core rule for arbitrary
+ // wall/floor/ceiling thicknesses and arbitrary imported module dimensions.
+ function contactPivotY(sourceMinY,targetY,scaleY=1,lift=0){
+  return round(num(targetY,0)-num(sourceMinY,0)*num(scaleY,1)+num(lift,0));
+ }
+ function contactTopY(sourceMaxY,pivotY,scaleY=1){
+  return round(num(pivotY,0)+num(sourceMaxY,0)*num(scaleY,1));
+ }
+ function choosePhysicalSupport({cursorY=null,candidates=[],allowedTypes=null,
+  maxDistance=3.5,verticalWeight=.65,preferHighest=false}={}){
+  if(!Array.isArray(candidates)||!candidates.length)return null;
+  const allowed=Array.isArray(allowedTypes)?new Set(allowedTypes):null;
+  const cy=finite(cursorY)?Number(cursorY):null;
+  let best=null;
+  for(const item of candidates){
+   if(!item||allowed&&!allowed.has(String(item.type)))continue;
+   const top=Number(item.top),distance=Number(item.distance);
+   if(!Number.isFinite(top)||!Number.isFinite(distance)||distance>maxDistance)continue;
+   const vertical=cy===null?0:Math.abs(top-cy);
+   // When no useful cursor height exists (roof above bare walls), highest
+   // physical support is preferable. Otherwise the pointed surface wins.
+   const score=distance+vertical*num(verticalWeight,.65)-
+    (preferHighest?top*.001:0);
+   if(!best||score<best.score||
+      (Math.abs(score-best.score)<1e-8&&preferHighest&&top>best.top))
+    best={...item,top,distance,vertical,score};
+  }
+  return best;
+ }
  function socketOccupied(worldSockets,targetPoint,incomingOut,{positionTolerance=.055,
   yTolerance=.10,directionDot=.94,excludeOwner=null}={}){
   const point=vec3(targetPoint),incoming=normalizeXZ(incomingOut);
@@ -128,7 +158,7 @@ const BuildCore=(()=>{
   return false;
  }
  return {DEFAULT_STOREY,safeStoreyHeight,safeFloorLevel,nominalFloorY,supportPriority,
-  chooseFloorDatum,normalizeSocket,socketCompatible,transformSocket,alignSockets,socketOccupied,
-  DEFAULT_SOCKET_RULES,rotateXZ,normalizeXZ};
+  chooseFloorDatum,choosePhysicalSupport,contactPivotY,contactTopY,normalizeSocket,socketCompatible,
+  transformSocket,alignSockets,socketOccupied,DEFAULT_SOCKET_RULES,rotateXZ,normalizeXZ};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=BuildCore;
