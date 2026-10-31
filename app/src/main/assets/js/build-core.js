@@ -89,7 +89,7 @@ const BuildCore=(()=>{
   const position=[target.point[0]-shifted[0],target.point[1]-shifted[1],target.point[2]-shifted[2]];
   const world=transformSocket(source,{position,yawDeg:yaw*180/Math.PI,scale:sc});
   const error=world?Math.hypot(world.point[0]-target.point[0],world.point[1]-target.point[1],world.point[2]-target.point[2]):Infinity;
-  return {position:position.map(round),rotation:round(((yaw*180/Math.PI)%360+360)%360),error};
+  return {position:position.map(v=>round(v)),rotation:round(((yaw*180/Math.PI)%360+360)%360),error};
  }
  function socketOccupied(worldSockets,targetPoint,incomingOut,{positionTolerance=.055,
   yTolerance=.10,directionDot=.94,excludeOwner=null}={}){
