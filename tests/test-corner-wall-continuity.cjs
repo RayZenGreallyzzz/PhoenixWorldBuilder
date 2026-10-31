@@ -122,8 +122,13 @@ for(const yaw of [0,90,180,270])for(const story of [0,1]){
  assert(entry,'Corner must be placeable without overlapping existing straight wall');
  const free=BuildJoin.wallInfo(w,entry).sockets.filter(s=>dist(s.point,source.c)>.1);
  assert.equal(free.length,1,'One L arm is still available for the next wall');
+ assert(free[0].point.toArray().every(Number.isFinite)&&free[0].out.toArray().every(Number.isFinite),
+  'Free corner socket must be finite; yaw '+yaw+' story '+story+
+  ' point '+free[0].point.toArray()+' out '+free[0].out.toArray());
  w.setPlacement('wall','wall');
  const target=free[0].point.clone().add(free[0].out.clone().multiplyScalar(1));
+ assert(target.toArray().every(Number.isFinite),
+  'Corner continuation target must be finite; yaw '+yaw+' story '+story+' target '+target.toArray());
  const next=w.solvePlacement(target);
  assert(next.wallEnd&&next.reference===entry.data.id,'Next straight wall joins the other L cap');
  assert(next.position?.toArray().every(Number.isFinite)&&Number.isFinite(next.rotation),
