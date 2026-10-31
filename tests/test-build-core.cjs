@@ -41,8 +41,18 @@ assert.equal(d.source,'configured');
 close(d.height,.1+4*2.6);
 
 // Socket transform and exact alignment.
-const left={id:'L',point:[-1,0,0],out:[-1,0,0]};
-const right={id:'R',point:[1,0,0],out:[1,0,0]};
+const left={id:'L',point:[-1,0,0],out:[-1,0,0],role:'wall-end'};
+const right={id:'R',point:[1,0,0],out:[1,0,0],role:'wall-end'};
+assert(BuildCore.socketCompatible(left,{point:[0,0,0],out:[1,0,0],role:'corner-arm'}),
+ 'Wall end may join a corner arm');
+assert(!BuildCore.socketCompatible(left,{point:[0,0,0],out:[1,0,0],role:'floor-edge'}),
+ 'Wall end must not accidentally magnetize to a floor-edge socket');
+assert(BuildCore.socketCompatible(
+ {point:[0,0,0],out:[1,0,0],role:'wall-base'},
+ {point:[0,0,0],out:[-1,0,0],role:'floor-edge'}),
+ 'Wall base is compatible with floor edge by construction rules');
+assert.equal(BuildCore.alignSockets(left,{point:[0,0,0],out:[1,0,0],role:'roof-edge'}),null,
+ 'Incompatible socket roles fail before geometry alignment');
 let pose=BuildCore.alignSockets(left,{point:[5,0,2],out:[1,0,0]});
 assert(pose&&pose.error<1e-8);
 assert.deepEqual(pose.position,[6,0,2]);
