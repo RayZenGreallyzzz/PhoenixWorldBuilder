@@ -8,7 +8,7 @@ class WorldBuilder{
   this.scene.add(new THREE.HemisphereLight('#dce5e6','#515c50',0.68));this.sun=new THREE.DirectionalLight('#fff0db',0.78);this.sun.position.set(30,58,20);this.scene.add(this.sun);
   this.camera=new THREE.PerspectiveCamera(59,1,.08,280);this.yaw=.65;this.pitch=.55;this.distance=26;this.target=new THREE.Vector3(0,2,0);
   this.clock=new THREE.Clock();this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.placementAxes={x:1,y:1,z:1};this.wallThicknessMeters=null;this.placementModuleShape=null;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.selected=null;this.ghost=null;this.placementOutline=null;this.moveTarget=null;
+  this.objects=[];this.nextId=1;this.assetCache=new Map();this.assetAnimations=new Map();this.avatarMixer=null;this.avatarHeight=1.8;this.avatarModel=null;this.avatarOriginalHeight=0;this.avatarOriginalFitSize=0;this.avatarOriginalBounds=null;this.avatarSourceDimensions=null;this.avatarSource=null;this.avatarAnimationsEnabled=true;this.avatarGroundTimer=0;this.avatarGroundOffset=0;this.invertCameraX=false;this.avatarActions={};this.avatarClips=[];this.avatarMotionState='';this.avatarAnimationOverride=null;this.mode='build';this.invertJoystickX=false;this.invertJoystickY=false;this.avatarFacingOffset=Math.PI;this.placement=null;this.placementCategory=null;this.placementRotation=0;this.placementScale=1;this.placementAxes={x:1,y:1,z:1};this.wallThicknessMeters=null;this.placementModuleShape=null;this.smartSnap=true;this.joinMode='auto';this.autoThickness=true;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.edgeShift=0;this.placementLift=0;this.centerOverhead=false;this.storeyHeight=2.6;this.lastSnapResult=null;this.categoryForKind=null;this.onSnapChanged=()=>{};this.onAimTargetChanged=()=>{};this.gameSnapChoice='auto';this.gameSnapResolvedChoice=null;this.gameSnapTargetId=null;this.gameSnapSocketName=null;this.gameSnapStackT=null;this._gameAimSignature='';this.selected=null;this.ghost=null;this.placementOutline=null;this.moveTarget=null;
   this.snap=2;this.floorLevel=0;this.stroke=false;this.brush='raise';this.brushSize=6;this.brushPower=.3;this.terrainPaint='#668358';this.currentPaint='#ffffff';this.textureId=null;this.placementSurfacePaint={};
   this.renderScale=.75;this.fpsLimit=30;this.tLast=0;this.frames=0;this.fps=0;this.undo=[];this.onChanged=()=>{};this.onSelected=()=>{};
   this.terrainSize=128;this.segments=64;this.terrain=new THREE.Mesh(new THREE.PlaneGeometry(128,128,64,64),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}));this.terrain.rotation.x=-Math.PI/2;
@@ -636,13 +636,126 @@ class WorldBuilder{
   const wasGame=this.mode==='walk'||this.mode==='playbuild',isGame=mode==='walk'||mode==='playbuild';
   if(mode!==this.mode&&this.droneMode)this.setDroneMode(false);
   this.mode=mode;this.player.visible=isGame&&!this.droneMode;this.grid.visible=!isGame;this.highlight.visible=!isGame&&!!this.selected;
+  if(mode!=='playbuild'){this.gameSnapTargetId=null;this.gameSnapSocketName=null;this.gameSnapStackT=null;this.gameSnapResolvedChoice=null;this._gameAimSignature='';this.onAimTargetChanged?.(null);}
   if(isGame&&!wasGame){this.player.position.set(this.target.x,this.heightAt(this.target.x,this.target.z)+.85,this.target.z);this.distance=5.2;this.pitch=.34;}
   else if(!isGame&&wasGame){this.target.copy(this.player.position);this.target.y+=1;this.distance=17;this.pitch=.58;}
   if(mode==='playbuild'&&this.placement&&!this.ghost)this.setPlacement(this.placement,this.placementCategory);
   if(mode==='walk'&&this.ghost){this.ghost.removeFromParent();this.ghost=null;this.placementOutline?.removeFromParent();}
   this.onChanged();
  }
+ setGameSnapChoice(choice){
+  const allowed=new Set(['auto','left-end','top-left','top','top-right','right-end']);
+  this.gameSnapChoice=allowed.has(choice)?choice:'auto';
+  this.updateGameGhost();
+  return this.gameSnapChoice;
+ }
+ buildAimHit(maxDistance=24){
+  if(this.mode!=='playbuild'||!this.camera||!this.ray)return null;
+  this.pointer.set(0,0);this.ray.setFromCamera(this.pointer,this.camera);
+  const entries=(this.objects||[]).filter(entry=>{
+   const cat=entry.data?.category||this.categoryForKind?.(entry.kind)||entry.kind;
+   return ['wall','corner','door','railing'].includes(cat);
+  });
+  if(!entries.length)return null;
+  const byRoot=new Map(entries.map(entry=>[entry.mesh,entry]));
+  const hits=this.ray.intersectObjects(entries.map(entry=>entry.mesh),true);
+  for(const hit of hits){
+   if(hit.distance>maxDistance)break;
+   let root=hit.object;
+   while(root&&!byRoot.has(root))root=root.parent;
+   const entry=byRoot.get(root);if(!entry)continue;
+   const normal=hit.face?.normal?.clone();
+   if(normal)normal.applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
+   return {entry,point:hit.point.clone(),normal,distance:hit.distance};
+  }
+  return null;
+ }
+ gameAimOptions(hit=this.buildAimHit()){
+  if(!hit||typeof BuildJoin==='undefined'||typeof BuildCurves==='undefined')return null;
+  const entry=hit.entry,info=BuildJoin.wallInfo(this,entry);if(!info)return null;
+  const sockets=BuildCurves.sourceSockets(info)||[];
+  const allInfos=(this.objects||[]).map(e=>{
+   const cat=e.data?.category||this.categoryForKind?.(e.kind)||e.kind;
+   return ['wall','corner','door','railing'].includes(cat)?BuildJoin.wallInfo(this,e):null;
+  }).filter(Boolean);
+  const visibleSockets=sockets.map(socket=>{
+   const screen=socket.point.clone().project(this.camera);
+   const occupied=BuildJoin.socketDirectionOccupied?.(
+    allInfos,info,socket.point,new THREE.Vector3(1,0,0))||false;
+   return {...socket,screenX:screen.x,screenY:screen.y,occupied};
+  }).sort((a,b)=>a.screenX-b.screenX);
+  const left=visibleSockets[0]||null,right=visibleSockets[visibleSockets.length-1]||null;
+  const lines=info.segments?.length?info.segments:[info];
+  let line=lines[0]||info,best=Infinity;
+  for(const candidate of lines){
+   const a=candidate.a,c=candidate.c,dx=c.x-a.x,dz=c.z-a.z,len2=dx*dx+dz*dz;
+   const t=len2>1e-8?THREE.MathUtils.clamp(((hit.point.x-a.x)*dx+(hit.point.z-a.z)*dz)/len2,0,1):.5;
+   const x=a.x+dx*t,z=a.z+dz*t,d=Math.hypot(hit.point.x-x,hit.point.z-z);
+   if(d<best){best=d;line=candidate}
+  }
+  const targetLength=Math.max(.001,line.length||Math.hypot(line.c.x-line.a.x,line.c.z-line.a.z));
+  let incomingLength=0;
+  if(this.ghost&&typeof BuildSnap!=='undefined'){
+   const b=BuildSnap.dimensionBounds(BuildSnap.attrBounds(this.ghost),this);
+   if(b&&!b.isEmpty())incomingLength=Math.max(b.max.x-b.min.x,b.max.z-b.min.z)*(this.placementScale||1);
+  }
+  const tooWide=incomingLength>targetLength+.035;
+  const margin=THREE.MathUtils.clamp(incomingLength/(2*targetLength),0,.5);
+  const aScreen=line.a.clone().project(this.camera).x,cScreen=line.c.clone().project(this.camera).x;
+  const screenLeftT=aScreen<=cScreen?margin:1-margin;
+  const screenRightT=aScreen<=cScreen?1-margin:margin;
+  const topPoint=t=>{
+   const p=line.a.clone().lerp(line.c,t);p.y=info.top;return p;
+  };
+  return {entry,info,hit,left,right,targetLength,incomingLength,tooWide,
+   choices:{
+    'left-end':left?{point:left.point.clone(),socketName:left.name,disabled:left.occupied,reason:left.occupied?'Торец уже занят':''}:null,
+    'right-end':right?{point:right.point.clone(),socketName:right.name,disabled:right.occupied,reason:right.occupied?'Торец уже занят':''}:null,
+    'top-left':{point:topPoint(screenLeftT),stackT:screenLeftT,disabled:tooWide,reason:tooWide?'Новая стена шире опорной':''},
+    'top':{point:topPoint(.5),stackT:.5,disabled:tooWide,reason:tooWide?'Новая стена шире опорной':''},
+    'top-right':{point:topPoint(screenRightT),stackT:screenRightT,disabled:tooWide,reason:tooWide?'Новая стена шире опорной':''}
+   }};
+ }
+ gameAimPlacementPoint(){
+  if(this.mode!=='playbuild'||!this.placement||this.smartSnap===false){
+   this.gameSnapTargetId=null;this.gameSnapSocketName=null;this.gameSnapStackT=null;return null;
+  }
+  const options=this.gameAimOptions();
+  if(!options){
+   const changed=this._gameAimSignature!=='none';
+   this._gameAimSignature='none';this.gameSnapTargetId=null;this.gameSnapSocketName=null;
+   this.gameSnapStackT=null;this.gameSnapResolvedChoice=null;
+   if(changed)this.onAimTargetChanged?.(null);
+   return null;
+  }
+  let choice=this.gameSnapChoice||'auto';
+  if(choice==='auto'){
+   const candidates=['left-end','top','right-end'].map(name=>{
+    const item=options.choices[name];if(!item||item.disabled)return null;
+    const screen=item.point.clone().project(this.camera);
+    return {name,item,score:Math.hypot(screen.x,screen.y)};
+   }).filter(Boolean).sort((a,b)=>a.score-b.score);
+   choice=candidates[0]?.name||'top';
+  }
+  const chosen=options.choices[choice]||options.choices.top;
+  this.gameSnapResolvedChoice=choice;this.gameSnapTargetId=options.entry.data?.id??null;
+  this.gameSnapSocketName=choice.endsWith('-end')?chosen?.socketName||null:null;
+  this.gameSnapStackT=choice.startsWith('top')?chosen?.stackT??.5:null;
+  const signature=[this.gameSnapTargetId,choice,chosen?.disabled?'blocked':'ok',
+   this.gameSnapSocketName||'',Math.round((this.gameSnapStackT??-1)*1000)].join(':');
+  if(signature!==this._gameAimSignature){
+   this._gameAimSignature=signature;
+   this.onAimTargetChanged?.({targetId:this.gameSnapTargetId,choice,resolvedChoice:choice,
+    category:options.entry.data?.category||this.categoryForKind?.(options.entry.kind),
+    disabled:!!chosen?.disabled,reason:chosen?.reason||'',options});
+  }
+  return chosen?.point?.clone()||null;
+ }
  forwardPlacementPoint(){
+  if(this.mode==='playbuild'){
+   const aimed=this.gameAimPlacementPoint();
+   if(aimed)return aimed;
+  }
   if(this.mode==='playbuild'&&this.droneMode){
    const x=THREE.MathUtils.clamp(this.target.x,-62,62),z=THREE.MathUtils.clamp(this.target.z,-62,62);
    return new THREE.Vector3(x,this.placementHeight(x,z),z);
