@@ -160,6 +160,7 @@ const BuildJoin=(()=>{
   const possible=[];
   for(const entry of w.objects||[]){
    if(entry===w.moveTarget)continue;
+   if(w.mode==='playbuild'&&w.gameSnapTargetId!=null&&entry.data?.id!==w.gameSnapTargetId)continue;
    if(!wallCategory(catOf(w,entry))&&!(typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind)))continue;
    const root=entry.mesh;
    // Fast world-space rejection based on geometry bounding sphere after pivot shift.
@@ -312,8 +313,11 @@ const BuildJoin=(()=>{
  }
  function stack(w,p,candidates,box){
   let best=null;
-  const auto=w.joinMode==='auto';
+  const guided=w.mode==='playbuild'&&w.gameSnapTargetId!=null&&
+   String(w.gameSnapResolvedChoice||'').startsWith('top');
+  const auto=w.joinMode==='auto'&&!guided;
   for(const wall of candidates){
+   if(guided&&wall.entry.data?.id!==w.gameSnapTargetId)continue;
    if(wall.d>3.25)continue;
    const vertical=Number.isFinite(p.y)?abs(wall.top-p.y):0;
    // Automatic stacking is only allowed when the cursor/support plane is
@@ -324,15 +328,27 @@ const BuildJoin=(()=>{
   }
   if(!best)return null;
   const old=best.wall,line=old.bestSegment||old;
-  const delta=(w.edgeShift||0),t=clamp(old.projected.t+delta/Math.max(line.length,.001),0,1);
-  const anchor=new THREE.Vector3(line.a.x+(line.c.x-line.a.x)*t,old.top,
-   line.a.z+(line.c.z-line.a.z)*t);
   const majorX=(box.max.x-box.min.x)>=(box.max.z-box.min.z);
   const yaw=angle(line.a,line.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
+  const scale=w.placementScale||1;
+  const incomingLength=(majorX?box.max.x-box.min.x:box.max.z-box.min.z)*scale;
+  const supportLength=Math.max(.001,line.length||distXZ(line.a,line.c));
+  if(guided&&incomingLength>supportLength+.035){
+   const t=.5,anchor=new THREE.Vector3(line.a.x+(line.c.x-line.a.x)*t,old.top,
+    line.a.z+(line.c.z-line.a.z)*t);
+   return {position:solvePivot(w,box,anchor,yaw,old.top),rotation:((yaw*180/Math.PI)%360+360)%360,
+    snapped:false,stacked:true,valid:false,edge:false,reference:old.entry.data.id,
+    category:w.placementCategory||'wall',missingTarget:'Новая стена шире опорной и выходит за её границы',
+    joinedTo:'physical-top',physicalContact:true};
+  }
+  const baseT=guided&&Number.isFinite(w.gameSnapStackT)?w.gameSnapStackT:old.projected.t;
+  const delta=(w.edgeShift||0),t=clamp(baseT+delta/supportLength,0,1);
+  const anchor=new THREE.Vector3(line.a.x+(line.c.x-line.a.x)*t,old.top,
+   line.a.z+(line.c.z-line.a.z)*t);
   return {position:solvePivot(w,box,anchor,yaw,old.top),
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,stacked:true,edge:false,
    reference:old.entry.data.id,category:w.placementCategory||'wall',
-   joinedTo:'physical-top',physicalContact:true};
+   joinedTo:'physical-top',physicalContact:true,boundsContained:true};
  }
  function currentDeckTop(w,p){
   let best=null,bestDelta=Infinity;
@@ -390,6 +406,8 @@ const BuildJoin=(()=>{
    if(deckTop!==null&&abs(old.bottom-deckTop)>.09)continue;
    const targets=BuildCurves.sourceSockets(old);
    for(const target of targets||[]){
+    if(w.mode==='playbuild'&&w.gameSnapTargetId===old.entry.data?.id&&
+       w.gameSnapSocketName&&target.name!==w.gameSnapSocketName)continue;
     if(Number.isFinite(p.y)&&abs(target.point.y-p.y)>.75)continue;
     for(const slot of slots)for(const extraYawDeg of turns){
      const pose=BuildCore.alignSockets(
@@ -499,7 +517,8 @@ const BuildJoin=(()=>{
  }
  function resolve(w,p){
   const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
-  const mode=w.joinMode||'auto';
+  const guidedChoice=w.mode==='playbuild'&&w.gameSnapTargetId!=null?w.gameSnapResolvedChoice:null;
+  const mode=String(guidedChoice||'').startsWith('top')?'stack':(w.joinMode||'auto');
   const isCorner=mode==='corner'||(mode==='auto'&&cat==='corner');
   const isStack=mode==='stack'||(mode==='auto'&&cat==='wall');
   const isEnd=mode==='auto'&&(['wall','door','railing'].includes(cat)||typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement));
