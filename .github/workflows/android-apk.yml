@@ -53,6 +53,7 @@ jobs:
           node tests/test-zip.cjs
           node tests/test-build-core.cjs
           node tests/test-physical-contact-chain.cjs
+          node tests/test-game-aim-wall-snap.cjs
           node tests/test-build-physics.cjs
           node tests/test-avatar.cjs
           node tests/test-game-input.cjs
