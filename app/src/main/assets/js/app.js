@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id), $all=s=>[...document.querySelectorAll(s)];
-const BUILTINS=[['floor','Пол 2×2','foundation'],['ceiling','Потолок / перекрытие 2×2','ceiling'],['wall','Стена 2×2,6','wall'],['corner','Угол стены 90°','corner'],['arc90','Закруглённая стена 90° · R2','wall'],['arc180','Полукруглая стена 180° · R2','wall'],['arcFloor90','Закруглённый пол 90° · R2','foundation'],['arcCeiling90','Закруглённое перекрытие 90° · R2','ceiling'],['window','Стена с окном','wall'],['roof','Двускатная крыша (старая)','roof'],['roof1','Крыша 1 скат • односкатная','roof'],['roof2','Крыша 2 ската • двускатная','roof'],['roof3','Крыша 3 ската • трёхскатная','roof'],['roof4','Крыша 4 ската • шатровая','roof'],['roof5','Крыша 5 скатов • пятигранная','roof'],['roof6','Крыша 6 скатов • шестигранная','roof'],['roofSlope','Кровля • отдельный скат','roof'],['roofRidge','Кровля • конёк','roof'],['roofValley','Кровля • ендова','roof'],['roofHip','Кровля • диагональное ребро','roof'],['roofEave','Кровля • карниз','roof'],['roofInnerCorner','Кровля • внутренний угол','roof'],['roofOuterCorner','Кровля • наружный угол','roof'],['roofGable','Кровля • фронтон','roof'],['roofFlat','Кровля • плоский модуль','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
+const BUILTINS=[['floor','Пол (стартовый)','foundation'],['ceiling','Потолок / перекрытие','ceiling'],['wall','Стена (стартовая)','wall'],['corner','Угол стены 90°','corner'],['arc90','Закруглённая стена 90° · R2','wall'],['arc180','Полукруглая стена 180° · R2','wall'],['arcFloor90','Закруглённый пол 90° · R2','foundation'],['arcCeiling90','Закруглённое перекрытие 90° · R2','ceiling'],['window','Стена с окном','wall'],['roof','Двускатная крыша (старая)','roof'],['roof1','Крыша 1 скат • односкатная','roof'],['roof2','Крыша 2 ската • двускатная','roof'],['roof3','Крыша 3 ската • трёхскатная','roof'],['roof4','Крыша 4 ската • шатровая','roof'],['roof5','Крыша 5 скатов • пятигранная','roof'],['roof6','Крыша 6 скатов • шестигранная','roof'],['roofSlope','Кровля • отдельный скат','roof'],['roofRidge','Кровля • конёк','roof'],['roofValley','Кровля • ендова','roof'],['roofHip','Кровля • диагональное ребро','roof'],['roofEave','Кровля • карниз','roof'],['roofInnerCorner','Кровля • внутренний угол','roof'],['roofOuterCorner','Кровля • наружный угол','roof'],['roofGable','Кровля • фронтон','roof'],['roofFlat','Кровля • плоский модуль','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
 const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['corner','Углы'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
@@ -524,6 +524,41 @@ function changeDimension(axis,percent,game=false){
  syncDimensionInputs();
  toast((selected?'Выбранный модуль: ':'Новый модуль: ')+axis.toUpperCase()+' '+Math.round(factor*100)+'%');
 }
+const AIM_CHOICE_LABELS={
+ 'auto':'Авто по прицелу','left-end':'левый торец','right-end':'правый торец',
+ 'top-left':'сверху по левому краю','top':'сверху по центру','top-right':'сверху по правому краю'
+};
+function refreshAimSnapUI(state=null){
+ const activeMode=w.mode==='playbuild';
+ const hint=$('aimSnapHint');if(hint)hint.classList.toggle('hidden',!activeMode);
+ const label=$('aimTargetLabel'),detail=$('aimTargetDetail');
+ const buttons=$all('[data-game-snap]');
+ const options=state?.options?.choices||{};
+ for(const button of buttons){
+  const choice=button.dataset.gameSnap;
+  const item=options[choice];
+  const unavailable=activeMode&&state&&choice!=='auto'&&(!item||item.disabled);
+  button.disabled=!!unavailable;
+  button.classList.toggle('unavailable',!!unavailable);
+  button.classList.toggle('active',(w.gameSnapChoice||'auto')===choice);
+ }
+ document.body.classList.toggle('aimWall',!!(activeMode&&state&&!state.disabled));
+ document.body.classList.toggle('aimBlocked',!!(activeMode&&state?.disabled));
+ if(!activeMode)return;
+ if(!state){
+  if(label)label.textContent='Прицел: наведи на стену';
+  if(detail)detail.textContent='Крестик выбирает конкретную стену; соседние стены не перехватывают магнит.';
+  if(hint)hint.textContent='Наведи крестик на стену';
+  return;
+ }
+ const chosen=state.resolvedChoice||w.gameSnapResolvedChoice||w.gameSnapChoice||'auto';
+ const text='Стена #'+state.targetId+' • '+(AIM_CHOICE_LABELS[chosen]||chosen);
+ if(label)label.textContent=text;
+ const selected=state.options?.choices?.[chosen];
+ const reason=state.reason||selected?.reason||'Торец к торцу по реальной геометрии';
+ if(detail)detail.textContent=reason;
+ if(hint)hint.textContent=(state.disabled?'✕ ':'🧲 ')+text+(reason?' · '+reason:'');
+}
 function refreshConstructionUI(){
  const height=(w.storeyHeight||2.6).toFixed(2);
  $('storeyHeightInput').value=height;$('buildStoreyHeight').value=height;
@@ -542,7 +577,7 @@ function refreshConstructionUI(){
  const sourceName={floor:'по верхней плите',ceiling:'по перекрытию',wall:'по стене',configured:'по высоте этажа'}[datum.source];
  for(const id of ['floorDatumInfo','gameFloorDatumInfo'])
   $(id).textContent='Основание: '+datum.height.toFixed(2)+' м ('+sourceName+')';
- $('btnSnapToggle').textContent=w.smartSnap!==false?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
+ $('btnSnapToggle').textContent=w.smartSnap!==false?'🧲 Магнит по прицелу: вкл.':'○ Магнит выключен';
  $('btnSnapToggle').setAttribute('aria-pressed',String(w.smartSnap!==false));
  updateSurfaceUI();
  $('buildJoinMode').value=w.joinMode||'auto';
@@ -715,6 +750,7 @@ function setMode(mode){w.setMode(mode);const game=mode==='walk'||mode==='playbui
  $('joystick').classList.toggle('hidden',!game);$('walkHint').classList.toggle('hidden',mode!=='walk');$('actionbar').classList.toggle('hidden',mode==='terrain'||game);
  $('gameBuildHud').classList.toggle('hidden',mode!=='playbuild');$('btnBackEditor').classList.toggle('hidden',mode!=='walk');
  $('btnGameBuild').textContent=mode==='playbuild'?'🏗️ Строим':'🎮 Строить в игре';
+ refreshAimSnapUI(mode==='playbuild'?null:null);
  syncDroneUI();
  }
 function wireButtons(){
@@ -741,6 +777,13 @@ function wireButtons(){
  $('btnGameSurfaceClear').onclick=clearSurface;
  $('btnGameSavePreset').onclick=saveModulePreset;
  $('btnBuildRotate').onclick=()=>toast('Дополнительный поворот: '+w.rotatePlacement()+'°');
+ $all('[data-game-snap]').forEach(button=>button.onclick=()=>{
+  const choice=w.setGameSnapChoice(button.dataset.gameSnap);
+  const aimed=w.gameAimPlacementPoint();
+  refreshAimSnapUI(aimed?{targetId:w.gameSnapTargetId,resolvedChoice:w.gameSnapResolvedChoice,
+   disabled:false,reason:'',options:w.gameAimOptions()}:null);
+  toast(choice==='auto'?'Магнит выбирает точку по прицелу':'Привязка: '+(AIM_CHOICE_LABELS[choice]||choice));
+ });
  $('buildJoinMode').onchange=e=>{
   const mode=w.setJoinMode(e.target.value);refreshConstructionUI();
   toast(({auto:'Привязка по торцам стен, затем по краю пола',corner:'Стыковка под углом 90°',stack:'Ставим стену над стеной',free:'Свободная установка'})[mode]);
@@ -759,9 +802,10 @@ function wireButtons(){
  $('btnCornerZUp').onclick=()=>shiftCorner(0,.1);
  $('btnSnapToggle').onclick=()=>{
   const active=w.toggleSmartSnap();
-  $('btnSnapToggle').textContent=active?'🧲 К краю пола: вкл.':'○ Свободно: сетка';
+  $('btnSnapToggle').textContent=active?'🧲 Магнит по прицелу: вкл.':'○ Магнит выключен';
   $('btnSnapToggle').setAttribute('aria-pressed',String(active));
-  toast(active?'Привязка к краям пола включена':'Свободная установка по сетке');
+  if(!active)refreshAimSnapUI(null);
+  toast(active?'Наведи прицел на стену и выбери физическую точку':'Магнит по прицелу выключен');
  };
  const moveEdge=delta=>{
   const v=w.shiftAlongEdge(delta);
@@ -781,14 +825,15 @@ function wireButtons(){
   const centered=w.toggleOverheadCenter();refreshConstructionUI();
   toast(centered?'Крыша и потолок центрируются над выбранным полом':'Свободное положение крыши и потолка');
  };
+ w.onAimTargetChanged=state=>refreshAimSnapUI(state);
  w.onSnapChanged=result=>{
   const good=result.valid!==false;
   const detail=result.reason||(result.valid===false?result.missingTarget:
    result.corner?'Угол состыкован':
-   result.stacked?'Стена над стеной':
+   result.stacked?(result.boundsContained?'Стена точно в границах опорной стены':'Стена над стеной'):
    result.slab?'Толщина соседнего пола: '+Math.round((result.referenceThickness||0)*100)+' см':
    result.overhead?'Перекрытие выровнено':
-   result.snapped?'Привязано к детали':'По сетке');
+   result.physicalSocket?'Торцы стен совпали':result.snapped?'Привязано к детали':'По сетке');
   const adjusted=!!(w.cornerOffsetX||w.cornerOffsetZ||w.placementLift);
   const tier=(!good||result.conflict)?'blocked':
    result.manualAligned||good&&result.snapped&&!adjusted?'allowed':'manual';
