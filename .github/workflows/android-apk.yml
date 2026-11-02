@@ -82,6 +82,7 @@ jobs:
           node tests/test-socket-occupancy.cjs
           node tests/test-rounded-starters.cjs
           node tests/test-four-rounded-floor-corners.cjs
+          node tests/test-wall-exterior-floor-edge.cjs
           node tests/test-undo-magnetic-snap.cjs
           node tests/test-module-presets.cjs
           node tests/test-module-forge.cjs
