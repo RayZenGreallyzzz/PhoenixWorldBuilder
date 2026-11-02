@@ -5,7 +5,7 @@ const java=fs.readFileSync(path.join(root,'java/com/phoenix/worldbuilder/MainAct
 assert(java.includes('new Intent(Intent.ACTION_OPEN_DOCUMENT)'),'Native chooser must not inherit WebView MIME restrictions');
 assert(java.includes('intent.setType("*/*")'),'GLB should be selectable even when Android reports application/octet-stream');
 assert(!java.includes('params.createIntent()'),'Do not carry across stale EXTRA_MIME_TYPES');
-assert(/\\.glb\\$\/i\.test\(f.name\)/.test(app),'JavaScript validates selected GLB by extension');
+assert(app.includes("uniqueImportedId('glb:',f.name)"),'JavaScript recognizes selected GLB as a model');
 const handler=app.slice(app.indexOf(" $('fileAssets').onchange="),app.indexOf(" $('fileProject').onchange="));
 assert(!/f\.size\s*[><=]|MAX_FILE|50\s*\*\s*1024/.test(handler),
  'GLB importer has no arbitrary 50 MB size cutoff');
