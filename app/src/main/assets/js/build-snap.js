@@ -181,6 +181,16 @@ const BuildSnap=(()=>{
   if(!root)return [];
   root.updateWorldMatrix(true,true);
   const bounds=attrBounds(root);if(bounds.isEmpty())return [];
+  // The bundled 90° sector has two *radial* straight sides and a curved
+  // circumference. Explicit radial geometry is more reliable than extracting
+  // the edge frequency of its deliberately duplicated fan triangles.
+  if(root.name==='arcFloor90'||root.name==='arcCeiling90'){
+   const top=bounds.max.y;
+   return [
+    {a:new THREE.Vector3(0,top,0),b:new THREE.Vector3(bounds.max.x,top,0),length:bounds.max.x},
+    {a:new THREE.Vector3(0,top,0),b:new THREE.Vector3(0,top,bounds.max.z),length:bounds.max.z}
+   ];
+  }
   const inverse=root.matrixWorld.clone().invert(),relative=new THREE.Matrix4();
   const vertex=new THREE.Vector3(),counts=new Map(),lookup=new Map();
   let processed=0;
