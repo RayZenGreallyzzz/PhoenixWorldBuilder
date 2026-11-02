@@ -29,22 +29,30 @@ assert.equal(w.placementOutline.material.color.getHex(),0xffc36a,'Unsnapped empt
 const first=w.placeAt(pos(0,0,0));
 assert(first&&w.objects.length===1,'First foundation saved');
 assert.equal(first.mesh.children[0].material.opacity,1,'Placed module is not tinted/transparent');
-// Automatic collision prevention is enforced with magnet enabled.
-w.smartSnap=true;
+// Magnet-off mode reports the collision but permits deliberate placement.
 hit=w.applyGhostPlacement(pos(0,0,0));
-assert.equal(hit.valid,false,'Identical overlapping foundation must be red');
-assert.equal(hit.obstacle,first.data.id);
+assert.equal(hit.valid,true,'Free placement permits intentional overlapping foundations');
+assert.equal(hit.conflict,true,'Overlapping foundation is clearly reported as a collision');
 assert.equal(w.placementOutline.material.color.getHex(),0xff635c);
-assert.equal(w.placeAt(pos(0,0,0)),null,'Blocked placement creates no duplicate');
-assert.equal(w.objects.length,1);
+// In automatic mode the same exact geometry must be rejected by the validator.
+w.smartSnap=true;
+const blocked=BuildPlacementValidator.validate(w,{category:'foundation',snapped:false},w.ghost);
+assert.equal(blocked.valid,false,'Automatic collision validation rejects duplicate foundation');
+assert.equal(blocked.obstacle,first.data.id);
+w.smartSnap=false;
+assert.equal(w.objects.length,1,'Collision preview does not create a duplicate');
 hit=w.applyGhostPlacement(pos(2,0,0));
 assert.equal(hit.valid,true,'Edge-to-edge floors allowed');
 assert.equal(w.placeAt(pos(2,0,0)).data.id,2);
 w.setPlacement('wall','wall');
 let oldWall=w.instantiate('wall',{id:110,pos:[0,0,0],rot:0,scale:1,category:'wall',storey:0});
 hit=w.applyGhostPlacement(pos(0,0,0));
-assert.equal(hit.valid,false,'Duplicate parallel wall blocked');
-assert.equal(w.placeAt(pos(0,0,0)),null);
+assert.equal(hit.valid,true,'Manual wall overlap is permitted');
+assert.equal(hit.conflict,true,'Parallel wall collision is shown in red');
+w.smartSnap=true;
+const wallBlocked=BuildPlacementValidator.validate(w,{category:'wall',snapped:false},w.ghost);
+assert.equal(wallBlocked.valid,false,'Magnetic collision validator rejects parallel overlap');
+w.smartSnap=false;
 w.placementRotation=90;
 hit=w.applyGhostPlacement(pos(0,0,0));
 assert.equal(hit.valid,true,'Perpendicular wall intersection is a valid join');
