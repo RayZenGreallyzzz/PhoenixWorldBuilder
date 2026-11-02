@@ -55,7 +55,15 @@ close(new THREE.Box3().setFromObject(roof.mesh).min.y,ceilingTop,'Roof lowest ed
 w.setFloorLevel(6);w.setStoreyHeight(4.1);
 w.setPlacement('floor','foundation');
 const nextFloorPoint=new THREE.Vector3(center.x,ceilingTop,center.z);
-solved=w.solvePlacement(nextFloorPoint);assert(solved.snapped,'Foundation can sit on previous ceiling');
+solved=w.solvePlacement(nextFloorPoint);
+assert(solved.snapped&&solved.stackedOnSlab,'Floor attaches to ceiling top, not to a lower floor edge');
+assert.equal(solved.reference,ceiling.data.id,'Ceiling directly under the cursor is the structural support');
+const expectedUpperCentre=new THREE.Box3().setFromObject(ceiling.mesh).getCenter(new THREE.Vector3());
+const newBounds=BuildSnap.attrBounds(w.ghost);
+const incomingCentre=solved.position.clone().add(
+ new THREE.Vector3((newBounds.min.x+newBounds.max.x)/2,0,(newBounds.min.z+newBounds.max.z)/2));
+close(incomingCentre.x,expectedUpperCentre.x,'New floor aligned over ceiling X');
+close(incomingCentre.z,expectedUpperCentre.z,'New floor aligned over ceiling Z');
 const topFloor=w.placeAt(nextFloorPoint);
 const topFloorTop=new THREE.Box3().setFromObject(topFloor.mesh).max.y;
 close(new THREE.Box3().setFromObject(topFloor.mesh).min.y,ceilingTop,'Next floor bottom touches ceiling top');
