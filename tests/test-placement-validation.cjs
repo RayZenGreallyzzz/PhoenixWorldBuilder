@@ -29,6 +29,8 @@ assert.equal(w.placementOutline.material.color.getHex(),0xffc36a,'Unsnapped empt
 const first=w.placeAt(pos(0,0,0));
 assert(first&&w.objects.length===1,'First foundation saved');
 assert.equal(first.mesh.children[0].material.opacity,1,'Placed module is not tinted/transparent');
+// Automatic collision prevention is enforced with magnet enabled.
+w.smartSnap=true;
 hit=w.applyGhostPlacement(pos(0,0,0));
 assert.equal(hit.valid,false,'Identical overlapping foundation must be red');
 assert.equal(hit.obstacle,first.data.id);
@@ -67,7 +69,8 @@ const custom=rotated.clone(true);w.assetCache.set('glb:angled',custom);
 w.setPlacement('glb:angled','foundation');
 w.placementRotation=45;
 hit=w.applyGhostPlacement(pos(25,0,25));
-assert.equal(hit.valid,false,'Same rotated imported GLB overlaps existing floor');
+assert.equal(hit.valid,true,'Manual placement may intentionally overlap imported GLB');
+assert.equal(hit.conflict,true,'Overlapping imported GLB is still reported as a conflict');
 hit=w.applyGhostPlacement(pos(35,0,25));
 assert.equal(hit.valid,true,'Distant rotated GLB does not collide');
 const index=fs.readFileSync(path.join(root,'../index.html'),'utf8');
