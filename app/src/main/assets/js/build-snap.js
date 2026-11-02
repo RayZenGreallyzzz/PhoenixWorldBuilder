@@ -320,9 +320,11 @@ const BuildSnap=(()=>{
   const actual=slabStraightEdges(model);
   const wide=box.max.x-box.min.x,deep=box.max.z-box.min.z;
   const topEdges=actual.filter(e=>e.length>.4);
-  const shouldPhysical=w.placement==='arcFloor90'||(topEdges.length>=2&&
-   topEdges.length>2&&(topEdges.length!==4||topEdges.some(e=>
-    Math.abs(e.length-wide)>.03&&Math.abs(e.length-deep)>.03)));
+  // Only rounded floor geometry needs tangent/radial edge alignment.
+  // Arbitrary slanted/cut GLB floors keep the legacy orientation and scale.
+  const isRounded=w.placement==='arcFloor90'||
+   /(?:round|curv|arc.?floor|floor.?arc|закругл|кругл|полукруг)/i.test(String(w.placement||''));
+  const shouldPhysical=isRounded&&topEdges.length>=2;
   if(shouldPhysical){
    const joined=radialFloorSnap(w,p,model,box,ref,edge,sourceThickness,scale);
    if(joined)return joined;
