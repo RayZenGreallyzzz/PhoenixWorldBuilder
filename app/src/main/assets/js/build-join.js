@@ -548,6 +548,47 @@ const BuildJoin=(()=>{
    snapped:true,edge:true,wallEnd:true,wallCorner:best.perpendicular,
    joinedTo:best.perpendicular?'wall-corner':'wall-end',reference:best.reference,category};
  }
+ // For a reused curved/L-shaped GLB, identical horizontal sections are the
+ // only automatic upper-storey placement we can prove without a contour solver.
+ // Matching the source transform exactly also matches its exterior silhouette.
+ function stackMatchedProfile(w,p,candidates,box,cat){
+  const root=w.ghost||w.assetCache?.get(w.placement)||w.makeBuiltin?.(w.placement);
+  if(!root)return null;
+  const srcScale=w.placementScale||1;
+  const srcWidth=(box.max.x-box.min.x)*srcScale;
+  const srcDepth=(box.max.z-box.min.z)*srcScale;
+  const requestedTop=w.joinMode==='stack'||
+   (w.mode==='playbuild'&&String(w.gameSnapResolvedChoice||'').startsWith('top'));
+  let selected=null;
+  for(const target of candidates){
+   if(target.entry===w.moveTarget||target.entry.kind!==w.placement)continue;
+   if(!['wall','corner','door'].includes(catOf(w,target.entry)))continue;
+   const vertical=Math.abs(target.top-p.y);
+   if(!requestedTop&&(vertical>.75||target.d>1.2))continue;
+   if(requestedTop&&target.d>3.25)continue;
+   if(!selected||target.d+vertical*.3<selected.d+Math.abs(selected.top-p.y)*.3)
+    selected=target;
+  }
+  if(!selected)return null;
+  const base=selected.root,baseBounds=BuildSnap.attrBounds(base);
+  if(baseBounds.isEmpty())return null;
+  const targetWidth=(baseBounds.max.x-baseBounds.min.x)*Math.abs(base.scale.x);
+  const targetDepth=(baseBounds.max.z-baseBounds.min.z)*Math.abs(base.scale.z);
+  const difference=Math.max(Math.abs(targetWidth-srcWidth),Math.abs(targetDepth-srcDepth));
+  if(difference>.002){
+   return {position:new THREE.Vector3(p.x,p.y,p.z),rotation:w.placementRotation||0,
+    snapped:false,valid:false,stacked:true,category:cat,
+    missingTarget:'Контур верхнего угла отличается от нижнего. Выключи магнит и подгони вручную.'};
+  }
+  base.updateWorldMatrix(true,true);
+  const origin=base.getWorldPosition(new THREE.Vector3());
+  const position=new THREE.Vector3(origin.x,
+   selected.top-box.min.y*srcScale,origin.z);
+  const rotation=((base.rotation.y*180/Math.PI)%360+360)%360;
+  return {position,rotation,snapped:true,stacked:true,profileStack:true,
+   reference:selected.entry.data.id,category:cat,physicalContact:true,
+   exteriorAligned:true,boundsContained:true};
+ }
  function resolve(w,p){
   const cat=w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
   const guidedChoice=w.mode==='playbuild'&&w.gameSnapTargetId!=null?w.gameSnapResolvedChoice:null;
@@ -557,6 +598,14 @@ const BuildJoin=(()=>{
   const isEnd=mode==='auto'&&(['wall','door','railing'].includes(cat)||typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement));
   if(!isCorner&&!isStack&&!isEnd)return null;
   const walls=nearby(w,p),box=modelBounds(w);
+  // A real reused curved/corner profile must sit directly over its matching
+  // contour, never over the diagonal of its bounding rectangle.
+  const profile=cat==='corner'||(typeof BuildCurves!=='undefined'&&
+   BuildCurves.isArc(w.placement,w.ghost));
+  if(profile&&isStack){
+   const stacked=stackMatchedProfile(w,p,walls,box,cat);
+   if(stacked)return stacked;
+  }
   // Curved modules MUST join via physical end-cap sockets and tangent,
   // never via the rectangular bounds used for ordinary straight walls.
   const curved=typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement);
