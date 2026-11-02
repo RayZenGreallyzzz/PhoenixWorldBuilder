@@ -307,7 +307,14 @@ const BuildSnap=(()=>{
  function floorOnCeiling(w,p,model,box,scale){
   const candidates=[];
   for(const entry of w.objects||[]){
-   if(entry===w.moveTarget||kindOf(w,entry)!=='ceiling')continue;
+   if(entry===w.moveTarget)continue;
+   const type=kindOf(w,entry);
+   // A floor with its underside painted IS the ceiling of the room below;
+   // keep one physical slab and allow the same structural support behavior.
+   const underside=entry.data?.surfacePaint?.bottom;
+   const paintedUnderside=!!underside&&
+    !!(underside.texture||underside.color||underside.material);
+   if(type!=='ceiling'&&!(type==='foundation'&&paintedUnderside))continue;
    const ref=surface(entry);if(!ref)continue;
    if(Number.isFinite(p.y)&&Math.abs(p.y-ref.top)>.38)continue;
    const local=p.clone().applyMatrix4(ref.root.matrixWorld.clone().invert());
