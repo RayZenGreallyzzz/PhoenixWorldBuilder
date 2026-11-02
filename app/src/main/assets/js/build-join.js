@@ -333,7 +333,7 @@ const BuildJoin=(()=>{
   const scale=w.placementScale||1;
   const incomingLength=(majorX?box.max.x-box.min.x:box.max.z-box.min.z)*scale;
   const supportLength=Math.max(.001,line.length||distXZ(line.a,line.c));
-  if(guided&&incomingLength>supportLength+.035){
+  if(incomingLength>supportLength+.035){
    const t=.5,anchor=new THREE.Vector3(line.a.x+(line.c.x-line.a.x)*t,old.top,
     line.a.z+(line.c.z-line.a.z)*t);
    return {position:solvePivot(w,box,anchor,yaw,old.top),rotation:((yaw*180/Math.PI)%360+360)%360,
@@ -342,13 +342,42 @@ const BuildJoin=(()=>{
     joinedTo:'physical-top',physicalContact:true};
   }
   const baseT=guided&&Number.isFinite(w.gameSnapStackT)?w.gameSnapStackT:old.projected.t;
-  const delta=(w.edgeShift||0),t=clamp(baseT+delta/supportLength,0,1);
+  const delta=w.edgeShift||0;
+  // Both ends of the upper module must remain within the support length.
+  const half=incomingLength/(2*supportLength);
+  const t=clamp(baseT+delta/supportLength,half,1-half);
   const anchor=new THREE.Vector3(line.a.x+(line.c.x-line.a.x)*t,old.top,
    line.a.z+(line.c.z-line.a.z)*t);
-  return {position:solvePivot(w,box,anchor,yaw,old.top),
+  const position=solvePivot(w,box,anchor,yaw,old.top);
+  // Align actual exterior planes, not centre lines, for straight walls.
+  // Curved and compound corner profiles require dedicated contour checking.
+  let exteriorAligned=false;
+  if(['wall','door'].includes(catOf(w,old.entry))&&w.placementCategory==='wall'){
+   const tangent=line.c.clone().sub(line.a).setY(0).normalize();
+   const normal=new THREE.Vector3(-tangent.z,0,tangent.x);
+   if((p.x-line.a.x)*normal.x+(p.z-line.a.z)*normal.z<0)normal.negate();
+   const supportBox=BuildSnap.attrBounds(old.root);
+   if(!supportBox.isEmpty()){
+    old.root.updateWorldMatrix(true,true);
+    let lowerEdge=-Infinity,upperEdge=-Infinity;
+    for(const x of [supportBox.min.x,supportBox.max.x])
+     for(const z of [supportBox.min.z,supportBox.max.z]){
+      const q=new THREE.Vector3(x,supportBox.min.y,z).applyMatrix4(old.root.matrixWorld);
+      lowerEdge=Math.max(lowerEdge,q.x*normal.x+q.z*normal.z);
+     }
+    for(const x of [box.min.x,box.max.x])
+     for(const z of [box.min.z,box.max.z]){
+      const q=rotate(new THREE.Vector3(x,0,z),yaw).multiplyScalar(scale).add(position);
+      upperEdge=Math.max(upperEdge,q.x*normal.x+q.z*normal.z);
+     }
+    position.addScaledVector(normal,lowerEdge-upperEdge);
+    exteriorAligned=true;
+   }
+  }
+  return {position,
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,stacked:true,edge:false,
    reference:old.entry.data.id,category:w.placementCategory||'wall',
-   joinedTo:'physical-top',physicalContact:true,boundsContained:true};
+   joinedTo:'physical-top',physicalContact:true,boundsContained:true,exteriorAligned};
  }
  function currentDeckTop(w,p){
   let best=null,bestDelta=Infinity;
@@ -428,7 +457,7 @@ const BuildJoin=(()=>{
      const reach=Math.max(1.85,Math.min(4.5,
       Math.hypot(box.max.x-box.min.x,box.max.z-box.min.z)*scale*.6+1.4));
      if(distance>reach)continue;
-     const perpendicular=Math.abs(target.out.dot(slot.out))<.15;
+     const perpendicular=slot.role==='corner-arm'||target.role==='corner-arm';
      // Cursor intent must choose the physical joint, not merely a wall
      // orientation whose centre happens to pass near the cursor. This is
      // essential at L-corners where one socket is already occupied.
