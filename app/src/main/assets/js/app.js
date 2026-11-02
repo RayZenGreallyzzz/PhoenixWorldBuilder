@@ -583,10 +583,13 @@ function refreshConstructionUI(){
  $('buildJoinMode').value=w.joinMode||'auto';
  const manualXYZ=w.smartSnap===false||w.joinMode==='free';
  $('manualXYZPanel').classList.toggle('hidden',!manualXYZ);
+ $('editorManualXYZPanel').classList.toggle('hidden',!manualXYZ);
+ $('editorManualXYZPanel').style.display=manualXYZ?'flex':'none';
+ $('btnEditorSnapToggle').textContent=w.smartSnap!==false?'🧲 Магнит: вкл.':'○ Магнит: выкл.';
  if(manualXYZ){
   const pos=w.manualPlacementPosition||w.ghost?.position||w.forwardPlacementPoint();
-  for(const axis of ['X','Y','Z']){
-   const input=$('manualPos'+axis);
+  for(const axis of ['X','Y','Z'])for(const prefix of ['manualPos','editorManualPos']){
+   const input=$(prefix+axis);
    if(document.activeElement!==input)input.value=Number(pos[axis.toLowerCase()]||0).toFixed(3);
   }
  }
@@ -809,11 +812,12 @@ function wireButtons(){
  $('btnCornerXUp').onclick=()=>shiftCorner(.1,0);
  $('btnCornerZDown').onclick=()=>shiftCorner(0,-.1);
  $('btnCornerZUp').onclick=()=>shiftCorner(0,.1);
- for(const axis of ['X','Y','Z'])$('manualPos'+axis).onchange=e=>{
+ for(const axis of ['X','Y','Z'])for(const prefix of ['manualPos','editorManualPos'])$(prefix+axis).onchange=e=>{
   const result=w.setManualPositionAxis(axis.toLowerCase(),e.target.value);
   if(result===null)toast('Выключи магнит и введи корректную координату в метрах');
   refreshConstructionUI();
  };
+ $('btnEditorSnapToggle').onclick=()=>{w.toggleSmartSnap();refreshConstructionUI();};
  $('btnSnapToggle').onclick=()=>{
   const active=w.toggleSmartSnap();
   $('btnSnapToggle').textContent=active?'🧲 Магнит по прицелу: вкл.':'○ Магнит выключен';
