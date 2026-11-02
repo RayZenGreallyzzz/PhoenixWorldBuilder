@@ -109,6 +109,8 @@ const BuildCore=(()=>{
   const shifted=rotateXZ(local,yaw);
   const position=[target.point[0]-shifted[0],target.point[1]-shifted[1],target.point[2]-shifted[2]];
   const world=transformSocket(source,{position,yawDeg:yaw*180/Math.PI,scale:sc});
+  // End-face directions must oppose, otherwise the joints do not actually meet.
+  if(!world||world.out[0]*target.out[0]+world.out[2]*target.out[2]>-.999)return null;
   const error=world?Math.hypot(world.point[0]-target.point[0],world.point[1]-target.point[1],world.point[2]-target.point[2]):Infinity;
   return {position:position.map(v=>round(v)),rotation:round(((yaw*180/Math.PI)%360+360)%360),error};
  }
