@@ -169,6 +169,7 @@ const BuildSnap=(()=>{
    anchor.y=(typeof BuildCore!=='undefined'?
     BuildCore.contactPivotY(modelBox.min.y,target,scale,0):
     target-modelBox.min.y*scale);
+  }
   return {position:anchor,rotation:((yaw*180/Math.PI)%360+360)%360,
    snapped:true,overhead:true,edge:false,
    reference:support[0]?.entry.data.id,targetHeight:target,category:cat,
