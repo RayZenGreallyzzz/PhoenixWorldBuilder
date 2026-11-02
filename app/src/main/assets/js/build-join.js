@@ -484,6 +484,9 @@ const BuildJoin=(()=>{
   if(!['wall','door','railing'].includes(category))return null;
   const socketResult=joinBySockets(w,p,candidates,box,onlyCorner,occupancyCandidates);
   if(socketResult)return socketResult;
+  // Explicit/derived physical ends must not fall back to guessed box corners.
+  // The old fallback could report a green joint after a failed socket check.
+  if(typeof BuildCurves!=='undefined'&&BuildCurves.incomingSockets(w,box)?.length)return null;
   const majorX=box.max.x-box.min.x>=box.max.z-box.min.z;
   const main=majorX?'x':'z',cross=majorX?'z':'x';
   const mid=(box.min[cross]+box.max[cross])/2;
