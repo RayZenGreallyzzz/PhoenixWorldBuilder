@@ -28,5 +28,5 @@ w.setPlacement('stairs','stairs');place=w.solvePlacement(near);assert(place.snap
 const stairBounds=BuildSnap.attrBounds(w.ghost);
 assert(Math.abs(place.position.y+stairBounds.max.y-top)<.005,'Last step must reach the deck');
 w.setPlacement('wall','wall');w.smartSnap=false;place=w.solvePlacement(near);
-assert(!place.snapped&&Math.abs(place.position.x/2-Math.round(place.position.x/2))<.001,'Free placement still uses grid');
+assert(!place.snapped&&Math.abs(place.position.x-near.x)<.001&&Math.abs(place.position.z-near.z)<.001,'Free placement preserves exact X/Z without grid rounding');
 console.log('Rotated and scaled GLB decks support wall/stair snapping, fine movement, and saved coordinates');
