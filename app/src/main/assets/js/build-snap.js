@@ -175,6 +175,121 @@ const BuildSnap=(()=>{
    reference:support[0]?.entry.data.id,targetHeight:target,category:cat,
    supportCount:support.length,physicalContact:true};
  }
+ // Extract the true straight sections of a slab's top perimeter.
+ // Important for quarter-circle floors: the rectangle bounds are NOT its edge.
+ function slabStraightEdges(root){
+  if(!root)return [];
+  root.updateWorldMatrix(true,true);
+  const bounds=attrBounds(root);if(bounds.isEmpty())return [];
+  const inverse=root.matrixWorld.clone().invert(),relative=new THREE.Matrix4();
+  const vertex=new THREE.Vector3(),counts=new Map(),lookup=new Map();
+  let processed=0;
+  const key=q=>Math.round(q.x*1000)+','+Math.round(q.z*1000);
+  root.traverse(mesh=>{
+   if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
+   const attr=mesh.geometry.attributes.position;
+   if(attr.count>90000||processed+attr.count>120000)return;
+   processed+=attr.count;
+   relative.multiplyMatrices(inverse,mesh.matrixWorld);
+   const indices=mesh.geometry.index,triangles=indices?indices.count:attr.count;
+   for(let i=0;i+2<triangles;i+=3){
+    const ps=[];
+    for(let j=0;j<3;j++){
+     const index=indices?indices.getX(i+j):i+j;
+     const q=vertex.fromBufferAttribute(attr,index).applyMatrix4(relative).clone();
+     ps.push(q);
+    }
+    if(!ps.every(q=>Math.abs(q.y-bounds.max.y)<.004))continue;
+    for(const [j,k] of [[0,1],[1,2],[2,0]]){
+     const a=ps[j],b=ps[k],ka=key(a),kb=key(b);
+     if(ka===kb)continue;
+     const id=ka<kb?ka+'|'+kb:kb+'|'+ka;
+     counts.set(id,(counts.get(id)||0)+1);
+     lookup.set(ka,a);lookup.set(kb,b);
+    }
+   }
+  });
+  const segments=[];
+  for(const [id,count] of counts){
+   if(count!==1)continue;
+   const [a,b]=id.split('|').map(x=>lookup.get(x));
+   const length=Math.hypot(a.x-b.x,a.z-b.z);
+   if(length>.3)segments.push({a,b,length});
+  }
+  if(!segments.length)return [];
+  // Discard arc tessellation chords in favor of real straight radial ends.
+  const longest=Math.max(...segments.map(s=>s.length));
+  return segments.filter(s=>s.length>=Math.max(.3,longest*.35));
+ }
+ function physicalSlabEdge(ref,p){
+  const edges=slabStraightEdges(ref.root),bounds=ref.box;
+  if(!edges.length)return nearestEdge(ref,p);
+  const centroid=new THREE.Vector3((bounds.min.x+bounds.max.x)/2,0,
+   (bounds.min.z+bounds.max.z)/2).applyMatrix4(ref.root.matrixWorld);
+  let best=null;
+  for(const edge of edges){
+   const a=worldPoint(ref.root,edge.a.x,bounds.max.y,edge.a.z);
+   const b=worldPoint(ref.root,edge.b.x,bounds.max.y,edge.b.z);
+   const tangent=b.clone().sub(a).setY(0).normalize();
+   const delta=p.clone().sub(a).setY(0);
+   const len=a.distanceTo(b),t=clamp(delta.dot(tangent),0,len);
+   const at=a.clone().addScaledVector(tangent,t);
+   const distance=Math.hypot(at.x-p.x,at.z-p.z);
+   const normal=new THREE.Vector3(-tangent.z,0,tangent.x);
+   const middle=a.clone().add(b).multiplyScalar(.5);
+   if(normal.dot(centroid.clone().sub(middle))>0)normal.negate();
+   if(!best||distance<best.distance)
+    best={distance,point:at,tangent,normal,first:a,last:b,length:len};
+  }
+  return best||nearestEdge(ref,p);
+ }
+ function radialFloorSnap(w,p,model,box,ref,edge,sourceThickness,scale){
+  const sections=slabStraightEdges(model);
+  if(!sections.length||!edge?.normal)return null;
+  const xs=(box.min.x+box.max.x)/2,zs=(box.min.z+box.max.z)/2;
+  const centre=new THREE.Vector3(xs,0,zs);
+  // For a quarter-circle the true centroid is in the sector, not the
+  // centre of its bounding rectangle. Prefer the source material interior
+  // sampled from its top triangles when available.
+  const arcFloor=w.placement==='arcFloor90'||model.userData?.pwbModuleShape==='arcFloor90';
+  const interior=arcFloor?new THREE.Vector3(.85,0,.85):centre;
+  const theta=v=>Math.atan2(-v.z,v.x);
+  const sectionsSorted=[...sections].sort((a,b)=>b.length-a.length);
+  let best=null;
+  const targetLength=edge.first.distanceTo(edge.last);
+  const thickness=ref.top-ref.bottom;
+  let factor=1;
+  if(w.autoThickness!==false){
+   const ratio=thickness/(sourceThickness*scale);
+   if(ratio>=.15&&ratio<=6)factor=ratio;
+  }
+  for(const section of sectionsSorted){
+   const sourceLength=section.length*scale;
+   if(sourceLength>targetLength+.035)continue;
+   const middle=section.a.clone().add(section.b).multiplyScalar(.5);
+   const tangent=section.b.clone().sub(section.a).setY(0).normalize();
+   const inside=new THREE.Vector3(-tangent.z,0,tangent.x);
+   if(inside.dot(interior.clone().sub(middle))<0)inside.negate();
+   const yaw=theta(edge.normal)-theta(inside);
+   const t=Math.max(sourceLength/2,Math.min(targetLength-sourceLength/2,
+    edge.point.clone().sub(edge.first).dot(edge.tangent)+(w.edgeShift||0)));
+   const dest=edge.first.clone().addScaledVector(edge.tangent,t);
+   const rotatedMiddle=rotated(middle,yaw).multiplyScalar(scale);
+   const position=new THREE.Vector3(dest.x-rotatedMiddle.x,
+    ref.top-box.max.y*scale*factor+(w.placementLift||0),
+    dest.z-rotatedMiddle.z);
+   const snappedMid=new THREE.Vector3(position.x+rotatedMiddle.x,ref.top,
+    position.z+rotatedMiddle.z);
+   const d=Math.hypot(p.x-snappedMid.x,p.z-snappedMid.z);
+   const score=d+Math.abs(yaw)*.015;
+   if(!best||score<best.score)best={score,position,rotation:((yaw*180/Math.PI)%360+360)%360,
+    snapped:true,slab:true,edge:true,physicalSlabEdge:true,category:'foundation',
+    reference:ref.entry.data.id,thicknessY:factor,referenceThickness:thickness};
+  }
+  if(!best)return null;
+  const {score,...result}=best;
+  return result;
+ }
  function matchSlab(w,p,cat,model,box){
   // Floors share a top plane and, optionally, thickness without scaling X or Z.
   // 3D cut-corner geometry is kept intact: only the parent group's Y scale changes.
@@ -188,7 +303,7 @@ const BuildSnap=(()=>{
    const ref=surface(entry);if(!ref)continue;
    const physicalThickness=ref.top-ref.bottom;
    if(!Number.isFinite(physicalThickness)||physicalThickness<.025||physicalThickness>1.5)continue;
-   const edge=nearestEdge(ref,p),distance=edge.distance;
+   const edge=physicalSlabEdge(ref,p),distance=edge.distance;
    if(distance>Math.max(3.5,Math.min(6,Math.max(box.max.x-box.min.x,box.max.z-box.min.z)*scale)))continue;
    const vertical=Number.isFinite(p.y)?Math.abs(ref.top-p.y):0;
    // Adjacent slab snapping is only valid on the same physical Y plane.
@@ -200,6 +315,20 @@ const BuildSnap=(()=>{
   possible.sort((a,b)=>a.score-b.score);
   if(!possible.length)return null;
   const choice=possible[0],ref=choice.ref,edge=choice.edge,normal=edge.normal;
+  // A rounded/cut corner has no rectangular outside edge. Dock its real
+  // straight radial boundary to a real edge of the existing floor.
+  const actual=slabStraightEdges(model);
+  const wide=box.max.x-box.min.x,deep=box.max.z-box.min.z;
+  const topEdges=actual.filter(e=>e.length>.4);
+  const shouldPhysical=w.placement==='arcFloor90'||(topEdges.length>=2&&
+   topEdges.length>2&&(topEdges.length!==4||topEdges.some(e=>
+    Math.abs(e.length-wide)>.03&&Math.abs(e.length-deep)>.03)));
+  if(shouldPhysical){
+   const joined=radialFloorSnap(w,p,model,box,ref,edge,sourceThickness,scale);
+   if(joined)return joined;
+   // Never pretend a rounded edge is rectangular when a physical edge fails.
+   return null;
+  }
   const yaw=(w.placementRotation||0)*Math.PI/180;
   const xx=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
   const zz=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
