@@ -231,9 +231,10 @@ const BuildSnap=(()=>{
    if(length>.3)segments.push({a,b,length});
   }
   if(!segments.length)return save([]);
-  // Discard arc tessellation chords in favor of real straight radial ends.
-  const longest=Math.max(...segments.map(s=>s.length));
-  return save(segments.filter(s=>s.length>=Math.max(.3,longest*.35)));
+  // Keep short *real* cutout edges. In a 12 m floor a 2 m corner
+  // was discarded by the old 35%-of-longest-edge heuristic.
+  // Tessellated arc chords were already excluded by the 0.3 m minimum.
+  return save(segments);
  }
  function physicalSlabEdge(ref,p){
   const edges=slabStraightEdges(ref.root),bounds=ref.box;
@@ -308,6 +309,110 @@ const BuildSnap=(()=>{
  // When the cursor is on a ceiling's upper face, the next floor rests on
  // that face. When the cursor is beside a slab, join its side on the same
  // horizontal plane. Surface textures NEVER affect either decision.
+ // A fourth quarter-floor corner is a TWO-edge closure, not a one-edge
+ // extension. Search physical pairs of perpendicular open floor boundaries
+ // first, then solve one rigid rotation/translation satisfying BOTH seams.
+ // This also works for imported cut-out GLB floors whose notch is much
+ // smaller than the floor's overall bounds.
+ function closeRoundedFloorCorner(w,p,model,box,scale){
+  const sections=slabStraightEdges(model);
+  if(sections.length!==2||!['arcFloor90','arcCeiling90'].includes(w.placement)&&
+     !/(?:round|curv|arc.?floor|floor.?arc|закругл|кругл|полукруг)/i.test(String(w.placement||'')))
+   return null;
+  const shared=(()=>{
+   for(const a of [sections[0].a,sections[0].b])
+    for(const b of [sections[1].a,sections[1].b])
+     if(Math.hypot(a.x-b.x,a.z-b.z)<.008)return a.clone();
+   return null;
+  })();
+  if(!shared)return null;
+  const outgoing=sections.map(e=>{
+   const other=Math.hypot(e.a.x-shared.x,e.a.z-shared.z)<.008?e.b:e.a;
+   return other.clone().sub(shared).setY(0).normalize();
+  });
+  if(Math.abs(outgoing[0].dot(outgoing[1]))>.04)return null;
+  const inner=model.name==='arcFloor90'||model.name==='arcCeiling90'?
+   new THREE.Vector3(.85,0,.85):
+   new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
+  const toward=inner.clone().sub(shared).setY(0);
+  if(toward.lengthSq()<.02)return null;
+  const edges=[];
+  for(const entry of w.objects||[]){
+   if(entry===w.moveTarget||!['foundation','ceiling'].includes(kindOf(w,entry)))continue;
+   const ref=surface(entry);
+   if(!ref||Math.abs(ref.top-p.y)>.76)continue;
+   const boundary=slabStraightEdges(ref.root);
+   if(!boundary.length)continue;
+   const centre=worldPoint(ref.root,(ref.box.min.x+ref.box.max.x)/2,
+    ref.box.max.y,(ref.box.min.z+ref.box.max.z)/2);
+   for(const e of boundary){
+    const a=worldPoint(ref.root,e.a.x,ref.box.max.y,e.a.z);
+    const b=worldPoint(ref.root,e.b.x,ref.box.max.y,e.b.z);
+    const length=Math.hypot(b.x-a.x,b.z-a.z);
+    if(length<Math.min(sections[0].length,sections[1].length)*scale-.03)continue;
+    const middle=a.clone().add(b).multiplyScalar(.5);
+    // Every physical boundary must have its empty side toward the new sector.
+    const outward=new THREE.Vector3(-(b.z-a.z),0,b.x-a.x).normalize();
+    if(outward.dot(centre.clone().sub(middle))>0)outward.negate();
+    edges.push({a,b,length,outward,ref});
+   }
+  }
+  const yawOf=v=>Math.atan2(-v.z,v.x);
+  let best=null;
+  // A cut-out notch's two boundaries meet at one physical vertex.
+  for(let i=0;i<edges.length;i++)for(let j=i+1;j<edges.length;j++){
+   const a=edges[i],b=edges[j];
+   if(Math.abs(a.ref.top-b.ref.top)>.005)continue;
+   for(const va of [a.a,a.b])for(const vb of [b.a,b.b]){
+    if(Math.hypot(va.x-vb.x,va.z-vb.z)>.025)continue;
+    const corner=va.clone().add(vb).multiplyScalar(.5);
+    const da=(va===a.a?a.b:a.a).clone().sub(corner).setY(0).normalize();
+    const db=(vb===b.a?b.b:b.a).clone().sub(corner).setY(0).normalize();
+    if(Math.abs(da.dot(db))>.025)continue;
+    for(const swap of [false,true]){
+     const d0=swap?db:da,d1=swap?da:db;
+     const n0=swap?b.outward:a.outward;
+     const n1=swap?a.outward:b.outward;
+     const yaw=yawOf(d0)-yawOf(outgoing[0]);
+     if(rotated(outgoing[1],yaw).dot(d1)<.999)continue;
+     const interior=rotated(toward,yaw).normalize();
+     // On both contact sides the new quarter-circle must occupy the EMPTY
+     // half-plane, not cut into the two already installed floor panels.
+     if(interior.dot(n0)<.15||interior.dot(n1)<.15)continue;
+     const width=sections[0].length*scale,depth=sections[1].length*scale;
+     if(width>a.length+.04||depth>b.length+.04)continue;
+     const pos=corner.clone().sub(rotated(shared,yaw).multiplyScalar(scale));
+     const sourceThickness=(box.max.y-box.min.y)*scale;
+     const supportThickness=a.ref.top-a.ref.bottom;
+     let thicknessY=1;
+     if(w.autoThickness!==false&&sourceThickness>.012){
+      const ratio=supportThickness/sourceThickness;
+      if(ratio>=.15&&ratio<=6)thicknessY=ratio;
+     }
+     pos.y=a.ref.top-box.max.y*scale*thicknessY+(w.placementLift||0);
+     // Never resolve a 4th corner by snapping another copy over an already
+     // installed one; compare exact origin and orientation, not just AABB.
+     const angle=((yaw*180/Math.PI)%360+360)%360;
+     if((w.objects||[]).some(e=>e!==w.moveTarget&&e.kind===w.placement&&
+        e.mesh.position.distanceTo(pos)<.02&&
+        Math.abs(Math.atan2(Math.sin(e.mesh.rotation.y-yaw),
+          Math.cos(e.mesh.rotation.y-yaw)))<.02))continue;
+     const centre=pos.clone().add(rotated(inner,yaw).multiplyScalar(scale));
+     const distance=Math.hypot(centre.x-p.x,centre.z-p.z);
+     if(distance>4.5)continue;
+     const score=distance+Math.abs(a.ref.top-p.y)*.25;
+     if(!best||score<best.score)best={score,position:pos,rotation:angle,
+      snapped:true,slab:true,edge:true,physicalSlabEdge:true,
+      physicalCornerClosure:true,joinedEdges:2,category:'foundation',
+      reference:a.ref.entry.data?.id,secondaryReference:b.ref.entry.data?.id,
+      thicknessY,referenceThickness:supportThickness};
+    }
+   }
+  }
+  if(!best)return null;
+  const {score,...solved}=best;
+  return solved;
+ }
  function floorOnCeiling(w,p,model,box,scale){
   const candidates=[];
   for(const entry of w.objects||[]){
@@ -360,6 +465,8 @@ const BuildSnap=(()=>{
   if(!Number.isFinite(sourceThickness)||sourceThickness<.012)return null;
   const upper=floorOnCeiling(w,p,model,box,scale);
   if(upper)return upper;
+  const closure=closeRoundedFloorCorner(w,p,model,box,scale);
+  if(closure)return closure;
   const possible=[];
   for(const entry of w.objects){
    if(entry===w.moveTarget||!['foundation','ceiling'].includes(kindOf(w,entry)))continue;
