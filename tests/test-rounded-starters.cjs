@@ -81,6 +81,7 @@ for(const kind of ['arcFloor90','arcCeiling90']){
  w.setPlacement(kind,'foundation'); // Explicit user assignment to "Пол".
  const point=new THREE.Vector3(1.05,.15,0);
  const solved=w.solvePlacement(point);
+ console.log('ROUNDED_FLOOR_DEBUG',kind,JSON.stringify({category:solved.category,slab:solved.slab,physicalSlabEdge:solved.physicalSlabEdge,overhead:solved.overhead,position:solved.position.toArray(),snapped:solved.snapped}));
  assert(solved.snapped&&solved.slab&&solved.physicalSlabEdge,
   'Assigned curved floor must join by real radial edge: '+kind);
  assert.equal(solved.category,'foundation','Selected floor role is authoritative');
