@@ -300,6 +300,46 @@ const BuildSnap=(()=>{
   const {score,...result}=best;
   return result;
  }
+ // A floor and its underside (ceiling) are the same structural slab.
+ // When the cursor is on a ceiling's upper face, the next floor rests on
+ // that face. When the cursor is beside a slab, join its side on the same
+ // horizontal plane. Surface textures NEVER affect either decision.
+ function floorOnCeiling(w,p,model,box,scale){
+  const candidates=[];
+  for(const entry of w.objects||[]){
+   if(entry===w.moveTarget||kindOf(w,entry)!=='ceiling')continue;
+   const ref=surface(entry);if(!ref)continue;
+   if(Number.isFinite(p.y)&&Math.abs(p.y-ref.top)>.38)continue;
+   const local=p.clone().applyMatrix4(ref.root.matrixWorld.clone().invert());
+   // An interior hit means 'floor on top'; an edge hit means 'extend floor'.
+   const xMargin=Math.min(.12,(ref.box.max.x-ref.box.min.x)*.12);
+   const zMargin=Math.min(.12,(ref.box.max.z-ref.box.min.z)*.12);
+   if(local.x<ref.box.min.x+xMargin||local.x>ref.box.max.x-xMargin||
+      local.z<ref.box.min.z+zMargin||local.z>ref.box.max.z-zMargin)continue;
+   const axes=w.placementAxes||{};
+   const desiredX=(box.max.x-box.min.x)*scale;
+   const desiredZ=(box.max.z-box.min.z)*scale;
+   const width=(ref.box.max.x-ref.box.min.x)*Math.abs(ref.root.scale.x);
+   const depth=(ref.box.max.z-ref.box.min.z)*Math.abs(ref.root.scale.z);
+   // A larger slab must not hang outside its supporting ceiling.
+   if(desiredX>width+.005||desiredZ>depth+.005)continue;
+   const cx=(ref.box.min.x+ref.box.max.x)/2,cz=(ref.box.min.z+ref.box.max.z)/2;
+   const centre=worldPoint(ref.root,cx,ref.box.max.y,cz);
+   const yaw=localFrameYaw(ref.root);
+   const srcCentre=rotated(new THREE.Vector3((box.min.x+box.max.x)/2,0,
+      (box.min.z+box.max.z)/2),yaw).multiplyScalar(scale);
+   const position=new THREE.Vector3(centre.x-srcCentre.x,
+      ref.top-box.min.y*scale+(w.placementLift||0),centre.z-srcCentre.z);
+   const score=Math.abs(p.x-centre.x)+Math.abs(p.z-centre.z)+
+      (Number.isFinite(p.y)?Math.abs(p.y-ref.top):0);
+   candidates.push({position,rotation:((yaw*180/Math.PI)%360+360)%360,
+    snapped:true,slab:true,stackedOnSlab:true,physicalContact:true,
+    reference:entry.data?.id,category:'foundation',score});
+  }
+  candidates.sort((a,b)=>a.score-b.score);
+  if(!candidates.length)return null;
+  const {score,...result}=candidates[0];return result;
+ }
  function matchSlab(w,p,cat,model,box){
   // Floors share a top plane and, optionally, thickness without scaling X or Z.
   // 3D cut-corner geometry is kept intact: only the parent group's Y scale changes.
@@ -307,15 +347,19 @@ const BuildSnap=(()=>{
   const sourceThickness=box.max.y-box.min.y;
   const scale=w.placementScale||1;
   if(!Number.isFinite(sourceThickness)||sourceThickness<.012)return null;
+  const upper=floorOnCeiling(w,p,model,box,scale);
+  if(upper)return upper;
   const possible=[];
   for(const entry of w.objects){
-   if(kindOf(w,entry)!=='foundation')continue;
+   if(entry===w.moveTarget||!['foundation','ceiling'].includes(kindOf(w,entry)))continue;
    const ref=surface(entry);if(!ref)continue;
    const physicalThickness=ref.top-ref.bottom;
    if(!Number.isFinite(physicalThickness)||physicalThickness<.025||physicalThickness>1.5)continue;
    const edge=physicalSlabEdge(ref,p),distance=edge.distance;
    if(distance>Math.max(3.5,Math.min(6,Math.max(box.max.x-box.min.x,box.max.z-box.min.z)*scale)))continue;
    const vertical=Number.isFinite(p.y)?Math.abs(ref.top-p.y):0;
+   // Only extend slabs on their own horizontal band; never confuse a
+   // lower floor with a ceiling of the next storey.
    // Adjacent slab snapping is only valid on the same physical Y plane.
    // A lower floor must never hijack a new slab intended for a ceiling above.
    if(Number.isFinite(p.y)&&vertical>.75)continue;
