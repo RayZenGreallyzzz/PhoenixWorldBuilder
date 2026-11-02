@@ -73,6 +73,8 @@ const BuildCurves=(()=>{
   return sockets;
  }
  function sourceSockets(info){
+  // Compound corners with no identifiable arm tips have no safe sockets.
+  if(info?.unresolvedCorner)return [];
   // A 90-degree corner exposes two genuine arm-end sockets. Its AABB
   // extrema describe a phantom diagonal and must not be used for arcs.
   if(info.root?.userData?.pwbModuleSockets?.length===2)
