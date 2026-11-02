@@ -530,7 +530,7 @@ const AIM_CHOICE_LABELS={
 };
 function refreshAimSnapUI(state=null){
  const activeMode=w.mode==='playbuild';
- // Keep the crosshair clear; placement information belongs to the HUD.
+ const hint=null; // Crosshair captions removed; placement state remains in the side HUD.
  const label=$('aimTargetLabel'),detail=$('aimTargetDetail');
  const buttons=$all('[data-game-snap]');
  const options=state?.options?.choices||{};
