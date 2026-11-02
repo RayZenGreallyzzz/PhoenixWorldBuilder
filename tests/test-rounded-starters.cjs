@@ -119,12 +119,34 @@ for(const kind of ['arcFloor90','arcCeiling90']){
   Math.abs(above.max.z-below.max.z)<.002,
   'Rounded exterior perimeter stays aligned between stories');
 }
+// Floor and ceiling are two decorated faces of ONE structural module.
+// Painting the underside must not create an independent ceiling object,
+// while its top remains a valid support for a new floor.
+{
+ const w=world();
+ const lower=w.instantiate('floor',{id:220,pos:[4,2.6,0],rot:0,scale:1,
+  category:'foundation',surfacePaint:{bottom:{color:'#dddccc'}},storey:0});
+ assert.equal(w.objects.length,1,'Painting the underside does not add a ceiling object');
+ w.setPlacement('floor','foundation');
+ const p=new THREE.Vector3(4,2.77,0);
+ const result=w.solvePlacement(p);
+ assert(result.snapped&&result.stackedOnSlab&&result.reference===220,
+  'Underside-painted floor is still a valid ceiling support for the next floor');
+ const upper=w.placeAt(p);
+ assert(upper,'Next floor can be installed above underside-painted slab');
+ const a=new THREE.Box3().setFromObject(lower.mesh);
+ const b=new THREE.Box3().setFromObject(upper.mesh);
+ assert(Math.abs(a.max.y-b.min.y)<.002,'Upper floor sits directly on painted slab');
+ assert.equal(lower.data.category,'foundation','Texturing the underside never changes structural category');
+ assert.equal(w.objects.length,2,'Only the chosen structural pieces exist');
+}
 const app=fs.readFileSync(path.join(dir,'app.js'),'utf8');
 const html=fs.readFileSync(path.join(dir,'../index.html'),'utf8');
 for(const kind of ['arc90','arc180','arcFloor90','arcCeiling90'])
  assert(app.includes("['"+kind+"'"),'Starter catalogue includes '+kind);
 assert(html.indexOf('rounded-modules.js')<html.indexOf('world.js'),'Rounded module generator loads before WorldBuilder');
 assert(html.includes('id="assetSort"'),'Sortable catalogue controls available');
+assert(!html.includes('id="aimSnapHint"'),'No intrusive text overlay under the crosshair');
 assert(app.includes('items.splice(0,items.length,...start,...imported)'),
  'White permanent starting modules remain pinned before imported model sort');
 assert(app.includes("catalogMode='emblems';catalogPage=0")&&app.includes("document.body.classList.add('catalogOpen')"),
