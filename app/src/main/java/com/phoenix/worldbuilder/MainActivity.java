@@ -101,10 +101,18 @@ public class MainActivity extends Activity {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = cb;
                 try {
-                    Intent intent = params.createIntent();
+                    // Do not inherit WebView's MIME filters here: many
+                    // Android document providers classify .glb as
+                    // application/octet-stream (or no MIME type). Keeping
+                    // FileChooserParams' EXTRA_MIME_TYPES would grey those
+                    // files out despite setType("*/*"). Validate extensions
+                    // after selection in the JavaScript import handler.
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                     intent.setType("*/*");
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,
+                            params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
                     startActivityForResult(intent, PICK_FILE);
                     return true;
                 } catch (Exception e) {
