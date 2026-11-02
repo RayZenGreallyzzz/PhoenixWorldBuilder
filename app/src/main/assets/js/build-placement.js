@@ -177,7 +177,7 @@ const BuildPlacementValidator=(()=>{
   const cat=solved.category||w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
   // Paint/decor should not be blocked by deliberate layering on existing
   // surfaces. Also respect the already exposed "Free" placement mode.
-  if(w.joinMode==='free'){
+  if(w.joinMode==='free'||w.smartSnap===false){
    // Free placement must be possible, but do not falsely paint collisions
    // green as if a magnetic joint had been confirmed.
    const current=rect(root);
