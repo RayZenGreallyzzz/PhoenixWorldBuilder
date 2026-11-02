@@ -496,11 +496,23 @@ const BuildJoin=(()=>{
  function joinEnd(w,p,candidates,box,onlyCorner=false,occupancyCandidates=candidates){
   const category=w.placementCategory||w.categoryForKind?.(w.placement)||'wall';
   if(!['wall','door','railing'].includes(category))return null;
-  const socketResult=joinBySockets(w,p,candidates,box,onlyCorner,occupancyCandidates);
-  if(socketResult)return socketResult;
-  // Explicit/derived physical ends must not fall back to guessed box corners.
-  // The old fallback could report a green joint after a failed socket check.
-  if(typeof BuildCurves!=='undefined'&&BuildCurves.incomingSockets(w,box)?.length)return null;
+  const root=w.ghost||w.assetCache?.get(w.placement);
+  const specialProfile=!!root?.userData?.pwbModuleSockets?.length||
+   (typeof BuildCurves!=='undefined'&&BuildCurves.isArc(w.placement,root));
+  // Plain straight walls still support deliberate 90° turns at a free end.
+  // Such a turn is a corner connection, NOT an opposing end-face socket.
+  const pointedTurn=!specialProfile&&candidates.some(old=>
+   [old.a,old.c].some(at=>{
+    const dx=p.x-at.x,dz=p.z-at.z,d=Math.hypot(dx,dz);
+    return d>.25&&d<1.3&&Math.abs((dx*old.dir.x+dz*old.dir.z)/d)<.36;
+   }));
+  const turnRequested=!specialProfile&&(onlyCorner||w.joinMode==='corner'||pointedTurn);
+  if(!turnRequested){
+   const socketResult=joinBySockets(w,p,candidates,box,false,occupancyCandidates);
+   if(socketResult)return socketResult;
+   // Never guess joints for user-defined physical sockets or curved geometry.
+   if(specialProfile)return null;
+  }
   const majorX=box.max.x-box.min.x>=box.max.z-box.min.z;
   const main=majorX?'x':'z',cross=majorX?'z':'x';
   const mid=(box.min[cross]+box.max[cross])/2;
@@ -523,7 +535,7 @@ const BuildJoin=(()=>{
    const baseline=angle(line.a,line.c)+(majorX?0:Math.PI/2)+(w.placementRotation||0)*Math.PI/180;
    for(const endpoint of (line.tipOnly?['a']:['a','c'])){
     const join=line[endpoint],inwards=line.dir.clone().multiplyScalar(endpoint==='a'?1:-1);
-    for(const k of (onlyCorner?[1,3]:[0,1,2,3])){
+    for(const k of (turnRequested?[1,3]:[0,1,2,3])){
      const yaw=baseline+k*Math.PI/2;
      for(const attachment of ['min','max']){
       const local=new THREE.Vector3();
@@ -547,7 +559,7 @@ const BuildJoin=(()=>{
       const dot=outward.dot(inwards);
       if(dot>.77)continue; // Do not return inside the already built wall.
       const perpendicular=abs(dot)<.38;
-      if(onlyCorner&&!perpendicular)continue;
+      if(turnRequested&&!perpendicular)continue;
       const vertical=Number.isFinite(p.y)?abs(old.bottom-p.y):0;
       const score=distance+vertical*.45+(perpendicular?.09:0);
       if(!best||score<best.score)
