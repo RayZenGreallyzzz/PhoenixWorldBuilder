@@ -72,6 +72,29 @@ for(const kind of ['arcFloor90','arcCeiling90']){
  assert.equal(w.makeBuiltin(kind).children[0].material.color.getHexString(),'ffffff',
   'Every starter instance is pristine, independent of prior edits');
 }
+// Regression: category, not GLB/builtin name, decides whether a curved slab
+// docks alongside the floor or gets lifted as an overhead ceiling.
+for(const kind of ['arcFloor90','arcCeiling90']){
+ const w=world();
+ const base=w.instantiate('floor',{id:100,pos:[0,0,0],rot:0,scale:1,
+  category:'foundation',storey:0});
+ w.setPlacement(kind,'foundation'); // Explicit user assignment to "Пол".
+ const point=new THREE.Vector3(1.05,.15,0);
+ const solved=w.solvePlacement(point);
+ assert(solved.snapped&&solved.slab&&solved.physicalSlabEdge,
+  'Assigned curved floor must join by real radial edge: '+kind);
+ assert.equal(solved.category,'foundation','Selected floor role is authoritative');
+ const placed=w.placeAt(point);
+ assert(placed,'Curved floor can be installed: '+kind);
+ const existing=new THREE.Box3().setFromObject(base.mesh);
+ const added=new THREE.Box3().setFromObject(placed.mesh);
+ assert(Math.abs(existing.max.y-added.max.y)<.002,
+  'Rounded floor upper surface must be flush: '+kind);
+ const overlapX=Math.min(existing.max.x,added.max.x)-Math.max(existing.min.x,added.min.x);
+ const overlapZ=Math.min(existing.max.z,added.max.z)-Math.max(existing.min.z,added.min.z);
+ assert(overlapX<.003||overlapZ<.003,
+  'Curved floor must not be stacked on the existing slab: '+kind);
+}
 const app=fs.readFileSync(path.join(dir,'app.js'),'utf8');
 const html=fs.readFileSync(path.join(dir,'../index.html'),'utf8');
 for(const kind of ['arc90','arc180','arcFloor90','arcCeiling90'])
