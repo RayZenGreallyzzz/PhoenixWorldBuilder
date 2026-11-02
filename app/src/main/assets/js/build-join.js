@@ -377,7 +377,7 @@ const BuildJoin=(()=>{
   return {position,
    rotation:((yaw*180/Math.PI)%360+360)%360,snapped:true,stacked:true,edge:false,
    reference:old.entry.data.id,category:w.placementCategory||'wall',
-   joinedTo:'physical-top',physicalContact:true,boundsContained:true,exteriorAligned};
+   joinedTo:'physical-top',physicalContact:true,boundsContained:exteriorAligned,exteriorAligned};
  }
  function currentDeckTop(w,p){
   let best=null,bestDelta=Infinity;
