@@ -702,6 +702,28 @@ const BuildSnap=(()=>{
    if(cat==='stairs')anchor.y-=modelBox.max.y*scale;
    else anchor.y-=modelBox.min.y*scale;
   }
+  // Walls snap with their EXTERIOR FACE on the floor boundary, not
+  // their centre line. The old midpoint alignment pushed half of a
+  // 22 cm wall (11 cm) beyond the floor, even when the magnet was green.
+  // A rotated/offset-pivot imported wall is handled with its real bounds.
+  if(aligned&&model&&!modelBox.isEmpty()&&
+     ['wall','door','railing'].includes(cat)&&chosen.edge?.normal){
+   const longitudinal=rotated(new THREE.Vector3(1,0,0),yaw);
+   const tangent=chosen.edge.tangent,outer=chosen.edge.normal;
+   const length=(modelBox.max.x-modelBox.min.x)*scale;
+   const thickness=(modelBox.max.z-modelBox.min.z)*scale;
+   // Only walls parallel to the floor edge have a meaningful exterior face.
+   // Perpendicular intersections and curved modules retain their own sockets.
+   const customSockets=!!model.userData?.pwbModuleSockets?.length;
+   const curved=typeof BuildCurves!=='undefined'&&BuildCurves.isArc(kind,model);
+   if(!customSockets&&!curved&&length>thickness*1.5&&
+      Math.abs(longitudinal.dot(tangent))>.995){
+    const across=rotated(new THREE.Vector3(0,0,1),yaw);
+    const extent=(Math.abs(longitudinal.dot(outer))*length+
+      Math.abs(across.dot(outer))*thickness)*.5;
+    anchor.addScaledVector(outer,-extent);
+   }
+  }
   // Walls, doors and staircases join the top surface of the imported platform.
   const degrees=((yaw*180/Math.PI)%360+360)%360;
   return lifted({position:anchor,rotation:degrees,snapped:true,edge:aligned,reference:chosen.entry.data.id,category:cat});
