@@ -220,6 +220,14 @@ const BuildPlacementValidator=(()=>{
   // Only reject obviously duplicated structural volume, never edges touching.
   for(const entry of w.objects||[]){
    if(entry===w.moveTarget)continue;
+   // A verified two-edge quarter-circle sits in a concave notch. The
+   // support floor's big rectangle-shaped AABB includes that EMPTY notch;
+   // treating that AABB as solid wrongly blocks even the first corner.
+   // Only exempt the exact support(s) whose two real outer edge normals
+   // were checked by closeRoundedFloorCorner. All other collisions remain.
+   if(cat==='foundation'&&solved.physicalCornerClosure&&
+     (entry.data?.id===solved.reference||
+      entry.data?.id===solved.secondaryReference))continue;
    const otherType=category(w,entry);
    if(decorative.has(otherType)||!structural.has(otherType))continue;
    if(!(cat===otherType||(wallLike.has(cat)&&wallLike.has(otherType))))continue;
