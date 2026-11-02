@@ -311,7 +311,11 @@ class WorldBuilder{
  }
  toggleOverheadCenter(){this.centerOverhead=!this.centerOverhead;this.updateGameGhost();return this.centerOverhead;}
  setJoinMode(mode){
+  const wasFree=this.joinMode==='free';
   this.joinMode=['auto','corner','stack','free'].includes(mode)?mode:'auto';
+  if(!wasFree&&this.joinMode==='free'&&this.ghost)
+   this.manualPlacementPosition=this.ghost.position.clone();
+  if(wasFree&&this.joinMode!=='free'&&this.smartSnap!==false)this.manualPlacementPosition=null;
   this.updateGameGhost();return this.joinMode;
  }
  toggleAutoThickness(){this.autoThickness=!this.autoThickness;this.updateGameGhost();this.onChanged();return this.autoThickness;}
@@ -407,22 +411,23 @@ class WorldBuilder{
   try{
    const fine=solved=>{
     const cat=this.placementCategory||this.categoryForKind?.(this.placement)||this.placement;
-    if(solved&&['wall','corner','door','railing','stairs'].includes(cat)){
+    if(solved&&this.smartSnap!==false&&this.joinMode!=='free'&&['wall','corner','door','railing','stairs'].includes(cat)){
      solved.position.x+=this.cornerOffsetX||0;
      solved.position.z+=this.cornerOffsetZ||0;
     }
     return solved;
    };
-   if(this.joinMode==='free'){
-    const x=Math.round(p.x/this.snap)*this.snap,z=Math.round(p.z/this.snap)*this.snap;
-    // Free placement also needs the true bottom pivot for imported GLBs.
+   if(this.joinMode==='free'||this.smartSnap===false){
+    // Free mode never rounds to the grid. A numeric XYZ override is exact
+    // (in metres) and is not moved back by automatic support detection.
+    const pinned=this.manualPlacementPosition;
+    const x=pinned?.x??p.x,z=pinned?.z??p.z;
     const b=this.ghost&&typeof BuildSnap!=='undefined'?
      BuildSnap.dimensionBounds(BuildSnap.attrBounds(this.ghost),this):null;
     const bottom=b&&!b.isEmpty()?b.min.y*(this.placementScale||1):0;
-    return fine({position:new THREE.Vector3(x,
-     this.placementHeight(x,z)-bottom+(this.placementLift||0),z),
-     rotation:this.placementRotation||0,snapped:false,
-     category:this.placementCategory,manual:true});
+    const y=pinned?.y??((Number.isFinite(p.y)?p.y:this.placementHeight(x,z))-bottom+(this.placementLift||0));
+    return {position:new THREE.Vector3(x,y,z),rotation:this.placementRotation||0,
+     snapped:false,category:this.placementCategory,manual:true};
    }
    if(typeof BuildJoin!=='undefined'&&this.placement&&this.smartSnap!==false){
     const joined=BuildJoin.resolve(this,p);
@@ -837,7 +842,23 @@ class WorldBuilder{
   if(this.mode==='playbuild')this.applyGhostPlacement(this.forwardPlacementPoint());
   else if(this.ghost.position&&this.lastSnapResult)this.applyGhostPlacement(this.ghost.position.clone());
  }
- toggleSmartSnap(){this.smartSnap=!this.smartSnap;this.updateGameGhost();return this.smartSnap;}
+ toggleSmartSnap(){
+  if(this.smartSnap!==false&&this.ghost)this.manualPlacementPosition=this.ghost.position.clone();
+  this.smartSnap=!this.smartSnap;
+  if(this.smartSnap!==false&&this.joinMode!=='free')this.manualPlacementPosition=null;
+  this.updateGameGhost();return this.smartSnap;
+ }
+ setManualPositionAxis(axis,value){
+  if(!['x','y','z'].includes(axis))return null;
+  const n=Number(value);
+  if(!Number.isFinite(n)||Math.abs(n)>10000)return null;
+  if(this.smartSnap!==false&&this.joinMode!=='free')return null;
+  const point=this.manualPlacementPosition?.clone()||this.ghost?.position.clone()||this.forwardPlacementPoint();
+  point[axis]=Math.round(n*1000)/1000;
+  this.manualPlacementPosition=point;
+  if(this.ghost)this.applyGhostPlacement(point);
+  return point[axis];
+ }
  shiftAlongEdge(delta){this.edgeShift=THREE.MathUtils.clamp(Math.round((this.edgeShift+delta)*100)/100,-20,20);this.updateGameGhost();return this.edgeShift;}
  rotatePlacement(){this.placementRotation=(this.placementRotation+90)%360;this.updateGameGhost();return this.placementRotation;}
  // Lightweight surface and obstacle collision for previewing assembled buildings.
@@ -922,7 +943,7 @@ class WorldBuilder{
    this.placementAxes={x:1,y:1,z:1};this.wallThicknessMeters=null;
   }
   this.placementModuleShape=null;this.placementModuleUse=null;
-  this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
+  this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.manualPlacementPosition=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
   if(this.ghost)this.ghost.removeFromParent();
   if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline.geometry.dispose();this.placementOutline.material.dispose();this.placementOutline=null;}
   this.ghost=kind?(this.makeBuiltin(kind)||this.assetCache.get(kind)?.clone(true)||null):null;
