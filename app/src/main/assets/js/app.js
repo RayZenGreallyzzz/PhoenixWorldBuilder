@@ -581,6 +581,15 @@ function refreshConstructionUI(){
  $('btnSnapToggle').setAttribute('aria-pressed',String(w.smartSnap!==false));
  updateSurfaceUI();
  $('buildJoinMode').value=w.joinMode||'auto';
+ const manualXYZ=w.smartSnap===false||w.joinMode==='free';
+ $('manualXYZPanel').classList.toggle('hidden',!manualXYZ);
+ if(manualXYZ){
+  const pos=w.manualPlacementPosition||w.ghost?.position||w.forwardPlacementPoint();
+  for(const axis of ['X','Y','Z']){
+   const input=$('manualPos'+axis);
+   if(document.activeElement!==input)input.value=Number(pos[axis.toLowerCase()]||0).toFixed(3);
+  }
+ }
  $('btnAutoThickness').textContent=w.autoThickness!==false?'↕ Толщина пола: авто':'↕ Толщина пола: исходная';
  $('btnAutoThickness').setAttribute('aria-pressed',String(w.autoThickness!==false));
  $('cornerAdjust').classList.toggle('hidden',!['wall','corner','door','stairs','railing'].includes(w.placementCategory));
@@ -800,11 +809,17 @@ function wireButtons(){
  $('btnCornerXUp').onclick=()=>shiftCorner(.1,0);
  $('btnCornerZDown').onclick=()=>shiftCorner(0,-.1);
  $('btnCornerZUp').onclick=()=>shiftCorner(0,.1);
+ for(const axis of ['X','Y','Z'])$('manualPos'+axis).onchange=e=>{
+  const result=w.setManualPositionAxis(axis.toLowerCase(),e.target.value);
+  if(result===null)toast('Выключи магнит и введи корректную координату в метрах');
+  refreshConstructionUI();
+ };
  $('btnSnapToggle').onclick=()=>{
   const active=w.toggleSmartSnap();
   $('btnSnapToggle').textContent=active?'🧲 Магнит по прицелу: вкл.':'○ Магнит выключен';
   $('btnSnapToggle').setAttribute('aria-pressed',String(active));
   if(!active)refreshAimSnapUI(null);
+  refreshConstructionUI();
   toast(active?'Наведи прицел на стену и выбери физическую точку':'Магнит по прицелу выключен');
  };
  const moveEdge=delta=>{
