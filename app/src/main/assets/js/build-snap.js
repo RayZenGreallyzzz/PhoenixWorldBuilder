@@ -2,6 +2,7 @@
 const BuildSnap=(()=>{
  const clamp=THREE.MathUtils.clamp;
  const boundsCache=new WeakMap();
+ const slabEdgeCache=new WeakMap();
  const structural=(cat)=>cat==='foundation'||cat==='ceiling';
  const edgable=(cat,kind)=>{
   if(['wall','door','stairs','railing'].includes(cat))return true;
@@ -179,17 +180,20 @@ const BuildSnap=(()=>{
  // Important for quarter-circle floors: the rectangle bounds are NOT its edge.
  function slabStraightEdges(root){
   if(!root)return [];
+  const signature=geometrySignature(root),cached=slabEdgeCache.get(root);
+  if(cached?.signature===signature)return cached.edges;
+  const save=edges=>{slabEdgeCache.set(root,{signature,edges});return edges;};
   root.updateWorldMatrix(true,true);
-  const bounds=attrBounds(root);if(bounds.isEmpty())return [];
+  const bounds=attrBounds(root);if(bounds.isEmpty())return save([]);
   // The bundled 90° sector has two *radial* straight sides and a curved
   // circumference. Explicit radial geometry is more reliable than extracting
   // the edge frequency of its deliberately duplicated fan triangles.
   if(root.name==='arcFloor90'||root.name==='arcCeiling90'){
    const top=bounds.max.y;
-   return [
+   return save([
     {a:new THREE.Vector3(0,top,0),b:new THREE.Vector3(bounds.max.x,top,0),length:bounds.max.x},
     {a:new THREE.Vector3(0,top,0),b:new THREE.Vector3(0,top,bounds.max.z),length:bounds.max.z}
-   ];
+   ]);
   }
   const inverse=root.matrixWorld.clone().invert(),relative=new THREE.Matrix4();
   const vertex=new THREE.Vector3(),counts=new Map(),lookup=new Map();
@@ -226,10 +230,10 @@ const BuildSnap=(()=>{
    const length=Math.hypot(a.x-b.x,a.z-b.z);
    if(length>.3)segments.push({a,b,length});
   }
-  if(!segments.length)return [];
+  if(!segments.length)return save([]);
   // Discard arc tessellation chords in favor of real straight radial ends.
   const longest=Math.max(...segments.map(s=>s.length));
-  return segments.filter(s=>s.length>=Math.max(.3,longest*.35));
+  return save(segments.filter(s=>s.length>=Math.max(.3,longest*.35)));
  }
  function physicalSlabEdge(ref,p){
   const edges=slabStraightEdges(ref.root),bounds=ref.box;
