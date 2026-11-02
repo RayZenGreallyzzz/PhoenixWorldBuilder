@@ -233,6 +233,39 @@ const BuildSnap=(()=>{
   return {position:point,rotation:(w.placementRotation||0),snapped:true,slab:true,edge:true,
    reference:ref.entry.data.id,category:cat,thicknessY:factor,referenceThickness:choice.thickness};
  }
+ // Compare the actual 3D silhouette at both roof section edges before
+ // permitting an automatic seam. A sloped panel with mismatched end heights
+ // is NOT a continuous roof, even when both axis-aligned boxes touch.
+ function roofEndProfile(root,side,scaleXYZ){
+  root.updateWorldMatrix(true,true);
+  const local=attrBounds(root);if(local.isEmpty())return null;
+  const targetZ=side<0?local.min.z:local.max.z;
+  const inverse=root.matrixWorld.clone().invert(),matrix=new THREE.Matrix4();
+  const point=new THREE.Vector3(),values=new Set();
+  let total=0,tooLarge=false;
+  root.traverse(mesh=>{
+   if(tooLarge||!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
+   const positions=mesh.geometry.attributes.position;
+   total+=positions.count;
+   if(total>200000){tooLarge=true;return;}
+   matrix.multiplyMatrices(inverse,mesh.matrixWorld);
+   for(let i=0;i<positions.count;i++){
+    point.fromBufferAttribute(positions,i).applyMatrix4(matrix);
+    if(Math.abs(point.z-targetZ)>.003)continue;
+    const x=Math.round(point.x*scaleXYZ[0]*1000)/1000;
+    const y=Math.round(point.y*scaleXYZ[1]*1000)/1000;
+    values.add(x+':'+y);
+   }
+  });
+  if(tooLarge||values.size<2)return null;
+  return [...values].sort();
+ }
+ const roofEdgesMeet=(newRoot,oldRoot,side,newXYZ,oldXYZ)=>{
+  const before=roofEndProfile(oldRoot,side,oldXYZ);
+  const after=roofEndProfile(newRoot,-side,newXYZ);
+  return !!before&&!!after&&before.length===after.length&&
+   before.every((value,i)=>value===after[i]);
+ };
  // Roof section -> roof section along the roof's local longitudinal Z axis.
  // Only the same source module and matching transverse dimensions may join;
  // the snap does not alter pitch, height, or shape of either section.
@@ -241,6 +274,7 @@ const BuildSnap=(()=>{
   const scale=w.placementScale||1,axes=w.placementAxes||{};
   const width=(modelBox.max.x-modelBox.min.x)*scale;
   const depth=(modelBox.max.z-modelBox.min.z)*scale;
+  const newXYZ=[scale*(axes.x||1),scale*(axes.y||1),scale*(axes.z||1)];
   const centerNew=new THREE.Vector3((modelBox.min.x+modelBox.max.x)/2,0,
    (modelBox.min.z+modelBox.max.z)/2);
   if(width<.2||depth<.2)return null;
@@ -252,7 +286,10 @@ const BuildSnap=(()=>{
    const oldScale=old.data.scale||1;
    const oldWidth=(base.max.x-base.min.x)*oldScale*(old.data.dimensionScale?.x||1);
    const oldDepth=(base.max.z-base.min.z)*oldScale*(old.data.dimensionScale?.z||1);
-   if(Math.abs(oldWidth-width)>.08||Math.abs(old.mesh.scale.y-model.scale.y)>.08)continue;
+   if(Math.abs(oldWidth-width)>.003||Math.abs(oldDepth-depth)>.003||
+    Math.abs(old.mesh.scale.y-newXYZ[1])>.003)continue;
+   // Roof tiles with incompatible edge heights would leave open seams.
+   const oldXYZ=[old.mesh.scale.x,old.mesh.scale.y,old.mesh.scale.z];
    const yaw=(old.data.rot||0)*Math.PI/180;
    const rotation=((w.placementRotation||0)%360+360)%360;
    if(rotation!==0)continue; // manual rotation opts out of automatic section linking
@@ -262,6 +299,7 @@ const BuildSnap=(()=>{
    const newRotated=rotated(centerNew,yaw).multiplyScalar(scale);
    const direction=rotated(new THREE.Vector3(0,0,1),yaw);
    for(const side of [-1,1]){
+    if(!roofEdgesMeet(model,old.mesh,side,newXYZ,oldXYZ))continue;
     const desired=oldCenter.clone().addScaledVector(direction,side*(oldDepth+depth)/2);
     const position=new THREE.Vector3(desired.x-newRotated.x,
      old.mesh.position.y,desired.z-newRotated.z);
