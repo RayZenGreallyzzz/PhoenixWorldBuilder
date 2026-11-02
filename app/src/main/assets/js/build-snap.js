@@ -322,7 +322,7 @@ const BuildSnap=(()=>{
   const topEdges=actual.filter(e=>e.length>.4);
   // Only rounded floor geometry needs tangent/radial edge alignment.
   // Arbitrary slanted/cut GLB floors keep the legacy orientation and scale.
-  const isRounded=w.placement==='arcFloor90'||
+  const isRounded=w.placement==='arcFloor90'||topEdges.length===2||
    /(?:round|curv|arc.?floor|floor.?arc|закругл|кругл|полукруг)/i.test(String(w.placement||''));
   const shouldPhysical=isRounded&&topEdges.length>=2;
   if(shouldPhysical){
