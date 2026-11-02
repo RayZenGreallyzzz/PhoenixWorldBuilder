@@ -93,6 +93,11 @@
 </div>
 <span>Привязка к деталям</span>
  <button id="btnSnapToggle" class="wide" aria-pressed="true">🧲 Магнит по прицелу: вкл.</button>
+ <div id="manualXYZPanel" class="hudRow hidden" aria-label="Точная подгонка без магнита">
+  <label>X, м <input id="manualPosX" type="number" step="0.001" inputmode="decimal" aria-label="Координата X в метрах"></label>
+  <label>Y, м <input id="manualPosY" type="number" step="0.001" inputmode="decimal" aria-label="Координата Y в метрах"></label>
+  <label>Z, м <input id="manualPosZ" type="number" step="0.001" inputmode="decimal" aria-label="Координата Z в метрах"></label>
+ </div>
  <div class="hudRow"><button id="btnShiftLeft" title="Сдвинуть вдоль края влево">◀ 0,25 м</button><span id="snapShiftLabel">0 м</span><button id="btnShiftRight" title="Сдвинуть вдоль края вправо">0,25 м ▶</button></div>
  <small id="snapStatus" class="snapStatus">Наведи крестик на стену и выбери точку привязки</small>
 </div><div id="placementStatus" class="placementStatus" aria-live="polite">◌ Выбери место установки</div>
