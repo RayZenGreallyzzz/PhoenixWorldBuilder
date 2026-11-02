@@ -96,6 +96,29 @@ for(const kind of ['arcFloor90','arcCeiling90']){
  assert(overlapX<.003||overlapZ<.003,
   'Curved floor must not be stacked on the existing slab: '+kind);
 }
+// A single physical sector can have floor texture above and ceiling texture
+// below. Even a module named 'ceiling' can be assigned the structural floor
+// category. Next-storey floor must sit on top, not next to it.
+{
+ const w=world();
+ const lower=w.instantiate('arcCeiling90',{id:210,pos:[0,2.6,0],rot:0,scale:1,
+  category:'ceiling',storey:0});
+ w.setPlacement('arcFloor90','foundation');
+ const cursor=new THREE.Vector3(1,2.77,.6);
+ const result=w.solvePlacement(cursor);
+ assert(result.snapped&&result.stackedOnSlab,
+  'Rounded floor must snap ON TOP of a matching ceiling when aimed inside');
+ assert.equal(result.reference,lower.data.id,'Correct supporting slab is targeted');
+ const upper=w.placeAt(cursor);
+ assert(upper,'Can install upper floor on a matching rounded ceiling');
+ const below=new THREE.Box3().setFromObject(lower.mesh);
+ const above=new THREE.Box3().setFromObject(upper.mesh);
+ assert(Math.abs(above.min.y-below.max.y)<.002,
+  'Top of lower sector touches bottom of upper floor without a gap');
+ assert(Math.abs(above.min.x-below.min.x)<.002&&
+  Math.abs(above.max.z-below.max.z)<.002,
+  'Rounded exterior perimeter stays aligned between stories');
+}
 const app=fs.readFileSync(path.join(dir,'app.js'),'utf8');
 const html=fs.readFileSync(path.join(dir,'../index.html'),'utf8');
 for(const kind of ['arc90','arc180','arcFloor90','arcCeiling90'])
