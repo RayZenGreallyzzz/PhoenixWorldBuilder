@@ -399,7 +399,8 @@ const BuildJoin=(()=>{
   if(!slots?.length)return null;
   const scale=w.placementScale||1;
   const center=new THREE.Vector3((box.min.x+box.max.x)/2,0,(box.min.z+box.max.z)/2);
-  const turns=onlyCorner?[90,-90]:[0,90,-90,180];
+  // End-face directions determine the yaw: free extra turns create false joins.
+  const turns=[0];
   const deckTop=currentDeckTop(w,p);
   let best=null;
   for(const old of candidates){
@@ -413,7 +414,7 @@ const BuildJoin=(()=>{
      const pose=BuildCore.alignSockets(
       {point:slot.point.toArray(),out:slot.out.toArray()},
       {point:target.point.toArray(),out:target.out.toArray()},
-      {scale,extraYawDeg:(w.placementRotation||0)+extraYawDeg}
+      {scale:[scale*(w.placementAxes?.x||1),scale*(w.placementAxes?.y||1),scale*(w.placementAxes?.z||1)],extraYawDeg}
      );
      if(!pose||!pose.position.every(Number.isFinite)||!Number.isFinite(pose.rotation))continue;
      const yaw=pose.rotation*Math.PI/180;
@@ -427,7 +428,7 @@ const BuildJoin=(()=>{
      const reach=Math.max(1.85,Math.min(4.5,
       Math.hypot(box.max.x-box.min.x,box.max.z-box.min.z)*scale*.6+1.4));
      if(distance>reach)continue;
-     const perpendicular=Math.abs(extraYawDeg)%180===90;
+     const perpendicular=Math.abs(target.out.dot(slot.out))<.15;
      // Cursor intent must choose the physical joint, not merely a wall
      // orientation whose centre happens to pass near the cursor. This is
      // essential at L-corners where one socket is already occupied.
