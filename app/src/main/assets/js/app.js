@@ -106,7 +106,7 @@ function fitOwnModel(){
  w.select(null);
  const result=w.setModuleShape(shape,use);
  if(!result.ok)return toast('Модуль не создан: '+result.reason);
- surfaceMode='module';surfaceScope='all';
+ surfaceMode='module';surfaceScope='all';saveSurfacePreferences();
  w.updatePreviewSurfacePaint('all','mode','module');
  const existing=w.placementSurfacePaint?.all?.texture||w.textureId;
  if(existing)w.updatePreviewSurfacePaint('all','texture',existing);
@@ -284,6 +284,39 @@ async function showTextureImage(img,id){
  img.onerror=()=>URL.revokeObjectURL(url);
  img.src=url;
 }
+// Persist user's preferred mapping independently of each object's finish.
+const SURFACE_PREFS_KEY='pwb_surface_preferences_v1';
+function saveSurfacePreferences(){
+ try{localStorage.setItem(SURFACE_PREFS_KEY,JSON.stringify({
+  scope:surfaceScope,mode:surfaceMode,tileMeters:surfaceTileMeters,
+  imageScale:surfaceImageScale,faithful:surfaceFaithful
+ }))}catch(e){console.warn('Surface preferences not saved',e)}
+}
+function restoreSurfacePreferences(){
+ try{
+  const p=JSON.parse(localStorage.getItem(SURFACE_PREFS_KEY)||'null');
+  if(!p||typeof p!=='object')return;
+  if(SurfacePaint.faces.includes(p.scope))surfaceScope=p.scope;
+  if(SurfacePaint.modes.includes(p.mode))surfaceMode=p.mode;
+  if(Number.isFinite(p.tileMeters))surfaceTileMeters=Math.max(.1,Math.min(40,p.tileMeters));
+  if(Number.isFinite(p.imageScale))surfaceImageScale=Math.max(.25,Math.min(4,p.imageScale));
+  if(typeof p.faithful==='boolean')surfaceFaithful=p.faithful;
+  if(surfaceMode==='joined')surfaceScope='top';
+ }catch(e){console.warn('Surface preferences not restored',e)}
+}
+// Displayed settings can come from an existing module, not user defaults.
+function currentSurfaceControls(){
+ const game=w.mode==='playbuild';
+ const mode=$(game?'gameSurfaceMode':'surfaceMode').value;
+ const meters=Number($(game?'gameSurfaceTileMeters':'surfaceTileMeters').value);
+ const scale=Number($(game?'gameSurfaceImageScale':'surfaceImageScale').value)/100;
+ return {
+  mode:SurfacePaint.modes.includes(mode)?mode:surfaceMode,
+  tileMeters:Number.isFinite(meters)&&meters>0?Math.max(.1,Math.min(40,meters)):surfaceTileMeters,
+  imageScale:Number.isFinite(scale)&&scale>0?Math.max(.25,Math.min(4,scale)):surfaceImageScale,
+  faithful:!!$(game?'gameSurfaceFaithful':'surfaceFaithful').checked
+ };
+}
 function surfaceTarget(){
  if(w.mode==='playbuild'&&$('surfacePaintTarget').value==='new')return null;
  return w.selected||null;
@@ -315,7 +348,7 @@ function applyJoinedFloor(id){
  if(!entry){toast('Для общего рисунка сначала выдели установленную плиту пола');return 0}
  const n=w.applyJoinedFloorFinish(entry,id,{faithful:surfaceFaithful});
  if(!n){toast('Выбери плиту пола (не стену): соседние плиты найдутся автоматически');return 0}
- surfaceScope='top';surfaceMode='joined';updateSurfaceUI();
+ surfaceScope='top';surfaceMode='joined';saveSurfacePreferences();updateSurfaceUI();
  toast('Один рисунок нанесён на '+n+' соединённых плит без повторения');
  return n;
 }
@@ -341,7 +374,7 @@ function clearSurface(){
  updateSurfaceUI();toast('Облицовка стороны снята');
 }
 function setSurfaceScope(face){
- surfaceScope=SurfacePaint.faces.includes(face)?face:'all';updateSurfaceUI();
+ surfaceScope=SurfacePaint.faces.includes(face)?face:'all';saveSurfacePreferences();updateSurfaceUI();
 }
 function changeSurfaceMode(mode){
  surfaceMode=SurfacePaint.modes.includes(mode)?mode:'repeat';
@@ -350,47 +383,54 @@ function changeSurfaceMode(mode){
   for(const id of ['surfaceScope','gameSurfaceScope'])$(id).value='top';
   for(const id of ['surfaceMode','gameSurfaceMode'])$(id).value='joined';
   for(const id of ['surfaceTileMeters','gameSurfaceTileMeters'])$(id).disabled=true;
+  saveSurfacePreferences();updateSurfaceUI();
   toast('Выдели плиту и выбери изображение: оно ляжет на весь соединённый пол');
   return;
  }
+ saveSurfacePreferences();
  assignSurfacePaint('mode',surfaceMode);
 }
 function changeSurfaceMeters(value){
  const n=Number(value);surfaceTileMeters=Number.isFinite(n)?Math.max(.1,Math.min(40,n)):1;
+ saveSurfacePreferences();
  assignSurfacePaint('tileMeters',surfaceTileMeters);
 }
 function changeSurfaceImageScale(value){
  const v=Number(value);
  surfaceImageScale=Number.isFinite(v)?Math.max(.25,Math.min(4,v/100)):1;
+ saveSurfacePreferences();
  assignSurfacePaint('imageScale',surfaceImageScale);
 }
 function changeSurfaceFaithful(value){
- surfaceFaithful=!!value;assignSurfacePaint('faithful',surfaceFaithful);
+ surfaceFaithful=!!value;saveSurfacePreferences();assignSurfacePaint('faithful',surfaceFaithful);
 }
 function selectTexture(id){
  return (async()=>{
   if(!id)return assignSurfacePaint('texture',null);
   const tex=await loadTexture(id);
   if(!tex){toast('Не удалось открыть текстуру');return}
+  // Apply what the visible controls show, even when switching between
+  // two already-painted modules with different individual settings.
+  const chosen=currentSurfaceControls();
   // Setting up a new surface records the selected repeat/stretch settings
   // alongside the image, so later projects and GLBs can reproduce the mapping.
-  if(surfaceMode!=='joined'){
+  if(chosen.mode!=='joined'){
    const entry=surfaceTarget();
    if(entry){
     let skin=SurfacePaint.normalize(entry.data.surfacePaint);
-    skin=SurfacePaint.update(skin,surfaceScope,'mode',surfaceMode);
-    skin=SurfacePaint.update(skin,surfaceScope,'tileMeters',surfaceTileMeters);
-    skin=SurfacePaint.update(skin,surfaceScope,'imageScale',surfaceImageScale);
-    skin=SurfacePaint.update(skin,surfaceScope,'faithful',surfaceFaithful);
+    skin=SurfacePaint.update(skin,surfaceScope,'mode',chosen.mode);
+    skin=SurfacePaint.update(skin,surfaceScope,'tileMeters',chosen.tileMeters);
+    skin=SurfacePaint.update(skin,surfaceScope,'imageScale',chosen.imageScale);
+    skin=SurfacePaint.update(skin,surfaceScope,'faithful',chosen.faithful);
     // Do not call updateSurfacePaint three times (each would add an Undo).
     w.remember();
     skin=SurfacePaint.update(skin,surfaceScope,'texture',id);
     entry.data.surfacePaint=skin;w.applyAppearance(entry);w.onChanged();
    }else if(w.placement&&w.ghost){
-    w.updatePreviewSurfacePaint(surfaceScope,'mode',surfaceMode);
-    w.updatePreviewSurfacePaint(surfaceScope,'tileMeters',surfaceTileMeters);
-    w.updatePreviewSurfacePaint(surfaceScope,'imageScale',surfaceImageScale);
-    w.updatePreviewSurfacePaint(surfaceScope,'faithful',surfaceFaithful);
+    w.updatePreviewSurfacePaint(surfaceScope,'mode',chosen.mode);
+    w.updatePreviewSurfacePaint(surfaceScope,'tileMeters',chosen.tileMeters);
+    w.updatePreviewSurfacePaint(surfaceScope,'imageScale',chosen.imageScale);
+    w.updatePreviewSurfacePaint(surfaceScope,'faithful',chosen.faithful);
     w.updatePreviewSurfacePaint(surfaceScope,'texture',id);
    }else return toast('Выбери установленную деталь или новую деталь в каталоге');
    updateSurfaceUI();
@@ -1276,7 +1316,7 @@ async function init(){
    renderLibrary();
   }
  });
- setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
+ restoreSurfacePreferences();setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
  w.onSelected=e=>{DecalUI.render();syncDimensionInputs();if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name,importedAt:row.importedAt||0})}
