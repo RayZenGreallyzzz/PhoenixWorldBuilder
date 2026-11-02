@@ -69,6 +69,13 @@ const topFloorTop=new THREE.Box3().setFromObject(topFloor.mesh).max.y;
 close(new THREE.Box3().setFromObject(topFloor.mesh).min.y,ceilingTop,'Next floor bottom touches ceiling top');
 
 w.setPlacement('wall','wall');
+const debugUpper=w.applyGhostPlacement(new THREE.Vector3(edge.x,topFloorTop,edge.z));
+console.log('SECOND_STORY_DEBUG',JSON.stringify({
+ floor:topFloor.data.pos,ceiling:ceiling.data.pos,edge:edge.toArray(),
+ position:debugUpper?.position?.toArray(),reason:debugUpper?.reason,
+ category:debugUpper?.category,valid:debugUpper?.valid,
+ topFloorTop, snapped:debugUpper?.snapped, floorShape:new THREE.Box3().setFromObject(topFloor.mesh).toArray?.()
+}));
 const upperWall=w.placeAt(new THREE.Vector3(edge.x,topFloorTop,edge.z));assert(upperWall);
 const upperWallBox=new THREE.Box3().setFromObject(upperWall.mesh);
 close(upperWallBox.min.y,topFloorTop,'Upper wall touches new floor top');
