@@ -68,15 +68,17 @@ const topFloor=w.placeAt(nextFloorPoint);
 const topFloorTop=new THREE.Box3().setFromObject(topFloor.mesh).max.y;
 close(new THREE.Box3().setFromObject(topFloor.mesh).min.y,ceilingTop,'Next floor bottom touches ceiling top');
 
+// Test a real position on the NEW upper slab, not a distant edge of the
+// ground-floor deck which is outside this smaller ceiling/floor footprint.
 w.setPlacement('wall','wall');
-const debugUpper=w.applyGhostPlacement(new THREE.Vector3(edge.x,topFloorTop,edge.z));
-console.log('SECOND_STORY_DEBUG',JSON.stringify({
- floor:topFloor.data.pos,ceiling:ceiling.data.pos,edge:edge.toArray(),
- position:debugUpper?.position?.toArray(),reason:debugUpper?.reason,
- category:debugUpper?.category,valid:debugUpper?.valid,
- topFloorTop, snapped:debugUpper?.snapped, floorShape:new THREE.Box3().setFromObject(topFloor.mesh).toArray?.()
-}));
-const upperWall=w.placeAt(new THREE.Vector3(edge.x,topFloorTop,edge.z));assert(upperWall);
+const upperBounds=BuildSnap.attrBounds(topFloor.mesh);
+topFloor.mesh.updateMatrixWorld(true);
+const upperPoint=new THREE.Vector3(upperBounds.max.x-.2,upperBounds.max.y,
+ (upperBounds.min.z+upperBounds.max.z)/2).applyMatrix4(topFloor.mesh.matrixWorld);
+let upperSolved=w.solvePlacement(upperPoint);
+assert(upperSolved.snapped,'Upper wall must find its actual new floor support');
+close(upperSolved.position.y,topFloorTop,'Upper wall base uses the upper floor plane');
+const upperWall=w.placeAt(upperPoint);assert(upperWall);
 const upperWallBox=new THREE.Box3().setFromObject(upperWall.mesh);
 close(upperWallBox.min.y,topFloorTop,'Upper wall touches new floor top');
 
