@@ -167,9 +167,8 @@ const BuildSnap=(()=>{
    const shift=rotated(middle,yaw).multiplyScalar(scale);
    anchor.x-=shift.x;anchor.z-=shift.z;
    anchor.y=(typeof BuildCore!=='undefined'?
-    BuildCore.contactPivotY(modelBox.min.y,target,scale,w.placementLift||0):
-    target-modelBox.min.y*scale+(w.placementLift||0));
-  }else anchor.y+=(w.placementLift||0);
+    BuildCore.contactPivotY(modelBox.min.y,target,scale,0):
+    target-modelBox.min.y*scale);
   return {position:anchor,rotation:((yaw*180/Math.PI)%360+360)%360,
    snapped:true,overhead:true,edge:false,
    reference:support[0]?.entry.data.id,targetHeight:target,category:cat,
@@ -280,7 +279,8 @@ const BuildSnap=(()=>{
   const kind=w.placement||'',cat=w.placementCategory||w.categoryForKind?.(kind)||'prop';
   const aligned=edgable(cat,kind),useSnap=w.smartSnap!==false;
   const rawY=Number.isFinite(p.y)?p.y:w.heightAt(p.x,p.z);
-  const raw=new THREE.Vector3(Math.round(p.x/w.snap)*w.snap,rawY,Math.round(p.z/w.snap)*w.snap);
+  // Grid quantization belongs to magnetic placement only.
+  const raw=useSnap?new THREE.Vector3(Math.round(p.x/w.snap)*w.snap,rawY,Math.round(p.z/w.snap)*w.snap):new THREE.Vector3(p.x,rawY,p.z);
   const basic={position:raw,rotation:w.placementRotation||0,snapped:false,edge:false,reference:null,category:cat};
   const model=w.ghost||w.makeBuiltin(kind)||w.assetCache?.get(kind);
   const modelBox=model?dimensionBounds(attrBounds(model),w):new THREE.Box3().makeEmpty();
