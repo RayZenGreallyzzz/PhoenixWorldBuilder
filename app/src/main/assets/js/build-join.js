@@ -566,6 +566,18 @@ const BuildJoin=(()=>{
    if(matched)return matched;
   }
   const straightWalls=nearCurves?walls.filter(x=>!BuildCurves.isArc(x.entry.kind)):walls;
+  // Imported L/rounded corner modules already have two physical end caps.
+  // Their own sockets take precedence over guessed intersections of walls.
+  if(isCorner&&!curved&&cat==='corner'&&typeof BuildCurves!=='undefined'){
+   const ends=BuildCurves.incomingSockets(w,box);
+   if(ends?.length){
+    const hit=joinBySockets(w,p,straightWalls,box,false,walls);
+    if(hit)return {...hit,corner:true};
+    // No valid socket nearby: let ordinary free/base placement handle it.
+    // Never fabricate an L-pivot from the imported GLB's bounding box.
+    return null;
+   }
+  }
   if(isEnd&&!curved){
    const end=joinEnd(w,p,straightWalls,box,false,walls);
    if(end)return end;
