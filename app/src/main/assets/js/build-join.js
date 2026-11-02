@@ -312,7 +312,7 @@ const BuildJoin=(()=>{
    reference:best.reference,category:w.placementCategory||'corner',joinedTo:'corner'};
  }
  function stack(w,p,candidates,box){
-  let best=null;
+  let best=null,tooShort=null;
   const majorX=(box.max.x-box.min.x)>=(box.max.z-box.min.z);
   const scale=w.placementScale||1;
   const incomingLength=(majorX?box.max.x-box.min.x:box.max.z-box.min.z)*scale;
@@ -325,13 +325,23 @@ const BuildJoin=(()=>{
    const line=wall.bestSegment||wall;
    const supportLength=Math.max(.001,line.length||distXZ(line.a,line.c));
    // A short corner arm must not steal a full upper wall from a proper support.
-   if(incomingLength>supportLength+.035)continue;
+   if(incomingLength>supportLength+.035){
+    if(guided||w.joinMode==='stack')tooShort=wall;
+    continue;
+   }
    const vertical=Number.isFinite(p.y)?abs(wall.top-p.y):0;
    // Automatic stacking is only allowed when the cursor/support plane is
    // physically near the wall top. Explicit Stack mode may reach farther.
    if(auto&&vertical>.85)continue;
    const grade=wall.d+vertical*.65;
    if(!best||grade<best.grade)best={wall,grade};
+  }
+  if(!best&&tooShort){
+   const old=tooShort,at=old.bestSegment?.a||old.a;
+   return {position:new THREE.Vector3(at.x,old.top,at.z),
+    rotation:w.placementRotation||0,snapped:false,stacked:true,valid:false,
+    category:w.placementCategory||'wall',reference:old.entry.data.id,
+    missingTarget:'Новая стена шире опорной и выходит за её границы'};
   }
   if(!best)return null;
   const old=best.wall,line=old.bestSegment||old;
