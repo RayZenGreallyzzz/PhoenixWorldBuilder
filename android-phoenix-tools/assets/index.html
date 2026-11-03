@@ -1,0 +1,131 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+*{box-sizing:border-box}body{margin:0;color:#e8f0e8;background:#141c21;font:14px system-ui}
+header{padding:8px 10px;background:#24343b;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+label{white-space:nowrap}select,input,button{color:#f5f9fa;background:#354e55;border:1px solid #5d777a;border-radius:7px;padding:6px;font-size:14px}
+button{min-height:36px}input{width:82px}#viewport{width:100%;height:302px;touch-action:none;display:block}
+#msg{font-size:12px;color:#e5dfaa;padding:6px 10px;min-height:22px}#info{font-size:12px;padding:4px 10px;color:#c3e3d0}
+</style></head><body>
+<header><label>Инструмент
+<select id="mode"><option value="view">Осмотр 3D</option><option value="texture">Текстура поверхности</option><option value="decal">PNG/JPG наклейка</option></select></label>
+<label>Размер наклейки <input type="number" id="decalSize" min="0.1" max="6" step="0.1" value="0.8"> м</label>
+<button id="undo" type="button">↶ Убрать наклейку</button>
+</header>
+<canvas id="viewport" aria-label="Трёхмерный предпросмотр загруженного GLB"></canvas>
+<div id="msg">Загрузка офлайн-просмотра…</div>
+<div id="info">В режиме осмотра вращай модель одним пальцем, увеличивай двумя. Для декора выбери PNG/JPG сверху и коснись модели.</div>
+<script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
+<script src="OrbitControls.js"></script>
+<script>
+(function(){'use strict';
+const msg=document.getElementById('msg'),canvas=document.getElementById('viewport');
+const mode=document.getElementById('mode'),size=document.getElementById('decalSize');
+const W=canvas.clientWidth||350,H=canvas.clientHeight||300;
+let renderer,scene,camera,controls,root,texture=null;
+let meshes=[],decalHistory=[],mapped=new Set(),saved={};
+if(typeof THREE==='undefined'||typeof THREE.GLTFLoader!=='function'){
+ msg.textContent='Не загружен локальный 3D-движок. Проверь пакет.';return;
+}
+try{
+ renderer=new THREE.WebGLRenderer({canvas,antialias:false,alpha:false,powerPreference:'low-power'});
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.setSize(W,H,false);
+ renderer.setClearColor(0x202d31,1);
+ scene=new THREE.Scene();scene.background=new THREE.Color(0x202d31);
+ camera=new THREE.PerspectiveCamera(55,W/H,.05,600);camera.position.set(2,2.2,4);
+ scene.add(new THREE.AmbientLight(0xffffff,.82));
+ const light=new THREE.DirectionalLight(0xffffff,1.3);light.position.set(4,8,6);scene.add(light);
+ const grid=new THREE.GridHelper(8,16,0x788b91,0x3b5057);scene.add(grid);
+ controls=new THREE.OrbitControls(camera,canvas);controls.enableDamping=true;
+ controls.maxDistance=90;controls.minDistance=.2;
+}catch(e){msg.textContent='Не удалось открыть WebGL: '+e.message;return;}
+function save(){
+ const pack={textureTargets:[...mapped],decals:decalHistory.map(x=>({
+  p:x.position.toArray(),q:x.quaternion.toArray(),s:x.scale.x
+ }))};
+ try{window.PhoenixBridge.saveAppearance(JSON.stringify(pack));}catch(e){}
+}
+function textureIfNeeded(callback){
+ if(texture){callback(texture);return;}
+ new THREE.TextureLoader().load('decor?version='+Date.now(),t=>{
+  t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.RepeatWrapping;
+  if(renderer.outputEncoding!==undefined)t.encoding=THREE.sRGBEncoding;
+  texture=t;callback(t);
+ },undefined,()=>msg.textContent='Сначала выбери PNG/JPG в верхней части приложения.');
+}
+function overlay(p,q,meters,persist=true){
+ textureIfNeeded(map=>{
+  const mat=new THREE.MeshBasicMaterial({map,transparent:true,side:THREE.DoubleSide,
+   polygonOffset:true,polygonOffsetFactor:-1,depthWrite:false});
+  const obj=new THREE.Mesh(new THREE.PlaneGeometry(1,1),mat);
+  obj.position.fromArray(p);obj.quaternion.fromArray(q);obj.scale.setScalar(meters);
+  scene.add(obj);decalHistory.push(obj);if(persist)save();
+  msg.textContent='Наклейка размещена на модели. Размер: '+meters+' м.';
+ });
+}
+function mapSurface(index,persist=true){
+ textureIfNeeded(map=>{
+  const mesh=meshes[index];if(!mesh)return;
+  if(mesh.material){
+   const source=Array.isArray(mesh.material)?mesh.material[0]:mesh.material;
+   const material=source.clone();material.map=map;material.needsUpdate=true;
+   mesh.material=material;mesh.material.needsUpdate=true;
+  }
+  mapped.add(index);if(persist)save();
+  msg.textContent='Текстура назначена на поверхность №'+(index+1)+'.';
+ });
+}
+function applySaved(){
+ if(saved.textureTargets)for(const i of saved.textureTargets){if(Number.isInteger(i))mapSurface(i,false);}
+ if(saved.decals)for(const d of saved.decals){
+  if(d&&Array.isArray(d.p)&&d.p.length===3&&Array.isArray(d.q)&&d.q.length===4){
+   overlay(d.p,d.q,Math.min(6,Math.max(.1,Number(d.s)||.8)),false);
+  }
+ }
+}
+function fitObject(object){
+ const bb=new THREE.Box3().setFromObject(object),centre=bb.getCenter(new THREE.Vector3());
+ const bounds=bb.getSize(new THREE.Vector3()),maxDim=Math.max(.2,bounds.x,bounds.y,bounds.z);
+ grid.position.y=bb.min.y-.005;controls.target.copy(centre);
+ camera.position.copy(centre).add(new THREE.Vector3(maxDim*1.3,maxDim*.9,maxDim*1.5));
+ camera.near=Math.max(.02,maxDim/1000);camera.far=Math.max(100,maxDim*30);
+ camera.updateProjectionMatrix();controls.update();
+}
+new THREE.GLTFLoader().load('model.glb',gltf=>{
+ root=gltf.scene;scene.add(root);
+ root.traverse(node=>{if(node.isMesh)meshes.push(node)});
+ fitObject(root);
+ fetch('appearance.json').then(r=>r.json()).then(j=>{saved=j||{};applySaved();}).catch(()=>{});
+ msg.textContent='GLB загружен: '+meshes.length+' сеток. Текстуру или наклейку можно нанести касанием.';
+},undefined,()=>msg.textContent='GLB пока не выбран или файл не поддерживается. Нажми «Выбрать персонажа или модуль GLB».');
+function pointer(event){
+ if(mode.value==='view'||!root)return;
+ const rect=canvas.getBoundingClientRect(),pointer=new THREE.Vector2(
+  (event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
+ const ray=new THREE.Raycaster();ray.setFromCamera(pointer,camera);
+ const hit=ray.intersectObjects(meshes,false)[0];if(!hit)return;
+ if(mode.value==='texture'){mapSurface(meshes.indexOf(hit.object));return;}
+ const normal=hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+ const p=hit.point.clone().addScaledVector(normal,.012);
+ const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),normal);
+ overlay(p.toArray(),q.toArray(),Math.min(6,Math.max(.1,Number(size.value)||.8)));
+}
+mode.addEventListener('change',()=>{
+ controls.enabled=mode.value==='view';
+ msg.textContent=mode.value==='view'?'Осмотр: вращение и масштабирование модели.':'Коснись поверхности модели.';
+});
+canvas.addEventListener('pointerup',pointer);
+document.getElementById('undo').addEventListener('click',()=>{
+ const d=decalHistory.pop();if(!d)return;scene.remove(d);d.geometry.dispose();
+ save();msg.textContent='Последняя наклейка удалена.';
+});
+window.addEventListener('resize',()=>{
+ const width=canvas.clientWidth||350,height=canvas.clientHeight||300;
+ renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();
+});
+let last=0;function frame(now){requestAnimationFrame(frame);
+ if(now-last<30)return;last=now;controls.update();renderer.render(scene,camera);}
+requestAnimationFrame(frame);
+})();
+</script></body></html>
