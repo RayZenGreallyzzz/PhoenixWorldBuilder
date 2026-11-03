@@ -9,6 +9,7 @@ resigned with the same signing key before installing.
 import argparse,struct,zipfile
 from pathlib import Path
 from patch_manifest import patch
+from patch_visible_brand import apply as patch_display_brand
 
 def copy_info(zi):
  out=zipfile.ZipInfo(zi.filename,zi.date_time)
@@ -33,6 +34,9 @@ def patch_base(base:Path,compiled_dex:Path,assets:Path,output:Path):
    copied=copy_info(item)
    if name=='AndroidManifest.xml':
     data=patch(old.read(item))
+   elif name=='resources.arsc':
+    data,counts=patch_display_brand(old.read(item))
+    print('Phoenix 3D resource labels:',counts)
    else:data=old.read(item)
    out.writestr(copied,data)
    count+=1
