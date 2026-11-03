@@ -501,10 +501,16 @@ class WorldBuilder{
   }
   const color=typeof this.placement==='string'&&this.placement.startsWith('glb:')?null:this.placementCategory==='ceiling_finish'?'#ffffff':this.currentPaint;
   const rec=this.instantiate(this.placement,{id:this.nextId++,pos:v.toArray(),rot:solved.rotation,scale:this.placementScale,thicknessY:solved.thicknessY||1,
-   dimensionScale:{...this.placementAxes},wallThicknessMeters:this.wallThicknessMeters||undefined,moduleShape:this.placementModuleShape||undefined,moduleUse:this.placementModuleUse||undefined,surfacePaint:JSON.parse(JSON.stringify(this.placementSurfacePaint||{})),decals:JSON.parse(JSON.stringify(this.placementDecals||[])),category:this.placementCategory||this.categoryForKind?.(this.placement)||null,storey:this.floorLevel,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
+   dimensionScale:{...this.placementAxes},wallThicknessMeters:this.wallThicknessMeters||undefined,moduleShape:this.placementModuleShape||undefined,moduleUse:this.placementModuleUse||undefined,
+   paramWall:typeof ParametricWall!=='undefined'&&ParametricWall.kinds.has(this.placement)?
+    ParametricWall.normalize(this.placementParamWall,this.placement):undefined,
+   surfacePaint:JSON.parse(JSON.stringify(this.placementSurfacePaint||{})),decals:JSON.parse(JSON.stringify(this.placementDecals||[])),category:this.placementCategory||this.categoryForKind?.(this.placement)||null,storey:this.floorLevel,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
   this.select(rec);this.onChanged();return rec;
  }
- instantiate(kind,data){let obj=this.makeBuiltin(kind); const imported=!obj;
+ instantiate(kind,data){
+  if(typeof ParametricWall!=='undefined'&&ParametricWall.kinds.has(kind))
+   data.paramWall=ParametricWall.normalize(data.paramWall,kind);
+  let obj=this.makeBuiltin(kind,data.paramWall);const imported=!obj;
   if(imported){const cache=this.assetCache.get(kind);if(!cache)throw Error('Сначала импортируй '+kind);obj=cache.clone(true)}
   if(data.moduleShape&&typeof ModuleForge!=='undefined'){
    const result=ModuleForge.build(obj,data.moduleShape,
@@ -530,7 +536,9 @@ class WorldBuilder{
   }
   this.scene.add(obj);obj.updateMatrixWorld(true);this.objects.push(entry);this.applyAppearance(entry);this.nextId=Math.max(this.nextId,entry.data.id+1);return entry;
  }
- makeBuiltin(kind){
+ makeBuiltin(kind,paramWallSpec=null){
+  if(typeof ParametricWall!=='undefined'&&ParametricWall.kinds.has(kind))
+   return ParametricWall.build(kind,paramWallSpec);
   if(typeof RoofModules!=='undefined'&&RoofModules.kinds.has(kind))
    return RoofModules.create(kind);
   if(typeof RoundedModules!=='undefined'&&RoundedModules.kinds.has(kind))
@@ -995,10 +1003,15 @@ class WorldBuilder{
    this.placementAxes={x:1,y:1,z:1};this.wallThicknessMeters=null;
   }
   this.placementModuleShape=null;this.placementModuleUse=null;
+  if(typeof ParametricWall!=='undefined'){
+   this.placementParamWall=ParametricWall.kinds.has(kind)?
+    (kind===this.placement&&this.placementParamWall?this.placementParamWall:
+     ParametricWall.defaults(kind)):null;
+  }
   this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.manualPlacementPosition=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
   if(this.ghost)this.ghost.removeFromParent();
   if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline.geometry.dispose();this.placementOutline.material.dispose();this.placementOutline=null;}
-  const builtin=kind?this.makeBuiltin(kind):null;
+  const builtin=kind?this.makeBuiltin(kind,this.placementParamWall):null;
   this.ghost=builtin||(kind&&this.assetCache.get(kind)?
    WorldBuilder.orientImportedForRole(this.assetCache.get(kind).clone(true),
     category||this.categoryForKind?.(kind)):null);
@@ -1024,6 +1037,57 @@ class WorldBuilder{
    }
    this.updateGameGhost();
   }
+ }
+ // Change a procedural wall WITHOUT performing arbitrary booleans on user
+ // GLBs. Geometry is rebuilt from metric parameters; the old project ID,
+ // position, surface settings and structural socket identity are retained.
+ updateParametricWall(spec,entry=null){
+  if(typeof ParametricWall==='undefined')return false;
+  const kind=entry?.kind||this.placement;
+  if(!ParametricWall.kinds.has(kind))return false;
+  const values=ParametricWall.normalize(spec,kind);
+  const replacement=ParametricWall.build(kind,values);
+  if(entry){
+   this.remember();
+   const old=entry.mesh;
+   replacement.position.copy(old.position);
+   replacement.quaternion.copy(old.quaternion);
+   replacement.scale.copy(old.scale);
+   replacement.userData.objectId=entry.data.id;
+   replacement.userData.pwbCategory=entry.data.category||'wall';
+   old.removeFromParent();
+   this.scene.add(replacement);entry.mesh=replacement;
+   entry.data.paramWall=values;
+   if(typeof ModuleTopology!=='undefined')
+    entry.data.moduleTopology=ModuleTopology.make(replacement,entry.data.category||'wall');
+   this.applyAppearance(entry);
+   this.select(entry);this.onChanged();
+  }else{
+   this.placementParamWall=values;
+   if(!this.ghost)return true;
+   const old=this.ghost;
+   replacement.position.copy(old.position);replacement.rotation.copy(old.rotation);
+   replacement.userData.pwbCategory='wall';replacement.userData.pwbPreview=true;
+   replacement.traverse(obj=>{
+    if(!obj.isMesh)return;
+    obj.material=obj.material.clone();
+    obj.material.transparent=true;obj.material.opacity=.47;
+    obj.material.depthWrite=false;
+   });
+   if(typeof SurfacePaint!=='undefined'&&Object.keys(this.placementSurfacePaint||{}).length)
+    SurfacePaint.applyToRoot(replacement,this.placementSurfacePaint,this.textures);
+   this.applyAxisScale(replacement,this.placementScale,this.placementAxes);
+   old.removeFromParent();
+   this.ghost=replacement;this.scene.add(replacement);
+   if(this.placementOutline){
+    this.placementOutline.removeFromParent();
+    this.placementOutline.geometry?.dispose();this.placementOutline.material?.dispose();
+   }
+   this.placementOutline=new THREE.BoxHelper(replacement,0x50f4a0);
+   this.placementOutline.material.depthTest=false;this.scene.add(this.placementOutline);
+   this.updateGameGhost();this.onChanged();
+  }
+  return true;
  }
  updateGhost(p){this.applyGhostPlacement(p)}
  action(act){const e=this.selected;if(!e)return false;this.remember();if(act==='rotate'){e.data.rot=(e.data.rot+90)%360;e.mesh.rotation.y=e.data.rot*Math.PI/180}
@@ -1074,6 +1138,7 @@ class WorldBuilder{
     this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,
      thicknessY:e.thicknessY||1,dimensionScale:e.dimensionScale,
      wallThicknessMeters:e.wallThicknessMeters,moduleShape:e.moduleShape,moduleUse:e.moduleUse,
+     paramWall:e.paramWall,
      category:e.category,moduleTopology:e.moduleTopology,
      storey:e.storey,surfacePaint:e.surfacePaint||{},
      decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,
