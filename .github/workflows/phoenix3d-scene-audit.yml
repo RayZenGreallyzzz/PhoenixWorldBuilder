@@ -1,0 +1,46 @@
+name: Phoenix 3D - inspect Planner scene bridge
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/phoenix3d-planner-offline]
+    paths:
+      - 'scripts/phoenix3d/scene_audit.py'
+      - '.github/workflows/phoenix3d-scene-audit.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recover personal Planner base APK from tagged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release build
+          gh release download 3D --repo RayZenGreallyzzz/PhoenixWorldBuilder --dir release --clobber
+          python3 scripts/phoenix3d/reconstruct.py release build/original.xapk
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('build/original.xapk') as z:
+              open('build/base.apk','wb').write(z.read('com.planner5d.planner5d.apk'))
+          PY
+      - name: Install jadx decompiler for inspection (no binary modifications)
+        run: |
+          curl -fL --retry 3 -o build/jadx.zip https://github.com/skylot/jadx/releases/download/v1.5.2/jadx-1.5.2.zip
+          unzip -q build/jadx.zip -d build/jadx
+          build/jadx/bin/jadx --version
+      - name: Decompile Java/Dex components and find native scene integration
+        run: |
+          mkdir -p build/java build/report
+          build/jadx/bin/jadx --no-res --threads-count 2 --no-imports \
+            -d build/java build/base.apk >build/report/jadx.log 2>&1 || true
+          python3 scripts/phoenix3d/scene_audit.py build/java/sources >build/report/scene-audit.txt
+          head -n 230 build/report/scene-audit.txt
+      - name: Publish targeted report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix3D-Planner-Scene-Integration-Audit
+          path: build/report/
+          retention-days: 7
