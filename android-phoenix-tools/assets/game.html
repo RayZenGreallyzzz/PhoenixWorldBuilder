@@ -42,7 +42,7 @@ input[type=number]{width:70px;padding:5px}
   <button id="btnOptions" type="button">⚙ Настройки</button>
   <button id="btnPlay" type="button" class="active">🏃 Ходить</button>
   <button id="btnBuild" type="button">🧱 Строить</button>
-  <button id="btnPlanner" type="button">🏠 Planner</button>
+  <button id="btnPlanner" type="button">🏠 Строительство</button>
  </div>
  <div id="hudRight"><button id="btnAvatar" type="button">＋ GLB персонаж</button></div>
 </div>
@@ -82,8 +82,8 @@ input[type=number]{width:70px;padding:5px}
  <label><input id="useDecor" type="checkbox"> Красить новый модуль</label></div>
  <div><button type="button" id="btnRotate">⟳ Поворот 90°</button><button type="button" id="btnUndo">↶ Назад</button><button type="button" id="btnDelete">🗑 Удалить ближайшую</button></div>
  <hr style="border-color:#455a64">
- <div><button type="button" id="btnPlannerImport">📂 Открыть JSON проекта Planner</button></div>
- <p id="mapNotice">Проекты Planner отображаются как приблизительная 3D-геометрия стен. Пока игровой режим хранит добавленные детали отдельно и не изменяет оригинальный проект.</p>
+ <div><button type="button" id="btnPlannerImport">📂 Импортировать план JSON</button></div>
+ <p id="mapNotice">Импортированный план отображается приблизительно. Игровая карта сохраняется отдельно и не изменяет основной проект.</p>
  <div><button type="button" id="btnSaveBundle">📦 Сохранить всё (GLB + дом + декор)</button></div>
  <div><button type="button" id="btnLoadBundle">📥 Открыть проект Phoenix ZIP</button></div>
  <div><button type="button" id="btnExport">💾 Экспорт карты JSON отдельно</button></div>
@@ -512,7 +512,7 @@ function drawPlannerProject(project){
   }
   elevation+=floorHeight;
  }
- if(!raw.length){setMessage('В JSON Planner нет распознанных стен и комнат');return;}
+ if(!raw.length){setMessage('В JSON нет распознанных стен и комнат');return;}
  const avgX=raw.reduce((a,p)=>a+p.x,0)/raw.length;
  const avgZ=raw.reduce((a,p)=>a+p.z,0)/raw.length;
  for(const item of raw.slice(0,360)){
@@ -523,8 +523,8 @@ function drawPlannerProject(project){
   scene.add(mesh);item._mesh=mesh;importedItems.push(item);
  }
  player.position.set(0,0,0);
- setMessage('Загружен контур проекта Planner: '+importedItems.length+' стен · только чтение');
- $('mapNotice').textContent='Схема Planner отображается отдельно от нативного редактора. Импорт не переносит декор и мебель. Игровые детали сохраняются отдельно и НЕ изменяют оригинал.';
+ setMessage('Загружен контур плана: '+importedItems.length+' стен · только чтение');
+ $('mapNotice').textContent='Импорт плана не переносит декор и мебель. Игровые изменения не записываются в исходный проект основного редактора.';
 }
 async function restore(){
  try{
