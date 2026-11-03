@@ -169,9 +169,8 @@ jobs:
       - name: Upload personal test APK as Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Phoenix3D-Planner-GLB-Decor-TEST
+          name: Phoenix3D-ONLY-APK-GameGizmo-TEST
           path: |
-            build/Phoenix3D_Planner_GLB_Tools_TEST.xapk
             build/Phoenix3D_One_APK_Installer_TEST.apk
             build/Phoenix3D_build_report.json
           retention-days: 7
