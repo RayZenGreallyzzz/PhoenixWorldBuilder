@@ -23,8 +23,9 @@ button{min-height:36px}input{width:82px}#viewport{width:100%;height:302px;touch-
 const msg=document.getElementById('msg'),canvas=document.getElementById('viewport');
 const mode=document.getElementById('mode'),size=document.getElementById('decalSize');
 const W=canvas.clientWidth||350,H=canvas.clientHeight||300;
-let renderer,scene,camera,controls,root,texture=null;
-let meshes=[],decalHistory=[],mapped=new Set(),saved={};
+let renderer,scene,camera,controls,root,texture=null,mixer=null;
+const clock=new THREE.Clock();
+let meshes=[],decalHistory=[],mapped=new Map(),saved={};
 if(typeof THREE==='undefined'||typeof THREE.GLTFLoader!=='function'){
  msg.textContent='Не загружен локальный 3D-движок. Проверь пакет.';return;
 }
@@ -41,7 +42,7 @@ try{
  controls.maxDistance=90;controls.minDistance=.2;
 }catch(e){msg.textContent='Не удалось открыть WebGL: '+e.message;return;}
 function save(){
- const pack={textureTargets:[...mapped],decals:decalHistory.map(x=>({
+ const pack={textureTargets:[...mapped.values()],decals:decalHistory.map(x=>({
   p:x.position.toArray(),q:x.quaternion.toArray(),s:x.scale.x
  }))};
  try{window.PhoenixBridge.saveAppearance(JSON.stringify(pack));}catch(e){}
@@ -64,20 +65,29 @@ function overlay(p,q,meters,persist=true){
   msg.textContent='Наклейка размещена на модели. Размер: '+meters+' м.';
  });
 }
-function mapSurface(index,persist=true){
+function mapSurface(index,materialIndex=0,persist=true){
  textureIfNeeded(map=>{
-  const mesh=meshes[index];if(!mesh)return;
-  if(mesh.material){
-   const source=Array.isArray(mesh.material)?mesh.material[0]:mesh.material;
-   const material=source.clone();material.map=map;material.needsUpdate=true;
-   mesh.material=material;mesh.material.needsUpdate=true;
+  const mesh=meshes[index];if(!mesh||!mesh.material)return;
+  if(Array.isArray(mesh.material)){
+   if(!mesh.material[materialIndex])return;
+   const list=mesh.material.slice(),replacement=list[materialIndex].clone();
+   replacement.map=map;replacement.needsUpdate=true;
+   list[materialIndex]=replacement;mesh.material=list;
+  }else{
+   const replacement=mesh.material.clone();replacement.map=map;replacement.needsUpdate=true;
+   mesh.material=replacement;
   }
-  mapped.add(index);if(persist)save();
-  msg.textContent='Текстура назначена на поверхность №'+(index+1)+'.';
+  mapped.set(index+':'+materialIndex,{mesh:index,material:materialIndex});
+  if(persist)save();
+  msg.textContent='Текстура назначена на поверхность №'+(index+1)+', материал '+(materialIndex+1)+'.';
  });
 }
 function applySaved(){
- if(saved.textureTargets)for(const i of saved.textureTargets){if(Number.isInteger(i))mapSurface(i,false);}
+ if(saved.textureTargets)for(const item of saved.textureTargets){
+  if(Number.isInteger(item))mapSurface(item,0,false);
+  else if(Number.isInteger(item?.mesh)&&Number.isInteger(item?.material))
+   mapSurface(item.mesh,item.material,false);
+ }
  if(saved.decals)for(const d of saved.decals){
   if(d&&Array.isArray(d.p)&&d.p.length===3&&Array.isArray(d.q)&&d.q.length===4){
    overlay(d.p,d.q,Math.min(6,Math.max(.1,Number(d.s)||.8)),false);
@@ -95,6 +105,11 @@ function fitObject(object){
 new THREE.GLTFLoader().load('model.glb',gltf=>{
  root=gltf.scene;scene.add(root);
  root.traverse(node=>{if(node.isMesh)meshes.push(node)});
+ if(Array.isArray(gltf.animations)&&gltf.animations.length){
+  mixer=new THREE.AnimationMixer(root);
+  const idle=gltf.animations.find(c=>/idle|stand/i.test(c.name))||gltf.animations[0];
+  mixer.clipAction(idle).play();
+ }
  fitObject(root);
  fetch('appearance.json').then(r=>r.json()).then(j=>{saved=j||{};applySaved();}).catch(()=>{});
  msg.textContent='GLB загружен: '+meshes.length+' сеток. Текстуру или наклейку можно нанести касанием.';
@@ -105,7 +120,9 @@ function pointer(event){
   (event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
  const ray=new THREE.Raycaster();ray.setFromCamera(pointer,camera);
  const hit=ray.intersectObjects(meshes,false)[0];if(!hit)return;
- if(mode.value==='texture'){mapSurface(meshes.indexOf(hit.object));return;}
+ if(mode.value==='texture'){
+  mapSurface(meshes.indexOf(hit.object),hit.face?.materialIndex||0);return;
+ }
  const normal=hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
  const p=hit.point.clone().addScaledVector(normal,.012);
  const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),normal);
@@ -125,7 +142,10 @@ window.addEventListener('resize',()=>{
  renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();
 });
 let last=0;function frame(now){requestAnimationFrame(frame);
- if(now-last<30)return;last=now;controls.update();renderer.render(scene,camera);}
+ if(now-last<30)return;
+ const delta=Math.min(.05,(now-last)/1000||.033);
+ last=now;if(mixer)mixer.update(delta);
+ controls.update();renderer.render(scene,camera);}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
