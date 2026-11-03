@@ -72,6 +72,7 @@ input[type=number]{width:70px;padding:5px}
   <option value="wall">Стена</option><option value="door">Стена с дверью</option>
   <option value="window">Стена с окном</option><option value="floor">Пол</option>
   <option value="ceiling">Перекрытие</option><option value="roof">Плоская крыша</option>
+   <option value="roof-gable">Двускатная крыша (2 ската, закрытые торцы)</option>
  </select></label></div>
  <div><label>Длина <input id="length" type="number" min=".5" max="15" step=".1" value="2"> м</label>
  <label>Высота <input id="height" type="number" min=".4" max="7" step=".1" value="2.6"> м</label></div>
@@ -143,7 +144,7 @@ let joyX=0,joyZ=0,keys=new Set(),cameraTouch=null,stickPointer=null;
 let framePrevious=0,saveCounter=0,isReady=false;
 const colorMat=(type,ghost=false,withDecor=false)=>new THREE.MeshStandardMaterial({
  color:ghost?0x5aead4:withDecor&&decorTexture?0xffffff:
-  type==='floor'?0xe8e0cb:type==='roof'?0x768c99:0xece9dd,
+  type==='floor'?0xe8e0cb:['roof','roof-gable'].includes(type)?0x768c99:0xece9dd,
  map:!ghost&&withDecor&&decorTexture?decorTexture:null,
  roughness:.85,transparent:ghost,opacity:ghost?0.46:1,depthWrite:!ghost
 });
@@ -180,11 +181,38 @@ function wallShape(data,ghost=false){
  }
  return group;
 }
+// The two solid roof slopes share the same ridge line. End triangles close
+// the attic so a two-part roof cannot leave gaps at the ridge or gables.
+function gableRoofShape(data,ghost=false){
+ const group=new THREE.Group(),half=data.length/2,depth=data.height;
+ const thickness=Math.min(.5,Math.max(.05,data.thickness));
+ const rise=Math.min(3,Math.max(.32,half*.6));
+ const solid=(outline,amount,z)=>{
+  const shape=new THREE.Shape();
+  outline.forEach(([x,y],i)=>i?shape.lineTo(x,y):shape.moveTo(x,y));
+  shape.closePath();
+  const geometry=new THREE.ExtrudeGeometry(shape,{depth:amount,bevelEnabled:false,steps:1,curveSegments:1});
+  geometry.translate(0,0,z);
+  const mesh=new THREE.Mesh(geometry,colorMat('roof-gable',ghost,data.decor));
+  group.add(mesh);
+ };
+ // Slopes meet exactly at x=0, and share the same upper and lower ridge height.
+ solid([[-half,0],[0,rise],[0,rise-thickness],[-half,-thickness]],depth,-depth/2);
+ solid([[0,rise],[half,0],[half,-thickness],[0,rise-thickness]],depth,-depth/2);
+ // Triangular end infill closes both ends instead of leaving a drafty attic.
+ const gable=[[-half,0],[half,0],[0,rise]];
+ const end=Math.min(thickness,depth*.15);
+ solid(gable,end,-depth/2);
+ solid(gable,end,depth/2-end);
+ return group;
+}
 function makeItem(data,ghost=false){
  const group=new THREE.Group();
  const type=data.kind;
  if(['wall','door','window'].includes(type)){
   group.add(wallShape(data,ghost));
+ }else if(type==='roof-gable'){
+  group.add(gableRoofShape(data,ghost));
  }else{
   const slab=type==='roof'?.18:Math.min(.8,Math.max(.06,data.thickness));
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(data.length,slab,data.height),colorMat(type,ghost,data.decor));
@@ -275,7 +303,7 @@ function gizmoMode(next){
 function axisProperty(item,axis){
  if(gizmo.mode==='move')return axis;
  if(gizmo.mode==='rotate')return 'rot';
- const slab=['floor','ceiling','roof'].includes(item.kind);
+ const slab=['floor','ceiling','roof','roof-gable'].includes(item.kind);
  return axis==='x'?'length':axis==='y'?(slab?'thickness':'height'):
   slab?'height':'thickness';
 }
@@ -344,7 +372,7 @@ function rebuild(){
  selectedForm();previewUpdate();
 }
 function validItem(obj){
- if(!obj||!['wall','door','window','floor','ceiling','roof'].includes(obj.kind))return null;
+ if(!obj||!['wall','door','window','floor','ceiling','roof','roof-gable'].includes(obj.kind))return null;
  const data={kind:obj.kind};
  for(const key of ['x','y','z','rot','length','height','thickness']){
   const number=Number(obj[key]);if(!Number.isFinite(number)||Math.abs(number)>100)return null;
