@@ -386,6 +386,8 @@ class WorldBuilder{
    this.applyAxisScale(entry.mesh,entry.data.scale||1,entry.data.dimensionScale,entry.data.thicknessY||1);
    if(entry.data.wallThicknessMeters&&typeof WallThickness!=='undefined')
     WallThickness.apply(entry.mesh,entry.kind,entry.data.category,entry.data.wallThicknessMeters);
+   // Axis transforms change the object matrix, but local structural sockets
+   // remain metric descriptors; only geometry edits require new measurements.
    const newBottom=new THREE.Box3().setFromObject(entry.mesh).min.y;
    if(Number.isFinite(previousBottom)&&Number.isFinite(newBottom)){
     entry.mesh.position.y+=previousBottom-newBottom;
@@ -418,6 +420,8 @@ class WorldBuilder{
   if(!WallThickness.apply(root,kind,cat,value))return false;
   if(entry){
    entry.data.wallThicknessMeters=value;
+   if(typeof ModuleTopology!=='undefined')
+    entry.data.moduleTopology=ModuleTopology.make(entry.mesh,entry.data.category);
    this.onChanged();this.onSelected?.(entry);
   }else{
    this.wallThicknessMeters=value;
@@ -515,6 +519,15 @@ class WorldBuilder{
   obj.position.fromArray(data.pos);obj.rotation.y=(data.rot||0)*Math.PI/180;this.applyAxisScale(obj,data.scale||1,data.dimensionScale,Number(data.thicknessY)||1);
   if(data.wallThicknessMeters&&typeof WallThickness!=='undefined')
    WallThickness.apply(obj,kind,data.category||this.categoryForKind?.(kind),data.wallThicknessMeters);
+  // Measure the structural object once, after import orientation, mesh
+  // shaping and thickness processing; NEVER derive a structural role from
+  // textures or the name of the source GLB.
+  if(typeof ModuleTopology!=='undefined'){
+   const role=entry.data.category||this.categoryForKind?.(kind)||'prop';
+   const measured=ModuleTopology.make(obj,role);
+   if(measured)entry.data.moduleTopology=measured;
+   else delete entry.data.moduleTopology;
+  }
   this.scene.add(obj);obj.updateMatrixWorld(true);this.objects.push(entry);this.applyAppearance(entry);this.nextId=Math.max(this.nextId,entry.data.id+1);return entry;
  }
  makeBuiltin(kind){
@@ -1061,7 +1074,8 @@ class WorldBuilder{
     this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,
      thicknessY:e.thicknessY||1,dimensionScale:e.dimensionScale,
      wallThicknessMeters:e.wallThicknessMeters,moduleShape:e.moduleShape,moduleUse:e.moduleUse,
-     category:e.category,storey:e.storey,surfacePaint:e.surfacePaint||{},
+     category:e.category,moduleTopology:e.moduleTopology,
+     storey:e.storey,surfacePaint:e.surfacePaint||{},
      decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,
      texture:e.texture,door:e.door,open:e.open});
    }
