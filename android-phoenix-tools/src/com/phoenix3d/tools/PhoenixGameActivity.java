@@ -16,6 +16,10 @@ import org.json.JSONObject;
 import org.json.JSONArray;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.ZipOutputStream;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipEntry;
+import android.graphics.BitmapFactory;
 
 /**
  * Play-and-build mode with a custom GLB avatar and native Android file picker.
@@ -25,9 +29,10 @@ import java.nio.charset.StandardCharsets;
  * native libGDX scene. Its game-map JSON is stored independently for safety.
  */
 public final class PhoenixGameActivity extends Activity {
- private static final int PICK_CHARACTER=960, PICK_PROJECT=961, EXPORT_MAP=962;
+ private static final int PICK_CHARACTER=960, PICK_PROJECT=961, EXPORT_MAP=962, PICK_DECOR=963, SAVE_BUNDLE=964, LOAD_BUNDLE=965;
  private static final long MAX_GLB=48L*1024*1024;
- private File root,model,plannerJson,gameJson;
+ private File root,model,plannerJson,gameJson,decor,appearance;
+ private String decorMime="image/png";
  private WebView view;
  @Override public void onCreate(Bundle state) {
   super.onCreate(state);
@@ -36,6 +41,8 @@ public final class PhoenixGameActivity extends Activity {
   model=new File(root,"model.glb");
   plannerJson=new File(root,"planner-project.json");
   gameJson=new File(root,"game-scene.json");
+  decor=new File(root,"decor.bin");appearance=new File(root,"appearance.json");
+  decorMime=getPreferences(0).getString("decor_mime","image/png");
   view=new WebView(this);
   WebSettings settings=view.getSettings();
   settings.setJavaScriptEnabled(true);
@@ -52,6 +59,9 @@ public final class PhoenixGameActivity extends Activity {
     String path=uri.getPath();
     if(path==null)return empty();
     try{
+     if("/decor".equals(path)){
+      return decor.isFile()?stream(decorMime,null,new FileInputStream(decor)):empty();
+     }
      if("/model.glb".equals(path)){
       return model.isFile()?stream("model/gltf-binary",null,new FileInputStream(model)):empty();
      }
@@ -134,6 +144,33 @@ public final class PhoenixGameActivity extends Activity {
     if(!incoming.renameTo(plannerJson))throw new IOException("Не удалось сохранить план");
     info("Проект Planner импортирован для игрового просмотра. Исходник не изменён.");
     view.loadUrl("https://phoenix3d.local/game.html");
+   }else if(request==PICK_DECOR){
+    File incoming=new File(root,"decor-preview.bin");
+    try(InputStream in=getContentResolver().openInputStream(uri)){copy(in,incoming,12L*1024*1024);}
+    BitmapFactory.Options check=new BitmapFactory.Options();check.inJustDecodeBounds=true;
+    BitmapFactory.decodeFile(incoming.getAbsolutePath(),check);
+    if(check.outWidth<1||check.outHeight<1||check.outWidth>8192||check.outHeight>8192){
+     incoming.delete();throw new IOException("Повреждённый рисунок или разрешение больше 8192");
+    }
+    if(decor.exists())decor.delete();
+    if(!incoming.renameTo(decor))throw new IOException("Не удалось сохранить декор");
+    decorMime="image/jpeg".equals(getContentResolver().getType(uri))?"image/jpeg":"image/png";
+    getPreferences(0).edit().putString("decor_mime",decorMime).apply();
+    info("Новый рисунок добавлен в строительный режим.");
+    view.loadUrl("https://phoenix3d.local/game.html");
+   }else if(request==SAVE_BUNDLE){
+    try(OutputStream output=getContentResolver().openOutputStream(uri)){
+     if(output==null)throw new IOException("Нельзя записать в выбранную папку");
+     writeBundle(output);
+    }
+    info("Игровой проект с персонажем и декором экспортирован в ZIP.");
+   }else if(request==LOAD_BUNDLE){
+    try(InputStream input=getContentResolver().openInputStream(uri)){
+     if(input==null)throw new IOException("Нельзя открыть архив");
+     loadBundle(input);
+    }
+    info("Персонаж, игровая карта и декор восстановлены.");
+    view.loadUrl("https://phoenix3d.local/game.html");
    }else if(request==EXPORT_MAP){
     if(!gameJson.isFile()){info("Сначала построй хоть один модуль");return;}
     try(InputStream in=new FileInputStream(gameJson);
@@ -144,9 +181,56 @@ public final class PhoenixGameActivity extends Activity {
    }
   }catch(Exception e){info("Ошибка: "+e.getMessage());}
  }
+ private void writeBundle(OutputStream output)throws IOException{
+  File[] files={model,gameJson,plannerJson,decor,appearance};
+  try(ZipOutputStream archive=new ZipOutputStream(output)){
+   byte[] block=new byte[32768];
+   for(File file:files){
+    if(!file.isFile())continue;
+    archive.putNextEntry(new ZipEntry(file.getName()));
+    try(InputStream input=new FileInputStream(file)){
+     int n;while((n=input.read(block))!=-1)archive.write(block,0,n);
+    }
+    archive.closeEntry();
+   }
+  }
+ }
+ private void loadBundle(InputStream file)throws IOException{
+  int seen=0;
+  try(ZipInputStream archive=new ZipInputStream(file)){
+   ZipEntry entry;
+   while((entry=archive.getNextEntry())!=null){
+    String name=entry.getName();File target;long limit;
+    if("model.glb".equals(name)){target=model;limit=MAX_GLB;}
+    else if("game-scene.json".equals(name)){target=gameJson;limit=1024L*1024;}
+    else if("planner-project.json".equals(name)){target=plannerJson;limit=8L*1024*1024;}
+    else if("decor.bin".equals(name)){target=decor;limit=12L*1024*1024;}
+    else if("appearance.json".equals(name)){target=appearance;limit=65536;}
+    else throw new IOException("Недопустимый файл в проекте: "+name);
+    copy(archive,target,limit);archive.closeEntry();
+    seen++;
+    if(seen>5)throw new IOException("Слишком много файлов в проекте");
+   }
+  }
+  if(seen==0)throw new IOException("Игровой проект пустой");
+ }
  public final class GameBridge{
   @JavascriptInterface public void chooseCharacter(){
    runOnUiThread(()->choose(PICK_CHARACTER,"*/*"));
+  }
+  @JavascriptInterface public void chooseDecor(){
+   runOnUiThread(()->choose(PICK_DECOR,"image/*"));
+  }
+  @JavascriptInterface public void saveBundle(){
+   runOnUiThread(()->{
+    Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+    i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/zip");
+    i.putExtra(Intent.EXTRA_TITLE,"Phoenix3D_PlayBuild_Project.zip");
+    startActivityForResult(i,SAVE_BUNDLE);
+   });
+  }
+  @JavascriptInterface public void loadBundle(){
+   runOnUiThread(()->choose(LOAD_BUNDLE,"application/zip"));
   }
   @JavascriptInterface public void choosePlannerJson(){
    runOnUiThread(()->choose(PICK_PROJECT,"application/json"));
