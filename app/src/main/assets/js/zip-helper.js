@@ -57,5 +57,59 @@ const ZipUtils=(()=>{
   }
   return out;
  }
- return {build,extract};
+ // Open a ZIP as a random-access archive. The previous extract() API
+ // inflated every GLB into memory at once (~110 MB for the architecture
+ // library) before the first IndexedDB write. This reader holds the
+ // compressed ZIP only and inflates ONE requested model at a time.
+ async function open(file,{maxEntries=5000,maxTotal=170000000}={}){
+  const ab=await file.arrayBuffer(),view=new DataView(ab),bytes=new Uint8Array(ab);
+  let eocd=-1;
+  for(let p=bytes.length-22;p>=Math.max(0,bytes.length-65557);p--)
+   if(view.getUint32(p,true)===0x06054b50){eocd=p;break}
+  if(eocd<0)throw Error('Не найден каталог ZIP');
+  const count=view.getUint16(eocd+10,true),start=view.getUint32(eocd+16,true);
+  if(count>maxEntries)throw Error('Слишком много файлов в ZIP');
+  if(start>=bytes.length)throw Error('Повреждён каталог ZIP');
+  const entries=new Map();
+  let position=start,total=0;
+  for(let i=0;i<count;i++){
+   if(position+46>bytes.length||view.getUint32(position,true)!==0x02014b50)
+    throw Error('Повреждён каталог ZIP');
+   const flags=view.getUint16(position+8,true),method=view.getUint16(position+10,true);
+   const crc32=view.getUint32(position+16,true);
+   const compressed=view.getUint32(position+20,true),uncompressed=view.getUint32(position+24,true);
+   const nameLen=view.getUint16(position+28,true),extraLen=view.getUint16(position+30,true),commentLen=view.getUint16(position+32,true);
+   const local=view.getUint32(position+42,true);
+   const name=dec.decode(bytes.subarray(position+46,position+46+nameLen)).replace(/\\/g,'/');
+   position+=46+nameLen+extraLen+commentLen;
+   if(!name||name.endsWith('/')||!/\\.(glb|png|jpg|jpeg|webp|json)$/i.test(name))continue;
+   if(name.split('/').includes('..')||name.startsWith('/'))throw Error('Небезопасный путь внутри ZIP');
+   if(flags&1)throw Error('ZIP защищён паролем');
+   if(method!==0&&method!==8)throw Error('Тип сжатия ZIP не поддерживается');
+   if(local+30>bytes.length||view.getUint32(local,true)!==0x04034b50)throw Error('Повреждён ZIP');
+   const offset=local+30+view.getUint16(local+26,true)+view.getUint16(local+28,true);
+   if(offset+compressed>bytes.length)throw Error('Повреждены данные ZIP');
+   total+=uncompressed;
+   if(total>maxTotal)throw Error('Архив слишком большой для памяти устройства');
+   entries.set(name,{offset,compressed,uncompressed,method,crc32});
+  }
+  async function read(name){
+   const entry=entries.get(name);
+   if(!entry)return null;
+   const slice=bytes.subarray(entry.offset,entry.offset+entry.compressed);
+   let result;
+   if(entry.method===0)result=slice.slice();
+   else{
+    if(typeof DecompressionStream==='undefined')
+     throw Error('Android WebView не поддерживает распаковку DEFLATE');
+    const stream=new Blob([slice]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    result=new Uint8Array(await new Response(stream).arrayBuffer());
+   }
+   if(result.length!==entry.uncompressed||crc(result)!==entry.crc32)
+    throw Error('Ошибка распаковки или контрольной суммы: '+name);
+   return result;
+  }
+  return {names:[...entries.keys()],read,count:entries.size,totalBytes:total};
+ }
+ return {build,extract,open};
 })();
