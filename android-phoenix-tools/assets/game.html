@@ -108,17 +108,17 @@ ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 const grid=new THREE.GridHelper(120,120,0xa2b7ab,0x647d6e);grid.position.y=.007;scene.add(grid);
 const player=new THREE.Group();scene.add(player);player.position.set(0,0,0);
 let character=null,mixer=null,idleAction=null,walkAction=null,playingWalk=false;
-const fallback=new THREE.Group(),body=new THREE.Mesh(new THREE.CapsuleGeometry(.23,.98,4,9),new THREE.MeshLambertMaterial({color:0x25272a}));
+const fallback=new THREE.Group(),body=new THREE.Mesh(new THREE.CylinderGeometry(.22,.25,1.24,12),new THREE.MeshLambertMaterial({color:0x25272a}));
 body.position.y=.9;fallback.add(body);
 const head=new THREE.Mesh(new THREE.SphereGeometry(.18,10,8),new THREE.MeshLambertMaterial({color:0xe5b792}));
 head.position.y=1.68;fallback.add(head);player.add(fallback);
 const savedItems=[],importedItems=[],objectMeshes=[],undoStack=[];
-let mode='walk',orientation=0,orbitYaw=0,orbitPitch=.29,preview=null,rotateDegrees=0,upCamera=0;
+let mode='walk',orientation=0,orbitYaw=0,orbitPitch=.29,preview=null,previewKey='',rotateDegrees=0,upCamera=0;
 let joyX=0,joyZ=0,keys=new Set(),cameraTouch=null,stickPointer=null;
 let framePrevious=0,saveCounter=0,isReady=false;
 const colorMat=(type,ghost=false)=>new THREE.MeshStandardMaterial({
  color:ghost?0x5aead4:type==='floor'?0xe8e0cb:type==='roof'?0x768c99:0xece9dd,
- roughness:.85,transparent:ghost,opacity:ghost?.46:1,depthWrite:!ghost
+ roughness:.85,transparent:ghost,opacity:ghost?0.46:1,depthWrite:!ghost
 });
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const quant=(v,n=.25)=>Math.round(v/n)*n;
@@ -205,10 +205,17 @@ function placeData(){
  return data;
 }
 function previewUpdate(){
- if(mode!=='build'){if(preview){dispose(preview);preview=null;}return;}
+ if(mode!=='build'){if(preview){dispose(preview);preview=null;previewKey='';}return;}
  const item=placeData();
- if(preview)dispose(preview);
- preview=makeItem(item,true);
+ // Only geometry/type changes rebuild the preview. Character movement and
+ // camera aim update the existing mesh transform, avoiding per-frame GL churn.
+ const key=[item.kind,item.length,item.height,item.thickness].join(':');
+ if(!preview||previewKey!==key){
+  if(preview)dispose(preview);
+  preview=makeItem(item,true);previewKey=key;
+ }
+ preview.position.set(item.x,item.y,item.z);preview.rotation.y=item.rot*Math.PI/180;
+ preview.userData.part=item;
 }
 function record(){
  undoStack.push(JSON.stringify(savedItems));
@@ -280,7 +287,7 @@ function collides(px,pz){
   const lz=dx*Math.sin(angle)+dz*Math.cos(angle);
   if(Math.abs(lx)<s.length/2+.23&&Math.abs(lz)<s.thickness/2+.23){
    // Door openings are not colliders if the avatar passes through center.
-   if(s.kind==='door'&&Math.abs(lx)<.48&&player.position.y>=s.y-.05)return false;
+   if(s.kind==='door'&&Math.abs(lx)<.48&&player.position.y>=s.y-.05)continue;
    return true;
   }
  }
