@@ -1,0 +1,48 @@
+name: Phoenix 3D - verify personal offline XAPK
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/phoenix3d-planner-offline]
+    paths:
+      - 'scripts/phoenix3d/**'
+      - '.github/workflows/phoenix3d-verify-release.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve all 6 packages from the 3D Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release out
+          gh release download 3D --repo RayZenGreallyzzz/PhoenixWorldBuilder --dir release --clobber
+          ls -lh release
+      - name: Restore canonical XAPK from numbered ZIPs
+        run: |
+          python3 scripts/phoenix3d/reconstruct.py release out/Phoenix3D_Planner.xapk
+          python3 - <<'PY'
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          x=Path('out/Phoenix3D_Planner.xapk')
+          with zipfile.ZipFile(x) as z:
+              names=z.namelist()
+              assert 'com.planner5d.planner5d.apk' in names
+              assert 'config.arm64_v8a.apk' in names
+              assert 'config.armeabi_v7a.apk' in names
+              assert sum(n.startswith('config.') for n in names)==8
+              data={'xapk_size_bytes':x.stat().st_size,
+                    'sha256':hashlib.file_digest(x.open('rb'),'sha256').hexdigest(),
+                    'entries':names,
+                    'notes':'Byte-for-byte verification only; no GLB import/WebDAV hooks implemented.'}
+          Path('out/report.json').write_text(json.dumps(data,indent=2),encoding='utf-8')
+          print(json.dumps(data,indent=2))
+          PY
+      - name: Upload audit report (not redundant 252 MB XAPK)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix3D-Release-Integrity-Report
+          path: out/report.json
