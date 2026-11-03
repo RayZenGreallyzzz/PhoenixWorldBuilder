@@ -16,6 +16,7 @@ try{
 }catch(e){console.warn('Texture quality settings unavailable',e);w.setTextureQuality(4)}
 try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),modulePresets=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
 let choosingImageSurface=false,importOrder=0,currentSection='';
+let bundledArchive=null;const bundledPaths=new Map();
 const importedStamp=()=>Date.now()+(++importOrder)/1000;
 const uniqueImportedId=(prefix,name)=>prefix+name.toLowerCase()+':'+Date.now().toString(36)+'_'+(++importOrder).toString(36);
 let statusMessage='';let surfaceScope='all',surfaceMode='repeat',surfaceTileMeters=1,surfaceImageScale=1,surfaceFaithful=true;let pendingRecovery=null;let savedNatively=false;let initializing=true;
@@ -51,7 +52,67 @@ function dbOp(store,key,value){
  });
 }
 function dbKeys(store){return new Promise((resolve,reject)=>{const tx=localStore.transaction(store,'readonly');const r=tx.objectStore(store).getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function cacheFromDB(id){if(w.assetCache.has(id))return w.assetCache.get(id);const row=await dbOp('assets',id);if(!row)return null;try{const parsed=await GLB.load(row.bytes);await bindImportedMaterials(id,parsed.root);w.tuneModelTextures(parsed.root);w.assetCache.set(id,parsed.root);w.assetAnimations.set(id,parsed.animations||[]);if(parsed.triangles>150000)toast('Модель тяжёлая: '+Math.round(parsed.triangles)+' треугольников');return parsed.root}catch(e){toast('Модель не открыта: '+e.message);throw e}}
+async function assetBytes(id){
+ if(bundledPaths.has(id)&&bundledArchive)return bundledArchive.read(bundledPaths.get(id));
+ const row=await dbOp('assets',id);
+ return row?.bytes||null;
+}
+async function cacheFromDB(id){
+ if(w.assetCache.has(id))return w.assetCache.get(id);
+ const bytes=await assetBytes(id);if(!bytes)return null;
+ try{
+  const parsed=await GLB.load(bytes);
+  await bindImportedMaterials(id,parsed.root);
+  w.tuneModelTextures(parsed.root);w.assetCache.set(id,parsed.root);
+  w.assetAnimations.set(id,parsed.animations||[]);
+  if(parsed.triangles>150000)toast('Модель тяжёлая: '+Math.round(parsed.triangles)+' треугольников');
+  return parsed.root;
+ }catch(e){toast('Модель не открыта: '+e.message);throw e}
+}
+// Optional prepacked ARCHITECTURE APK. A ZIP inside Android assets is indexed
+// only once, and no GLB is decompressed until that specific catalog item is
+// used. Ordinary small APKs without this asset keep working as before.
+async function loadEmbeddedLibrary(){
+ const packed=await new Promise(resolve=>{
+  try{
+   const xhr=new XMLHttpRequest();
+   xhr.open('GET','pwb_architecture_bundle.zip',true);
+   xhr.responseType='arraybuffer';
+   xhr.onload=()=>resolve(xhr.response?.byteLength>1000&&[0,200].includes(xhr.status)?xhr.response:null);
+   xhr.onerror=()=>resolve(null);xhr.send();
+  }catch(e){resolve(null)}
+ });
+ if(!packed)return 0;
+ try{
+  const archive=await ZipUtils.open(new Blob([packed]));
+  const metaPath=SmartPackage.lookup(archive.names,'metadata.json');
+  if(!metaPath)return 0;
+  const meta=JSON.parse(new TextDecoder().decode(await archive.read(metaPath)));
+  if(!Array.isArray(meta.models)||meta.models.length===0)return 0;
+  const paths=new Set(archive.names);
+  let count=0;
+  for(const entry of meta.models){
+   if(!entry?.path||!paths.has(entry.path))continue;
+   const id='bundle:'+entry.path.toLocaleLowerCase();
+   const override=catalogMeta[id]||{};
+   // The imported GLB's declared role is authoritative unless the user
+   // explicitly changed it in this device's catalog.
+   const category=override.manualCategory?override.category:entry.category;
+   const original=savedMeta.get(id)||{};
+   const base=entry.path.split('/').pop();
+   savedMeta.set(id,{...original,sourcePath:entry.path,
+    catalogSection:entry.catalogSection||entry.path.split('/')[0],
+    library:entry.library||'Phoenix Architecture',
+    name:base,displayName:entry.name||base,
+    category:category||groupType(base),
+    libraryBundleId:meta.libraryBundleId||'phoenix-architecture',
+    ...override});
+   bundledPaths.set(id,entry.path);count++;
+  }
+  bundledArchive=archive;
+  return count;
+ }catch(e){console.warn('Optional built-in architecture library unavailable',e);return 0}
+}
 async function bindImportedMaterials(id,root){if(!localStore)return;const binding=await dbOp('bindings',id);if(!binding?.slots?.length)return;
  const maps=new Map();for(const slot of binding.slots){if(!slot.texture)continue;
   if(!maps.has(slot.texture))try{maps.set(slot.texture,await loadTexture(slot.texture))}catch(e){console.warn('Missing texture',slot.texture,e)}
@@ -1255,7 +1316,7 @@ async function saveToDevice(filename,blob){if(window.NativeBridge?.beginSave){co
 async function exportJson(){await saveToDevice('phoenix_map.json',new Blob([JSON.stringify(projectData())],{type:'application/json'}));}
 async function exportPack(){try{toast('Создаю пакет карты…');const project=projectData(),items={'project.json':JSON.stringify(project)},manifest={};
  const assetIds=new Set(project.objects.map(x=>x.kind).filter(x=>!BUILTINS.some(b=>b[0]===x)));// Character GLB is only used for scene inspection, not exported as house geometry.
- for(const id of assetIds){const row=await dbOp('assets',id);if(row){const path='models/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.glb';items[path]=row.bytes;manifest[path]=id;}}
+ for(const id of assetIds){const bytes=await assetBytes(id);if(bytes){const path='models/'+id.replace(/[^a-zA-Z0-9._-]/g,'_')+'.glb';items[path]=bytes;manifest[path]=id;}}
  const texIds=new Set(project.objects.map(x=>x.texture).filter(Boolean));
  for(const obj of project.objects)for(const face of SurfacePaint.faces){
   const skin=obj.surfacePaint?.[face]?.texture;if(skin)texIds.add(skin);
@@ -1373,6 +1434,8 @@ async function init(){
   const storedPresets=await dbOp('catalog',PRESET_KEY)||[];
   modulePresets=new Map(Array.isArray(storedPresets)?storedPresets.filter(x=>x?.id&&x?.sourceKind).map(x=>[x.id,x]):[]);
   for(const [id,meta] of Object.entries(catalogMeta)){if(savedMeta.has(id))Object.assign(savedMeta.get(id),meta)}
+  const embeddedCount=await loadEmbeddedLibrary();
+  if(embeddedCount)toast('Встроенная архитектура: '+embeddedCount+' моделей • доступна без ZIP');
   const autosave=await dbOp('projects','autosave');
   const selected=PhoenixPersistence.choose(PhoenixPersistence.read(),autosave);
   if(selected){
