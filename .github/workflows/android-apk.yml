@@ -65,6 +65,7 @@ jobs:
           node tests/test-construction-tools.cjs
           node tests/test-catalog-visual.cjs
           node tests/test-glb-edge-snap.cjs
+          node tests/test-imported-floor-role.cjs
           node tests/test-roof-ceiling-levels.cjs
           node tests/test-roof-fit-feedback.cjs
           node tests/test-roof-kit.cjs
