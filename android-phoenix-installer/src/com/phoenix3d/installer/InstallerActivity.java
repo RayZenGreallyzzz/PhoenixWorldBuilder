@@ -79,6 +79,16 @@ public final class InstallerActivity extends Activity {
   String msg=getIntent().getStringExtra(EXTRA_MESSAGE);
   if(msg!=null)message(msg);
  }
+ @Override protected void onNewIntent(Intent intent){
+  super.onNewIntent(intent);
+  setIntent(intent);
+  String result=intent.getStringExtra(EXTRA_MESSAGE);
+  if(result!=null){
+   busy=false;
+   if(install!=null)install.setEnabled(true);
+   message(result);
+  }
+ }
  private int px(int dp){return (int)(getResources().getDisplayMetrics().density*dp+.5f);}
  private void message(String text){if(info!=null)info.setText(text);}
  @Override protected void onResume(){
