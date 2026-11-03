@@ -91,6 +91,7 @@ jobs:
           node tests/test-module-presets.cjs
           node tests/test-module-forge.cjs
           node tests/test-module-topology.cjs
+          node tests/test-parametric-wall-openings.cjs
           node tests/test-decals.cjs
           node tests/test-smart-package.cjs
           node tests/test-murals.cjs
