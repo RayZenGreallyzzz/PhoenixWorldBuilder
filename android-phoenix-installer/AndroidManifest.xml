@@ -4,7 +4,7 @@
  <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35"/>
  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
  <application android:label="Phoenix 3D — Установка" android:theme="@android:style/Theme.Material.Light.NoActionBar"
-   android:allowBackup="false" android:hasCode="true" android:usesCleartextTraffic="false">
+   android:icon="@drawable/phoenix_fireplace" android:allowBackup="false" android:hasCode="true" android:usesCleartextTraffic="false">
    <activity android:name=".InstallerActivity" android:exported="true">
     <intent-filter>
       <action android:name="android.intent.action.MAIN"/>
