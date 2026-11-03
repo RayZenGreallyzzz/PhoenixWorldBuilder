@@ -707,13 +707,15 @@ class WorldBuilder{
   }
   return null;
  }
- gameAimOptions(hit=this.buildAimHit()){
+ gameAimOptions(hit=null){
   const role=this.placementCategory||this.categoryForKind?.(this.placement);
-  // Only walls have left/right end sockets or top-of-wall points.
-  // A floor must NEVER be guided to a wall socket just because its original
-  // GLB mesh was exported in a vertical orientation.
+  // Only wall-like modules need the expensive wall raycast. Previously the
+  // default argument called buildAimHit() BEFORE checking this role, so
+  // moving a FLOOR ghost raycast against every installed wall every frame.
   if(!['wall','corner','door','railing'].includes(role))return null;
-  if(!hit||typeof BuildJoin==='undefined'||typeof BuildCurves==='undefined')return null;
+  if(typeof BuildJoin==='undefined'||typeof BuildCurves==='undefined')return null;
+  if(!hit)hit=this.buildAimHit();
+  if(!hit)return null;
   const entry=hit.entry,info=BuildJoin.wallInfo(this,entry);if(!info)return null;
   const sockets=BuildCurves.sourceSockets(info)||[];
   const allInfos=(this.objects||[]).map(e=>{
