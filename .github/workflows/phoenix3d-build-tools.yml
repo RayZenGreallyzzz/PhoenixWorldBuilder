@@ -98,7 +98,7 @@ jobs:
           for src in original.glob('*.apk'):
               if src.name=='com.planner5d.planner5d.apk':
                   src=pathlib.Path('build/phoenix_patched_unsigned.apk')
-              strip_v2(src,pathlib.Path('build/unsigned-'+src.name))
+              strip_v2(src,pathlib.Path('build/unsigned-'+('com.planner5d.planner5d.apk' if src.name=='phoenix_patched_unsigned.apk' else src.name)))
           PY
           for src in build/unsigned-*.apk; do
             name="${src##*/unsigned-}"
