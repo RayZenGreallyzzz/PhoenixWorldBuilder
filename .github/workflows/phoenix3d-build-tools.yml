@@ -44,7 +44,7 @@ jobs:
           mkdir -p build/classes build/dex
           javac -source 8 -target 8 \
             -classpath "$ANDROID_HOME/platforms/android-35/android.jar" \
-            -d build/classes android-phoenix-tools/src/com/phoenix3d/tools/PhoenixToolsActivity.java
+            -d build/classes android-phoenix-tools/src/com/phoenix3d/tools/*.java
           "$ANDROID_HOME/build-tools/35.0.0/d8" --min-api 29 \
             --lib "$ANDROID_HOME/platforms/android-35/android.jar" \
             --output build/dex $(find build/classes -name '*.class' -print)
@@ -63,7 +63,7 @@ jobs:
           from pathlib import Path
           import re
           html=Path('build/viewer/game.html').read_text()
-          scripts=re.findall(r'<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>',html)
+          scripts=[html.rsplit('<script>',1)[-1].split('</script>',1)[0]]
           assert len(scripts)==1, 'Expected one offline game controller'
           Path('build/viewer/game-controller.js').write_text(scripts[0])
           PY
