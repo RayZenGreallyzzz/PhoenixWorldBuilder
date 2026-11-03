@@ -35,8 +35,8 @@ public final class InstallerActivity extends Activity {
    "com.planner5d.planner5d.apk",
    "config.arm64_v8a.apk",
    "config.armeabi_v7a.apk",
-   "config.de.apk","config.en.apk","config.es.apk","config.fr.apk",
-   "config.ru.apk","config.xxhdpi.apk"
+   "config.hdpi.apk","config.mdpi.apk","config.tvdpi.apk",
+   "config.xhdpi.apk","config.xxhdpi.apk","config.xxxhdpi.apk"
  };
  static final String EXTRA_MESSAGE="com.phoenix3d.installer.MESSAGE";
  private TextView info;
