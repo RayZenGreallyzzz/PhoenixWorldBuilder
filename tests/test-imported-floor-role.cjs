@@ -7,7 +7,7 @@ global.BuildJoin=require(path.join(dir,'build-join.js'));
 global.BuildCurves=require(path.join(dir,'build-curves.js'));
 global.BuildPlacementValidator=require(path.join(dir,'build-placement.js'));
 vm.runInThisContext(fs.readFileSync(path.join(dir,'world.js'),'utf8')+'\nglobal.WorldBuilder=WorldBuilder');
-const near=(a,b,t=.008)=>assert(Math.abs(a-b)<t,a+' vs '+b);
+const near=(a,b,message,t=.008)=>assert(Math.abs(a-b)<t,message+': '+a+' vs '+b);
 function world(){
  const w=Object.create(WorldBuilder.prototype);
  Object.assign(w,{scene:new THREE.Scene(),objects:[],assetCache:new Map(),textures:new Map(),
