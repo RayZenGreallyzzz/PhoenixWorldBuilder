@@ -21,7 +21,8 @@ w.GameBridge={
  chooseDecor(){chosenDecor++;},saveBundle(){savedBundles++;},loadBundle(){loadedBundles++}
 };
 w.fetch=async url=>({ok:true,json:async()=>url.includes('game-scene')?{version:1,items:[]}:{className:'Project',items:[]}});
-const THREE={...realThree};
+// Three.js exports some constructors as non-enumerable properties; inherit them.
+const THREE=Object.create(realThree);
 THREE.WebGLRenderer=class {
  constructor(){this.capabilities={getMaxAnisotropy:()=>4};this.outputEncoding=realThree.sRGBEncoding;}
  setPixelRatio(){}setSize(){}render(){}
