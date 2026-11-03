@@ -2,8 +2,8 @@
 const BuildPlacementValidator=(()=>{
  const EPS=.025;
  const rectCache=new WeakMap();
- const structural=new Set(['foundation','wall','corner','door','ceiling','roof','stairs']);
- const wallLike=new Set(['wall','corner','door']);
+ const structural=new Set(['foundation','wall','corner','door','railing','ceiling','roof','stairs']);
+ const wallLike=new Set(['wall','corner','door','railing']);
  const decorative=new Set(['prop','decor','decoration','ceiling_finish','overlay','foliage']);
  const category=(w,e)=>e.data?.category||w.categoryForKind?.(e.kind)||e.kind;
  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
