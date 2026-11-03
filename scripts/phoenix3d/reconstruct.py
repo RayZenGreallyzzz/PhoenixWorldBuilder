@@ -34,9 +34,9 @@ def recover(directory:Path,destination:Path):
   if not final.is_file():raise FileNotFoundError('Missing sixth part Phoenix3D_Parts.zip')
   parts.append(final)
   with parts[0].open('rb') as src:
-   if src.read(4)!=b'PK\\x07\\x08':raise ValueError('Not a split ZIP: missing PK0708 header')
+   if src.read(4)!=b'PK\x07\x08':raise ValueError('Not a split ZIP: missing PK0708 header')
    hdr=src.read(30)
-   if len(hdr)!=30 or hdr[:4]!=b'PK\\x03\\x04':raise ValueError('Invalid local ZIP header')
+   if len(hdr)!=30 or hdr[:4]!=b'PK\x03\x04':raise ValueError('Invalid local ZIP header')
    _,version,flags,method,time,date,crc,compressed,original,namelen,extralen=struct.unpack('<IHHHHHIIIHH',hdr)
    name=src.read(namelen).decode('utf-8');src.seek(extralen,1)
    offset=src.tell()
