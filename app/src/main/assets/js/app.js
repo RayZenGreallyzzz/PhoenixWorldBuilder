@@ -1,7 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id), $all=s=>[...document.querySelectorAll(s)];
 const BUILTINS=[['floor','Пол (стартовый)','foundation'],['ceiling','Потолок / перекрытие','ceiling'],['wall','Стена (стартовая)','wall'],['corner','Угол стены 90°','corner'],['arc90','Закруглённая стена 90° · R2','wall'],['arc180','Полукруглая стена 180° · R2','wall'],['arcFloor90','Закруглённый пол 90° · R2','foundation'],['arcCeiling90','Закруглённое перекрытие 90° · R2','ceiling'],['window','Стена с окном','wall'],['roof','Двускатная крыша (старая)','roof'],['roof1','Крыша 1 скат • односкатная','roof'],['roof2','Крыша 2 ската • двускатная','roof'],['roof3','Крыша 3 ската • трёхскатная','roof'],['roof4','Крыша 4 ската • шатровая','roof'],['roof5','Крыша 5 скатов • пятигранная','roof'],['roof6','Крыша 6 скатов • шестигранная','roof'],['roofSlope','Кровля • отдельный скат','roof'],['roofRidge','Кровля • конёк','roof'],['roofValley','Кровля • ендова','roof'],['roofHip','Кровля • диагональное ребро','roof'],['roofEave','Кровля • карниз','roof'],['roofInnerCorner','Кровля • внутренний угол','roof'],['roofOuterCorner','Кровля • наружный угол','roof'],['roofGable','Кровля • фронтон','roof'],['roofFlat','Кровля • плоский модуль','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
-const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['corner','Углы'],['roof','Крыши'],['door','Двери'],['prop','Декор']];
+const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['corner','Углы'],['roof','Крыши'],['door','Двери'],['railing','Перила и ограждения'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
 const w=new WorldBuilder($('viewport'));w.textures=new Map();
@@ -15,7 +15,7 @@ try{
  $('textureDetail').value=String(quality);
 }catch(e){console.warn('Texture quality settings unavailable',e);w.setTextureQuality(4)}
 try{const remembered=Number(localStorage.getItem('phoenix_scene_exposure'));if(remembered>=45&&remembered<=125){$('sceneExposure').value=String(remembered);$('exposureValue').textContent=remembered+'%';w.renderer.toneMappingExposure=remembered/100;}}catch(_){}let currentFilter='all',catalogMode='models',catalogPage=0,catalogMeta={},savedMeta=new Map(),textureMeta=new Map(),modulePresets=new Map(),lastToast=null,lastTouch=null,pointers=new Map(),inputDragging=false,brushLast=0,localStore=null,isLoading=false;
-let choosingImageSurface=false,importOrder=0;
+let choosingImageSurface=false,importOrder=0,currentSection='';
 const importedStamp=()=>Date.now()+(++importOrder)/1000;
 const uniqueImportedId=(prefix,name)=>prefix+name.toLowerCase()+':'+Date.now().toString(36)+'_'+(++importOrder).toString(36);
 let statusMessage='';let surfaceScope='all',surfaceMode='repeat',surfaceTileMeters=1,surfaceImageScale=1,surfaceFaithful=true;let pendingRecovery=null;let savedNatively=false;let initializing=true;
@@ -29,6 +29,7 @@ function groupType(name){
  if(/(?:угол|углов|corner|miter|mitre|косой|скошен)/.test(s)&&/(?:пол|floor|настил|плит|slab|foundation)/.test(s))return 'foundation';
  if(/(?:^|[\\/:_-])arc[_-]?r\d|полукругл|четверть.?круг|quarter.?round|quarter.?circle|curved[_-]?wall|round[_-]?wall/.test(s))return 'wall';
  if(/(?:угол|углов|corner|miter|mitre|стык_стен|стыков|скошен)/.test(s))return 'corner';
+ if(/перил|огражд|balustrad|railing|fence/.test(s))return 'railing';
  if(/двер|door|ворот|gate/.test(s))return 'door';
  if(/стен|окно|wall|window|колон|pillar|column/.test(s))return 'wall';
  if(/пол|floor|foundation|фундамент|плит|основан|platform/.test(s))return 'foundation';
@@ -465,17 +466,18 @@ function renderLibrary(){
   }
  }else{
   for(const [id,name,category] of BUILTINS){
-   if(currentFilter==='my'||(currentFilter!=='all'&&currentFilter!==category)||(q&&!name.toLowerCase().includes(q)))continue;
+   if(currentSection||currentFilter==='my'||(currentFilter!=='all'&&currentFilter!==category)||(q&&!name.toLowerCase().includes(q)))continue;
    items.push({id,name,kind:'builtin',category});
   }
   for(const [id,meta] of savedMeta){
    const name=meta.displayName||fmtName(meta.name);
    const category=meta.category||groupType(meta.name);
+   if(currentSection&&!String(meta.catalogSection||meta.sourcePath||'').startsWith(currentSection))continue;
    if(currentFilter==='my'||(currentFilter!=='all'&&currentFilter!==category)||(q&&!(name+' '+meta.name+' '+(meta.sourceId||'')).toLowerCase().includes(q)))continue;
    items.push({id,name,kind:'asset',category});
   }
   for(const [id,preset] of modulePresets){
-   if(!['all','my',preset.category].includes(currentFilter))continue;
+   if(currentSection||!['all','my',preset.category].includes(currentFilter))continue;
    if(q&&!(preset.name+' '+preset.sourceKind).toLowerCase().includes(q))continue;
    items.push({id,name:preset.name,kind:'preset',category:preset.category});
   }
@@ -670,7 +672,13 @@ function setupPicker(){
  };
  $('galleryPrev').onclick=()=>{catalogPage=Math.max(0,catalogPage-1);renderLibrary();$('buildPanel').scrollTop=0};
  $('galleryNext').onclick=()=>{catalogPage++;renderLibrary();$('buildPanel').scrollTop=0};const search=document.createElement('input');search.id='assetSearch';search.placeholder='Поиск по названию или ID';search.style.cssText='background:#203442;color:#fff;border:1px solid #486373;border-radius:7px;padding:10px;width:100%;margin-bottom:8px;font-size:12px';$('assetList').before(search);search.oninput=()=>{catalogPage=0;renderLibrary()};
- $all('.pill').forEach(b=>b.onclick=()=>{$all('.pill').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentFilter=b.dataset.filter;catalogPage=0;renderLibrary()});
+ $all('.pill').forEach(b=>b.onclick=()=>{$all('.pill').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentFilter=b.dataset.filter;currentSection='';$all('[data-catalog-section]').forEach(x=>x.classList.toggle('active',!x.dataset.catalogSection));catalogPage=0;renderLibrary()});
+ $all('[data-catalog-section]').forEach(b=>b.onclick=()=>{
+  currentSection=b.dataset.catalogSection||'';currentFilter='all';
+  $all('#categoryFilters .pill').forEach(x=>x.classList.toggle('active',x.dataset.filter==='all'));
+  $all('[data-catalog-section]').forEach(x=>x.classList.toggle('active',x===b));
+  catalogMode='models';catalogPage=0;renderLibrary();
+ });
  $all('.tab').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
  $all('[data-brush]').forEach(b=>b.onclick=()=>{$all('[data-brush]').forEach(t=>t.classList.remove('active'));b.classList.add('active');w.brush=b.dataset.brush});
  $('brushSize').oninput=e=>{w.brushSize=+e.target.value;$('brushSizeValue').textContent=e.target.value};$('brushPower').oninput=e=>{w.brushPower=+e.target.value/100;$('brushPowerValue').textContent=e.target.value+'%'};
@@ -1031,14 +1039,16 @@ function wireButtons(){
    toast('Изображение добавлено первым в каталоге «Изображения». Нажми его, чтобы нанести.')}catch(err){toast('Текстура не открыта: '+err.message)}};
 }
 async function importZip(file,isProject=false){
- const entries=await ZipUtils.extract(file),keys=Object.keys(entries);
- const readJson=key=>{const name=SmartPackage.lookup(keys,key);if(!name)return null;
-  try{return JSON.parse(new TextDecoder().decode(entries[name]))}
+ const archive=await ZipUtils.open(file),keys=archive.names;
+ const readJson=async key=>{const name=SmartPackage.lookup(keys,key);if(!name)return null;
+  try{return JSON.parse(new TextDecoder().decode(await archive.read(name)))}
   catch(e){console.warn('ZIP JSON:',name,e);return null}
  };
- const manifest=readJson('assets_manifest.json'),savedBindings=readJson('bindings.json');
- const importedCatalog=readJson('catalog.json'),packageMeta=readJson('metadata.json')||readJson('package.json')||{};
+ const manifest=await readJson('assets_manifest.json'),savedBindings=await readJson('bindings.json');
+ const importedCatalog=await readJson('catalog.json'),packageMeta=(await readJson('metadata.json'))||(await readJson('package.json'))||{};
  const plan=SmartPackage.analyze(keys,packageMeta);
+ const modelByPath=new Map(plan.models.map(m=>[m.path,m]));
+ const imageByPath=new Map([...plan.pictures,...plan.textures].map(m=>[m.path,m]));
  const glbs=[],imageIds=new Map(),textureKeys=[],importedIds=new Map();
  const originalModuleId=name=>manifest?.[name]||'glb:'+name.toLowerCase();
  const moduleId=name=>{
@@ -1056,15 +1066,22 @@ async function importZip(file,isProject=false){
  // First save all source bytes. Images retain independent roles and cannot
  // accidentally enter the repeating-texture selector when they are paintings.
  for(let i=0;i<keys.length;i++){
-  const name=keys[i],bytes=entries[name],base=name.split('/').pop();
-  const model=plan.models.find(x=>x.path===name);
-  const image=[...plan.pictures,...plan.textures].find(x=>x.path===name);
+  const name=keys[i],base=name.split('/').pop();
+  const model=modelByPath.get(name);
+  const image=imageByPath.get(name);
+  if(!model&&!image)continue;
+  // Only the active GLB is decompressed in memory; the ZIP stays compressed.
+  const bytes=await archive.read(name);
   if(model){
    const id=moduleId(name);
    await rememberAsset(id,base,bytes);glbs.push(id);
    const old=savedMeta.get(id)||{},prior=catalogMeta[id]||{};
    const explicit=model.metadata?.category||model.category;
-   const addition={sourcePath:name,assetRole:'model'};
+   const detail=model.metadata||{};
+   const addition={sourcePath:name,assetRole:'model',
+    catalogSection:detail.catalogSection||name.split('/')[0],
+    library:detail.library||'',
+    sourceId:detail.modelId||detail.sourceId||''};
    if(!old.manualCategory&&!prior.manualCategory)addition.category=explicit;
    const next={...addition,...prior};
    catalogMeta[id]=next;savedMeta.set(id,{...old,...next});
@@ -1079,7 +1096,10 @@ async function importZip(file,isProject=false){
   }else if(/(?:^|\/)project\.json$/i.test(name)){
    // Pick up project only when the caller explicitly imports a scene.
   }
-  if(i%60===0)await new Promise(resolve=>setTimeout(resolve,0));
+  if(i%60===0){
+   toast('Импорт библиотеки: '+glbs.length+' / '+plan.models.length+' моделей');
+   await new Promise(resolve=>setTimeout(resolve,0));
+  }
  }
  // Explicit legacy project metadata must remain authoritative.
  if(importedCatalog&&typeof importedCatalog==='object')
@@ -1098,7 +1118,7 @@ async function importZip(file,isProject=false){
  // Support existing exported material-link tables; resolve paths even with
  // one extra ZIP root directory and never point a slot at a nonexistent PNG.
  const mapName=keys.find(n=>/(?:^|\/)Привязки_материалов(?:_Все)?\.json$/i.test(n));
- const materialMap=mapName?readJson(mapName):null;
+ const materialMap=mapName?await readJson(mapName):null;
  if(materialMap?.libraries)for(const [library,lib] of Object.entries(materialMap.libraries)){
   for(const [modelId,model] of Object.entries(lib.models||{})){
    const resolved=SmartPackage.lookup(keys,model.file||'');
@@ -1129,7 +1149,7 @@ async function importZip(file,isProject=false){
   if(savedMeta.has(id))savedMeta.set(id,{...savedMeta.get(id),...meta});
  }
  try{await dbOp('catalog','metadata',catalogMeta)}catch(e){console.warn('ZIP catalogue save',e)}
- const project=readJson('project.json');
+ const project=await readJson('project.json');
  if(isProject&&project)await restoreProject(project);
  else if(pendingRecovery){
   const previous=pendingRecovery;
@@ -1138,7 +1158,7 @@ async function importZip(file,isProject=false){
  }
  if(!isProject){
   catalogMode=glbs.length?'models':'emblems';catalogPage=0;
-  currentFilter='all';$('assetSort').value='newest';
+  currentFilter='all';currentSection='';$all('[data-catalog-section]').forEach(x=>x.classList.toggle('active',!x.dataset.catalogSection));$('assetSort').value='newest';
   $all('#categoryFilters .pill').forEach(btn=>btn.classList.toggle('active',btn.dataset?.filter==='all'));
   document.body.classList.add('catalogOpen');
  }
