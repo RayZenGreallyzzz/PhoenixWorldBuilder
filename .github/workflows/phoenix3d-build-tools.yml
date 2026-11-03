@@ -173,8 +173,19 @@ jobs:
             build/Phoenix3D_One_APK_Installer_TEST.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging \
             build/Phoenix3D_One_APK_Installer_TEST.apk | grep "launchable-activity"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" list \
-            build/Phoenix3D_One_APK_Installer_TEST.apk | grep -F "assets/com.planner5d.planner5d.apk"
+          python3 - <<'PY'
+          # Test the exact entry path used by ZipFile.getEntry() at runtime.
+          import zipfile
+          apk='build/Phoenix3D_One_APK_Installer_TEST.apk'
+          with zipfile.ZipFile(apk) as z:
+              names=z.namelist()
+              split=[n for n in names if n.startswith('assets/') and n.endswith('.apk')]
+              assert len(split)==9,split
+              assert 'assets/com.planner5d.planner5d.apk' in split,split
+              assert len(set(split))==9
+              assert all(z.getinfo(n).file_size>10000 for n in split)
+          print('PASS: ZipFile installer will resolve all nine assets/*.apk entries')
+          PY
       - name: Upload personal test APK as Actions artifact
         uses: actions/upload-artifact@v4
         with:
