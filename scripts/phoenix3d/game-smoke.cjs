@@ -35,6 +35,7 @@ function click(id){
  const el=w.document.getElementById(id);assert(el,'Missing button #'+id);el.click();
 }
 async function main(){
+ w.eval(fs.readFileSync(path.resolve(root,'build/viewer/game-gizmo.js'),'utf8'));
  w.eval(code);
  await new Promise(resolve=>setTimeout(resolve,40));
  click('btnBuild');
@@ -43,6 +44,16 @@ async function main(){
  assert(latest?.version===1,'No saved game scene');
  assert(latest.items.length===1,'Expected 1 placed wall: '+JSON.stringify(latest));
  assert(latest.items[0].kind==='wall','Wrong object type');
+ const gizmoX=w.document.querySelector('#gX');
+ assert(!gizmoX.disabled,'Placed module should be selected for gizmo');
+ gizmoX.value='1.234';
+ click('gApply');
+ assert(Math.abs(latest.items[0].x-1.234)<.0001,'Gizmo X numeric edit did not save');
+ click('gMove');
+ w.document.querySelector('#gAxis').value='x';
+ w.document.querySelector('#gStep').value='.001';
+ click('gPlus');
+ assert(Math.abs(latest.items[0].x-1.235)<.0001,'Millimetre movement button failed');
  click('btnRotate');click('btnPlace');
  assert(latest.items.length===2,'Expected 2 placed walls');
  const part=w.document.querySelector('#part');
