@@ -42,7 +42,7 @@ def patch_base(base:Path,compiled_dex:Path,assets:Path,output:Path):
  with zipfile.ZipFile(output) as z:
   assert z.testzip() is None
   assert 'classes19.dex' in z.namelist()
-  assert len([n for n in z.namelist() if n.startswith('assets/phoenix3d/')])==5
+  assert len([n for n in z.namelist() if n.startswith('assets/phoenix3d/')])==6
  print('Patched Planner base APK:',output,'original entries',count,'size',output.stat().st_size)
 
 def strip_v2(source:Path,dest:Path):
