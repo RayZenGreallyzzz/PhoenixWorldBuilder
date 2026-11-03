@@ -134,14 +134,27 @@ const BuildJoin=(()=>{
  }
  function wallInfo(w,entry){
   const root=entry.mesh;root.updateWorldMatrix(true,true);
-  const b=BuildSnap.attrBounds(root);if(b.isEmpty())return null;
+  const role=catOf(w,entry);
+  const descriptor=entry.data?.moduleTopology;
+  const described=typeof ModuleTopology!=='undefined'?
+   ModuleTopology.boxOf(entry):null;
+  const b=described||BuildSnap.attrBounds(root);if(b.isEmpty())return null;
   const cx=(b.min.x+b.max.x)/2,cz=(b.min.z+b.max.z)/2;
   const acrossX=(b.max.x-b.min.x)>=(b.max.z-b.min.z);
-  const a=acrossX?byLocal(root,b.min.x,b.min.y,cz):byLocal(root,cx,b.min.y,b.min.z);
-  const c=acrossX?byLocal(root,b.max.x,b.min.y,cz):byLocal(root,cx,b.min.y,b.max.z);
-  const top=byLocal(root,cx,b.max.y,cz).y,bottom=byLocal(root,cx,b.min.y,cz).y;
+  // Straight modules with explicit role use the stored physical sockets.
+  // Curved walls and L corners keep their specialized tangent/corner sockets.
+  const specialized=role==='corner'||!!root.userData?.pwbModuleSockets?.length||
+   (typeof BuildCurves!=='undefined'&&BuildCurves.isArc(entry.kind,root));
+  const storedL=!specialized&&described?ModuleTopology.pointOf(root,descriptor,'L'):null;
+  const storedR=!specialized&&described?ModuleTopology.pointOf(root,descriptor,'R'):null;
+  const a=storedL|| (acrossX?byLocal(root,b.min.x,b.min.y,cz):byLocal(root,cx,b.min.y,b.min.z));
+  const c=storedR|| (acrossX?byLocal(root,b.max.x,b.min.y,cz):byLocal(root,cx,b.min.y,b.max.z));
+  const storedT=described?ModuleTopology.pointOf(root,descriptor,'T'):null;
+  const storedB=described?ModuleTopology.pointOf(root,descriptor,'B'):null;
+  const top=(storedT||byLocal(root,cx,b.max.y,cz)).y;
+  const bottom=(storedB||byLocal(root,cx,b.min.y,cz)).y;
   if(!Number.isFinite(top)||!Number.isFinite(bottom)||top<=bottom+.1)return null;
-  const type=catOf(w,entry),segments=cornerSegments(root,entry.kind,type);
+  const type=role,segments=cornerSegments(root,entry.kind,type);
   // Never use a corner's rectangular diagonal as a wall end if the
   // geometry does not expose reliable corner sockets.
   return {entry,root,b,a,c,top,bottom,mid:byLocal(root,cx,b.min.y,cz),
