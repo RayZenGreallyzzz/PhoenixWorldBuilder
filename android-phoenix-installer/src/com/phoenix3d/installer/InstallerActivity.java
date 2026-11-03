@@ -20,6 +20,8 @@ import android.widget.TextView;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.IOException;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipEntry;
 
 /**
  * One ordinary Android APK (no SAI/XAPK manager required) containing all 9
@@ -27,7 +29,7 @@ import java.io.IOException;
  * target app through the Android system PackageInstaller UI.
  *
  * This is NOT a merged/universal APK: the target app is still the 9-split
- * original Planner + optional Phoenix3D game modes. No root is required.
+ * full existing building engine + optional Phoenix 3D game tools. No root is required.
  */
 public final class InstallerActivity extends Activity {
  static final String TARGET="com.planner5d.planner5d";
@@ -52,12 +54,12 @@ public final class InstallerActivity extends Activity {
   title.setText("Phoenix 3D — установка из одного APK");
   title.setTextSize(22);body.addView(title);
   TextView explanation=new TextView(this);
-  explanation.setText("\nВнутри уже находятся 9 модулей Planner/Phoenix 3D. "+
-   "Никаких дополнительных ZIP, XAPK или установщиков не нужно.\n\n"+
-   "Нажми «Установить Phoenix 3D». Android попросит подтвердить "+
-   "установку приложения. Это работает без интернета.\n\n"+
-   "Важно: тестовая версия имеет другую подпись и может не обновиться "+
-   "поверх установленного Planner. Сначала сохрани свои проекты.\n");
+  explanation.setText("\nСохранены исходные инструменты строительства, каталог, стены, этажи и крыши. "+
+   "Дополнительно доступны GLB-персонажи и игровые инструменты.\n\n"+
+   "Весь комплект внутри этого APK; интернет не требуется. "+
+   "Подтверждение установки запрашивает сам Android.\n\n"+
+   "Внимание: новая подпись может не совпасть с подписью предыдущей установки. "+
+   "Перед заменой сохрани свои проекты.\n");
   explanation.setTextSize(15);body.addView(explanation);
   install=new Button(this);
   install.setText("📦 Установить Phoenix 3D");body.addView(install);
@@ -71,7 +73,7 @@ public final class InstallerActivity extends Activity {
    }catch(Exception error){message("Игра ещё не установлена или Android запретил запуск: "+error.getMessage());}
   });
   info=new TextView(this);info.setTextSize(14);
-  info.setText("Готово к установке. Требуется примерно 520 МБ свободного места.");
+  info.setText("Проверка встроенных строительных компонентов…");
   body.addView(info);
   setContentView(scroll);
   String msg=getIntent().getStringExtra(EXTRA_MESSAGE);
@@ -98,17 +100,18 @@ public final class InstallerActivity extends Activity {
   new Thread(()->{
    PackageInstaller.Session session=null;
    try{
-    android.content.res.AssetManager assets=getAssets();
-    long total=0;
-    for(String name:SPLITS){
-     try(android.content.res.AssetFileDescriptor fd=assets.openFd(name)){
-      total+=fd.getLength();
-     }catch(IOException compressed){
-      try(InputStream src=assets.open(name)){
-       byte[] block=new byte[65536];int n;while((n=src.read(block))!=-1)total+=n;
-      }
+    // The 9 signed APK entries are verified by CI as assets/*.apk.
+    // Reading our own installed APK as ZIP is more reliable than
+    // AssetManager.open() for large, nonstandard .apk asset files.
+    ZipFile container=new ZipFile(getApplicationInfo().sourceDir);
+    try{
+     long total=0;
+     for(String name:SPLITS){
+      ZipEntry entry=container.getEntry("assets/"+name);
+      if(entry==null||entry.isDirectory()||entry.getSize()<10240)
+       throw new IOException("Внутри APK нет компонента "+name+". Файлов не хватает.");
+      total+=entry.getSize();
      }
-    }
     PackageInstaller installer=getPackageManager().getPackageInstaller();
     PackageInstaller.SessionParams params=
        new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
@@ -121,13 +124,12 @@ public final class InstallerActivity extends Activity {
     long written=0;
     for(int i=0;i<SPLITS.length;i++){
      String filename=SPLITS[i];
-     try(InputStream src=assets.open(filename);
-         OutputStream dest=session.openWrite(filename,0,-1)){
+     ZipEntry entry=container.getEntry("assets/"+filename);
+     try(InputStream src=container.getInputStream(entry);
+         OutputStream dest=session.openWrite(filename,0,entry.getSize())){
       byte[] buffer=new byte[64*1024];
       int n;
-      while((n=src.read(buffer))!=-1){
-       dest.write(buffer,0,n);written+=n;
-      }
+      while((n=src.read(buffer))!=-1){dest.write(buffer,0,n);}
       session.fsync(dest);
      }
      final int progress=i+1;
@@ -141,7 +143,8 @@ public final class InstallerActivity extends Activity {
       PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_MUTABLE);
     session.commit(pending.getIntentSender());
     session.close();session=null;
-    runOnUiThread(()->message("Android проверяет пакет. Подтверди системный запрос на установку."));
+    runOnUiThread(()->message("Android проверяет полный Phoenix 3D. Подтверди системную установку."));
+    }finally{container.close();}
    }catch(Exception error){
     if(session!=null){try{session.abandon();}catch(Exception ignored){}}
     runOnUiThread(()->{
@@ -167,7 +170,7 @@ public final class InstallerActivity extends Activity {
    }else{
     String detail=intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
     launchResult(context,"Установка завершилась ошибкой ("+status+"): "+detail+
-      "\nВозможно, уже установлен Planner с другой подписью. Сначала сделай резервную копию.");
+      "\nВозможно, установлена другая версия с несовместимой подписью. Сохрани проекты перед заменой.");
    }
   }
   private void launchResult(Context ctx,String info){
