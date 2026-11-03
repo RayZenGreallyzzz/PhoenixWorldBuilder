@@ -25,7 +25,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-/** Optional offline tools activity in the same APK as Planner, not a hook into Planner's 3D room. */
+/** Extra local tools. Existing 3D construction engine remains in the package. */
 public final class PhoenixToolsActivity extends Activity {
  private static final int PICK_GLB=601,PICK_DECOR=602,SAVE_ZIP=603,LOAD_ZIP=604;
  private final long MAX_MODEL=48L*1024*1024,MAX_DECOR=12L*1024*1024;
@@ -43,9 +43,9 @@ public final class PhoenixToolsActivity extends Activity {
   TextView title=new TextView(this);title.setText("Phoenix 3D — личные модели и декор");
   title.setTextSize(21);body.addView(title);
   TextView help=new TextView(this);
-  help.setText("Работает локально. Это дополнительный редактор внутри Planner. Перенос GLB в строительную сцену Planner пока не поддерживается.");
+  help.setText("Игровой режим с персонажем работает отдельно от основного строительства. Для полнофункционального редактора нажми кнопку ниже. Перенос GLB в его родную сцену пока не готов.");
   body.addView(help);
-  button(body,"🏠 Открыть строительство Planner",()->{
+  button(body,"🏠 Открыть полноценное строительство",()->{
    Intent i=new Intent();i.setClassName(getPackageName(),"com.planner5d.library.activity.Main");
    startActivity(i);
   });
