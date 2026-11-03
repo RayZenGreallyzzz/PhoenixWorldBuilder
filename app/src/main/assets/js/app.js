@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id), $all=s=>[...document.querySelectorAll(s)];
-const BUILTINS=[['floor','Пол (стартовый)','foundation'],['ceiling','Потолок / перекрытие','ceiling'],['wall','Стена (стартовая)','wall'],['corner','Угол стены 90°','corner'],['arc90','Закруглённая стена 90° · R2','wall'],['arc180','Полукруглая стена 180° · R2','wall'],['arcFloor90','Закруглённый пол 90° · R2','foundation'],['arcCeiling90','Закруглённое перекрытие 90° · R2','ceiling'],['window','Стена с окном','wall'],['roof','Двускатная крыша (старая)','roof'],['roof1','Крыша 1 скат • односкатная','roof'],['roof2','Крыша 2 ската • двускатная','roof'],['roof3','Крыша 3 ската • трёхскатная','roof'],['roof4','Крыша 4 ската • шатровая','roof'],['roof5','Крыша 5 скатов • пятигранная','roof'],['roof6','Крыша 6 скатов • шестигранная','roof'],['roofSlope','Кровля • отдельный скат','roof'],['roofRidge','Кровля • конёк','roof'],['roofValley','Кровля • ендова','roof'],['roofHip','Кровля • диагональное ребро','roof'],['roofEave','Кровля • карниз','roof'],['roofInnerCorner','Кровля • внутренний угол','roof'],['roofOuterCorner','Кровля • наружный угол','roof'],['roofGable','Кровля • фронтон','roof'],['roofFlat','Кровля • плоский модуль','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
+const BUILTINS=[['floor','Пол (стартовый)','foundation'],['ceiling','Потолок / перекрытие','ceiling'],['wall','Стена (стартовая)','wall'],['pwall','Стена • параметрическая','wall'],['pwindow','Стена • с оконным проёмом','wall'],['pdoor','Стена • с дверным проёмом','wall'],['corner','Угол стены 90°','corner'],['arc90','Закруглённая стена 90° · R2','wall'],['arc180','Полукруглая стена 180° · R2','wall'],['arcFloor90','Закруглённый пол 90° · R2','foundation'],['arcCeiling90','Закруглённое перекрытие 90° · R2','ceiling'],['window','Стена с окном','wall'],['roof','Двускатная крыша (старая)','roof'],['roof1','Крыша 1 скат • односкатная','roof'],['roof2','Крыша 2 ската • двускатная','roof'],['roof3','Крыша 3 ската • трёхскатная','roof'],['roof4','Крыша 4 ската • шатровая','roof'],['roof5','Крыша 5 скатов • пятигранная','roof'],['roof6','Крыша 6 скатов • шестигранная','roof'],['roofSlope','Кровля • отдельный скат','roof'],['roofRidge','Кровля • конёк','roof'],['roofValley','Кровля • ендова','roof'],['roofHip','Кровля • диагональное ребро','roof'],['roofEave','Кровля • карниз','roof'],['roofInnerCorner','Кровля • внутренний угол','roof'],['roofOuterCorner','Кровля • наружный угол','roof'],['roofGable','Кровля • фронтон','roof'],['roofFlat','Кровля • плоский модуль','roof'],['door','Дверь с петлями','door'],['pillar','Колонна','wall'],['stairs','Лестница','stairs'],['tree','Дерево','prop'],['crate','Ящик','prop']];
 const CATEGORIES=[['foundation','Пол'],['stairs','Лестницы'],['ceiling','Потолки'],['wall','Стены'],['corner','Углы'],['roof','Крыши'],['door','Двери'],['railing','Перила и ограждения'],['prop','Декор']];
 const COLORS=['#b7ac91','#ede6d0','#645c56','#90694c','#674535','#ad5650','#426b9a','#345448','#d2b45f','#424856','#b79bb2','#202c33'];
 const TERRAIN_COLORS=['#668358','#3b653b','#a59b71','#89705b','#a8a6a1','#d4c99c','#a6b8c0','#426a7b'];
@@ -673,7 +673,61 @@ function refreshAimSnapUI(state=null){
  if(detail)detail.textContent=reason;
  if(hint)hint.textContent=(state.disabled?'✕ ':'🧲 ')+text+(reason?' · '+reason:'');
 }
+// Procedural holes are editable architectural data, NOT destructive GLB cuts.
+function selectedParamWall(){
+ const selected=w.selected;
+ if(typeof ParametricWall==='undefined')return null;
+ if(selected&&ParametricWall.kinds.has(selected.kind))
+  return {kind:selected.kind,entry:selected,spec:selected.data.paramWall};
+ if(w.placement&&ParametricWall.kinds.has(w.placement))
+  return {kind:w.placement,entry:null,spec:w.placementParamWall};
+ return null;
+}
+function syncParamWallForm(){
+ const panel=$('paramWallControls');
+ if(!panel)return;
+ const target=selectedParamWall();
+ panel.classList.toggle('hidden',!target);
+ if(!target)return;
+ const p=ParametricWall.normalize(target.spec,target.kind),hole=p.openings[0]||null;
+ $('paramWallLength').value=String(p.length);
+ $('paramWallHeight').value=String(p.height);
+ $('paramWallThickness').value=String(p.thickness);
+ $('paramWallOpeningType').value=hole?.type||'none';
+ $('paramWallOpeningWidth').value=String(hole?.width||1.1);
+ $('paramWallOpeningHeight').value=String(hole?.height||1.15);
+ $('paramWallOpeningSill').value=String(hole?.sill||0);
+ $('paramWallOpeningOffset').value=String(hole?.offset||0);
+ $('paramWallOpeningSill').disabled=hole?.type==='door';
+ $('paramWallStatus').textContent=p.openings.length+' проём(ов) · '+
+  (target.entry?'Редактируется установленная стена':'Настройки следующей стены')+
+  ' · GLB с декоративной кладкой не изменяются';
+}
+function applyParamWallForm(mode='replace'){
+ const target=selectedParamWall();
+ if(!target)return toast('Выбери параметрическую стену, не импортированный GLB');
+ const get=id=>Number($(id).value);
+ const type=$('paramWallOpeningType').value;
+ const previous=ParametricWall.normalize(target.spec,target.kind);
+ const opening=type==='none'?null:{type,
+  width:get('paramWallOpeningWidth'),height:get('paramWallOpeningHeight'),
+  sill:type==='door'?0:get('paramWallOpeningSill'),
+  offset:get('paramWallOpeningOffset')};
+ if(mode==='add'&&!opening)
+  return toast('Выбери «Окно» или «Дверной проём» для добавления');
+ const spec={
+  length:get('paramWallLength'),height:get('paramWallHeight'),
+  thickness:get('paramWallThickness'),
+  openings:mode==='clear'?[]:mode==='add'?
+   [...previous.openings,opening]:opening?[opening]:[]
+ };
+ if(!w.updateParametricWall(spec,target.entry))
+  return toast('Форма доступна только параметрическим стенам');
+ syncParamWallForm();
+ toast('✓ Настоящая геометрия стены обновлена · '+spec.openings.length+' проём(ов)');
+}
 function refreshConstructionUI(){
+ syncParamWallForm();
  const height=(w.storeyHeight||2.6).toFixed(2);
  $('storeyHeightInput').value=height;$('buildStoreyHeight').value=height;
  $('levelValue').textContent=(w.floorLevel||0)+1;
@@ -1040,6 +1094,10 @@ function wireButtons(){
  $('btnGamePaintImage').onclick=$('btnPaintImage').onclick;
  $('btnUndo').onclick=async()=>{await w.undoLast();toast('Действие отменено')};$('btnSelect').onclick=()=>{choosingImageSurface=false;$('btnPaintImage').classList.remove('active');w.setPlacement(null);w.moveTarget=null;for(const id of ['placementStatus','buildPlacementStatus']){const el=$(id);if(el){el.textContent='◌ Выбери деталь';el.classList.remove('allowed','blocked')}}$('btnBuildPlace').classList.remove('placementBlocked');$('btnBuildPlace').setAttribute('aria-disabled','false');$('btnSelect').classList.add('active');toast('Нажми на объект, чтобы выделить')};
  for(const action of ['Rotate','Copy','Move','Delete'])$('btn'+action).onclick=()=>{if(!w.action(action.toLowerCase()))toast('Сначала выбери объект');else toast({Rotate:'Поворот 90°',Copy:'Создана копия',Move:'Выбери новое место',Delete:'Удалено'}[action])};
+$('paramWallOpeningType').onchange=e=>{$('paramWallOpeningSill').disabled=e.target.value==='door'};
+ $('btnParamWallApply').onclick=()=>applyParamWallForm('replace');
+ $('btnParamWallAdd').onclick=()=>applyParamWallForm('add');
+ $('btnParamWallClear').onclick=()=>applyParamWallForm('clear');
  $('btnDoor').onclick=()=>{if(!w.selected)return toast('Выбери дверь или объект');w.remember();w.selected.data.door=!w.selected.data.door;toast(w.selected.data.door?'Дверь интерактивна':'Объект больше не дверь')};
  $('btnDoorOpen').onclick=()=>{if(w.selected){w.toggleDoor(w.selected);toast(w.selected.data.open?'Открыто':'Закрыто')}};
  $('btnZoomIn').onclick=()=>w.distance=Math.max(3,w.distance*.8);$('btnZoomOut').onclick=()=>w.distance=Math.min(90,w.distance*1.22);$('btnCamera').onclick=()=>{w.pitch=.55;w.yaw=.65;w.distance=(w.mode==='playbuild'||w.mode==='walk')?5.2:23};
@@ -1425,7 +1483,7 @@ async function init(){
   }
  });
  restoreSurfacePreferences();setupPicker();wireButtons();refreshConstructionUI();attachTouches();const exit=document.createElement('button');exit.id='btnBackEditor';exit.className='hidden';exit.textContent='✎ Редактор';exit.style.cssText='position:absolute;right:12px;bottom:72px;z-index:5;background:#236758';exit.onclick=()=>setMode('build');document.body.append(exit);
- w.onSelected=e=>{DecalUI.render();syncDimensionInputs();if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
+ w.onSelected=e=>{DecalUI.render();syncDimensionInputs();syncParamWallForm();if(e){$('modelScale').value=Math.round((e.data.scale||1)*100);$('modelScaleValue').textContent=$('modelScale').value+'%';$('textureSelect').value=e.data.texture||'';$('customColor').value=e.data.color||'#b7ac91';$('roughSlider').value=Math.round((e.data.roughness??.8)*100);$('metalSlider').value=Math.round((e.data.metalness??0)*100);updateSurfaceUI();}};w.onChanged=saveSoon;
  renderLibrary();w.animate(0);
  try{localStore=await openDB();const files=await dbKeys('assets');for(const id of files){const row=await dbOp('assets',id);savedMeta.set(id,{name:row.name,importedAt:row.importedAt||0})}
   const categories=await dbKeys('categories');for(const id of categories){const meta=savedMeta.get(id);if(meta)meta.category=await dbOp('categories',id)}
