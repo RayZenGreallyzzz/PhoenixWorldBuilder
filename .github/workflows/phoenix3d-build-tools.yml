@@ -55,6 +55,7 @@ jobs:
           mkdir -p build/viewer
           cp android-phoenix-tools/assets/index.html build/viewer/index.html
           cp android-phoenix-tools/assets/game.html build/viewer/game.html
+          cp android-phoenix-tools/assets/game-gizmo.js build/viewer/game-gizmo.js
           cp build/node/node_modules/three/build/three.min.js build/viewer/three.min.js
           cp build/node/node_modules/three/examples/js/loaders/GLTFLoader.js build/viewer/GLTFLoader.js
           cp build/node/node_modules/three/examples/js/controls/OrbitControls.js build/viewer/OrbitControls.js
