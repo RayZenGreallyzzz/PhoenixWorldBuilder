@@ -28,6 +28,7 @@ const SmartPackage=(()=>{
   if(/(?:roof|крыша|кровл)/.test(v))return 'roof';
   if(floorWord||/(?:platform|основан)/.test(v))return 'foundation';
   if(/(?:wall|стен|window|окно|pillar|колон)/.test(v))return 'wall';
+  if(/(?:перил|огражд|balustrad|railing|fence)/.test(v))return 'railing';
   if(/(?:door|двер|ворот)/.test(v))return 'door';
   if(/(?:stairs|лестниц|ступен)/.test(v))return 'stairs';
   return 'prop';
@@ -42,13 +43,14 @@ const SmartPackage=(()=>{
  const normalizeCategory=(value,fallback)=>{
   if(!value)return category(fallback);
   const v=String(value).toLocaleLowerCase().trim();
-  if(['foundation','wall','corner','ceiling','stairs','roof','door','prop'].includes(v))return v;
+  if(['foundation','wall','corner','ceiling','stairs','roof','door','railing','prop'].includes(v))return v;
   if(/угол|углов|углы|угловые|угловой|угловая|corner/.test(v))return 'corner';
   if(/стен|wall|колонн|pillar/.test(v))return 'wall';
   if(/потол|перекрыт|ceiling/.test(v))return 'ceiling';
   if(/кры|кровл|roof/.test(v))return 'roof';
   if(/пол|фундамент|плит|floor/.test(v))return 'foundation';
   if(/лест|ступен|stair/.test(v))return 'stairs';
+  if(/перил|огражд|balustrad|railing|fence/.test(v))return 'railing';
   if(/двер|ворот|door/.test(v))return 'door';
   return category(fallback);
  };
