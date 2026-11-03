@@ -82,7 +82,7 @@ const ZipUtils=(()=>{
    const local=view.getUint32(position+42,true);
    const name=dec.decode(bytes.subarray(position+46,position+46+nameLen)).replace(/\\/g,'/');
    position+=46+nameLen+extraLen+commentLen;
-   if(!name||name.endsWith('/')||!/\\.(glb|png|jpg|jpeg|webp|json)$/i.test(name))continue;
+   if(!name||name.endsWith('/')||!/\.(glb|png|jpg|jpeg|webp|json)$/i.test(name))continue;
    if(name.split('/').includes('..')||name.startsWith('/'))throw Error('Небезопасный путь внутри ZIP');
    if(flags&1)throw Error('ZIP защищён паролем');
    if(method!==0&&method!==8)throw Error('Тип сжатия ZIP не поддерживается');
