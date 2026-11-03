@@ -1,0 +1,123 @@
+name: Phoenix 3D — standalone offline APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/phoenix3d-standalone-no-planner]
+    paths:
+      - 'android-phoenix-standalone/**'
+      - 'scripts/phoenix3d/prepare_standalone_icon.py'
+      - 'scripts/phoenix3d/game-smoke.cjs'
+      - '.github/workflows/phoenix3d-standalone.yml'
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android compiler
+        run: |
+          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          "$SDK_MANAGER" "platforms;android-35" "build-tools;35.0.0"
+      - name: Bundle offline JS engine and standalone game assets
+        run: |
+          mkdir -p build/node build/viewer build/standalone/assets/phoenix3d build/standalone/res/drawable build/classes build/dex
+          npm install --prefix build/node --no-package-lock --no-audit --no-fund three@0.140.0 jsdom@22.1.0
+          cp android-phoenix-standalone/assets/game.html build/viewer/game.html
+          cp android-phoenix-tools/assets/game-gizmo.js build/viewer/game-gizmo.js
+          cp build/node/node_modules/three/build/three.min.js build/viewer/three.min.js
+          cp build/node/node_modules/three/examples/js/loaders/GLTFLoader.js build/viewer/GLTFLoader.js
+          cp build/node/node_modules/three/examples/js/controls/OrbitControls.js build/viewer/OrbitControls.js
+          cp build/viewer/* build/standalone/assets/phoenix3d/
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('build/viewer/game.html').read_text()
+          assert not re.search(r'planner|sign.?in|subscribe|billing|account',html,re.I),'Unexpected old branded UI'
+          scripts=[html.rsplit('<script>',1)[-1].split('</script>',1)[0]]
+          assert scripts and scripts[0].strip()
+          Path('build/viewer/game-controller.js').write_text(scripts[0])
+          PY
+          node --check build/viewer/game-gizmo.js
+          node --check build/viewer/game-controller.js
+          node scripts/phoenix3d/game-smoke.cjs
+      - name: Prepare fireplace icon (use exact fireplace.png if added)
+        run: |
+          python3 -m pip install --user 'Pillow==10.4.0'
+          python3 scripts/phoenix3d/prepare_standalone_icon.py --out build/standalone/res/drawable/phoenix_icon.png
+      - name: Compile real standalone Android app (no nine split files)
+        run: |
+          javac -source 8 -target 8 \
+            -classpath "$ANDROID_HOME/platforms/android-35/android.jar" \
+            -d build/classes android-phoenix-standalone/src/com/phoenix3d/builder/PhoenixBuilderActivity.java
+          "$ANDROID_HOME/build-tools/35.0.0/d8" --min-api 29 \
+            --lib "$ANDROID_HOME/platforms/android-35/android.jar" \
+            --output build/dex $(find build/classes -name '*.class' -print)
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" package -f \
+            -M android-phoenix-standalone/AndroidManifest.xml \
+            -S build/standalone/res -A build/standalone/assets \
+            -I "$ANDROID_HOME/platforms/android-35/android.jar" \
+            -F build/Phoenix3D_unsigned.apk
+          (cd build/dex && "$ANDROID_HOME/build-tools/35.0.0/aapt" add ../Phoenix3D_unsigned.apk classes.dex)
+      - name: Sign and validate ordinary APK
+        run: |
+          keytool -genkeypair -keystore build/sign-test.jks -storepass phoenix3dtest \
+            -keypass phoenix3dtest -alias phoenix3d -keyalg RSA -keysize 3072 \
+            -validity 3650 -dname "CN=Phoenix3D Standalone Test" -noprompt
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 \
+            build/Phoenix3D_unsigned.apk build/Phoenix3D_aligned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks build/sign-test.jks --ks-key-alias phoenix3d \
+            --ks-pass pass:phoenix3dtest --key-pass pass:phoenix3dtest \
+            --out build/Phoenix3D_Offline_GameBuilder_TEST.apk build/Phoenix3D_aligned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --min-sdk-version 29 \
+            build/Phoenix3D_Offline_GameBuilder_TEST.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging build/Phoenix3D_Offline_GameBuilder_TEST.apk | head -n 10
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,zipfile,json
+          f=Path('build/Phoenix3D_Offline_GameBuilder_TEST.apk')
+          with zipfile.ZipFile(f) as z:
+              names=z.namelist()
+              assert z.testzip() is None
+              assert 'classes.dex' in names
+              assert 'assets/phoenix3d/game.html' in names
+              assert 'assets/phoenix3d/game-gizmo.js' in names
+              assert 'res/drawable/phoenix_icon.png' in names
+              assert not any(n.endswith('.apk') for n in names),'Unexpected embedded Planner split APK'
+          data={'filename':f.name,'bytes':f.stat().st_size,'sha256':hashlib.file_digest(f.open('rb'),'sha256').hexdigest(),
+                'package':'com.phoenix3d.builder',
+                'privacy':'No INTERNET permission, no login/account, no Planner app installed',
+                'features':['GLB character','third-person walk','local build & save','XYZ gizmo','PNG/JPG','portable ZIP project'],
+                'tested':['Java+DEX compile','3D game smoke','aapt resources','zipalign','APK signature'],
+                'not_tested':['real Android install','real GLB on GPU'],
+                'icon_exact_uploaded':Path('android-phoenix-standalone/assets/fireplace.png').is_file()}
+          Path('build/standalone-build-report.json').write_text(json.dumps(data,indent=2,ensure_ascii=False))
+          print(json.dumps(data,indent=2,ensure_ascii=False))
+          PY
+      - name: Upload one regular APK as Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix3D-STANDALONE-SINGLE-APK
+          path: |
+            build/Phoenix3D_Offline_GameBuilder_TEST.apk
+            build/standalone-build-report.json
+          retention-days: 14
+      - name: Publish DIRECT .apk link in GitHub prerelease (no ZIP wrapper)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=phoenix3d-standalone-apk-test
+          if ! gh release view "$TAG" --repo RayZenGreallyzzz/PhoenixWorldBuilder >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" \
+              --repo RayZenGreallyzzz/PhoenixWorldBuilder \
+              --title "Phoenix 3D — standalone APK (TEST)" \
+              --notes "Offline Android build: GLB character, touch joystick, third-person building, XYZ gizmo, local ZIP projects. No Planner, no login, no billing, no internet. This is an experimental test; signed with a temporary key each CI build." --prerelease
+          fi
+          gh release upload "$TAG" build/Phoenix3D_Offline_GameBuilder_TEST.apk \
+            --repo RayZenGreallyzzz/PhoenixWorldBuilder --clobber
