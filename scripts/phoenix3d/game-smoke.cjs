@@ -65,6 +65,14 @@ async function main(){
  assert(latest.items[2].decor===true,'Decor flag not serialized');
  click('btnUndo');
  assert(latest.items.length===2,'Undo not persisted');
+ // A gable roof must use the same save/restore schema as floors and walls.
+ part.value='roof-gable';part.dispatchEvent(new w.Event('change'));
+ withDecor.checked=false;withDecor.dispatchEvent(new w.Event('change'));
+ click('btnPlace');
+ assert(latest.items.length===3,'Expected sealed gable roof');
+ assert(latest.items[2].kind==='roof-gable','Gable roof kind not saved');
+ click('btnUndo');
+ assert(latest.items.length===2,'Gable roof undo failed');
  click('btnAvatar');click('btnDecor');
  assert(selectedGLB===1&&chosenDecor===1,'Android pickers not connected');
  click('btnSaveBundle');click('btnLoadBundle');
