@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;background:#10191e;color:#e8f5f5;font:14px system-ui,Arial}
+button,select,input{font:inherit;border-radius:9px;border:1px solid #52656b;background:#243941;color:white;min-height:37px}
+button{padding:7px 10px;cursor:pointer}
+button:active{background:#42626d}
+label{font-size:12px;color:#c3dce1}
+input[type=number]{width:70px;padding:5px}
+#game{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#hud{position:absolute;top:7px;left:7px;right:7px;display:flex;align-items:flex-start;justify-content:space-between;pointer-events:none;gap:8px}
+#hud>div{pointer-events:auto}
+#toolbar{background:#14242cdb;border:1px solid #344d53;border-radius:10px;padding:7px;display:flex;flex-wrap:wrap;align-items:center;gap:5px;max-width:min(78%,960px)}
+#toolbar button{font-size:13px;padding:5px 8px}
+#toolbar button.active{background:#3e7761;border-color:#78bf9c}
+#bottom{position:absolute;bottom:15px;left:15px;right:15px;display:flex;align-items:end;justify-content:space-between;pointer-events:none}
+#stick{width:132px;height:132px;border-radius:50%;border:2px solid #b2bfc36e;background:#13232c77;position:relative;touch-action:none;pointer-events:auto}
+#knob{width:53px;height:53px;position:absolute;top:39px;left:39px;border-radius:50%;border:2px solid #c0e1e2ab;background:#74969a9a}
+#actions{display:flex;flex-direction:column;gap:7px;pointer-events:auto}
+#actions button{min-height:49px;min-width:90px;background:#356f55e8;border:1px solid #72ac81}
+#actions button.danger{background:#753d3b}
+#panel{position:absolute;top:70px;right:8px;width:min(340px,80vw);max-height:56%;overflow:auto;background:#13252de8;border:1px solid #557077;border-radius:10px;padding:10px;display:none}
+#panel.open{display:block}
+#panel>div{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:5px 0}
+#panel select{max-width:100%;padding:4px}
+#status{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);font-size:12px;color:#d5e9eb;background:#142229c5;border-radius:6px;padding:4px 7px;max-width:65%;text-align:center}
+#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;color:#ddf6efbb;pointer-events:none;text-shadow:0 1px 2px black}
+#hint{position:absolute;left:50%;top:65px;transform:translateX(-50%);font-size:12px;color:#d6edec;background:#1223289b;padding:3px 8px;border-radius:8px;white-space:nowrap;max-width:65vw;overflow:hidden;text-overflow:ellipsis}
+#hudRight{background:#13262cbb;border-radius:9px;padding:6px}
+#hudRight button{background:#2b4b53;min-height:36px}
+#mapNotice{font-size:11px;line-height:1.4;color:#c4dcce}
+@media(max-width:620px){#toolbar{max-width:79%;padding:4px}#toolbar button{font-size:12px;min-height:34px}#hint{top:93px}#stick{width:111px;height:111px}#knob{top:31px;left:31px;width:47px;height:47px}#panel{top:99px;max-height:55%}#status{bottom:2px}}
+</style>
+</head><body>
+<canvas id="game" aria-label="Игровое строительство от третьего лица"></canvas>
+<div id="crosshair">＋</div>
+<div id="hud">
+ <div id="toolbar">
+  <button id="btnOptions" type="button">⚙ Настройки</button>
+  <button id="btnPlay" type="button" class="active">🏃 Ходить</button>
+  <button id="btnBuild" type="button">🧱 Строить</button>
+ </div>
+ <div id="hudRight"><button id="btnAvatar" type="button">＋ GLB персонаж</button></div>
+</div>
+<div id="hint">Левый джойстик — идти · проведи справа — повернуть камеру</div>
+<div id="panel">
+ <div><strong>🏗️ Игровой редактор</strong></div>
+ <div><small>Выбери модуль касанием: цветные стрелки X/Y/Z — перемещение или размер, кольцо — поворот.</small></div>
+ <div><strong id="selectedName">Модуль не выбран</strong>
+ <button id="selectNear" type="button">◎ Ближайший</button><button id="selectClear" type="button">✕</button></div>
+ <div><button id="gMove" type="button">↔ XYZ</button>
+ <button id="gRotate" type="button">⟳ Поворот</button>
+ <button id="gScale" type="button">⤢ Размеры</button></div>
+ <div><label>X <input id="gX" type="number" step=".001"></label>
+ <label>Y <input id="gY" type="number" step=".001"></label>
+ <label>Z <input id="gZ" type="number" step=".001"></label></div>
+ <div><label>Поворот Y° <input id="gRot" type="number" step=".1"></label>
+ <label>Длина <input id="gLength" type="number" step=".001"></label></div>
+ <div><label>Высота/глубина <input id="gHeight" type="number" step=".001"></label>
+ <label>Толщина <input id="gThickness" type="number" step=".001"></label></div>
+ <div><button id="gApply" type="button">✓ Применить координаты и размеры</button></div>
+ <div><label>Шаг <input id="gStep" type="number" min=".001" max="1" step=".001" value=".001"> м</label>
+ <label>Ось <select id="gAxis"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select></label>
+ <button id="gMinus" type="button">−</button><button id="gPlus" type="button">＋</button></div>
+ <small>Магнит — шаг 25 см. Без магнита точность 1 мм. Размеры и перемещение сохраняются в игровом проекте.</small>
+ <hr style="border-color:#455a64">
+ <div><label>Деталь <select id="part">
+  <option value="wall">Стена</option><option value="door">Стена с дверью</option>
+  <option value="window">Стена с окном</option><option value="floor">Пол</option>
+  <option value="ceiling">Перекрытие</option><option value="roof">Плоская крыша</option>
+ </select></label></div>
+ <div><label>Длина <input id="length" type="number" min=".5" max="15" step=".1" value="2"> м</label>
+ <label>Высота <input id="height" type="number" min=".4" max="7" step=".1" value="2.6"> м</label></div>
+ <div><label>Толщина <input id="thickness" type="number" min=".05" max=".8" step=".01" value=".22"> м</label>
+ <label>Y <input id="elevation" type="number" min="0" max="24" step=".01" value="0"> м</label></div>
+ <div><label><input id="snap" type="checkbox" checked> Магнит, шаг 25 см</label></div>
+ <div><button type="button" id="btnDecor">🎨 Загрузить PNG/JPG</button>
+ <label><input id="useDecor" type="checkbox"> Красить новый модуль</label></div>
+ <div><button type="button" id="btnRotate">⟳ Поворот 90°</button><button type="button" id="btnUndo">↶ Назад</button><button type="button" id="btnDelete">🗑 Удалить ближайшую</button></div>
+ <hr style="border-color:#455a64">
+ <div><button type="button" id="btnSaveBundle">📦 Сохранить всё (GLB + дом + декор)</button></div>
+ <div><button type="button" id="btnLoadBundle">📥 Открыть проект Phoenix ZIP</button></div>
+ <div><button type="button" id="btnExport">💾 Экспорт карты JSON отдельно</button></div>
+ <div><small>GLB-персонаж сохраняется локально; камера от третьего лица. Установленные игровые модули сохраняются автоматически.</small></div>
+</div>
+<div id="bottom">
+ <div id="stick"><div id="knob"></div></div>
+ <div id="actions">
+  <button id="btnPlace" type="button">＋ Установить</button>
+  <button id="btnJump" type="button">↑ Камера</button>
+ </div>
+</div>
+<div id="status">Загрузка локального игрового режима…</div>
+<script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
+<script src="game-gizmo.js"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const canvas=$('game'),msg=$('status'),panel=$('panel'),options=$('btnOptions');
+const bridge=window.GameBridge||{
+ chooseCharacter(){msg.textContent='Выбор GLB работает в Android-приложении'},
+ chooseDecor(){msg.textContent='Выбор PNG/JPG работает в Android-приложении'},
+ saveBundle(){},loadBundle(){},exportGameMap(){},saveScene(json){}
+};
+if(!window.THREE||!THREE.GLTFLoader){
+ msg.textContent='Ошибка: локальный Three.js не загрузился';return;
+}
+let renderer;
+try{
+ renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'low-power'});
+ renderer.setPixelRatio(Math.min(1.25,devicePixelRatio||1));
+ renderer.setSize(innerWidth,innerHeight,false);
+ renderer.outputEncoding=THREE.sRGBEncoding;
+}catch(e){msg.textContent='WebGL не запустился: '+e.message;return;}
+const scene=new THREE.Scene();scene.background=new THREE.Color('#8eabb5');
+scene.fog=new THREE.Fog('#8eabb5',40,120);
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.05,160);
+const ambient=new THREE.HemisphereLight(0xffffff,0x6b776d,1.1);scene.add(ambient);
+const sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(12,22,16);scene.add(sun);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(120,120),new THREE.MeshLambertMaterial({color:'#7b9580'}));
+ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+const grid=new THREE.GridHelper(120,120,0xa2b7ab,0x647d6e);grid.position.y=.007;scene.add(grid);
+const player=new THREE.Group();scene.add(player);player.position.set(0,0,0);
+let character=null,mixer=null,idleAction=null,walkAction=null,playingWalk=false,decorTexture=null;
+const fallback=new THREE.Group(),body=new THREE.Mesh(new THREE.CylinderGeometry(.22,.25,1.24,12),new THREE.MeshLambertMaterial({color:0x25272a}));
+body.position.y=.9;fallback.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.18,10,8),new THREE.MeshLambertMaterial({color:0xe5b792}));
+head.position.y=1.68;fallback.add(head);player.add(fallback);
+const savedItems=[],objectMeshes=[],undoStack=[];
+let mode='walk',orientation=0,orbitYaw=0,orbitPitch=.29,preview=null,previewKey='',rotateDegrees=0,upCamera=0;
+let selectedIndex=-1,gizmo=null;
+let joyX=0,joyZ=0,keys=new Set(),cameraTouch=null,stickPointer=null;
+let framePrevious=0,saveCounter=0,isReady=false;
+const colorMat=(type,ghost=false,withDecor=false)=>new THREE.MeshStandardMaterial({
+ color:ghost?0x5aead4:withDecor&&decorTexture?0xffffff:
+  type==='floor'?0xe8e0cb:type==='roof'?0x768c99:0xece9dd,
+ map:!ghost&&withDecor&&decorTexture?decorTexture:null,
+ roughness:.85,transparent:ghost,opacity:ghost?0.46:1,depthWrite:!ghost
+});
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const quant=(v,n=.25)=>Math.round(v/n)*n;
+const finite=(v,fallback)=>Number.isFinite(Number(v))?Number(v):fallback;
+const read=(id,defaultVal,min,max)=>clamp(finite($(id).value,defaultVal),min,max);
+function setMessage(text){msg.textContent=text;}
+function dispose(root){
+ if(!root)return;root.traverse(o=>{
+  if(o.isMesh){o.geometry?.dispose();
+   const mats=Array.isArray(o.material)?o.material:[o.material];
+   mats.forEach(m=>m?.dispose());
+  }
+ });
+ root.removeFromParent();
+}
+function wallShape(data,ghost=false){
+ const group=new THREE.Group(),w=data.length,h=data.height,t=data.thickness,kind=data.kind;
+ const door=kind==='door',window=kind==='window';
+ const pieces=[];
+ const add=(a,b,c,d)=>{
+  const width=b-a,hh=d-c;if(width<.001||hh<.001)return;
+  const piece=new THREE.Mesh(new THREE.BoxGeometry(width,hh,t),colorMat(kind,ghost,data.decor));
+  piece.position.set((a+b)/2,(c+d)/2,0);pieces.push(piece);group.add(piece);
+ };
+ if(!door&&!window)add(-w/2,w/2,0,h);
+ else{
+  const opening=Math.min(w-.12,door?1.05:1.1),left=-opening/2,right=opening/2;
+  const sill=door?0:Math.min(.88,h*.35),top=Math.min(h-.08,sill+(door?2.05:1.2));
+  add(-w/2,left,0,h);add(right,w/2,0,h);
+  if(sill>.01)add(left,right,0,sill);
+  if(top<h-.01)add(left,right,top,h);
+ }
+ return group;
+}
+function makeItem(data,ghost=false){
+ const group=new THREE.Group();
+ const type=data.kind;
+ if(['wall','door','window'].includes(type)){
+  group.add(wallShape(data,ghost));
+ }else{
+  const slab=type==='roof'?.18:Math.min(.8,Math.max(.06,data.thickness));
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(data.length,slab,data.height),colorMat(type,ghost,data.decor));
+  mesh.position.y=slab/2;group.add(mesh);
+ }
+ group.position.set(data.x,data.y,data.z);
+ group.rotation.y=data.rot*Math.PI/180;
+ group.userData.part=data;scene.add(group);return group;
+}
+function endpoints(data){
+ const half=data.length/2,angle=data.rot*Math.PI/180,dx=Math.cos(angle)*half,dz=-Math.sin(angle)*half;
+ return [{x:data.x-dx,z:data.z-dz,y:data.y},{x:data.x+dx,z:data.z+dz,y:data.y}];
+}
+function findSocket(x,z,elevation,newData){
+ let best=null,bestGrade=.58;
+ for(const item of savedItems){
+  if(!['wall','door','window','imported-wall'].includes(item.kind))continue;
+  if(Math.abs(item.y-elevation)>.05)continue;
+  for(const end of endpoints(item)){
+   // Align the incoming wall's LEFT or RIGHT end, not its center.
+   const dir=newData.rot*Math.PI/180,dx=Math.cos(dir)*newData.length/2,dz=-Math.sin(dir)*newData.length/2;
+   for(const sign of [-1,1]){
+    const centerX=end.x+sign*dx,centerZ=end.z+sign*dz;
+    const grade=Math.hypot(centerX-x,centerZ-z);
+    if(grade<bestGrade){bestGrade=grade;best={x:centerX,z:centerZ};}
+   }
+  }
+ }
+ return best;
+}
+function placeData(){
+ let part=$('part').value;
+ let distance=2.45+read('length',2,.5,15)*.15;
+ const fwdX=-Math.sin(orbitYaw),fwdZ=-Math.cos(orbitYaw);
+ let x=player.position.x+fwdX*distance,z=player.position.z+fwdZ*distance;
+ const snap=$('snap').checked;
+ if(snap){x=quant(x);z=quant(z);}
+ const base=read('elevation',0,0,24);
+ const data={kind:part,x,y:base,z,rot:(rotateDegrees%360+360)%360,
+  length:read('length',2,.5,15),height:read('height',2.6,.4,7),
+  thickness:read('thickness',.22,.05,.8),decor:$('useDecor').checked};
+ if(snap&&['wall','door','window'].includes(part)){
+  const point=findSocket(x,z,base,data);if(point){data.x=point.x;data.z=point.z;}
+ }
+ return data;
+}
+function previewUpdate(){
+ if(mode!=='build'){if(preview){dispose(preview);preview=null;previewKey='';}return;}
+ const item=placeData();
+ // Only geometry/type changes rebuild the preview. Character movement and
+ // camera aim update the existing mesh transform, avoiding per-frame GL churn.
+ const key=[item.kind,item.length,item.height,item.thickness,item.decor].join(':');
+ if(!preview||previewKey!==key){
+  if(preview)dispose(preview);
+  preview=makeItem(item,true);previewKey=key;
+ }
+ preview.position.set(item.x,item.y,item.z);preview.rotation.y=item.rot*Math.PI/180;
+ preview.userData.part=item;
+}
+function record(){
+ undoStack.push(JSON.stringify(savedItems));
+ if(undoStack.length>25)undoStack.shift();
+}
+
+function selectedItem(){return selectedIndex>=0?savedItems[selectedIndex]:null;}
+function selectedMesh(){return selectedIndex>=0?objectMeshes[selectedIndex]:null;}
+const formMap={gX:'x',gY:'y',gZ:'z',gRot:'rot',gLength:'length',gHeight:'height',gThickness:'thickness'};
+function selectedForm(){
+ const item=selectedItem();
+ $('selectedName').textContent=item?'Выбрано: '+item.kind+' #'+(selectedIndex+1):'Модуль не выбран';
+ for(const [input,key] of Object.entries(formMap)){
+  const el=$(input);el.disabled=!item;
+  if(item&&document.activeElement!==el)el.value=Number(item[key]).toFixed(key==='rot'?1:3);
+ }
+ for(const id of ['gApply','gMinus','gPlus'])$(id).disabled=!item;
+}
+function selectModule(index){
+ selectedIndex=index>=0&&index<savedItems.length?index:-1;
+ gizmo?.select(selectedMesh()||null);
+ if(selectedIndex>=0)panel.classList.add('open');
+ selectedForm();
+}
+function gizmoMode(next){
+ gizmo?.setMode(next);
+ for(const [name,id] of [['move','gMove'],['rotate','gRotate'],['scale','gScale']])
+  $(id).classList.toggle('active',name===next);
+}
+function axisProperty(item,axis){
+ if(gizmo.mode==='move')return axis;
+ if(gizmo.mode==='rotate')return 'rot';
+ const slab=['floor','ceiling','roof'].includes(item.kind);
+ return axis==='x'?'length':axis==='y'?(slab?'thickness':'height'):
+  slab?'height':'thickness';
+}
+const limits={x:[-45,45],y:[0,30],z:[-45,45],rot:[-3600,3600],
+ length:[.5,15],height:[.4,7],thickness:[.05,.8]};
+function moveSelected(before,axis,delta){
+ const item=selectedItem(),root=selectedMesh();
+ if(!item||!root)return;
+ const prop=axis==='rotation'?'rot':axisProperty(item,axis);
+ const range=limits[prop];if(!range)return;
+ item[prop]=Number(clamp(before[prop]+delta,...range).toFixed(3));
+ if(prop==='x'||prop==='y'||prop==='z')root.position[prop]=item[prop];
+ else if(prop==='rot')root.rotation.y=item.rot*Math.PI/180;
+ else {
+  const slab=['floor','ceiling','roof'].includes(item.kind);
+  root.scale.set(item.length/before.length,
+   (slab?item.thickness/before.thickness:item.height/before.height),
+   slab?item.height/before.height:item.thickness/before.thickness);
+ }
+ root.userData.part=item;selectedForm();
+}
+function commitTransform(changed){
+ if(!changed){undoStack.pop();return;}
+ rebuild();persist();setMessage('Модуль изменён и сохранён');selectedForm();
+}
+function applySelected(){
+ const item=selectedItem();if(!item)return;
+ const values={};
+ for(const [input,prop] of Object.entries(formMap)){
+  const v=Number($(input).value),[low,high]=limits[prop];
+  if(!Number.isFinite(v)||v<low||v>high){setMessage('Некорректное значение: '+prop);return;}
+  values[prop]=Number(v.toFixed(3));
+ }
+ record();Object.assign(item,values);rebuild();persist();selectedForm();
+ setMessage('Координаты и размеры применены');
+}
+function nudge(direction){
+ const item=selectedItem();if(!item)return;
+ const axis=$('gAxis').value;
+ const step=clamp(Number($('gStep').value)||.001,.001,1)*direction;
+ const key=gizmo.mode==='rotate'?'rot':axisProperty(item,axis);
+ const [min,max]=limits[key];
+ record();item[key]=Number(clamp(item[key]+step,min,max).toFixed(3));
+ rebuild();persist();selectedForm();
+ setMessage(key+' = '+item[key]);
+}
+function selectNear(){
+ let best=3.2,index=-1;
+ for(let i=0;i<savedItems.length;i++){
+  const item=savedItems[i],d=Math.hypot(item.x-player.position.x,item.z-player.position.z);
+  if(d<best){best=d;index=i;}
+ }
+ selectModule(index);
+ if(index<0)setMessage('Рядом нет построенного модуля');
+}
+function serialize(){return JSON.stringify({version:1,items:savedItems,updated:new Date().toISOString()});}
+function persist(){
+ try{bridge.saveScene(serialize());saveCounter++;}catch(e){setMessage('Сохранение не удалось: '+e.message);}
+}
+function rebuild(){
+ for(const object of objectMeshes)dispose(object);
+ objectMeshes.length=0;
+ for(const item of savedItems)objectMeshes.push(makeItem(item));
+ if(selectedIndex>=savedItems.length)selectedIndex=-1;
+ gizmo?.select(selectedMesh()||null);
+ selectedForm();previewUpdate();
+}
+function validItem(obj){
+ if(!obj||!['wall','door','window','floor','ceiling','roof'].includes(obj.kind))return null;
+ const data={kind:obj.kind};
+ for(const key of ['x','y','z','rot','length','height','thickness']){
+  const number=Number(obj[key]);if(!Number.isFinite(number)||Math.abs(number)>100)return null;
+  data[key]=number;
+ }
+ data.length=clamp(data.length,.5,15);data.height=clamp(data.height,.4,7);
+ data.thickness=clamp(data.thickness,.05,.8);
+ data.decor=obj.decor===true;
+ return data;
+}
+function place(){
+ if(mode!=='build'){setMode('build');return;}
+ if(savedItems.length>=300){setMessage('Для планшета ограничение: 300 игровых деталей');return;}
+ const data=placeData();
+ if(savedItems.some(item=>item.kind===data.kind&&Math.abs(item.y-data.y)<.02&&
+  Math.hypot(item.x-data.x,item.z-data.z)<.06&&Math.abs(item.rot-data.rot)<1)){
+  setMessage('Здесь уже стоит такая деталь');return;
+ }
+ record();savedItems.push(data);objectMeshes.push(makeItem(data));
+ selectModule(savedItems.length-1);
+ persist();setMessage('Установлено: '+data.kind+' · деталей '+savedItems.length);
+ previewUpdate();
+}
+function removeNearest(){
+ const x=player.position.x-2*Math.sin(orbitYaw),z=player.position.z-2*Math.cos(orbitYaw);
+ let idx=-1,best=2.8;
+ for(let i=0;i<savedItems.length;i++){
+  const item=savedItems[i],d=Math.hypot(item.x-x,item.z-z);
+  if(d<best){best=d;idx=i;}
+ }
+ if(idx<0){setMessage('Рядом нет установленной игровой детали');return;}
+ record();savedItems.splice(idx,1);rebuild();persist();setMessage('Деталь удалена');
+}
+function undo(){
+ const snapshot=undoStack.pop();if(!snapshot){setMessage('Нет изменений для отмены');return;}
+ savedItems.splice(0,savedItems.length,...JSON.parse(snapshot));rebuild();persist();setMessage('Последнее действие отменено');
+}
+function setMode(next){
+ mode=next;$('btnPlay').classList.toggle('active',mode==='walk');
+ $('btnBuild').classList.toggle('active',mode==='build');
+ $('btnPlace').style.display=mode==='build'?'block':'none';
+ $('btnDelete').disabled=mode!=='build';
+ if(mode==='build')panel.classList.add('open');else panel.classList.remove('open');
+ if(gizmo)gizmo.group.visible=mode==='build'&&!!gizmo.target;
+ $('hint').textContent=mode==='walk'?'Левый джойстик — ходьба · справа — камера':
+  'Магнит 25 см + стыки стен · цель — зелёная деталь · «Установить»';
+ previewUpdate();
+}
+function collides(px,pz){
+ for(const s of savedItems){
+  if(!['wall','door','window','imported-wall'].includes(s.kind))continue;
+  if(player.position.y>s.y+s.height-.18||player.position.y+1.15<s.y)continue;
+  const dx=px-s.x,dz=pz-s.z,angle=s.rot*Math.PI/180;
+  const lx=dx*Math.cos(angle)-dz*Math.sin(angle);
+  const lz=dx*Math.sin(angle)+dz*Math.cos(angle);
+  if(Math.abs(lx)<s.length/2+.23&&Math.abs(lz)<s.thickness/2+.23){
+   // Door openings are not colliders if the avatar passes through center.
+   if(s.kind==='door'&&Math.abs(lx)<.48&&player.position.y>=s.y-.05)continue;
+   return true;
+  }
+ }
+ return false;
+}
+const joystick=$('stick'),knob=$('knob');
+function joyPointer(e){
+ const rect=joystick.getBoundingClientRect(),cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+ let dx=(e.clientX-cx)/(rect.width*.32),dy=(e.clientY-cy)/(rect.height*.32);
+ const r=Math.max(1,Math.hypot(dx,dy));dx/=r;dy/=r;
+ joyX=clamp(dx,-1,1);joyZ=clamp(-dy,-1,1);
+ knob.style.transform='translate('+(joyX*rect.width*.27)+'px,'+(-joyZ*rect.height*.27)+'px)';
+}
+joystick.addEventListener('pointerdown',e=>{stickPointer=e.pointerId;joystick.setPointerCapture(e.pointerId);joyPointer(e);});
+joystick.addEventListener('pointermove',e=>{if(e.pointerId===stickPointer)joyPointer(e);});
+function resetStick(e){if(e.pointerId!==stickPointer)return;stickPointer=null;joyX=joyZ=0;knob.style.transform='';}
+joystick.addEventListener('pointerup',resetStick);joystick.addEventListener('pointercancel',resetStick);
+canvas.addEventListener('pointerdown',e=>{
+ if(e.pointerType==='touch'&&e.clientX<innerWidth*.35)return;
+ if(mode==='build'&&gizmo?.pointerDown(e,objectMeshes)){
+  if(gizmo.drag)canvas.setPointerCapture(e.pointerId);
+  return;
+ }
+ cameraTouch={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{
+ if(gizmo?.pointerMove(e))return;
+ if(!cameraTouch||cameraTouch.id!==e.pointerId)return;
+ const dx=e.clientX-cameraTouch.x,dy=e.clientY-cameraTouch.y;
+ orbitYaw-=dx*.006;orbitPitch=clamp(orbitPitch+dy*.004,-.1,1.05);
+ cameraTouch.x=e.clientX;cameraTouch.y=e.clientY;
+});
+canvas.addEventListener('pointerup',e=>{
+ gizmo?.pointerUp(e);
+ if(cameraTouch?.id===e.pointerId)cameraTouch=null;
+});
+canvas.addEventListener('pointercancel',e=>{
+ gizmo?.pointerUp(e);
+ if(cameraTouch?.id===e.pointerId)cameraTouch=null;
+});
+window.addEventListener('keydown',e=>{if(!['INPUT','SELECT'].includes(document.activeElement?.tagName))keys.add(e.key.toLowerCase());});
+window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+function loadDecor(){
+ new THREE.TextureLoader().load('decor?version='+Date.now(),texture=>{
+  texture.wrapS=THREE.RepeatWrapping;texture.wrapT=THREE.RepeatWrapping;
+  texture.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+  texture.encoding=THREE.sRGBEncoding;
+  if(decorTexture)decorTexture.dispose();
+  decorTexture=texture;
+  if(savedItems.length)rebuild();
+  setMessage('Текстура загружена — выбери «Красить новый модуль»');
+ },undefined,()=>{});
+}
+function loadAvatar(){
+ const loader=new THREE.GLTFLoader();
+ loader.load('model.glb',gltf=>{
+  if(character)dispose(character);
+  const art=new THREE.Group(),model=gltf.scene;
+  const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3());
+  if(size.y<.01){setMessage('GLB не имеет корректной высоты');return;}
+  const scale=clamp(1.8/size.y,.015,50);
+  model.scale.setScalar(scale);model.position.set(-(box.min.x+box.max.x)/2*scale,-box.min.y*scale,
+   -(box.min.z+box.max.z)/2*scale);
+  art.add(model);player.add(art);character=art;
+  fallback.visible=false;
+  if(gltf.animations?.length){
+   mixer=new THREE.AnimationMixer(model);
+   const clips=gltf.animations;
+   const idle=clips.find(c=>/idle|stand/i.test(c.name))||clips[0];
+   const walk=clips.find(c=>/walk|run|move/i.test(c.name))||null;
+   idleAction=mixer.clipAction(idle);idleAction.play();
+   walkAction=walk?mixer.clipAction(walk):null;
+  }
+  setMessage('Персонаж GLB загружен · можно ходить и строить');
+ },undefined,()=>setMessage('Пока показан манекен. Нажми «＋ GLB персонаж».'));
+}
+function switchWalk(walking){
+ if(!mixer||!walkAction||walking===playingWalk)return;
+ playingWalk=walking;
+ const from=walking?idleAction:walkAction,to=walking?walkAction:idleAction;
+ if(from)from.fadeOut(.18);
+ if(to){to.reset().fadeIn(.18).play();}
+}
+async function restore(){
+ try{
+  const result=await fetch('game-scene.json');const payload=await result.json();
+  if(payload.version===1&&Array.isArray(payload.items)){
+   savedItems.splice(0,savedItems.length,...payload.items.slice(0,300).map(validItem).filter(Boolean));
+   rebuild();
+  }
+ }catch(e){setMessage('Карту игрового режима восстановить не удалось');}
+ isReady=true;
+ setMode('walk');
+}
+function update(delta){
+ let mx=joyX,mz=joyZ;
+ if(keys.has('a')||keys.has('arrowleft'))mx-=1;
+ if(keys.has('d')||keys.has('arrowright'))mx+=1;
+ if(keys.has('w')||keys.has('arrowup'))mz+=1;
+ if(keys.has('s')||keys.has('arrowdown'))mz-=1;
+ const mag=Math.hypot(mx,mz);
+ if(mag>.01){
+  mx/=Math.max(1,mag);mz/=Math.max(1,mag);
+  const forwardX=-Math.sin(orbitYaw),forwardZ=-Math.cos(orbitYaw);
+  const rightX=Math.cos(orbitYaw),rightZ=-Math.sin(orbitYaw);
+  const speed=2.4*delta;
+  const dx=(mx*rightX+mz*forwardX)*speed;
+  const dz=(mx*rightZ+mz*forwardZ)*speed;
+  if(!collides(player.position.x+dx,player.position.z))player.position.x+=dx;
+  if(!collides(player.position.x,player.position.z+dz))player.position.z+=dz;
+  orientation=Math.atan2(dx,dz);player.rotation.y=orientation;
+ }
+ switchWalk(mag>.07);
+ if(mixer)mixer.update(delta);
+ const focus=new THREE.Vector3(player.position.x,player.position.y+1.28,player.position.z);
+ const dist=4.1+upCamera;
+ const desired=new THREE.Vector3(focus.x+Math.sin(orbitYaw)*dist,
+  focus.y+Math.sin(orbitPitch)*dist+1.35,
+  focus.z+Math.cos(orbitYaw)*dist);
+ camera.position.lerp(desired,Math.min(1,delta*12));
+ camera.lookAt(focus);
+ if(mode==='build'){previewUpdate();gizmo?.update();}
+}
+function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}
+window.addEventListener('resize',resize);
+document.addEventListener('visibilitychange',()=>{framePrevious=0;});
+function frame(time){
+ requestAnimationFrame(frame);
+ if(document.hidden)return;
+ const delta=framePrevious?clamp((time-framePrevious)/1000,0,.06):.032;
+ if(delta<1/32)return;
+ framePrevious=time;
+ update(delta);renderer.render(scene,camera);
+}
+gizmo=new PhoenixGizmo(scene,camera,canvas,{
+ select:selectModule,begin:record,change:moveSelected,end:commitTransform,
+ snap:()=>$('snap').checked
+});
+gizmoMode('move');selectedForm();
+$('selectNear').addEventListener('click',selectNear);
+$('selectClear').addEventListener('click',()=>selectModule(-1));
+$('gMove').addEventListener('click',()=>gizmoMode('move'));
+$('gRotate').addEventListener('click',()=>gizmoMode('rotate'));
+$('gScale').addEventListener('click',()=>gizmoMode('scale'));
+$('gApply').addEventListener('click',applySelected);
+$('gMinus').addEventListener('click',()=>nudge(-1));
+$('gPlus').addEventListener('click',()=>nudge(1));
+$('btnPlay').addEventListener('click',()=>setMode('walk'));
+$('btnBuild').addEventListener('click',()=>setMode('build'));
+$('btnAvatar').addEventListener('click',()=>bridge.chooseCharacter());
+$('btnOptions').addEventListener('click',()=>panel.classList.toggle('open'));
+$('btnPlace').addEventListener('click',place);
+$('btnRotate').addEventListener('click',()=>{rotateDegrees=(rotateDegrees+90)%360;previewUpdate();});
+$('btnUndo').addEventListener('click',undo);
+$('btnDelete').addEventListener('click',removeNearest);
+$('btnJump').addEventListener('click',()=>{upCamera=upCamera===0?2:0;});
+$('btnDecor').addEventListener('click',()=>bridge.chooseDecor());
+$('btnSaveBundle').addEventListener('click',()=>{persist();bridge.saveBundle();});
+$('btnLoadBundle').addEventListener('click',()=>bridge.loadBundle());
+$('btnExport').addEventListener('click',()=>bridge.exportGameMap());
+for(const id of ['part','length','height','thickness','elevation','snap','useDecor'])
+ $(id).addEventListener('change',previewUpdate);
+$('btnPlace').style.display='none';
+loadDecor();loadAvatar();restore();requestAnimationFrame(frame);
+})();
+</script>
+</body></html>
