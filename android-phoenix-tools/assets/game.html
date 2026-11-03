@@ -49,6 +49,25 @@ input[type=number]{width:70px;padding:5px}
 <div id="hint">Левый джойстик — идти · проведи справа — повернуть камеру</div>
 <div id="panel">
  <div><strong>🏗️ Игровой редактор</strong></div>
+ <div><small>Выбери модуль касанием: цветные стрелки X/Y/Z — перемещение или размер, кольцо — поворот.</small></div>
+ <div><strong id="selectedName">Модуль не выбран</strong>
+ <button id="selectNear" type="button">◎ Ближайший</button><button id="selectClear" type="button">✕</button></div>
+ <div><button id="gMove" type="button">↔ XYZ</button>
+ <button id="gRotate" type="button">⟳ Поворот</button>
+ <button id="gScale" type="button">⤢ Размеры</button></div>
+ <div><label>X <input id="gX" type="number" step=".001"></label>
+ <label>Y <input id="gY" type="number" step=".001"></label>
+ <label>Z <input id="gZ" type="number" step=".001"></label></div>
+ <div><label>Поворот Y° <input id="gRot" type="number" step=".1"></label>
+ <label>Длина <input id="gLength" type="number" step=".001"></label></div>
+ <div><label>Высота/глубина <input id="gHeight" type="number" step=".001"></label>
+ <label>Толщина <input id="gThickness" type="number" step=".001"></label></div>
+ <div><button id="gApply" type="button">✓ Применить координаты и размеры</button></div>
+ <div><label>Шаг <input id="gStep" type="number" min=".001" max="1" step=".001" value=".001"> м</label>
+ <label>Ось <select id="gAxis"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select></label>
+ <button id="gMinus" type="button">−</button><button id="gPlus" type="button">＋</button></div>
+ <small>Магнит — шаг 25 см. Без магнита точность 1 мм. Размеры и перемещение сохраняются в игровом проекте.</small>
+ <hr style="border-color:#455a64">
  <div><label>Деталь <select id="part">
   <option value="wall">Стена</option><option value="door">Стена с дверью</option>
   <option value="window">Стена с окном</option><option value="floor">Пол</option>
@@ -80,6 +99,7 @@ input[type=number]{width:70px;padding:5px}
 <div id="status">Загрузка локального игрового режима…</div>
 <script src="three.min.js"></script>
 <script src="GLTFLoader.js"></script>
+<script src="game-gizmo.js"></script>
 <script>
 (function(){
 'use strict';
@@ -118,6 +138,7 @@ const head=new THREE.Mesh(new THREE.SphereGeometry(.18,10,8),new THREE.MeshLambe
 head.position.y=1.68;fallback.add(head);player.add(fallback);
 const savedItems=[],importedItems=[],objectMeshes=[],undoStack=[];
 let mode='walk',orientation=0,orbitYaw=0,orbitPitch=.29,preview=null,previewKey='',rotateDegrees=0,upCamera=0;
+let selectedIndex=-1,gizmo=null;
 let joyX=0,joyZ=0,keys=new Set(),cameraTouch=null,stickPointer=null;
 let framePrevious=0,saveCounter=0,isReady=false;
 const colorMat=(type,ghost=false,withDecor=false)=>new THREE.MeshStandardMaterial({
@@ -227,6 +248,89 @@ function record(){
  undoStack.push(JSON.stringify(savedItems));
  if(undoStack.length>25)undoStack.shift();
 }
+
+function selectedItem(){return selectedIndex>=0?savedItems[selectedIndex]:null;}
+function selectedMesh(){return selectedIndex>=0?objectMeshes[selectedIndex]:null;}
+const formMap={gX:'x',gY:'y',gZ:'z',gRot:'rot',gLength:'length',gHeight:'height',gThickness:'thickness'};
+function selectedForm(){
+ const item=selectedItem();
+ $('selectedName').textContent=item?'Выбрано: '+item.kind+' #'+(selectedIndex+1):'Модуль не выбран';
+ for(const [input,key] of Object.entries(formMap)){
+  const el=$(input);el.disabled=!item;
+  if(item&&document.activeElement!==el)el.value=Number(item[key]).toFixed(key==='rot'?1:3);
+ }
+ for(const id of ['gApply','gMinus','gPlus'])$(id).disabled=!item;
+}
+function selectModule(index){
+ selectedIndex=index>=0&&index<savedItems.length?index:-1;
+ gizmo?.select(selectedMesh()||null);
+ if(selectedIndex>=0)panel.classList.add('open');
+ selectedForm();
+}
+function gizmoMode(next){
+ gizmo?.setMode(next);
+ for(const [name,id] of [['move','gMove'],['rotate','gRotate'],['scale','gScale']])
+  $(id).classList.toggle('active',name===next);
+}
+function axisProperty(item,axis){
+ if(gizmo.mode==='move')return axis;
+ if(gizmo.mode==='rotate')return 'rot';
+ const slab=['floor','ceiling','roof'].includes(item.kind);
+ return axis==='x'?'length':axis==='y'?(slab?'thickness':'height'):
+  slab?'height':'thickness';
+}
+const limits={x:[-45,45],y:[0,30],z:[-45,45],rot:[-3600,3600],
+ length:[.5,15],height:[.4,7],thickness:[.05,.8]};
+function moveSelected(before,axis,delta){
+ const item=selectedItem(),root=selectedMesh();
+ if(!item||!root)return;
+ const prop=axis==='rotation'?'rot':axisProperty(item,axis);
+ const range=limits[prop];if(!range)return;
+ item[prop]=Number(clamp(before[prop]+delta,...range).toFixed(3));
+ if(prop==='x'||prop==='y'||prop==='z')root.position[prop]=item[prop];
+ else if(prop==='rot')root.rotation.y=item.rot*Math.PI/180;
+ else {
+  const slab=['floor','ceiling','roof'].includes(item.kind);
+  root.scale.set(item.length/before.length,
+   (slab?item.thickness/before.thickness:item.height/before.height),
+   slab?item.height/before.height:item.thickness/before.thickness);
+ }
+ root.userData.part=item;selectedForm();
+}
+function commitTransform(changed){
+ if(!changed){undoStack.pop();return;}
+ rebuild();persist();setMessage('Модуль изменён и сохранён');selectedForm();
+}
+function applySelected(){
+ const item=selectedItem();if(!item)return;
+ const values={};
+ for(const [input,prop] of Object.entries(formMap)){
+  const v=Number($(input).value),[low,high]=limits[prop];
+  if(!Number.isFinite(v)||v<low||v>high){setMessage('Некорректное значение: '+prop);return;}
+  values[prop]=Number(v.toFixed(3));
+ }
+ record();Object.assign(item,values);rebuild();persist();selectedForm();
+ setMessage('Координаты и размеры применены');
+}
+function nudge(direction){
+ const item=selectedItem();if(!item)return;
+ const axis=$('gAxis').value;
+ const step=clamp(Number($('gStep').value)||.001,.001,1)*direction;
+ const key=gizmo.mode==='rotate'?'rot':axisProperty(item,axis);
+ const [min,max]=limits[key];
+ record();item[key]=Number(clamp(item[key]+step,min,max).toFixed(3));
+ rebuild();persist();selectedForm();
+ setMessage(key+' = '+item[key]);
+}
+function selectNear(){
+ let best=3.2,index=-1;
+ for(let i=0;i<savedItems.length;i++){
+  const item=savedItems[i],d=Math.hypot(item.x-player.position.x,item.z-player.position.z);
+  if(d<best){best=d;index=i;}
+ }
+ selectModule(index);
+ if(index<0)setMessage('Рядом нет построенного модуля');
+}
 function serialize(){return JSON.stringify({version:1,items:savedItems,updated:new Date().toISOString()});}
 function persist(){
  try{bridge.saveScene(serialize());saveCounter++;}catch(e){setMessage('Сохранение не удалось: '+e.message);}
@@ -235,7 +339,9 @@ function rebuild(){
  for(const object of objectMeshes)dispose(object);
  objectMeshes.length=0;
  for(const item of savedItems)objectMeshes.push(makeItem(item));
- previewUpdate();
+ if(selectedIndex>=savedItems.length)selectedIndex=-1;
+ gizmo?.select(selectedMesh()||null);
+ selectedForm();previewUpdate();
 }
 function validItem(obj){
  if(!obj||!['wall','door','window','floor','ceiling','roof'].includes(obj.kind))return null;
@@ -258,6 +364,7 @@ function place(){
   setMessage('Здесь уже стоит такая деталь');return;
  }
  record();savedItems.push(data);objectMeshes.push(makeItem(data));
+ selectModule(savedItems.length-1);
  persist();setMessage('Установлено: '+data.kind+' · деталей '+savedItems.length);
  previewUpdate();
 }
@@ -281,6 +388,7 @@ function setMode(next){
  $('btnPlace').style.display=mode==='build'?'block':'none';
  $('btnDelete').disabled=mode!=='build';
  if(mode==='build')panel.classList.add('open');else panel.classList.remove('open');
+ if(gizmo)gizmo.group.visible=mode==='build'&&!!gizmo.target;
  $('hint').textContent=mode==='walk'?'Левый джойстик — ходьба · справа — камера':
   'Магнит 25 см + стыки стен · цель — зелёная деталь · «Установить»';
  previewUpdate();
@@ -314,16 +422,27 @@ function resetStick(e){if(e.pointerId!==stickPointer)return;stickPointer=null;jo
 joystick.addEventListener('pointerup',resetStick);joystick.addEventListener('pointercancel',resetStick);
 canvas.addEventListener('pointerdown',e=>{
  if(e.pointerType==='touch'&&e.clientX<innerWidth*.35)return;
+ if(mode==='build'&&gizmo?.pointerDown(e,objectMeshes)){
+  if(gizmo.drag)canvas.setPointerCapture(e.pointerId);
+  return;
+ }
  cameraTouch={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove',e=>{
+ if(gizmo?.pointerMove(e))return;
  if(!cameraTouch||cameraTouch.id!==e.pointerId)return;
  const dx=e.clientX-cameraTouch.x,dy=e.clientY-cameraTouch.y;
  orbitYaw-=dx*.006;orbitPitch=clamp(orbitPitch+dy*.004,-.1,1.05);
  cameraTouch.x=e.clientX;cameraTouch.y=e.clientY;
 });
-canvas.addEventListener('pointerup',e=>{if(cameraTouch?.id===e.pointerId)cameraTouch=null;});
-canvas.addEventListener('pointercancel',e=>{if(cameraTouch?.id===e.pointerId)cameraTouch=null;});
+canvas.addEventListener('pointerup',e=>{
+ gizmo?.pointerUp(e);
+ if(cameraTouch?.id===e.pointerId)cameraTouch=null;
+});
+canvas.addEventListener('pointercancel',e=>{
+ gizmo?.pointerUp(e);
+ if(cameraTouch?.id===e.pointerId)cameraTouch=null;
+});
 window.addEventListener('keydown',e=>{if(!['INPUT','SELECT'].includes(document.activeElement?.tagName))keys.add(e.key.toLowerCase());});
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 function loadDecor(){
@@ -448,7 +567,7 @@ function update(delta){
   focus.z+Math.cos(orbitYaw)*dist);
  camera.position.lerp(desired,Math.min(1,delta*12));
  camera.lookAt(focus);
- if(mode==='build')previewUpdate();
+ if(mode==='build'){previewUpdate();gizmo?.update();}
 }
 function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}
 window.addEventListener('resize',resize);
@@ -461,6 +580,19 @@ function frame(time){
  framePrevious=time;
  update(delta);renderer.render(scene,camera);
 }
+gizmo=new PhoenixGizmo(scene,camera,canvas,{
+ select:selectModule,begin:record,change:moveSelected,end:commitTransform,
+ snap:()=>$('snap').checked
+});
+gizmoMode('move');selectedForm();
+$('selectNear').addEventListener('click',selectNear);
+$('selectClear').addEventListener('click',()=>selectModule(-1));
+$('gMove').addEventListener('click',()=>gizmoMode('move'));
+$('gRotate').addEventListener('click',()=>gizmoMode('rotate'));
+$('gScale').addEventListener('click',()=>gizmoMode('scale'));
+$('gApply').addEventListener('click',applySelected);
+$('gMinus').addEventListener('click',()=>nudge(-1));
+$('gPlus').addEventListener('click',()=>nudge(1));
 $('btnPlay').addEventListener('click',()=>setMode('walk'));
 $('btnBuild').addEventListener('click',()=>setMode('build'));
 $('btnPlanner').addEventListener('click',()=>bridge.openNativeBuilder());
