@@ -1,0 +1,35 @@
+name: Phoenix 3D - architectural project storage audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/phoenix3d-planner-offline]
+    paths:
+      - 'scripts/phoenix3d/project_schema.py'
+      - '.github/workflows/phoenix3d-project-audit.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get 6 release segments and original base APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release build/report
+          gh release download 3D --repo RayZenGreallyzzz/PhoenixWorldBuilder --dir release --clobber
+          python3 scripts/phoenix3d/reconstruct.py release build/original.xapk
+          python3 - <<'PY'
+          import zipfile,pathlib
+          with zipfile.ZipFile('build/original.xapk') as z:
+            pathlib.Path('build/base.apk').write_bytes(z.read('com.planner5d.planner5d.apk'))
+          PY
+      - name: Examine actual local project format
+        run: |
+          python3 scripts/phoenix3d/project_schema.py build/base.apk | tee build/report/project-schema.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix3D-Project-Schema-Audit
+          path: build/report/project-schema.txt
