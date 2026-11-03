@@ -52,6 +52,7 @@ jobs:
           node tests/test-export.cjs
           node tests/test-zip.cjs
           node tests/test-full-library-import.cjs
+          node tests/test-embedded-library-index.cjs
           node tests/test-build-core.cjs
           node tests/test-physical-contact-chain.cjs
           node tests/test-game-aim-wall-snap.cjs
