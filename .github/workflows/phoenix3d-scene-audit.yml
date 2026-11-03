@@ -38,6 +38,8 @@ jobs:
             -d build/java build/base.apk >build/report/jadx.log 2>&1 || true
           python3 scripts/phoenix3d/scene_audit.py build/java/sources >build/report/scene-audit.txt
           head -n 230 build/report/scene-audit.txt
+          python3 scripts/phoenix3d/scene_probe.py build/java/sources >build/report/scene-probe.txt
+          head -n 270 build/report/scene-probe.txt
       - name: Publish targeted report
         uses: actions/upload-artifact@v4
         with:
