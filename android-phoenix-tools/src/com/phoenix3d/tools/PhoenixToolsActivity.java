@@ -36,7 +36,7 @@ public final class PhoenixToolsActivity extends Activity {
   super.onCreate(state);
   root=new File(getFilesDir(),"phoenix3d");model=new File(root,"model.glb");
   decor=new File(root,"decor.bin");appearance=new File(root,"appearance.json");root.mkdirs();
-  decorMime=getPreferences(0).getString("decor_mime","image/png");
+  decorMime=getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).getString("decor_mime","image/png");
   ScrollView scroll=new ScrollView(this);
   LinearLayout body=new LinearLayout(this);body.setOrientation(1);
   int m=dp(12);body.setPadding(m,m,m,m);scroll.addView(body);
@@ -93,10 +93,10 @@ public final class PhoenixToolsActivity extends Activity {
   endpoint=field(body,"URL папки WebDAV, например https://cloud.example/remote.php/dav/files/user/Phoenix3D/",false);
   username=field(body,"Логин WebDAV",false);
   password=field(body,"Пароль приложения WebDAV — не сохраняется",true);
-  endpoint.setText(getPreferences(0).getString("webdav_url",""));
-  username.setText(getPreferences(0).getString("webdav_user",""));
-  button(body,"☁ Загрузить резервную копию моих GLB и декора",()->uploadWebDav());
-  button(body,"☁ Восстановить мои GLB и декор из WebDAV",()->downloadWebDav());
+  endpoint.setText(getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).getString("webdav_url",""));
+  username.setText(getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).getString("webdav_user",""));
+  button(body,"☁ Сохранить в WebDAV: GLB, декор и игровую карту",()->uploadWebDav());
+  button(body,"☁ Восстановить GLB, декор и карту из WebDAV",()->downloadWebDav());
   button(body,"💾 Сохранить резервную копию в память Android",()->{
    try{
     pendingBackup=makeBackup();Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -157,8 +157,13 @@ public final class PhoenixToolsActivity extends Activity {
     if(opt.outWidth<1||opt.outHeight<1||opt.outWidth>8192||opt.outHeight>8192){
      decor.delete();throw new IOException("Изображение повреждено или слишком большое");
     }
-    decorMime="image/jpeg".equals(getContentResolver().getType(uri))?"image/jpeg":"image/png";
-    getPreferences(0).edit().putString("decor_mime",decorMime).apply();
+    try(InputStream magic=new FileInputStream(decor)){
+     int p=magic.read(),q=magic.read();
+     if(p==255&&q==216)decorMime="image/jpeg";
+     else if(p==137&&q==80)decorMime="image/png";
+     else {decor.delete();throw new IOException("Только PNG или JPG");}
+    }
+    getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).edit().putString("decor_mime",decorMime).apply();
     msg("Текстура добавлена. Выбери инструмент в 3D-окне и коснись поверхности.");refreshViewer();
    }else if(code==SAVE_ZIP){
     if(pendingBackup==null)pendingBackup=makeBackup();
@@ -176,7 +181,8 @@ public final class PhoenixToolsActivity extends Activity {
  private File makeBackup()throws IOException{
   File archive=new File(getCacheDir(),"Phoenix3D-assets.zip");
   try(ZipOutputStream out=new ZipOutputStream(new FileOutputStream(archive))){
-   for(File f:new File[]{model,decor,appearance}){
+   for(File f:new File[]{model,decor,appearance,new File(root,"game-scene.json"),
+    new File(root,"planner-project.json")}){
     if(!f.isFile())continue;out.putNextEntry(new ZipEntry(f.getName()));
     try(InputStream in=new FileInputStream(f)){transfer(in,out);}out.closeEntry();
    }
@@ -189,8 +195,12 @@ public final class PhoenixToolsActivity extends Activity {
     if("model.glb".equals(entry.getName()))target=model;
     else if("decor.bin".equals(entry.getName()))target=decor;
     else if("appearance.json".equals(entry.getName()))target=appearance;
+    else if("game-scene.json".equals(entry.getName()))target=new File(root,"game-scene.json");
+    else if("planner-project.json".equals(entry.getName()))target=new File(root,"planner-project.json");
     else throw new IOException("Неожиданный файл в архиве: "+entry.getName());
-    long limit=target.equals(model)?MAX_MODEL:target.equals(decor)?MAX_DECOR:65536;
+    long limit=target.equals(model)?MAX_MODEL:target.equals(decor)?MAX_DECOR:
+      target.getName().equals("planner-project.json")?8L*1024*1024:
+      target.getName().equals("game-scene.json")?1024L*1024:65536;
     copyBounded(zip,target,limit);zip.closeEntry();
    }
   }
@@ -198,7 +208,7 @@ public final class PhoenixToolsActivity extends Activity {
  private void uploadWebDav(){
   String url=endpoint.getText().toString().trim(),login=username.getText().toString(),pwd=password.getText().toString();
   if(!url.startsWith("https://")){msg("WebDAV требует адрес HTTPS");return;}
-  getPreferences(0).edit().putString("webdav_url",url).putString("webdav_user",login).apply();
+  getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).edit().putString("webdav_url",url).putString("webdav_user",login).apply();
   msg("Подготовка резервной копии…");
   new Thread(()->{
    try{
@@ -223,7 +233,7 @@ public final class PhoenixToolsActivity extends Activity {
  private void downloadWebDav(){
   String url=endpoint.getText().toString().trim(),login=username.getText().toString(),pwd=password.getText().toString();
   if(!url.startsWith("https://")){msg("WebDAV требует адрес HTTPS");return;}
-  getPreferences(0).edit().putString("webdav_url",url).putString("webdav_user",login).apply();
+  getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).edit().putString("webdav_url",url).putString("webdav_user",login).apply();
   msg("Загрузка резервной копии из своего WebDAV…");
   new Thread(()->{
    try{
