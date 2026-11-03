@@ -19,6 +19,9 @@ const raycast=(root,x,y)=>{
 for(const [kind,openY,solidY] of [['pwindow',1.4,.4],['pdoor',1,2.4]]){
  const root=ParametricWall.build(kind);
  assert(root.userData.pwbParametricWall,'Parametric flag');
+ assert.equal(root.children.length,1,'Facade and opening jambs share ONE contiguous mesh');
+ assert(root.children[0].geometry.attributes.uv,'Continuous facade UVs');
+ assert(root.children[0].geometry.attributes.normal,'Explicit face normals');
  near(new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()).x,2,'Width '+kind);
  assert.equal(raycast(root,0,openY).length,0,kind+' has real through opening');
  assert(raycast(root,.87,openY).length>0,'Solid side jamb '+kind);
