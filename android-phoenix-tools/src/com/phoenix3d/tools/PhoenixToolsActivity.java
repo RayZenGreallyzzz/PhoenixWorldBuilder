@@ -49,6 +49,9 @@ public final class PhoenixToolsActivity extends Activity {
    Intent i=new Intent();i.setClassName(getPackageName(),"com.planner5d.library.activity.Main");
    startActivity(i);
   });
+  button(body,"🎮 Игровая стройка с GLB-персонажем",()->{
+   startActivity(new Intent(this,PhoenixGameActivity.class));
+  });
   button(body,"📂 Выбрать персонажа или модуль GLB (до 48 МБ)",()->openFile(PICK_GLB,"*/*"));
   button(body,"🎨 Выбрать PNG/JPG для декора (до 12 МБ)",()->openFile(PICK_DECOR,"image/*"));
   status=new TextView(this);status.setText("GLB и декор хранятся только на этом устройстве.");
