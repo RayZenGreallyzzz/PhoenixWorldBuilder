@@ -54,10 +54,20 @@ jobs:
           npm install --prefix build/node --no-audit --no-fund --no-package-lock three@0.140.0
           mkdir -p build/viewer
           cp android-phoenix-tools/assets/index.html build/viewer/index.html
+          cp android-phoenix-tools/assets/game.html build/viewer/game.html
           cp build/node/node_modules/three/build/three.min.js build/viewer/three.min.js
           cp build/node/node_modules/three/examples/js/loaders/GLTFLoader.js build/viewer/GLTFLoader.js
           cp build/node/node_modules/three/examples/js/controls/OrbitControls.js build/viewer/OrbitControls.js
           node --check build/viewer/GLTFLoader.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('build/viewer/game.html').read_text()
+          scripts=re.findall(r'<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>',html)
+          assert len(scripts)==1, 'Expected one offline game controller'
+          Path('build/viewer/game-controller.js').write_text(scripts[0])
+          PY
+          node --check build/viewer/game-controller.js
       - name: Patch original Planner APK without touching its scene implementation
         run: |
           python3 scripts/phoenix3d/build_tools_xapk.py \
@@ -66,6 +76,8 @@ jobs:
             --output build/phoenix_patched_unsigned.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree \
             build/phoenix_patched_unsigned.apk AndroidManifest.xml | grep PhoenixToolsActivity
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree \
+            build/phoenix_patched_unsigned.apk AndroidManifest.xml | grep PhoenixGameActivity
       - name: Sign all 9 APK components with one temporary test key
         run: |
           keytool -genkeypair -keystore build/phoenix-tools-test.jks -storepass phoenix3dtest \
@@ -103,9 +115,14 @@ jobs:
               assert z.testzip() is None and len(z.namelist())==9
           result={'size':target.stat().st_size,'sha256':hashlib.file_digest(target.open('rb'),'sha256').hexdigest(),
             'status':'TEST ONLY','android_verified':False,
-            'features':['in-app additional launcher','local GLB viewer','PNG/JPG texture and stickers',
+            'features':['same-package third-person playable avatar with touch joystick',
+             'separate local wall/floor snapping and game map save (not native Planner project)',
+             'read-only approximate Planner JSON wall visualization',
+             'in-app additional launcher','local GLB viewer','PNG/JPG texture and stickers',
              'local backup','manual HTTPS WebDAV asset upload'],
-            'not_implemented':['inserting GLB into Planner room','backing up native Planner projects',
+            'not_implemented':['inserting GLB into original Planner libGDX room',
+             'writing changes from game scene back to original Planner project',
+             'backing up native Planner projects',
              'online sign-in removal']}
           Path('build/Phoenix3D_build_report.json').write_text(json.dumps(result,indent=2,ensure_ascii=False))
           print(json.dumps(result,indent=2,ensure_ascii=False))
