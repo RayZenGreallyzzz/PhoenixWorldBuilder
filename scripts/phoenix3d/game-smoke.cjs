@@ -5,7 +5,6 @@
 const fs=require('fs'),path=require('path'),assert=require('assert');
 const root=process.cwd();
 const {JSDOM}=require(path.resolve(root,'build/node/node_modules/jsdom'));
-const realThree=require(path.resolve(root,'build/node/node_modules/three'));
 const html=fs.readFileSync(path.resolve(root,'build/viewer/game.html'),'utf8');
 const code=html.split('<script>')[1].split('</script>')[0];
 assert(code.includes('function placeData()'),'Game controller not found');
@@ -21,10 +20,12 @@ w.GameBridge={
  chooseDecor(){chosenDecor++;},saveBundle(){savedBundles++;},loadBundle(){loadedBundles++}
 };
 w.fetch=async url=>({ok:true,json:async()=>url.includes('game-scene')?{version:1,items:[]}:{className:'Project',items:[]}});
-// Three.js exports some constructors as non-enumerable properties; inherit them.
-const THREE=Object.create(realThree);
+// Evaluate exactly the browser Three.js build that gets bundled into the APK.
+w.eval(fs.readFileSync(path.resolve(root,'build/viewer/three.min.js'),'utf8'));
+const THREE=w.THREE;
+assert(THREE&&typeof THREE.Scene==='function','Browser Three.js failed to initialize');
 THREE.WebGLRenderer=class {
- constructor(){this.capabilities={getMaxAnisotropy:()=>4};this.outputEncoding=realThree.sRGBEncoding;}
+ constructor(){this.capabilities={getMaxAnisotropy:()=>4};this.outputEncoding=THREE.sRGBEncoding;}
  setPixelRatio(){}setSize(){}render(){}
 };
 THREE.GLTFLoader=class {load(url,onLoad,onProgress,onError){if(onError)onError(new Error('test has no GLB'));}};
