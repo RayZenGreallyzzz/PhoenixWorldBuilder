@@ -1050,13 +1050,23 @@ async function importZip(file,isProject=false){
  const modelByPath=new Map(plan.models.map(m=>[m.path,m]));
  const imageByPath=new Map([...plan.pictures,...plan.textures].map(m=>[m.path,m]));
  const glbs=[],imageIds=new Map(),textureKeys=[],importedIds=new Map();
+ const libraryBundle=!isProject&&packageMeta.isLibraryBundle===true;
+ const knownBundlePaths=new Map();
+ if(libraryBundle)for(const [id,meta] of savedMeta){
+  if(meta.sourcePath&&meta.libraryBundleId===packageMeta.libraryBundleId)
+   knownBundlePaths.set(meta.sourcePath,id);
+ }
  const originalModuleId=name=>manifest?.[name]||'glb:'+name.toLowerCase();
  const moduleId=name=>{
   if(importedIds.has(name))return importedIds.get(name);
   const original=originalModuleId(name);
-  // Importing the same named GLB must never overwrite older library entries.
-  const id=!isProject&&savedMeta.has(original)?
-   uniqueImportedId('glb:',name):original;
+  // Re-importing the SAME complete library must resume, not create 1 994
+  // duplicates and double the device storage. Standalone user imports keep
+  // their old duplicate-safe behavior.
+  const existing=libraryBundle?(knownBundlePaths.get(name)||
+   (savedMeta.get(original)?.sourcePath===name?original:null)):null;
+  const id=existing||(!isProject&&savedMeta.has(original)?
+   uniqueImportedId('glb:',name):original);
   importedIds.set(name,id);return id;
  };
  const remapId=id=>{
@@ -1070,15 +1080,20 @@ async function importZip(file,isProject=false){
   const model=modelByPath.get(name);
   const image=imageByPath.get(name);
   if(!model&&!image)continue;
-  // Only the active GLB is decompressed in memory; the ZIP stays compressed.
-  const bytes=await archive.read(name);
   if(model){
    const id=moduleId(name);
+   // Skip previously imported library assets even before decompression.
+   // User-edited categories and saved module settings remain unchanged.
+   if(libraryBundle&&savedMeta.get(id)?.sourcePath===name){
+    glbs.push(id);continue;
+   }
+   const bytes=await archive.read(name);
    await rememberAsset(id,base,bytes);glbs.push(id);
    const old=savedMeta.get(id)||{},prior=catalogMeta[id]||{};
    const explicit=model.metadata?.category||model.category;
    const detail=model.metadata||{};
    const addition={sourcePath:name,assetRole:'model',
+    libraryBundleId:libraryBundle?packageMeta.libraryBundleId:'',
     catalogSection:detail.catalogSection||name.split('/')[0],
     library:detail.library||'',
     sourceId:detail.modelId||detail.sourceId||''};
@@ -1086,6 +1101,7 @@ async function importZip(file,isProject=false){
    const next={...addition,...prior};
    catalogMeta[id]=next;savedMeta.set(id,{...old,...next});
   }else if(image){
+   const bytes=await archive.read(name);
    const role=image.role;
    const proposed=manifest?.[name]||(role==='painting'?'emblem:':'tex:')+name.toLowerCase();
    const id=!isProject&&textureMeta.has(proposed)?
