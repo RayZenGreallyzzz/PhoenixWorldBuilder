@@ -146,11 +146,11 @@ public final class PhoenixGameActivity extends Activity {
      json=new JSONObject(out.toString("UTF-8"));
     }
     if(!"Project".equals(json.optString("className"))||!(json.optJSONArray("items") instanceof JSONArray)){
-     incoming.delete();throw new IOException("Файл не является JSON-проектом Planner 5D");
+     incoming.delete();throw new IOException("Файл не является поддерживаемым JSON-проектом");
     }
     if(plannerJson.exists())plannerJson.delete();
     if(!incoming.renameTo(plannerJson))throw new IOException("Не удалось сохранить план");
-    info("Проект Planner импортирован для игрового просмотра. Исходник не изменён.");
+    info("План импортирован для игрового просмотра. Исходник не изменён.");
     view.loadUrl("https://phoenix3d.local/game.html");
    }else if(request==PICK_DECOR){
     File incoming=new File(root,"decor-preview.bin");
@@ -186,7 +186,7 @@ public final class PhoenixGameActivity extends Activity {
         OutputStream out=getContentResolver().openOutputStream(uri)){
      byte[] buf=new byte[32768];int n;while((n=in.read(buf))!=-1)out.write(buf,0,n);
     }
-    info("Игровая карта экспортирована в JSON. Она НЕ заменяет проект Planner.");
+    info("Игровая карта экспортирована в JSON. Она не заменяет проект основного редактора.");
    }
   }catch(Exception e){info("Ошибка: "+e.getMessage());}
  }
