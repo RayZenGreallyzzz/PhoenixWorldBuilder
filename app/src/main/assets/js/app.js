@@ -86,7 +86,7 @@ async function chooseAsset(id){
  try{
   const root=await cacheFromDB(id);if(!root)return toast('Файл не найден');
   const meta=savedMeta.get(id);
-  w.setPlacement(id,meta?.category||groupType(meta?.name||id));w.select(null);refreshConstructionUI();
+  w.setPlacement(id,meta?.category||groupType(meta?.name||id));w.select(null);refreshConstructionUI();refreshAimSnapUI();
   $('btnSelect').classList.remove('active');renderLibrary();
   $('snapShiftLabel').textContent='0 м';toast('Выбрано: '+fmtName(meta?.displayName||meta?.name||id));
  }catch(e){console.error(e);toast('Не удалось выбрать модель: '+e.message)}
@@ -229,7 +229,7 @@ function makeAssetButton(id,title,kind,category){
  }
  b.append(img,strong,small,materials);
  b.onclick=async()=>{
-  if(kind==='builtin'){w.setPlacement(id,category);w.select(null);refreshConstructionUI();$('snapShiftLabel').textContent='0 м';toast('Выбрано: '+title)}
+  if(kind==='builtin'){w.setPlacement(id,category);w.select(null);refreshConstructionUI();refreshAimSnapUI();$('snapShiftLabel').textContent='0 м';toast('Выбрано: '+title)}
   else if(kind==='preset')await chooseModulePreset(id);
   else await chooseAsset(id);
   if(w.mode==='playbuild')document.body.classList.remove('catalogOpen');
@@ -244,12 +244,19 @@ function makeAssetButton(id,title,kind,category){
   const selector=document.createElement('select');selector.className='assetCategory';
   for(const [key,label] of CATEGORIES){const opt=document.createElement('option');opt.value=key;opt.textContent=label;selector.append(opt)}
   selector.value=category;selector.title='Категория модуля';
+  // Category selection is not a click on the catalogue card. Otherwise
+  // Android can select the GLB using the OLD category during dropdown input.
+  for(const eventName of ['pointerdown','click','touchstart'])
+   selector.addEventListener(eventName,event=>event.stopPropagation());
   selector.onchange=async event=>{
+   event.stopPropagation();
    const type=event.target.value;
+   // Update placement immediately: merely changing placementCategory leaves
+   // the old wall-oriented ghost active, so a reclassified floor stands up.
+   if(w.placement===id){w.setPlacement(id,type);w.select(null);refreshConstructionUI();refreshAimSnapUI()}
    await updateCatalog(id,{category:type,manualCategory:true});
-   try{await dbOp('categories',id,type)}catch(e){}
-   if(w.placement===id)w.placementCategory=type;
-   renderLibrary();toast('Категория изменена');
+   try{await dbOp('categories',id,type)}catch(e){console.warn('Category store',e)}
+   renderLibrary();toast('Роль детали: '+(CATEGORIES.find(c=>c[0]===type)?.[1]||type));
   };
   const edit=document.createElement('button');edit.textContent='✎';edit.title='Исправить название';
   edit.onclick=()=>{
@@ -569,7 +576,11 @@ const AIM_CHOICE_LABELS={
  'top-left':'сверху по левому краю','top':'сверху по центру','top-right':'сверху по правому краю'
 };
 function refreshAimSnapUI(state=null){
- const activeMode=w.mode==='playbuild';
+ const role=w.placementCategory||w.categoryForKind?.(w.placement)||'prop';
+ const wallRole=['wall','corner','door','railing'].includes(role);
+ const activeMode=w.mode==='playbuild'&&wallRole;
+ const aimPanel=$('aimSnapPanel');
+ if(aimPanel)aimPanel.classList.toggle('hidden',!activeMode);
  const hint=null; // Crosshair captions removed; placement state remains in the side HUD.
  const label=$('aimTargetLabel'),detail=$('aimTargetDetail');
  const buttons=$all('[data-game-snap]');
