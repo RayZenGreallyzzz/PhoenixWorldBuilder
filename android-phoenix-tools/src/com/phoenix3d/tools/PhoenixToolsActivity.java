@@ -93,6 +93,7 @@ public final class PhoenixToolsActivity extends Activity {
   endpoint.setText(getPreferences(0).getString("webdav_url",""));
   username.setText(getPreferences(0).getString("webdav_user",""));
   button(body,"☁ Загрузить резервную копию моих GLB и декора",()->uploadWebDav());
+  button(body,"☁ Восстановить мои GLB и декор из WebDAV",()->downloadWebDav());
   button(body,"💾 Сохранить резервную копию в память Android",()->{
    try{
     pendingBackup=makeBackup();Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -216,6 +217,31 @@ public final class PhoenixToolsActivity extends Activity {
    }catch(Exception e){showError(e);}
   },"PhoenixDavBackup").start();
  }
+ private void downloadWebDav(){
+  String url=endpoint.getText().toString().trim(),login=username.getText().toString(),pwd=password.getText().toString();
+  if(!url.startsWith("https://")){msg("WebDAV требует адрес HTTPS");return;}
+  getPreferences(0).edit().putString("webdav_url",url).putString("webdav_user",login).apply();
+  msg("Загрузка резервной копии из своего WebDAV…");
+  new Thread(()->{
+   try{
+    URL dest=new URL(url.endsWith("/")?url+"Phoenix3D-assets.zip":url+"/Phoenix3D-assets.zip");
+    HttpURLConnection c=(HttpURLConnection)dest.openConnection();
+    c.setRequestMethod("GET");c.setConnectTimeout(12000);c.setReadTimeout(30000);
+    c.setInstanceFollowRedirects(false);
+    if(!login.isEmpty()){
+     String encoded=Base64.getEncoder().encodeToString((login+":"+pwd).getBytes(StandardCharsets.UTF_8));
+     c.setRequestProperty("Authorization","Basic "+encoded);
+    }
+    int code=c.getResponseCode();
+    if(code!=200)throw new IOException("WebDAV GET: HTTP "+code);
+    try(InputStream in=c.getInputStream()){restore(in);}finally{c.disconnect();}
+    msg("Мои GLB и текстуры восстановлены из WebDAV.");
+    runOnUiThread(()->refreshViewer());
+   }catch(Exception e){showError(e);}
+  },"PhoenixDavRestore").start();
+ }
+ @Override protected void onPause(){if(viewer!=null)viewer.onPause();super.onPause();}
+ @Override protected void onResume(){super.onResume();if(viewer!=null)viewer.onResume();}
  public final class EditorBridge {
   @JavascriptInterface public void saveAppearance(String json){
    try{
