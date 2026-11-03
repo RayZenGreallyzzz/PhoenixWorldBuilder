@@ -1,10 +1,11 @@
-name: Phoenix 3D - experimental GLB/decor tools inside Planner
+name: Phoenix 3D - preserve full editor and fix APK
 on:
   workflow_dispatch:
   push:
-    branches: [feature/phoenix3d-planner-offline]
+    branches: [fix/phoenix3d-full-editor-20261104]
     paths:
       - 'android-phoenix-tools/**'
+      - 'android-phoenix-installer/**'
       - 'scripts/phoenix3d/**'
       - '.github/workflows/phoenix3d-build-tools.yml'
 permissions:
@@ -71,7 +72,7 @@ jobs:
           node --check build/viewer/game-controller.js
           node --check build/viewer/game-gizmo.js
           node scripts/phoenix3d/game-smoke.cjs
-      - name: Patch original Planner APK without touching its scene implementation
+      - name: Preserve full original editor while adding optional Phoenix tools and display-name changes
         run: |
           python3 scripts/phoenix3d/build_tools_xapk.py \
             --base original/com.planner5d.planner5d.apk \
@@ -81,6 +82,9 @@ jobs:
             build/phoenix_patched_unsigned.apk AndroidManifest.xml | grep PhoenixToolsActivity
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree \
             build/phoenix_patched_unsigned.apk AndroidManifest.xml | grep PhoenixGameActivity
+      - name: Verify original building editor, 18 dex files, database and 3D objects preserved
+        run: |
+          python3 scripts/phoenix3d/verify_full_editor.py original/com.planner5d.planner5d.apk build/phoenix_patched_unsigned.apk
       - name: Sign all 9 APK components with one temporary test key
         run: |
           keytool -genkeypair -keystore build/phoenix-tools-test.jks -storepass phoenix3dtest \
@@ -142,6 +146,7 @@ jobs:
           test -s build/installer-dex/classes.dex
           "$ANDROID_HOME/build-tools/35.0.0/aapt" package -f \
             -M android-phoenix-installer/AndroidManifest.xml \
+            -S android-phoenix-installer/res \
             -I "$ANDROID_HOME/platforms/android-35/android.jar" \
             -A signed -0 apk -F build/installer_unsigned.apk
           (cd build/installer-dex && "$ANDROID_HOME/build-tools/35.0.0/aapt" add ../installer_unsigned.apk classes.dex)
@@ -153,6 +158,8 @@ jobs:
               assert 'classes.dex' in names
               expected={'assets/'+f.name for f in pathlib.Path('signed').glob('*.apk')}
               assert len(expected)==9 and expected.issubset(set(names)),(len(expected),names[:20])
+              # Runtime reads the *ZIP entry*, not AssetManager.openFd() (broken previously).
+              assert all(z.getinfo(entry).file_size>10000 for entry in expected)
               for entry in expected:assert z.getinfo(entry).file_size>10000
           print('ONE APK installer has all 9 signed split APKs embedded; raw bytes:',a.stat().st_size)
           PY
@@ -166,10 +173,12 @@ jobs:
             build/Phoenix3D_One_APK_Installer_TEST.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging \
             build/Phoenix3D_One_APK_Installer_TEST.apk | grep "launchable-activity"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" list \
+            build/Phoenix3D_One_APK_Installer_TEST.apk | grep -F "assets/com.planner5d.planner5d.apk"
       - name: Upload personal test APK as Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Phoenix3D-ONLY-APK-GameGizmo-TEST
+          name: Phoenix3D-FULL-EDITOR-FIX-TEST
           path: |
             build/Phoenix3D_One_APK_Installer_TEST.apk
             build/Phoenix3D_build_report.json
