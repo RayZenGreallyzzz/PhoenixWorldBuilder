@@ -9,7 +9,7 @@ from pathlib import Path
 
 REPLACEMENTS=[
  ("Planner 5D","Phoenix 3D"),
- ("Planner5D","Phoenix3D"),
+ # Keep technical tokens without spaces intact; they may be used as IDs.
 ]
 def apply(data:bytes)->tuple[bytes,dict]:
  counts={}
