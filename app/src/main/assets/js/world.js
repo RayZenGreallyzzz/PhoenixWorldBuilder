@@ -510,7 +510,7 @@ class WorldBuilder{
  instantiate(kind,data){
   if(typeof ParametricWall!=='undefined'&&ParametricWall.kinds.has(kind))
    data.paramWall=ParametricWall.normalize(data.paramWall,kind);
-  let obj=this.makeBuiltin(kind,data.paramWall);const imported=!obj;
+  let obj=this.makeBuiltin(kind,data.paramWall,data.roomPolygon);const imported=!obj;
   if(imported){const cache=this.assetCache.get(kind);if(!cache)throw Error('Сначала импортируй '+kind);obj=cache.clone(true)}
   if(data.moduleShape&&typeof ModuleForge!=='undefined'){
    const result=ModuleForge.build(obj,data.moduleShape,
@@ -536,7 +536,11 @@ class WorldBuilder{
   }
   this.scene.add(obj);obj.updateMatrixWorld(true);this.objects.push(entry);this.applyAppearance(entry);this.nextId=Math.max(this.nextId,entry.data.id+1);return entry;
  }
- makeBuiltin(kind,paramWallSpec=null){
+ makeBuiltin(kind,paramWallSpec=null,roomPolygon=null){
+  if(kind==='proomslab'&&typeof RoomBlueprint!=='undefined'){
+   const spec=roomPolygon||{points:RoomBlueprint.rectangle(2,2),thickness:.18};
+   return RoomBlueprint.slab(spec.points,spec.thickness);
+  }
   if(typeof ParametricWall!=='undefined'&&ParametricWall.kinds.has(kind))
    return ParametricWall.build(kind,paramWallSpec);
   if(typeof RoofModules!=='undefined'&&RoofModules.kinds.has(kind))
@@ -1038,6 +1042,34 @@ class WorldBuilder{
    this.updateGameGhost();
   }
  }
+ // Build a closed room as independently editable wall and slab modules.
+ // One undo checkpoint covers the entire room; invalid plans cannot
+ // silently destroy any of the user's existing map objects.
+ buildRoom(points,options={}){
+  if(typeof RoomBlueprint==='undefined')throw Error('Модуль комнат недоступен');
+  const target=options.origin||this.forwardPlacementPoint?.()||new THREE.Vector3();
+  const x=Number.isFinite(target.x)?target.x:0,z=Number.isFinite(target.z)?target.z:0;
+  const y=Number.isFinite(options.y)?options.y:this.heightAt?.(x,z)||0;
+  const plan=RoomBlueprint.plan(points,{...options,x,z,y});
+  const priorId=this.nextId,priorSelected=this.selected,created=[];
+  // Validate the entire polygon before any scene mutation.
+  this.remember();
+  try{
+   for(const item of plan){
+    const data={...item,id:this.nextId++,scale:1,dimensionScale:{x:1,y:1,z:1},
+     surfacePaint:{},decals:[],color:'#ffffff',roughness:.85,metalness:0,door:false,open:false};
+    created.push(this.instantiate(item.kind,data));
+   }
+   this.select(created[created.length-1]||null);
+   this.onChanged();
+   return created;
+  }catch(err){
+   for(const item of created){item.mesh.removeFromParent();
+    this.objects.splice(this.objects.indexOf(item),1);}
+   this.nextId=priorId;this.undo.pop();this.select(priorSelected);
+   throw err;
+  }
+ }
  // Change a procedural wall WITHOUT performing arbitrary booleans on user
  // GLBs. Geometry is rebuilt from metric parameters; the old project ID,
  // position, surface settings and structural socket identity are retained.
@@ -1138,7 +1170,7 @@ class WorldBuilder{
     this.instantiate(e.kind,{id:e.id,pos:e.pos,rot:e.rot,scale:e.scale||1,
      thicknessY:e.thicknessY||1,dimensionScale:e.dimensionScale,
      wallThicknessMeters:e.wallThicknessMeters,moduleShape:e.moduleShape,moduleUse:e.moduleUse,
-     paramWall:e.paramWall,
+     paramWall:e.paramWall,roomPolygon:e.roomPolygon,
      category:e.category,moduleTopology:e.moduleTopology,
      storey:e.storey,surfacePaint:e.surfacePaint||{},
      decals:e.decals||[],color:e.color,roughness:e.roughness,metalness:e.metalness,
