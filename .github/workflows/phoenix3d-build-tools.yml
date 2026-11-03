@@ -69,6 +69,7 @@ jobs:
           Path('build/viewer/game-controller.js').write_text(scripts[0])
           PY
           node --check build/viewer/game-controller.js
+          node --check build/viewer/game-gizmo.js
           node scripts/phoenix3d/game-smoke.cjs
       - name: Patch original Planner APK without touching its scene implementation
         run: |
