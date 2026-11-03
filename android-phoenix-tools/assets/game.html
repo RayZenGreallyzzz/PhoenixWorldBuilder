@@ -459,7 +459,10 @@ function loadDecor(){
 function loadAvatar(){
  const loader=new THREE.GLTFLoader();
  loader.load('model.glb',gltf=>{
+  if(mixer)mixer.stopAllAction();
+  mixer=null;idleAction=null;walkAction=null;playingWalk=false;
   if(character)dispose(character);
+  fallback.visible=true;
   const art=new THREE.Group(),model=gltf.scene;
   const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3());
   if(size.y<.01){setMessage('GLB не имеет корректной высоты');return;}
