@@ -42,7 +42,7 @@ public final class PhoenixGameActivity extends Activity {
   plannerJson=new File(root,"planner-project.json");
   gameJson=new File(root,"game-scene.json");
   decor=new File(root,"decor.bin");appearance=new File(root,"appearance.json");
-  decorMime=getPreferences(0).getString("decor_mime","image/png");
+  decorMime=getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).getString("decor_mime","image/png");
   view=new WebView(this);
   WebSettings settings=view.getSettings();
   settings.setJavaScriptEnabled(true);
@@ -85,6 +85,14 @@ public final class PhoenixGameActivity extends Activity {
   });
   setContentView(view);
   view.loadUrl("https://phoenix3d.local/game.html");
+ }
+ private static String sniffImage(File file)throws IOException{
+  try(InputStream in=new FileInputStream(file)){
+   byte[] header=new byte[8];if(in.read(header)!=8)throw new IOException("Пустой PNG/JPG");
+   if((header[0]&255)==255&&(header[1]&255)==216)return "image/jpeg";
+   if((header[0]&255)==137&&header[1]==80&&header[2]==78&&header[3]==71)return "image/png";
+   throw new IOException("Поддерживаются только PNG и JPEG");
+  }
  }
  private static WebResourceResponse empty(){
   return stream("text/plain","utf-8",new ByteArrayInputStream(new byte[0]));
@@ -149,13 +157,14 @@ public final class PhoenixGameActivity extends Activity {
     try(InputStream in=getContentResolver().openInputStream(uri)){copy(in,incoming,12L*1024*1024);}
     BitmapFactory.Options check=new BitmapFactory.Options();check.inJustDecodeBounds=true;
     BitmapFactory.decodeFile(incoming.getAbsolutePath(),check);
+    String mime=sniffImage(incoming);
     if(check.outWidth<1||check.outHeight<1||check.outWidth>8192||check.outHeight>8192){
      incoming.delete();throw new IOException("Повреждённый рисунок или разрешение больше 8192");
     }
     if(decor.exists())decor.delete();
     if(!incoming.renameTo(decor))throw new IOException("Не удалось сохранить декор");
-    decorMime="image/jpeg".equals(getContentResolver().getType(uri))?"image/jpeg":"image/png";
-    getPreferences(0).edit().putString("decor_mime",decorMime).apply();
+    decorMime=mime;
+    getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).edit().putString("decor_mime",decorMime).apply();
     info("Новый рисунок добавлен в строительный режим.");
     view.loadUrl("https://phoenix3d.local/game.html");
    }else if(request==SAVE_BUNDLE){
@@ -208,6 +217,10 @@ public final class PhoenixGameActivity extends Activity {
     else if("appearance.json".equals(name)){target=appearance;limit=65536;}
     else throw new IOException("Недопустимый файл в проекте: "+name);
     copy(archive,target,limit);archive.closeEntry();
+    if(target.equals(decor)){
+     decorMime=sniffImage(decor);
+     getSharedPreferences("phoenix3d.shared",MODE_PRIVATE).edit().putString("decor_mime",decorMime).apply();
+    }
     seen++;
     if(seen>5)throw new IOException("Слишком много файлов в проекте");
    }
