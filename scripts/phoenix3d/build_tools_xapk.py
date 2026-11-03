@@ -19,7 +19,7 @@ def copy_info(zi):
 
 def patch_base(base:Path,compiled_dex:Path,assets:Path,output:Path):
  inject={'AndroidManifest.xml':None,'classes19.dex':compiled_dex.read_bytes()}
- for name in ['index.html','three.min.js','GLTFLoader.js','OrbitControls.js']:
+ for name in ['index.html','game.html','three.min.js','GLTFLoader.js','OrbitControls.js']:
   inject['assets/phoenix3d/'+name]=(assets/name).read_bytes()
  with zipfile.ZipFile(base) as old,zipfile.ZipFile(output,'w',allowZip64=True) as out:
   if any(f'classes{i}.dex' not in old.namelist() for i in range(2,19)):
@@ -42,7 +42,7 @@ def patch_base(base:Path,compiled_dex:Path,assets:Path,output:Path):
  with zipfile.ZipFile(output) as z:
   assert z.testzip() is None
   assert 'classes19.dex' in z.namelist()
-  assert len([n for n in z.namelist() if n.startswith('assets/phoenix3d/')])==4
+  assert len([n for n in z.namelist() if n.startswith('assets/phoenix3d/')])==5
  print('Patched Planner base APK:',output,'original entries',count,'size',output.stat().st_size)
 
 def strip_v2(source:Path,dest:Path):
