@@ -324,6 +324,35 @@ class WorldBuilder{
   this.cornerOffsetZ=THREE.MathUtils.clamp(Math.round((this.cornerOffsetZ+dz)*100)/100,-2,2);
   this.updateGameGhost();return [this.cornerOffsetX,this.cornerOffsetZ];
  }
+ // Imported stone slabs sometimes arrive as upright wall panels (XY or YZ).
+ // A catalogue category is a placement role, not merely an icon: for a
+ // clearly thin vertical panel assigned to floor/ceiling, present its broad
+ // face horizontally. Keep the source model untouched for later re-use as a
+ // wall and apply the same orientation to saved instances on project restore.
+ static orientImportedForRole(source,category){
+  if(!source||!['foundation','ceiling'].includes(category))return source;
+  source.updateWorldMatrix(true,true);
+  const bb=new THREE.Box3().setFromObject(source);
+  if(bb.isEmpty())return source;
+  const size=bb.getSize(new THREE.Vector3());
+  if(![size.x,size.y,size.z].every(Number.isFinite))return source;
+  const thinAxis=size.x<=size.z?'x':'z',thin=size[thinAxis];
+  const broad=size[thinAxis==='x'?'z':'x'];
+  // A slab is a broad, thin sheet, not a tall column or a staircase.
+  if(thin<.003||size.y<thin*2.5||broad<thin*2.5||
+     size.y<thin*1.75||broad<.12)return source;
+  // If Y is already the thinnest axis, the floor lies flat. Never flip it.
+  if(size.y<=Math.min(size.x,size.z)*1.05)return source;
+  const container=new THREE.Group();
+  const tilt=new THREE.Group();
+  container.name=source.name||'imported-slab';
+  if(thinAxis==='z')tilt.rotation.x=-Math.PI/2;
+  else tilt.rotation.z=Math.PI/2;
+  tilt.add(source);container.add(tilt);
+  container.userData.pwbAutoFlattened=true;
+  container.userData.pwbSourceThinAxis=thinAxis;
+  return container;
+ }
  static normalizedAxes(axes){
   return {x:THREE.MathUtils.clamp(Number(axes?.x)||1,.2,5),
    y:THREE.MathUtils.clamp(Number(axes?.y)||1,.2,5),
@@ -471,13 +500,16 @@ class WorldBuilder{
    dimensionScale:{...this.placementAxes},wallThicknessMeters:this.wallThicknessMeters||undefined,moduleShape:this.placementModuleShape||undefined,moduleUse:this.placementModuleUse||undefined,surfacePaint:JSON.parse(JSON.stringify(this.placementSurfacePaint||{})),decals:JSON.parse(JSON.stringify(this.placementDecals||[])),category:this.placementCategory||this.categoryForKind?.(this.placement)||null,storey:this.floorLevel,color,roughness:.85,metalness:0,texture:this.textureId||null,door:false,open:false});
   this.select(rec);this.onChanged();return rec;
  }
- instantiate(kind,data){let obj=this.makeBuiltin(kind); if(!obj){const cache=this.assetCache.get(kind);if(!cache)throw Error('Сначала импортируй '+kind);obj=cache.clone(true)}
+ instantiate(kind,data){let obj=this.makeBuiltin(kind); const imported=!obj;
+  if(imported){const cache=this.assetCache.get(kind);if(!cache)throw Error('Сначала импортируй '+kind);obj=cache.clone(true)}
   if(data.moduleShape&&typeof ModuleForge!=='undefined'){
    const result=ModuleForge.build(obj,data.moduleShape,
     ModuleForge.uses.includes(data.moduleUse)?data.moduleUse:
      data.category==='roof'?'roof':['foundation','ceiling','ceiling_finish'].includes(data.category)?'foundation':'wall');
    if(!result.ok)throw Error('Модуль из GLB: '+result.reason);
   }
+  // The saved category controls the actual physical orientation after reload.
+  if(imported)obj=WorldBuilder.orientImportedForRole(obj,data.category||this.categoryForKind?.(kind));
   let entry={kind,data:JSON.parse(JSON.stringify(data)),mesh:obj};obj.userData.objectId=data.id;obj.userData.pwbCategory=data.category||this.categoryForKind?.(kind)||kind;
   if(!('scale' in data))entry.data.scale=1;
   obj.position.fromArray(data.pos);obj.rotation.y=(data.rot||0)*Math.PI/180;this.applyAxisScale(obj,data.scale||1,data.dimensionScale,Number(data.thicknessY)||1);
@@ -676,6 +708,11 @@ class WorldBuilder{
   return null;
  }
  gameAimOptions(hit=this.buildAimHit()){
+  const role=this.placementCategory||this.categoryForKind?.(this.placement);
+  // Only walls have left/right end sockets or top-of-wall points.
+  // A floor must NEVER be guided to a wall socket just because its original
+  // GLB mesh was exported in a vertical orientation.
+  if(!['wall','corner','door','railing'].includes(role))return null;
   if(!hit||typeof BuildJoin==='undefined'||typeof BuildCurves==='undefined')return null;
   const entry=hit.entry,info=BuildJoin.wallInfo(this,entry);if(!info)return null;
   const sockets=BuildCurves.sourceSockets(info)||[];
@@ -946,7 +983,10 @@ class WorldBuilder{
   this.placement=kind;this.placementCategory=category;this.moveTarget=null;this.manualPlacementPosition=null;this.edgeShift=0;this.cornerOffsetX=0;this.cornerOffsetZ=0;this.lastSnapResult=null;
   if(this.ghost)this.ghost.removeFromParent();
   if(this.placementOutline){this.placementOutline.removeFromParent();this.placementOutline.geometry.dispose();this.placementOutline.material.dispose();this.placementOutline=null;}
-  this.ghost=kind?(this.makeBuiltin(kind)||this.assetCache.get(kind)?.clone(true)||null):null;
+  const builtin=kind?this.makeBuiltin(kind):null;
+  this.ghost=builtin||(kind&&this.assetCache.get(kind)?
+   WorldBuilder.orientImportedForRole(this.assetCache.get(kind).clone(true),
+    category||this.categoryForKind?.(kind)):null);
   if(this.ghost){
    this.ghost.traverse(m=>{if(m.isMesh){
     m.material=Array.isArray(m.material)?m.material.map(mat=>mat.clone()):m.material.clone();
