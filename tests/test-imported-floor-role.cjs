@@ -39,6 +39,18 @@ let b=BuildSnap.attrBounds(w.ghost);
 near(b.max.y-b.min.y,.17,'Flat floor must have 17 cm Y thickness');
 near(b.max.z-b.min.z,2.6,'Vertical panel height becomes floor depth');
 assert.equal(w.gameAimOptions({}),null,'Floor never aims at wall end sockets');
+// No geometry raycast should run at all when placing non-wall geometry.
+let aimRaycasts=0;
+w.buildAimHit=()=>{aimRaycasts++;return null};
+assert.equal(w.gameAimOptions(),null,'Floor aim has no wall candidates');
+assert.equal(aimRaycasts,0,'Floor placement must not raycast all installed walls per frame');
+w.placementCategory='roof';
+assert.equal(w.gameAimOptions(),null,'Roof aim has no wall sockets');
+assert.equal(aimRaycasts,0,'Roof placement must not raycast walls per frame');
+w.placementCategory='wall';
+assert.equal(w.gameAimOptions(),null,'Wall can look for a target without finding one');
+assert.equal(aimRaycasts,1,'Wall aim still raycasts once as intended');
+w.placementCategory='foundation';
 let p=new THREE.Vector3(3,0,0);
 const installed=w.placeAt(p);
 assert(installed&&installed.data.category==='foundation','Installed imported slab has real floor category');
