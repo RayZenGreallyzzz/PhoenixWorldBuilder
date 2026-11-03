@@ -53,7 +53,11 @@ const BuildSnap=(()=>{
  };
  const worldPoint=(root,x,y,z)=>new THREE.Vector3(x,y,z).applyMatrix4(root.matrixWorld);
  const surface=(entry)=>{
-  const root=entry.mesh,box=attrBounds(root);
+  // The module stores its exact role and LOCAL metric bounds independently
+  // of its visual GLB mesh. Ordinary support checks are now O(1) instead of
+  // traversing the geometry of every nearby building part on each frame.
+  const root=entry.mesh,stored=typeof ModuleTopology!=='undefined'?
+   ModuleTopology.boxOf(entry):null,box=stored||attrBounds(root);
   if(box.isEmpty())return null;
   root.updateWorldMatrix(true,true);
   const inv=root.matrixWorld.clone().invert();
