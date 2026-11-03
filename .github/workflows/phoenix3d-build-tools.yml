@@ -51,7 +51,7 @@ jobs:
           test -s build/dex/classes.dex
       - name: Bundle local Three.js viewer (no CDN/network)
         run: |
-          npm install --prefix build/node --no-audit --no-fund --no-package-lock three@0.140.0
+          npm install --prefix build/node --no-audit --no-fund --no-package-lock three@0.140.0 jsdom@22.1.0
           mkdir -p build/viewer
           cp android-phoenix-tools/assets/index.html build/viewer/index.html
           cp android-phoenix-tools/assets/game.html build/viewer/game.html
@@ -68,6 +68,7 @@ jobs:
           Path('build/viewer/game-controller.js').write_text(scripts[0])
           PY
           node --check build/viewer/game-controller.js
+          node scripts/phoenix3d/game-smoke.cjs
       - name: Patch original Planner APK without touching its scene implementation
         run: |
           python3 scripts/phoenix3d/build_tools_xapk.py \
