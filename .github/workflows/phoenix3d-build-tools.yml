@@ -9,7 +9,7 @@ on:
       - 'scripts/phoenix3d/**'
       - '.github/workflows/phoenix3d-build-tools.yml'
 permissions:
-  contents: read
+  contents: write
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -195,3 +195,16 @@ jobs:
             build/Phoenix3D_build_report.json
           retention-days: 7
           if-no-files-found: error
+
+      - name: Publish direct APK link for Android
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=phoenix3d-full-editor-test
+          FILE=build/Phoenix3D_One_APK_Installer_TEST.apk
+          if ! gh release view "$TAG" --repo RayZenGreallyzzz/PhoenixWorldBuilder >/dev/null 2>&1; then
+            gh release create "$TAG" --repo RayZenGreallyzzz/PhoenixWorldBuilder \
+              --target "$GITHUB_SHA" --title "Phoenix 3D - full original editor preservation TEST" \
+              --notes "Experimental signed installer: original full construction editor retained alongside GLB tools. The APK contains 9 signed split modules installed by the Android system dialog. Does NOT integrate GLB into the original native 3D room; login requirements within the native editor are unchanged. Save data before changing Android signatures." --prerelease
+          fi
+          gh release upload "$TAG" "$FILE" --repo RayZenGreallyzzz/PhoenixWorldBuilder --clobber
