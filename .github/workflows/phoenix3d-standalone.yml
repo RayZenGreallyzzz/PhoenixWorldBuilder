@@ -46,9 +46,12 @@ jobs:
           node --check build/viewer/game-gizmo.js
           node --check build/viewer/game-controller.js
           node scripts/phoenix3d/game-smoke.cjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Prepare fireplace icon (use exact fireplace.png if added)
         run: |
-          python3 -m pip install --user 'Pillow==10.4.0'
+          python3 -m pip install --disable-pip-version-check --no-cache-dir 'Pillow==10.4.0'
           python3 scripts/phoenix3d/prepare_standalone_icon.py --out build/standalone/res/drawable/phoenix_icon.png
       - name: Compile real standalone Android app (no nine split files)
         run: |
