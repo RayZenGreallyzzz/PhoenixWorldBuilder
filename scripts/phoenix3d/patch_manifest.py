@@ -40,9 +40,10 @@ def patch(data):
  b=bytes(data)
  if b[:2]!=b'\x03\x00':raise ValueError('Not compiled Android XML')
  texts=strings_of(b);indexes={v:i for i,v in enumerate(texts)}
- new_texts=['com.phoenix3d.tools.PhoenixToolsActivity','Phoenix 3D Tools']
+ new_texts=['com.phoenix3d.tools.PhoenixToolsActivity','Phoenix 3D Tools',
+            'com.phoenix3d.tools.PhoenixGameActivity','Phoenix 3D — Игровая стройка']
  to_add=[s for s in new_texts if s not in indexes]
- if len(to_add)!=2:raise ValueError('Already patched manifest, or conflicting class')
+ if len(to_add)!=4:raise ValueError('Already patched manifest, or conflicting class')
  pool=8;t,hs,pool_size=struct.unpack_from('<HHI',b,pool)
  count,style,flags,ss,st=struct.unpack_from('<IIIII',b,pool+8)
  new_data=bytearray();new_offsets=[];old_data=b[pool+ss:pool+pool_size]
@@ -69,6 +70,14 @@ def patch(data):
  nodes=(
   node_start(activity,[string_att(name,indexes[new_texts[0]]),
                        bool_att(exported,True),string_att(label,indexes[new_texts[1]])])+
+  node_start(filter_id)+
+  node_start(action,[string_att(name,main)])+node_end(action)+
+  node_start(category,[string_att(name,launcher)])+node_end(category)+
+  node_end(filter_id)+node_end(activity)+
+  # Launching the same original Planner installation in third-person build
+  # mode is an explicit user choice; the native editor remains untouched.
+  node_start(activity,[string_att(name,indexes[new_texts[2]]),
+                       bool_att(exported,True),string_att(label,indexes[new_texts[3]])])+
   node_start(filter_id)+
   node_start(action,[string_att(name,main)])+node_end(action)+
   node_start(category,[string_att(name,launcher)])+node_end(category)+
