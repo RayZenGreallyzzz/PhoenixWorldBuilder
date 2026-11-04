@@ -65,6 +65,14 @@ for(const kind of ['wall','corner','arc90','arc180']){
  assert.equal(rayA.intersectObject(structure(aRoot),false).length,0,'Main wall is truly pierced at seam');
  assert.equal(rayB.intersectObject(structure(bRoot),false).length,0,'Neighbor wall is truly pierced at seam');
  assert.equal(left.opening.group,right.opening.group,'Both halves share a saved opening group');
+ const third={...b,id:3,root:CleanGeometry.create('wall')};
+ third.root.position.set(1,0,-1);third.root.rotation.y=Math.PI/2;
+ third.root.updateMatrixWorld(true);
+ const choose=Open.splitAtJunction(a,[b,third],open('door',.8,.8),3);
+ assert(choose.ok&&choose.parts[1].entry.id===3,
+  'Builder can explicitly choose a second wall at a three-way junction');
+ const missing=Open.splitAtJunction(a,[b,third],open('door',.8,.8),1000);
+ assert.equal(missing.ok,false,'Unconnected neighbor cannot be selected');
 }
 {
  const a={id:4,kind:'wall',category:'wall',storey:0,root:CleanGeometry.create('wall'),
