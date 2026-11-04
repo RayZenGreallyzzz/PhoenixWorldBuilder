@@ -71,7 +71,7 @@ const BuilderGizmo=(()=>{
   }
   start(e){
    if(!this.selected||e.button!==0||e.isPrimary===false)return false;
-   this.update();this.rayAt(e);
+   this.update();this.group.updateMatrixWorld(true);this.rayAt(e);
    const hits=this.ray.intersectObjects(this.group.children,true).filter(h=>h.object.visible);
    if(!hits.length)return false;
    const hit=hits[0],obj=this.selected;
