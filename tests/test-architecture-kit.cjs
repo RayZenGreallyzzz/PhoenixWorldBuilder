@@ -57,6 +57,9 @@ for(const kind of ids){
   assert(pivots.length=== (kind==='doorDouble'?2:1),
    'Hinged model '+kind+' has correct number of movable leaves');
   assert(root.getObjectByName('door:hinge'),'Physical hinges on '+kind);
+  assert(kit.setDoorAngle(root,50),'Ready-made door hinges animate');
+  assert(pivots.some(p=>Math.abs(p.rotation.y)>.5),
+   'Ready-made door moves around its own hinges');
  }
 }
 assert(total<9500,'Architecture library must stay small on Android');
