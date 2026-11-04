@@ -229,6 +229,8 @@ class CleanBuilder{
    obj.thickness=Number(preset.thickness)||.22;obj.rot=Number(preset.rot)||0;
    obj.sockets=preset.sockets||null;
    obj.meshEdit=CleanMeshEdit.normalize(preset.meshEdit);
+   obj.manualEdgeCut=preset.manualEdgeCut||null;
+   obj.autoEdgeCuts=FloorClip.normalizeCuts(preset.autoEdgeCuts);
    if(obj.kind==='floor')this.rebuildFloor(obj,preset.floorTrim);
    else if(CleanGeometry.isBuiltIn(obj.kind))this.updateGeometry(obj);
    else this.rebuildImported(obj);
@@ -267,8 +269,10 @@ class CleanBuilder{
     categoryOf(kind),root,sockets:config.sockets||null,
     storey:Number.isInteger(config.storey)?config.storey:this.floor,
     scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot,meshEdit:CleanMeshEdit.normalize(config.meshEdit),
-    floorTrim:FloorClip.normalize(config.floorTrim)};
-  if(kind==='floor'&&obj.floorTrim.enabled){
+    floorTrim:FloorClip.normalize(config.floorTrim),
+    manualEdgeCut:config.manualEdgeCut||null,
+    autoEdgeCuts:FloorClip.normalizeCuts(config.autoEdgeCuts)};
+  if(kind==='floor'&&(obj.floorTrim.enabled||obj.floorTrim.cuts?.length)){
    const result=FloorClip.apply(obj.root,obj.floorTrim);
    if(!result.ok)throw Error('Не удалось восстановить подрезку пола: '+result.reason);
   }
@@ -345,6 +349,11 @@ class CleanBuilder{
   $('physicalDimensions').textContent=obj?'Габариты: '+this.sizeText(obj):'Габариты: —';
   $('btnSaveModule').disabled=!obj;
   $('floorCutPanel').style.display=obj?.kind==='floor'?'block':'none';
+  $('autoCutPanel').style.display=obj?.category==='floor'?'block':'none';
+  $('glbCutPanel').style.display=obj&&!CleanGeometry.isBuiltIn(obj.kind)?'block':'none';
+  const glbCut=obj?.manualEdgeCut||{angle:0,offset:0,side:'less'};
+  read('glbCutAngle',glbCut.angle);read('glbCutOffset',glbCut.offset);
+  if(document.activeElement!==$('glbCutSide'))$('glbCutSide').value=glbCut.side;
   const floorCut=FloorClip.normalize(obj?.floorTrim);
   read('floorCutAngle',floorCut.angle);read('floorCutOffset',floorCut.offset);
   if(document.activeElement!==$('floorCutSide'))$('floorCutSide').value=floorCut.side;
@@ -440,13 +449,71 @@ class CleanBuilder{
  applyFloorSettings(reset=false){
   const obj=this.target();
   if(obj?.kind!=='floor')return notify('Выбери стандартную плиту пола','warn');
-  const edit=reset?{enabled:false}:{enabled:true,
+  const edit=reset?{...obj.floorTrim,enabled:false}:{...obj.floorTrim,enabled:true,
    angle:Number($('floorCutAngle').value),offset:Number($('floorCutOffset').value),
    side:$('floorCutSide').value};
   if(!this.rebuildFloor(obj,edit))return;
   if(obj===this.preview)this.updatePreview(this.cursor);
   this.syncInspector();
   notify(reset?'Оригинальная плита восстановлена':'Плита подрезана по линии, торец закрыт','success');
+ }
+ // Convert a user's angle to one root-local half-plane. The GLB stays untouched.
+ manualPlane(raw){
+  if(!raw)return null;
+  const angle=Number(raw.angle),offset=Number(raw.offset);
+  if(!Number.isFinite(angle)||!Number.isFinite(offset)||Math.abs(offset)>10000)
+   throw Error('Укажи допустимый угол и смещение среза');
+  const rad=clamp(angle,-180,180)*Math.PI/180,sign=raw.side==='greater'?1:-1;
+  return {nx:sign*Math.cos(rad),nz:sign*Math.sin(rad),offset:sign*offset};
+ }
+ importedCuts(obj,manual=obj.manualEdgeCut,auto=obj.autoEdgeCuts){
+  const cut=this.manualPlane(manual);
+  return [...(cut?[cut]:[]),...FloorClip.normalizeCuts(auto)];
+ }
+ applyImportedCut(reset=false){
+  const obj=this.target();
+  if(!obj||CleanGeometry.isBuiltIn(obj.kind))return notify('Выбери импортированную GLB-деталь','warn');
+  try{
+   const settings=reset?null:{angle:Number($('glbCutAngle').value),
+    offset:Number($('glbCutOffset').value),side:$('glbCutSide').value};
+   const cuts=this.importedCuts(obj,settings,obj.autoEdgeCuts);
+   const edit=CleanMeshEdit.normalize({...obj.meshEdit,planeCuts:cuts});
+   if(!this.rebuildImported(obj,edit))return;
+   obj.manualEdgeCut=settings;
+   if(obj===this.preview)this.updatePreview(this.cursor);
+   this.syncInspector();
+   notify(reset?'Ручной срез GLB снят':
+    'Точный срез GLB применён. Форма сохраняется в проекте и «Мои»; край может быть открытым','success');
+  }catch(err){notify(err.message,'error')}
+ }
+ applyAutomaticTrim(reset=false){
+  const obj=this.target();
+  if(!obj||obj.category!=='floor')return notify('Выбери плиту или GLB категории «Пол»','warn');
+  const builtin=obj.kind==='floor';
+  let cuts=[];
+  if(!reset){
+   const fresh=this.cloneTemplate(obj.kind,obj.thickness,obj.scale,obj.axes);
+   if(!fresh)return notify('Исходная модель не найдена','error');
+   const bounds=CleanGeometry.localBounds(fresh);
+   const result=EdgeAutoTrim.resolve(obj,this.entries.filter(e=>e!==obj),bounds);
+   if(!result.ok)return notify(result.reason+(result.skippedCurved?' (дуги пока не поддерживаются)':''),'warn');
+   cuts=result.cuts;
+  }
+  if(builtin){
+   if(!this.rebuildFloor(obj,{...obj.floorTrim,cuts}))return;
+  }else{
+   try{
+    const edit=CleanMeshEdit.normalize({...obj.meshEdit,
+     planeCuts:this.importedCuts(obj,obj.manualEdgeCut,cuts)});
+    if(!this.rebuildImported(obj,edit))return;
+   }catch(err){return notify(err.message,'error')}
+   obj.autoEdgeCuts=cuts;
+  }
+  if(obj===this.preview)this.updatePreview(this.cursor);
+  this.syncInspector();
+  notify(reset?'Автоподрезка по стенам снята':
+   'Подрезка выполнена по '+cuts.length+' границам стен'+
+   (builtin?' (торцы закрыты)':' (GLB: возможен открытый срез)'),'success');
  }
  // Rebuild from a pristine asset copy so edits never accumulate or damage GLB.
  rebuildImported(obj,newEdit=obj.meshEdit){
@@ -488,12 +555,13 @@ class CleanBuilder{
   const raw=reset?{}:{
    axis:$('trimAxis').value,cutStart:Number($('trimStart').value),
    cutEnd:Number($('trimEnd').value),bendAxis:$('bendAxis').value,
-   bend:Number($('bendAngle').value)
+   bend:Number($('bendAngle').value),planeCuts:obj.meshEdit?.planeCuts
   };
   const edit=CleanMeshEdit.normalize(raw);
   if(edit.cutStart+edit.cutEnd>94)
    return notify('Нельзя срезать больше 94% длины модели','error');
   if(!this.rebuildImported(obj,edit))return;
+  if(reset){obj.manualEdgeCut=null;obj.autoEdgeCuts=[]}
   if(obj===this.preview)this.updatePreview(this.cursor);
   this.syncInspector();
   notify(reset?'Исходная форма восстановлена (GLB в библиотеке не изменён)':
@@ -680,6 +748,7 @@ class CleanBuilder{
    axes:cloneJSON(source.axes),thickness:source.thickness,
    rot:source._snapRotation??source.rot,sockets:source.sockets?cloneJSON(source.sockets):null,
    meshEdit:CleanMeshEdit.normalize(source.meshEdit),floorTrim:FloorClip.normalize(source.floorTrim),
+    manualEdgeCut:source.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(source.autoEdgeCuts),
    position:source.root.position.toArray()};
   const entry=this.createEntry(source.kind,data);
   if(!entry){notify('Не удалось разместить модуль','error');return}
@@ -690,6 +759,8 @@ class CleanBuilder{
   this.preview.scale=data.scale;this.preview.axes=data.axes;this.preview.thickness=data.thickness;
   this.preview.meshEdit=CleanMeshEdit.normalize(data.meshEdit);
   this.preview.floorTrim=FloorClip.normalize(data.floorTrim);
+  this.preview.manualEdgeCut=data.manualEdgeCut||null;
+  this.preview.autoEdgeCuts=FloorClip.normalizeCuts(data.autoEdgeCuts);
   if(this.preview.kind==='floor')this.rebuildFloor(this.preview,this.preview.floorTrim);
   else if(CleanGeometry.isBuiltIn(this.preview.kind))this.updateGeometry(this.preview);
   else this.rebuildImported(this.preview);
@@ -738,6 +809,7 @@ class CleanBuilder{
    displayRotation:obj.root.rotation.y,storey:obj.storey,
    scale:obj.scale,axes:obj.axes,thickness:obj.thickness,sockets:obj.sockets,
    meshEdit:CleanMeshEdit.normalize(obj.meshEdit),floorTrim:FloorClip.normalize(obj.floorTrim),
+   manualEdgeCut:obj.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(obj.autoEdgeCuts),
    sizeCm:this.physicalSize(obj)};
  }
  project(){
@@ -846,6 +918,10 @@ class CleanBuilder{
   $('btnSaveModule').onclick=()=>this.saveModulePreset();
   $('btnApplyFloorCut').onclick=()=>this.applyFloorSettings();
   $('btnResetFloorCut').onclick=()=>this.applyFloorSettings(true);
+  $('btnAutoTrim').onclick=()=>this.applyAutomaticTrim();
+  $('btnResetAutoTrim').onclick=()=>this.applyAutomaticTrim(true);
+  $('btnApplyGlbCut').onclick=()=>this.applyImportedCut();
+  $('btnResetGlbCut').onclick=()=>this.applyImportedCut(true);
   for(const [id,dx,dz] of [['moveLeft',-1,0],['moveRight',1,0],['moveForward',0,-1],['moveBack',0,1]])
    $(id).onclick=()=>this.nudgeSelected(dx,dz);
   $('btnApplyMeshEdit').onclick=()=>this.applyMeshSettings();
