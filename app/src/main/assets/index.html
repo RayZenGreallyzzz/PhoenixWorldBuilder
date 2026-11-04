@@ -47,6 +47,8 @@
    <details class="rowSection" id="autoCutPanel"><summary>🏠 Автоподрезка по границе стен</summary>
     <p class="tip">Выбери плиту пола или импортированный GLB типа «Пол». Подрезка учитывает прямые стены и углы на текущем этаже, срезая часть плитки за внутренней гранью стены. Встроенные дуги учитываются с приближением по коротким участкам; сложные импортированные кривые пока пропускаются.</p>
     <div class="cols2"><button id="btnAutoTrim" class="primary">✂ По стенам</button><button id="btnResetAutoTrim" class="alt">Снять автосрез</button></div>
+    <div class="cols2"><button id="btnBulkTrim" class="primary">✂ Все плиты</button><button id="btnBulkTrimReset" class="alt">Вернуть все плиты</button></div>
+    <small class="tip">«Все плиты» обрабатывает плитки на всех этажах, учитывая только стены того же этажа. Можно отменить автосрезы кнопкой «Вернуть все плиты».</small>
     <small class="tip">Перед массовой обработкой сохрани проект. Результат можно сохранить в «Мои детали».</small>
    </details>
   <details class="rowSection" id="floorCutPanel"><summary>✂ Подрезка края плиты / плитки</summary>
@@ -57,14 +59,14 @@
     <div class="cols2"><button id="btnApplyFloorCut">✂ Подрезать</button><button id="btnResetFloorCut" class="alt">Сбросить срез</button></div>
    </details>
   <details class="rowSection" id="glbCutPanel"><summary>✂ Точный наклонный срез GLB</summary>
-    <p class="tip">Для статических импортированных GLB: режет геометрию по прямой под любым углом (плоскость вертикальна). UV сохраняются. У сложных моделей срез остаётся открытым; исходный GLB не изменяется.</p>
+    <p class="tip">Для статических импортированных GLB: режет геометрию по прямой под любым углом (плоскость вертикальна). UV сохраняются. Замкнутые статические GLB получают закрытый торец, исходные материалы и UV сохраняются; открытые/повреждённые сетки не закрываются автоматически. Оригинал GLB не изменяется.</p>
     <label>Угол нормали, °<input id="glbCutAngle" type="number" min="-180" max="180" step="1" value="0"></label>
     <label>Положение плоскости от центра модели, м<input id="glbCutOffset" type="number" step=".01" value="0"></label>
     <label>Оставить сторону<select id="glbCutSide"><option value="less">− нормали</option><option value="greater">+ нормали</option></select></label>
     <div class="cols2"><button id="btnApplyGlbCut">✂ Подрезать GLB</button><button id="btnResetGlbCut" class="alt">Снять этот срез</button></div>
    </details>
   <details class="rowSection" id="meshPanel"><summary>✂ Правка своего GLB: обрезать / согнуть</summary>
-    <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. Обрезка по плоскости оставляет открытый край; скелетные модели не деформируем.</p>
+    <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. После среза замкнутые статические сетки закрываются. У открытых GLB торец останется открытым; скелетные модели не деформируем.</p>
     <label>Ось обрезки<select id="trimAxis"><option value="x">X — ширина</option><option value="y">Y — высота</option><option value="z">Z — длина</option></select></label>
     <div class="cols2"><label>Срезать с начала, %<input id="trimStart" type="number" min="0" max="90" step="1" value="0"></label>
     <label>Срезать с конца, %<input id="trimEnd" type="number" min="0" max="90" step="1" value="0"></label></div>
@@ -91,6 +93,6 @@
 <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
-<script src="js/clean-geometry.js"></script><script src="js/mesh-caps.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script>
+<script src="js/clean-geometry.js"></script><script src="js/mesh-caps.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script><script src="js/bulk-floor-trim.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
