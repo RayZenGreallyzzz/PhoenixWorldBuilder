@@ -63,7 +63,8 @@ const SurfaceMaterials=(()=>{
   if(style.style==='none')return {ok:true,changed:false};
   if(style.style==='custom'&&!customTexture)
    return {ok:false,reason:'Сначала выбери загруженное изображение'};
-  const template=style.style==='custom'?customTexture:canvasPattern(style.style);
+  const template=style.style==='custom'?customTexture:
+   style.style==='paint'?null:canvasPattern(style.style);
   if(style.style!=='paint'&&!template)return {ok:false,reason:'Не удалось создать текстуру'};
   const image=template?template.clone():null;
   if(image){
