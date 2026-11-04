@@ -417,6 +417,36 @@ class CleanBuilder{
   if(this.outline){this.outline.setFromObject(obj.root)}
   this.syncInspector();
  }
+ // Rebuild the original closed slab. Trim is never applied cumulatively.
+ rebuildFloor(obj,rawEdit){
+  if(!obj||obj.kind!=='floor')return false;
+  const edit=FloorClip.normalize(rawEdit),fresh=this.cloneTemplate('floor',obj.thickness,obj.scale,obj.axes);
+  const result=FloorClip.apply(fresh,edit);
+  if(!result.ok){notify(result.reason,'error');return false}
+  const old=obj.root;
+  fresh.position.copy(old.position);fresh.rotation.copy(old.rotation);fresh.scale.copy(old.scale);
+  if(obj===this.preview){
+   fresh.traverse(mesh=>{if(!mesh.isMesh)return;
+    mesh.material=mesh.material.clone();mesh.material.transparent=true;
+    mesh.material.opacity=.55;mesh.material.depthWrite=false;
+   });
+  }
+  this.scene.add(fresh);old.removeFromParent();
+  obj.root=fresh;obj.floorTrim=edit;
+  if(this.outline&&obj===this.selected)this.outline.setFromObject(fresh);
+  return true;
+ }
+ applyFloorSettings(reset=false){
+  const obj=this.target();
+  if(obj?.kind!=='floor')return notify('Выбери стандартную плиту пола','warn');
+  const edit=reset?{enabled:false}:{enabled:true,
+   angle:Number($('floorCutAngle').value),offset:Number($('floorCutOffset').value),
+   side:$('floorCutSide').value};
+  if(!this.rebuildFloor(obj,edit))return;
+  if(obj===this.preview)this.updatePreview(this.cursor);
+  this.syncInspector();
+  notify(reset?'Оригинальная плита восстановлена':'Плита подрезана по линии, торец закрыт','success');
+ }
  // Rebuild from a pristine asset copy so edits never accumulate or damage GLB.
  rebuildImported(obj,newEdit=obj.meshEdit){
   if(!obj||CleanGeometry.isBuiltIn(obj.kind))return false;
@@ -598,7 +628,7 @@ class CleanBuilder{
   const data={category:source.category,storey:this.floor,scale:source.scale,
    axes:cloneJSON(source.axes),thickness:source.thickness,
    rot:source._snapRotation??source.rot,sockets:source.sockets?cloneJSON(source.sockets):null,
-   meshEdit:CleanMeshEdit.normalize(source.meshEdit),
+   meshEdit:CleanMeshEdit.normalize(source.meshEdit),floorTrim:FloorClip.normalize(source.floorTrim),
    position:source.root.position.toArray()};
   const entry=this.createEntry(source.kind,data);
   if(!entry){notify('Не удалось разместить модуль','error');return}
@@ -608,7 +638,9 @@ class CleanBuilder{
   this.settings={scale:data.scale,axes:data.axes,thickness:data.thickness};
   this.preview.scale=data.scale;this.preview.axes=data.axes;this.preview.thickness=data.thickness;
   this.preview.meshEdit=CleanMeshEdit.normalize(data.meshEdit);
-  if(CleanGeometry.isBuiltIn(this.preview.kind))this.updateGeometry(this.preview);
+  this.preview.floorTrim=FloorClip.normalize(data.floorTrim);
+  if(this.preview.kind==='floor')this.rebuildFloor(this.preview,this.preview.floorTrim);
+  else if(CleanGeometry.isBuiltIn(this.preview.kind))this.updateGeometry(this.preview);
   else this.rebuildImported(this.preview);
   this.applyTransform(this.preview);
   this.updatePreview(V(data.position[0],0,data.position[2]));
@@ -654,7 +686,8 @@ class CleanBuilder{
    position:obj.root.position.toArray().map(rounded),rot:obj.rot,
    displayRotation:obj.root.rotation.y,storey:obj.storey,
    scale:obj.scale,axes:obj.axes,thickness:obj.thickness,sockets:obj.sockets,
-   meshEdit:CleanMeshEdit.normalize(obj.meshEdit)};
+   meshEdit:CleanMeshEdit.normalize(obj.meshEdit),floorTrim:FloorClip.normalize(obj.floorTrim),
+   sizeCm:this.physicalSize(obj)};
  }
  project(){
   return {version:2,app:'Phoenix Builder Clean',
