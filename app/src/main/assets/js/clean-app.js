@@ -535,6 +535,90 @@ class CleanBuilder{
   this.gizmo.attach(this.tool==='pick'?this.selected:null);
   this.readSockets();
  }
+ openingParts(plan){
+  const staged=[];
+  for(const [obj,newOpenings] of plan){
+   const check=WallOpenings.validate(newOpenings,obj.kind);
+   if(!check.ok)return {ok:false,reason:check.reason};
+   const root=this.cloneTemplate(obj.kind,obj.thickness,obj.scale,obj.axes);
+   if(!root)return {ok:false,reason:'Не найдена исходная стена: '+obj.kind};
+   const result=WallOpenings.render(root,obj.kind,newOpenings,
+    {thickness:obj.thickness,axes:obj.axes});
+   if(!result.ok)return result;
+   root.position.copy(obj.root.position);
+   root.rotation.copy(obj.root.rotation);
+   root.scale.copy(obj.root.scale);
+   staged.push({obj,root,openings:WallOpenings.normalize(newOpenings)});
+  }
+  return {ok:true,staged};
+ }
+ commitOpenings(plan){
+  if(!plan.ok)return false;
+  for(const item of plan.staged){
+   const old=item.obj.root;
+   this.scene.add(item.root);old.removeFromParent();
+   item.obj.root=item.root;item.obj.openings=item.openings;
+   this.applySurfaceTo(item.obj);
+  }
+  if(this.outline&&this.selected)this.outline.setFromObject(this.selected.root);
+  this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.syncInspector();return true;
+ }
+ addOpening(){
+  const obj=this.selected;
+  if(this.tool!=='pick'||!obj||!WallOpenings.supported(obj.kind))
+   return notify('Выдели построенную прямую, угловую или полукруглую стену','warn');
+  const typ=$('openingType').value,x=Number($('openingX').value)/100,
+   y=Number($('openingBottom').value)/100,
+   w=Number($('openingWidth').value)/100,h=Number($('openingHeight').value)/100;
+  if(![x,y,w,h].every(Number.isFinite)||w<.1||h<.2)
+   return notify('Укажи размеры и положение проёма','warn');
+  const id='doorcut:'+Date.now().toString(36);
+  const definition={id,group:id,type:typ,x,y,w,h,
+   hinge:$('openingHinge').value,angle:0};
+  const split=WallOpenings.splitAtJunction(obj,this.entries,definition);
+  if(!split.ok)return notify(split.reason,'warn');
+  const changes=new Map();
+  for(const part of split.parts){
+   const items=changes.get(part.entry)||[...(part.entry.openings||[])];
+   items.push(part.opening);changes.set(part.entry,items);
+  }
+  const staged=this.openingParts(changes);
+  if(!staged.ok)return notify(staged.reason,'warn');
+  this.commitOpenings(staged);
+  $('openingSelect').value=split.parts[0].opening.id;
+  notify('✂ Вырезан '+(typ==='door'?'дверной':'оконный')+' проём'+
+   (split.joint?' через стык двух стен':' вдоль формы стены')+
+   ', вставлены '+(typ==='door'?'петли и дверные створки':'рама и стекло'),'success');
+ }
+ removeOpening(){
+  const obj=this.selected;
+  if(!obj||!WallOpenings.supported(obj.kind))return notify('Выдели стену с проёмом','warn');
+  const id=$('openingSelect').value,o=(obj.openings||[]).find(o=>o.id===id);
+  if(!o)return notify('Выбери готовый проём','warn');
+  const group=o.group||o.id,changes=new Map();
+  for(const e of this.entries){
+   if(!WallOpenings.supported(e.kind)||!e.openings?.some(x=>(x.group||x.id)===group))continue;
+   changes.set(e,e.openings.filter(x=>(x.group||x.id)!==group));
+  }
+  const staged=this.openingParts(changes);
+  if(!staged.ok)return notify(staged.reason,'error');
+  this.commitOpenings(staged);
+  notify('Проём удалён, '+changes.size+' стен восстановлено','success');
+ }
+ setDoorSwing(){
+  const obj=this.selected;if(!obj)return;
+  const o=obj.openings?.find(o=>o.id===$('openingSelect').value);
+  if(!o||o.type!=='door')return;
+  const angle=clamp(Number($('doorSwing').value)||0,-110,110),group=o.group||o.id;
+  for(const wall of this.entries){
+   for(const sibling of wall.openings||[]){
+    if((sibling.group||sibling.id)!==group||sibling.type!=='door')continue;
+    sibling.angle=angle;WallOpenings.setDoorAngle(wall.root,sibling.id,angle);
+   }
+  }
+  notify('Петли: дверь открыта на '+angle+'°. Состояние сохранится в проекте','success');
+ }
  readSockets(){
   const obj=this.target();if(!obj||CleanGeometry.isBuiltIn(obj.kind))return;
   const slots=obj.sockets||CleanGeometry.sockets(obj.kind,obj.root,null,obj.category);
