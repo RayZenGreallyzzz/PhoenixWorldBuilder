@@ -57,6 +57,10 @@
     <div class="cols2"><button id="btnApplyTexture" class="primary">Применить</button><button id="btnClearTexture" class="alt">Сбросить</button></div>
     <small id="textureSelection" class="tip">Можно выбрать узор слева во вкладке «Текстуры».</small>
    </details>
+   <details class="rowSection" id="prefabDoorPanel"><summary>🚪 Петли готовой двери</summary>
+    <label>Угол открытия дверной створки, °<input type="range" id="prefabDoorSwing" min="-110" max="110" value="0" step="5"></label>
+    <small class="tip">Двери из библиотеки имеют собственные петли; у двустворчатых створки открываются в противоположные стороны. Угол сохраняется в проекте.</small>
+   </details>
    <details class="rowSection" id="openingPanel"><summary>🚪 Двери, петли и окна</summary>
     <p class="tip">Выдели уже построенную прямую стену. Отверстие будет настоящим: геометрия стены удаляется, а дверь на петлях или оконная рама со стеклом вставляется в проём.</p>
     <label>Тип проёма<select id="openingType"><option value="door">Дверь с петлями</option><option value="window">Окно со стеклом</option></select></label>
