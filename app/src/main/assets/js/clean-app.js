@@ -66,6 +66,7 @@ class CleanBuilder{
   this.mode='build';this.tool='place';this.floor=0;this.magnet=true;
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
   this.selected=null;this.previewStatus=null;this.outline=null;
+  this.presets=this.loadPresets();this.dragMove=null;
   this.settings=defaultSettings();this.clock=new THREE.Clock();
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;
@@ -183,6 +184,58 @@ class CleanBuilder{
  descriptor(kind){
   return builtins.find(x=>x.kind===kind)||this.assets.get(kind);
  }
+ loadPresets(){
+  try{const records=JSON.parse(localStorage.getItem('phoenix-builder-clean-presets-v1')||'[]');
+   return Array.isArray(records)?records.filter(p=>p&&typeof p.kind==='string'&&typeof p.name==='string').slice(0,100):[];
+  }catch(e){return []}
+ }
+ physicalSize(obj){
+  if(!obj)return null;
+  obj.root.updateMatrixWorld(true);
+  const bounds=CleanGeometry.localBounds(obj.root);
+  if(bounds.isEmpty())return null;
+  const size=bounds.getSize(V()),scale=obj.root.scale;
+  return {x:Math.round(Math.abs(size.x*scale.x)*100),
+   y:Math.round(Math.abs(size.y*scale.y)*100),
+   z:Math.round(Math.abs(size.z*scale.z)*100)};
+ }
+ sizeText(obj){
+  const size=this.physicalSize(obj);
+  return size?'Ш '+size.x+' × В '+size.y+' × Г '+size.z+' см':'Размер не определён';
+ }
+ saveModulePreset(){
+  const obj=this.target();if(!obj)return notify('Выбери деталь для сохранения','warn');
+  const name=prompt('Название новой детали в «Мои»',this.descriptor(obj.kind)?.name||'Моя деталь');
+  if(name===null)return;
+  if(!name.trim())return notify('Укажи название детали','warn');
+  const preset={...this.encode(obj),name:safeName(name.trim()),sizeCm:this.physicalSize(obj),
+   savedAt:new Date().toISOString(),presetId:'custom:'+Date.now().toString(36)};
+  delete preset.id;delete preset.position;
+  try{
+   const records=[...this.presets,preset].slice(-100);
+   localStorage.setItem('phoenix-builder-clean-presets-v1',JSON.stringify(records));
+   this.presets=records;this.renderCatalog();
+   notify('💾 Сохранено в «Мои»: '+preset.name+' — '+this.sizeText(obj),'success');
+  }catch(err){notify('Библиотека недоступна: '+err.message,'error')}
+ }
+ async usePreset(preset){
+  try{
+   if(!await this.ensureTemplate(preset.kind,preset.category))
+    throw Error('Исходный GLB отсутствует в памяти устройства');
+   this.selectKind(preset.kind);
+   const obj=this.preview;
+   obj.category=preset.category||obj.category;
+   obj.scale=Number(preset.scale)||1;obj.axes={x:1,y:1,z:1,...(preset.axes||{})};
+   obj.thickness=Number(preset.thickness)||.22;obj.rot=Number(preset.rot)||0;
+   obj.sockets=preset.sockets||null;
+   obj.meshEdit=CleanMeshEdit.normalize(preset.meshEdit);
+   if(obj.kind==='floor')this.rebuildFloor(obj,preset.floorTrim);
+   else if(CleanGeometry.isBuiltIn(obj.kind))this.updateGeometry(obj);
+   else this.rebuildImported(obj);
+   this.applyTransform(obj);this.updatePreview(this.cursor);this.syncInspector();
+   notify('Выбрана деталь «'+preset.name+'»: '+this.sizeText(obj),'success');
+  }catch(err){notify('Невозможно открыть мою деталь: '+err.message,'error')}
+ }
  renderCatalog(){
   const container=$('catalogItems');container.textContent='';
   for(const module of [...builtins,...[...this.assets].map(([kind,value])=>({kind,
@@ -196,6 +249,14 @@ class CleanBuilder{
    btn.onclick=()=>this.selectKind(module.kind);
    container.append(btn);
   }
+  const saved=$('myCatalogItems');saved.textContent='';
+  for(const preset of this.presets){
+   const btn=document.createElement('button');btn.textContent=preset.name;
+   const size=document.createElement('span'),d=preset.sizeCm;
+   size.textContent=d?'Ш '+d.x+' × В '+d.y+' × Г '+d.z+' см':'Габариты уточнятся при выборе';
+   btn.append(size);btn.onclick=()=>this.usePreset(preset);saved.append(btn);
+  }
+  if(!this.presets.length){const hint=document.createElement('small');hint.textContent='Сохранённые детали появятся здесь';saved.append(hint)}
  }
  createEntry(kind,config={}){
   const data={...defaultSettings(),...config};
@@ -205,7 +266,12 @@ class CleanBuilder{
   const obj={id:config.id||this.nextId++,kind,category:config.category||meta?.category||
     categoryOf(kind),root,sockets:config.sockets||null,
     storey:Number.isInteger(config.storey)?config.storey:this.floor,
-    scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot,meshEdit:CleanMeshEdit.normalize(config.meshEdit)};
+    scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot,meshEdit:CleanMeshEdit.normalize(config.meshEdit),
+    floorTrim:FloorClip.normalize(config.floorTrim)};
+  if(kind==='floor'&&obj.floorTrim.enabled){
+   const result=FloorClip.apply(obj.root,obj.floorTrim);
+   if(!result.ok)throw Error('Не удалось восстановить подрезку пола: '+result.reason);
+  }
   this.applyTransform(obj);
   if(!CleanGeometry.isBuiltIn(kind)&&obj.category==='wall'){
    const detected=CleanGeometry.thicknessInfo(obj);
@@ -276,6 +342,12 @@ class CleanBuilder{
   for(const [key,axis] of [['sizeX','x'],['sizeY','y'],['sizeZ','z']])
    read(key,Math.round(a[axis]*100));
   read('thickness',Math.round((obj?.thickness||.22)*1000)/10);
+  $('physicalDimensions').textContent=obj?'Габариты: '+this.sizeText(obj):'Габариты: —';
+  $('btnSaveModule').disabled=!obj;
+  $('floorCutPanel').style.display=obj?.kind==='floor'?'block':'none';
+  const floorCut=FloorClip.normalize(obj?.floorTrim);
+  read('floorCutAngle',floorCut.angle);read('floorCutOffset',floorCut.offset);
+  if(document.activeElement!==$('floorCutSide'))$('floorCutSide').value=floorCut.side;
   const pos=obj?.root.position||V();
   for(const [key,axis] of [['posX','x'],['posY','y'],['posZ','z']])read(key,rounded(pos[axis]));
   read('rotY',Math.round((obj?.rot||0)*180/Math.PI*10)/10);
