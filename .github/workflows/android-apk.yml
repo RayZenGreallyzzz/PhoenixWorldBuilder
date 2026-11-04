@@ -52,6 +52,7 @@ jobs:
           node tests/test-clean-builder.cjs
           node tests/test-clean-mesh-edit.cjs
           node tests/test-mesh-caps.cjs
+          node tests/test-bulk-floor-trim.cjs
           node tests/test-planner-tools.cjs
           node tests/test-auto-wall-trim.cjs
           node tests/test-clean-browser-smoke.cjs
