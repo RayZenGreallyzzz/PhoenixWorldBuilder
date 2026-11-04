@@ -13,7 +13,7 @@ source.add(sourceMesh);
 assert(Edit.check(source).ok,'Normal GLB style static mesh editable');
 let copy=source.clone(true);
 let result=Edit.apply(copy,{axis:'x',cutStart:20,cutEnd:10,bendAxis:'x',bend:0});
-assert(result.ok&&result.changed&&result.openCut,'Physical trim removes triangles');
+assert(result.ok&&result.changed&&!result.openCut&&result.capTriangles>0,'Solid GLB trim removes triangles and closes the cut');
 const first=G.localBounds(copy);
 near(first.min.x,-1.5+3*.2,'20% start trim clips actual geometry');
 near(first.max.x,1.5-3*.1,'10% end trim clips actual geometry');
