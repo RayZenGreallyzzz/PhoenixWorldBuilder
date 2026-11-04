@@ -362,6 +362,7 @@ class CleanBuilder{
   for(const id of ['scaleAll','sizeX','sizeY','sizeZ','posX','posY','posZ','rotY'])
    $(id).disabled=!editable;
   $('socketPanel').style.display=obj&&!builtin&&obj.category==='wall'?'block':'none';
+  for(const id of ['moveLeft','moveRight','moveForward','moveBack'])$(id).disabled=!(obj&&this.selected===obj);
   this.readSockets();
  }
  readSockets(){
@@ -531,6 +532,56 @@ class CleanBuilder{
   this.ray.setFromCamera(this.pointer,this.camera);
   const plane=new THREE.Plane(V(0,1,0),-planeY);
   const hit=V();return this.ray.ray.intersectPlane(plane,hit)?hit:null;
+ }
+ nudgeSelected(dx,dz){
+  const obj=this.selected;
+  if(!obj||this.tool!=='pick')return notify('Нажми «Выделить» и выбери готовую деталь','warn');
+  const step=Number($('moveStep').value)||.25;
+  obj.root.position.x=Math.round((obj.root.position.x+dx*step)/step)*step;
+  obj.root.position.z=Math.round((obj.root.position.z+dz*step)/step)*step;
+  obj.root.updateMatrixWorld(true);
+  if(this.outline)this.outline.setFromObject(obj.root);
+  this.syncInspector();
+  notify('Перемещено: X '+rounded(obj.root.position.x)+' м, Z '+rounded(obj.root.position.z)+' м','success');
+ }
+ // Two-stage touch drag: first tap selects, second gesture moves in any X/Z direction.
+ beginObjectDrag(e){
+  if(this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
+  const rect=this.canvas.getBoundingClientRect();
+  this.pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
+  this.ray.setFromCamera(this.pointer,this.camera);
+  if(!this.ray.intersectObject(this.selected.root,true).length)return;
+  const hit=this.rayPoint(e,this.selected.root.position.y);
+  if(!hit)return;
+  this.dragMove={pointerId:e.pointerId,x:e.clientX,y:e.clientY,
+   hit,base:this.selected.root.position.clone(),moved:false};
+  this.controls.enabled=false;
+  if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
+  e.preventDefault();e.stopImmediatePropagation();
+ }
+ continueObjectDrag(e){
+  const drag=this.dragMove;
+  if(!drag||drag.pointerId!==e.pointerId)return;
+  if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<6)return;
+  drag.moved=true;
+  const point=this.rayPoint(e,drag.base.y);
+  if(!point)return;
+  const step=Number($('moveStep').value)||.25,obj=this.selected;
+  if(!obj)return;
+  obj.root.position.x=Math.round((drag.base.x+point.x-drag.hit.x)/step)*step;
+  obj.root.position.z=Math.round((drag.base.z+point.z-drag.hit.z)/step)*step;
+  obj.root.updateMatrixWorld(true);
+  if(this.outline)this.outline.setFromObject(obj.root);
+  this.syncInspector();
+  e.preventDefault();e.stopImmediatePropagation();
+ }
+ finishObjectDrag(e){
+  const drag=this.dragMove;
+  if(!drag||drag.pointerId!==e.pointerId)return;
+  this.dragMove=null;this.controls.enabled=true;
+  if(this.canvas.hasPointerCapture?.(e.pointerId))this.canvas.releasePointerCapture(e.pointerId);
+  if(drag.moved)notify('Деталь перемещена по X/Z: '+this.sizeText(this.selected),'success');
+  e.preventDefault();e.stopImmediatePropagation();
  }
  // Mounted decorations live on real wall faces, never imaginary wall sockets.
  wallHit(ray){
@@ -792,6 +843,11 @@ class CleanBuilder{
    $('levelLabel').textContent=this.floor+1;this.updatePreview(this.cursor)};
   $('magnet').onchange=e=>{this.magnet=e.target.checked;this.updatePreview(this.cursor)};
   $('moduleCategory').onchange=()=>this.changeCategory();
+  $('btnSaveModule').onclick=()=>this.saveModulePreset();
+  $('btnApplyFloorCut').onclick=()=>this.applyFloorSettings();
+  $('btnResetFloorCut').onclick=()=>this.applyFloorSettings(true);
+  for(const [id,dx,dz] of [['moveLeft',-1,0],['moveRight',1,0],['moveForward',0,-1],['moveBack',0,1]])
+   $(id).onclick=()=>this.nudgeSelected(dx,dz);
   $('btnApplyMeshEdit').onclick=()=>this.applyMeshSettings();
   $('btnResetMeshEdit').onclick=()=>this.applyMeshSettings(true);
   $('importModel').onchange=e=>{this.importGLB(e.target.files?.[0]);e.target.value=''};
@@ -807,6 +863,10 @@ class CleanBuilder{
   $('btnDelete').onclick=()=>this.delete();
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();
+  this.canvas.addEventListener('pointerdown',e=>this.beginObjectDrag(e),true);
+  this.canvas.addEventListener('pointermove',e=>this.continueObjectDrag(e),true);
+  for(const type of ['pointerup','pointercancel'])
+   this.canvas.addEventListener(type,e=>this.finishObjectDrag(e),true);
   this.canvas.addEventListener('pointerdown',e=>{this.pointerStart={x:e.clientX,y:e.clientY,time:performance.now()}});
   this.canvas.addEventListener('pointerup',e=>{
    const start=this.pointerStart;this.pointerStart=null;
