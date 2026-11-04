@@ -492,8 +492,35 @@ class CleanBuilder{
    if(obj===this.preview)this.updatePreview(this.cursor);
    this.syncInspector();
    notify(reset?'Ручной срез GLB снят':
-    'Точный срез GLB применён. Форма сохраняется в проекте и «Мои»; край может быть открытым','success');
+    ('Точный срез GLB применён: '+(obj.capResult?.openCut?
+     'открытая сетка, торец не закрыт':'замкнутая геометрия, торец закрыт')+
+     '. Сохранение запомнит форму.'),'success');
   }catch(err){notify(err.message,'error')}
+ }
+ trimWholeProject(reset=false){
+  const floors=this.entries.filter(e=>e.category==='floor').length;
+  if(!floors)return notify('В проекте нет плит пола','warn');
+  const action=reset?'Снять автоподрезку со всех плит':'Подрезать все плиты по стенам';
+  if(!confirm(action+' на всех этажах?\\nПлит: '+floors+
+   '. Изменения сохранятся в проекте после нажатия «Сохранить».'))return;
+  try{
+   const plan=BulkFloorTrim.prepare(this.entries,(kind,thickness,scale,axes)=>
+    this.cloneTemplate(kind,thickness,scale,axes),reset);
+   if(!plan.ok)return notify(plan.reason,'error');
+   if(!plan.staged.length)return notify(reset?
+    'Нет плит с автоподрезкой для восстановления':
+    'Плитки не пересекают стены — изменения не требуются','warn');
+   BulkFloorTrim.commit(plan,this.scene,this.selected,this.outline);
+   this.syncInspector();
+   notify((reset?'Автоподрезка снята: ':'Массовая подрезка выполнена: ')+
+    plan.count+' плит, границ: '+plan.cutCount+
+    ', без изменений: '+plan.unchanged+
+    (plan.openGLB?', GLB с открытым торцом: '+plan.openGLB:'')+
+    '. Нажми 💾 Сохранить.','success');
+  }catch(err){
+   console.error('Bulk trim failed',err);
+   notify('Массовая подрезка отменена: '+err.message,'error');
+  }
  }
  applyAutomaticTrim(reset=false){
   const obj=this.target();
@@ -522,7 +549,7 @@ class CleanBuilder{
   this.syncInspector();
   notify(reset?'Автоподрезка по стенам снята':
    'Подрезка выполнена по '+cuts.length+' границам стен'+
-   (builtin?' (торцы закрыты)':' (GLB: возможен открытый срез)'),'success');
+   (builtin?' (торцы закрыты)':(obj.capResult?.openCut?' (у GLB торец открыт)':' (торцы GLB закрыты)')),'success');
  }
  // Rebuild from a pristine asset copy so edits never accumulate or damage GLB.
  rebuildImported(obj,newEdit=obj.meshEdit){
@@ -931,6 +958,8 @@ class CleanBuilder{
   $('btnResetFloorCut').onclick=()=>this.applyFloorSettings(true);
   $('btnAutoTrim').onclick=()=>this.applyAutomaticTrim();
   $('btnResetAutoTrim').onclick=()=>this.applyAutomaticTrim(true);
+  $('btnBulkTrim').onclick=()=>this.trimWholeProject();
+  $('btnBulkTrimReset').onclick=()=>this.trimWholeProject(true);
   $('btnApplyGlbCut').onclick=()=>this.applyImportedCut();
   $('btnResetGlbCut').onclick=()=>this.applyImportedCut(true);
   for(const [id,dx,dz] of [['moveLeft',-1,0],['moveRight',1,0],['moveForward',0,-1],['moveBack',0,1]])
