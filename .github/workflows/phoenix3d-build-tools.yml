@@ -76,6 +76,11 @@ jobs:
                   if re.search(r'onCreate|login|signIn|auth|registration|guest|project|editor|room|offline|native',line,re.I):
                       print(f'{i:5}: {line[:230]}')
                       if i>4000:break
+              lines=text.splitlines()
+              print('=== MAIN ACTIVITY CLASS SOURCE BEGIN ===')
+              for i,line in enumerate(lines[:750],1):
+                  print(f'{i:4}: {line[:350]}')
+              print('=== MAIN ACTIVITY CLASS SOURCE END ===')
           PY
       - name: Compile additive Android Activity as classes19.dex
         run: |
