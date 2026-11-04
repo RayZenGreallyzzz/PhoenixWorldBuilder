@@ -48,3 +48,12 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
 #avatarSizeLabel{color:#89e9d5}
 #openingPanel .tip{margin:9px 0}
 @media(max-width:1100px){.textureCards{grid-template-columns:1fr 1fr}.gizmoModes{grid-template-columns:1fr 1fr}.gizmoModes button{font-size:10px}}
+
+/* Compact architectural prefabs — groups rather than one giant 17-item list. */
+#catalogItems{overflow-y:auto;flex:1;min-height:0}
+.catalogGroup{display:block;border:1px solid #35566b;border-radius:9px;background:#112c3b;flex-shrink:0;overflow:hidden}
+.catalogGroup>summary{padding:10px 8px;cursor:pointer;font-weight:700;font-size:12px;line-height:1.2;list-style:revert;color:#d6ecf3}
+.catalogGroup[open]>summary{border-bottom:1px solid #35566b;color:#98eadc}
+.catalogRows{display:flex;flex-direction:column;gap:6px;padding:6px}
+.catalogRows button{min-height:46px;padding:6px 8px}
+.catalogRows button span{font-size:10px;color:#a8bec8}
