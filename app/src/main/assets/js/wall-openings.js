@@ -149,6 +149,69 @@ const WallOpenings=(()=>{
   const mesh=new THREE.Mesh(g,mat);mesh.name=name;
   mesh.userData.phoenixInsert=true;parent.add(mesh);return mesh;
  }
+ // Select a curved or pointed head; the interior masonry is built to match.
+ function archMode(o){
+  if(o.omitStartFrame||o.omitEndFrame)return null;
+  if(o.type==='door'&&archStyles.includes(o.doorStyle))
+   return o.doorStyle==='round'?'round':'gothic';
+  if(o.frameStyle==='round'||o.frameStyle==='gothic'||o.frameStyle==='portal')
+   return o.frameStyle==='round'?'round':'gothic';
+  return null;
+ }
+ function archTop(o,s,prof,mode){
+  const centre=prof.length/2+o.x,half=Math.max(.05,o.w/2),
+   ratio=clamp(Math.abs(s-centre)/half,0,1);
+  if(mode==='round'){
+   const height=Math.min(half,.55);
+   return o.y+o.h-height+height*Math.sqrt(Math.max(0,1-ratio*ratio));
+  }
+  return o.y+o.h-Math.min(.56,o.h*.35)*ratio;
+ }
+ // A curved band with real thickness, per-point upper and lower elevations.
+ // It is used for curved door leaves, ornamental arch trim and the wall arch-cap.
+ function variableBand(prof,s0,s1,lower,upper,depth,material,parent,name,offset=null){
+  const n=Math.max(3,Math.ceil((s1-s0)/.045)),pos=[],uv=[];
+  const point=(s,y,side)=>{
+   const p=prof.pos(s),nx=p.nx/prof.sx,nz=p.nz/prof.sz,len=Math.hypot(nx,nz)||1;
+   return [p.x+side*depth/2*nx/len/prof.sx-(offset?.x||0),
+    y-(offset?.y||0),
+    p.z+side*depth/2*nz/len/prof.sz-(offset?.z||0)];
+  };
+  function add(p,u,v){pos.push(...p);uv.push(u,v)}
+  function tri(a,b,c,ua,va,ub,vb,uc,vc){
+   add(a,ua,va);add(b,ub,vb);add(c,uc,vc);
+  }
+  function face(a,b,c,d,s0,s1,y0,y1){
+   tri(a,b,c,s0,y0,s1,y0,s1,y1);
+   tri(a,c,d,s0,y0,s1,y1,s0,y1);
+  }
+  for(let i=0;i<n;i++){
+   const a=s0+(s1-s0)*i/n,b=s0+(s1-s0)*(i+1)/n;
+   const lowA=lower(a),lowB=lower(b),highA=upper(a),highB=upper(b);
+   if(Math.max(highA-lowA,highB-lowB)<.0001)continue;
+   for(const side of [-1,1]){
+    face(point(a,lowA,side),point(b,lowB,side),point(b,highB,side),
+     point(a,highA,side),a,b,lowA,highB);
+   }
+   face(point(a,highA,-1),point(b,highB,-1),point(b,highB,1),
+    point(a,highA,1),a,b,0,depth);
+   face(point(a,lowA,1),point(b,lowB,1),point(b,lowB,-1),
+    point(a,lowA,-1),a,b,0,depth);
+  }
+  for(const end of [s0,s1]){
+   const lo=lower(end),hi=upper(end);
+   if(hi-lo<.0001)continue;
+   face(point(end,lo,-1),point(end,lo,1),point(end,hi,1),point(end,hi,-1),
+    0,depth,lo,hi);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  geo.computeVertexNormals();geo.computeBoundingBox();geo.computeBoundingSphere();
+  const mesh=new THREE.Mesh(geo,material);mesh.name=name;
+  mesh.userData.phoenixInsert=true;parent.add(mesh);
+  return mesh;
+ }
  function infill(root,prof,o){
   const s0=prof.length/2+o.x-o.w/2,s1=s0+o.w,
    fw=Math.min(.045,o.w/6),depth=prof.thickness+.035;
