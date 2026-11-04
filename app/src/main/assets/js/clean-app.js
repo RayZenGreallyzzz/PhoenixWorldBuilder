@@ -382,16 +382,43 @@ class CleanBuilder{
  }
  renderCatalog(){
   const container=$('catalogItems');container.textContent='';
-  for(const module of [...builtins,...[...this.assets].map(([kind,value])=>({kind,
-    name:value.name,category:value.category}))]){
-   const btn=document.createElement('button');
-   btn.textContent=module.name;
-   const second=document.createElement('span');second.textContent=module.category==='wall'?
-    'Стена / магнитные торцы':module.category==='roof'?'Кровля':module.category==='decor'?'Настенный декор':module.category==='prop'?'Декор на полу':'Модуль';
-   btn.append(second);
-   btn.classList.toggle('active',this.preview?.kind===module.kind);
-   btn.onclick=()=>this.selectKind(module.kind);
-   container.append(btn);
+  const modules=[...builtins,...[...this.assets].map(([kind,value])=>({
+   kind,name:value.name,category:value.category,group:'imports'}))];
+  const sections=[
+   ['structure','🧱 Каркас и фундамент'],
+   ['doors','🚪 Двери — готовые модели'],
+   ['frames','▯ Рамы и порталы'],
+   ['roofs','🏠 Крыши: обычные и фэнтези'],
+   ['imports','📦 Загруженные GLB']
+  ];
+  const current=modules.find(m=>m.kind===this.preview?.kind);
+  for(const [group,label] of sections){
+   const matching=modules.filter(m=>{
+    const g=m.group||(m.category==='roof'?'roofs':'structure');
+    return g===group;
+   });
+   if(!matching.length)continue;
+   const section=document.createElement('details');section.className='catalogGroup';
+   section.open=group==='structure'||group===(current?.group||(
+    current?.category==='roof'?'roofs':'structure'));
+   const heading=document.createElement('summary');
+   heading.textContent=label+' ('+matching.length+')';section.append(heading);
+   const rows=document.createElement('div');rows.className='catalogRows';
+   for(const module of matching){
+    const btn=document.createElement('button');
+    btn.textContent=module.name;
+    const second=document.createElement('span');
+    second.textContent=module.group==='doors'?'Дверь с петлями • масштабируй гизмо':
+     module.group==='frames'?'Отдельная рама для проёма':
+     module.category==='roof'?'Готовая кровля • высота по стенам':
+     module.category==='wall'?'Стена / магнитные торцы':
+     module.category==='decor'?'Настенный декор':'Модуль';
+    btn.append(second);
+    btn.classList.toggle('active',this.preview?.kind===module.kind);
+    btn.onclick=()=>this.selectKind(module.kind);
+    rows.append(btn);
+   }
+   section.append(rows);container.append(section);
   }
   const saved=$('myCatalogItems');saved.textContent='';
   for(const preset of this.presets){
@@ -400,7 +427,10 @@ class CleanBuilder{
    size.textContent=d?'Ш '+d.x+' × В '+d.y+' × Г '+d.z+' см':'Габариты уточнятся при выборе';
    btn.append(size);btn.onclick=()=>this.usePreset(preset);saved.append(btn);
   }
-  if(!this.presets.length){const hint=document.createElement('small');hint.textContent='Сохранённые детали появятся здесь';saved.append(hint)}
+  if(!this.presets.length){
+   const hint=document.createElement('small');
+   hint.textContent='Сохранённые детали появятся здесь';saved.append(hint);
+  }
  }
  createEntry(kind,config={}){
   const data={...defaultSettings(),...config};
