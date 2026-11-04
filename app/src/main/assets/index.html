@@ -64,6 +64,8 @@
     <div class="cols2"><label>Ширина, см<input id="openingWidth" type="number" min="35" max="180" step="5" value="85"></label><label>Высота, см<input id="openingHeight" type="number" min="35" max="235" step="5" value="205"></label></div>
     <label>Соседняя стена на стыке<select id="openingNeighbor"><option value="">Авто (ближайшая)</option></select></label>
     <small class="tip">На полукруглой стене ширина измеряется вдоль дуги. Если проём пересекает стык стен, выбери соседний модуль — отверстие вырежется в обоих.</small>
+    <label>Вид двери<select id="openingDoorStyle"><option value="classic">Обычная филёнчатая</option><option value="round">С округлым верхом</option><option value="gothic">Стрельчатая / готика</option><option value="rune">Фэнтези с рунами</option><option value="double">Двустворчатая</option></select></label>
+    <label>Вид рамы<select id="openingFrameStyle"><option value="classic">Обычная прямая</option><option value="round">Круглая арка</option><option value="gothic">Готическая арка</option><option value="portal">Фэнтези-портал</option></select></label>
     <label>Петли<select id="openingHinge"><option value="left">Слева</option><option value="right">Справа</option></select></label>
     <button id="btnAddOpening" class="primary">✂ Вырезать проём и вставить</button>
     <label>Готовые проёмы<select id="openingSelect"></select></label>
@@ -119,7 +121,8 @@
 <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
-<script src="js/clean-geometry.js"></script><script src="js/mesh-caps.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script><script src="js/bulk-floor-trim.js"></script>
+<script src="js/architecture-kit.js"></script>
+ <script src="js/clean-geometry.js"></script><script src="js/mesh-caps.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script><script src="js/bulk-floor-trim.js"></script>
 <script src="js/avatar-fit.js"></script>
  <script src="js/surface-materials.js"></script>
  <script src="js/wall-openings.js"></script>
