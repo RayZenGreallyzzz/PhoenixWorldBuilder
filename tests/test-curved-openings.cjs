@@ -65,6 +65,12 @@ for(const kind of ['wall','corner','arc90','arc180']){
  assert.equal(rayA.intersectObject(structure(aRoot),false).length,0,'Main wall is truly pierced at seam');
  assert.equal(rayB.intersectObject(structure(bRoot),false).length,0,'Neighbor wall is truly pierced at seam');
  assert.equal(left.opening.group,right.opening.group,'Both halves share a saved opening group');
+ assert(left.opening.omitEndFrame&&right.opening.omitStartFrame,
+  'The joint itself stays open; no fake vertical frame post blocks the passage');
+ const mainFrame=aRoot.children.find(g=>g.name==='phoenixOpening:'+left.opening.id);
+ const connectedFrame=bRoot.children.find(g=>g.name==='phoenixOpening:'+right.opening.id);
+ assert(!mainFrame.children.some(g=>g.name==='frame:right'),'No false right jamb on primary wall');
+ assert(!connectedFrame.children.some(g=>g.name==='frame:left'),'No false left jamb on adjoining wall');
  const third={...b,id:3,root:CleanGeometry.create('wall')};
  third.root.position.set(1,0,-1);third.root.rotation.y=Math.PI/2;
  third.root.updateMatrixWorld(true);
