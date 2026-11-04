@@ -363,6 +363,8 @@ class CleanBuilder{
    obj.thickness=Number(preset.thickness)||.22;obj.rot=Number(preset.rot)||0;
    obj.sockets=preset.sockets||null;
    obj.meshEdit=CleanMeshEdit.normalize(preset.meshEdit);
+   obj.openings=WallOpenings.normalize(preset.openings);
+   obj.surface=SurfaceMaterials.normalize(preset.surface);
    obj.manualEdgeCut=preset.manualEdgeCut||null;
    obj.autoEdgeCuts=FloorClip.normalizeCuts(preset.autoEdgeCuts);
    if(obj.kind==='floor')this.rebuildFloor(obj,preset.floorTrim);
@@ -405,7 +407,14 @@ class CleanBuilder{
     scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot,meshEdit:CleanMeshEdit.normalize(config.meshEdit),
     floorTrim:FloorClip.normalize(config.floorTrim),
     manualEdgeCut:config.manualEdgeCut||null,
-    autoEdgeCuts:FloorClip.normalizeCuts(config.autoEdgeCuts)};
+    autoEdgeCuts:FloorClip.normalizeCuts(config.autoEdgeCuts),
+    openings:WallOpenings.normalize(config.openings),
+    surface:SurfaceMaterials.normalize(config.surface)};
+  if(WallOpenings.supported(kind)&&obj.openings.length){
+   const result=WallOpenings.render(obj.root,kind,obj.openings,
+    {thickness:obj.thickness,axes:obj.axes});
+   if(!result.ok)throw Error('Проём стены не удалось восстановить: '+result.reason);
+  }
   if(kind==='floor'&&(obj.floorTrim.enabled||obj.floorTrim.cuts?.length)){
    const result=FloorClip.apply(obj.root,obj.floorTrim);
    if(!result.ok)throw Error('Не удалось восстановить подрезку пола: '+result.reason);
@@ -426,6 +435,7 @@ class CleanBuilder{
    obj.thicknessEditable=false;
   }
   if(config.position)obj.root.position.fromArray(config.position);
+  this.applySurfaceTo(obj);
   return obj;
  }
  applyTransform(obj){
@@ -438,7 +448,7 @@ class CleanBuilder{
   if(this.preview){this.preview.root.removeFromParent();this.preview=null}
  }
  selectKind(kind){
-  this.disposePreview();this.selected=null;this.tool='place';
+  this.disposePreview();this.selected=null;this.tool='place';this.gizmo.attach(null);
   this.settings=defaultSettings();
   this.preview=this.createEntry(kind,{category:this.descriptor(kind)?.category||categoryOf(kind)});
   if(!this.preview){notify('Не удалось открыть модель','error');return}
@@ -457,6 +467,7 @@ class CleanBuilder{
   $('btnPick').classList.toggle('active',tool==='pick');
   $('btnPlace').classList.toggle('active',tool==='place');
   if(this.preview)this.preview.root.visible=tool==='place';
+  this.gizmo.attach(tool==='pick'?this.selected:null);
   notify(tool==='pick'?'Коснись готовой детали, чтобы изменить её':
    'Коснись места на земле для установки детали','neutral');
  }
@@ -506,6 +517,22 @@ class CleanBuilder{
    $(id).disabled=!editable;
   $('socketPanel').style.display=obj&&!builtin&&obj.category==='wall'?'block':'none';
   for(const id of ['moveLeft','moveRight','moveForward','moveBack'])$(id).disabled=!(obj&&this.selected===obj);
+  $('openingPanel').style.display=obj&&WallOpenings.supported(obj.kind)?'block':'none';
+  const openList=$('openingSelect'),prior=openList.value;openList.textContent='';
+  for(const o of obj?.openings||[]){
+   const opt=document.createElement('option');opt.value=o.id;
+   opt.textContent=(o.type==='door'?'🚪 Дверь ':'🪟 Окно ')+o.id.slice(-10);
+   openList.append(opt);
+  }
+  if([...openList.options].some(opt=>opt.value===prior))openList.value=prior;
+  if(obj?.openings?.length){
+   const chosen=obj.openings.find(o=>o.id===openList.value)||obj.openings[0];
+   read('doorSwing',chosen.angle||0);
+  }
+  $('textureStyle').value=obj?.surface?.style||'none';
+  read('textureTint',obj?.surface?.color||'#ffffff');
+  read('textureRepeat',obj?.surface?.repeat||1);
+  this.gizmo.attach(this.tool==='pick'?this.selected:null);
   this.readSockets();
  }
  readSockets(){
@@ -531,6 +558,14 @@ class CleanBuilder{
    }});
   }
   obj.root=newRoot;
+  if(obj.openings?.length){
+   const result=WallOpenings.render(newRoot,obj.kind,obj.openings,
+    {thickness:obj.thickness,axes:obj.axes});
+   if(!result.ok)throw Error('Не удалось восстановить проёмы: '+result.reason);
+  }
+  this.applySurfaceTo(obj);
+  if(this.outline&&obj===this.selected)this.outline.setFromObject(newRoot);
+  this.gizmo.attach(this.tool==='pick'?this.selected:null);
  }
  editField(id){
   const obj=this.target();if(!obj)return;
@@ -577,6 +612,7 @@ class CleanBuilder{
   }
   this.scene.add(fresh);old.removeFromParent();
   obj.root=fresh;obj.floorTrim=edit;
+  this.applySurfaceTo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(fresh);
   return true;
  }
@@ -705,6 +741,7 @@ class CleanBuilder{
   }
   this.scene.add(template);old.removeFromParent();
   obj.root=template;obj.meshEdit=requested;
+  this.applySurfaceTo(obj);
   obj.capResult=editResult;
   obj.thicknessEditable=!CleanMeshEdit.active(requested)&&
    !!CleanGeometry.thicknessInfo(obj);
@@ -911,6 +948,7 @@ class CleanBuilder{
    axes:cloneJSON(source.axes),thickness:source.thickness,
    rot:source._snapRotation??source.rot,sockets:source.sockets?cloneJSON(source.sockets):null,
    meshEdit:CleanMeshEdit.normalize(source.meshEdit),floorTrim:FloorClip.normalize(source.floorTrim),
+   openings:WallOpenings.normalize(source.openings),surface:SurfaceMaterials.normalize(source.surface),
     manualEdgeCut:source.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(source.autoEdgeCuts),
    position:source.root.position.toArray()};
   const entry=this.createEntry(source.kind,data);
@@ -921,6 +959,8 @@ class CleanBuilder{
   this.settings={scale:data.scale,axes:data.axes,thickness:data.thickness};
   this.preview.scale=data.scale;this.preview.axes=data.axes;this.preview.thickness=data.thickness;
   this.preview.meshEdit=CleanMeshEdit.normalize(data.meshEdit);
+  this.preview.openings=WallOpenings.normalize(data.openings);
+  this.preview.surface=SurfaceMaterials.normalize(data.surface);
   this.preview.floorTrim=FloorClip.normalize(data.floorTrim);
   this.preview.manualEdgeCut=data.manualEdgeCut||null;
   this.preview.autoEdgeCuts=FloorClip.normalizeCuts(data.autoEdgeCuts);
@@ -973,6 +1013,7 @@ class CleanBuilder{
    scale:obj.scale,axes:obj.axes,thickness:obj.thickness,sockets:obj.sockets,
    meshEdit:CleanMeshEdit.normalize(obj.meshEdit),floorTrim:FloorClip.normalize(obj.floorTrim),
    manualEdgeCut:obj.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(obj.autoEdgeCuts),
+   openings:WallOpenings.normalize(obj.openings),surface:SurfaceMaterials.normalize(obj.surface),
    sizeCm:this.physicalSize(obj)};
  }
  project(){
