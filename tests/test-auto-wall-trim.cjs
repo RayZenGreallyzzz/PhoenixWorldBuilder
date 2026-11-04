@@ -66,6 +66,31 @@ function rawBounds(module){return G.localBounds(G.create(module.kind))}
   'Curved wall removes a portion of the surrounding tile');
 }
 {
+ // Nonuniform GLB scale and yaw: convert real wall planes back to GLB root-local space.
+ const glb=new THREE.Group();
+ glb.add(new THREE.Mesh(new THREE.BoxGeometry(2,.2,2),new THREE.MeshStandardMaterial()));
+ glb.position.set(0,0,.4);
+ glb.rotation.y=Math.PI/4;
+ glb.scale.set(1.5,1,.75);
+ const tile={id:77,kind:'glb:tile',root:glb,category:'floor',storey:0};
+ const wall=module(78,'wall',[0,0,0]);
+ const cut=Edges.resolve(tile,[wall],G.localBounds(glb));
+ assert(cut.ok&&cut.cuts.length===1,'Scaled and rotated GLB gets wall-space-to-local cut');
+ const copy=glb.clone(true);
+ assert(Mesh.apply(copy,{planeCuts:cut.cuts}).ok,'Imported tile can be clipped in local space');
+ copy.updateWorldMatrix(true,true);
+ let minZ=Infinity;
+ copy.traverse(mesh=>{
+  if(!mesh.isMesh||!mesh.visible)return;
+  const pos=mesh.geometry.attributes.position,p=v();
+  for(let i=0;i<pos.count;i++){
+   p.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(mesh.matrixWorld);
+   minZ=Math.min(minZ,p.z);
+  }
+ });
+ assert(minZ>=.108,'Rotated GLB geometry ends at the real wall inner face: '+minZ);
+}
+{
  const source=new THREE.Group();
  const a=new THREE.Mesh(new THREE.BoxGeometry(2,.2,2),new THREE.MeshStandardMaterial());
  source.add(a);
