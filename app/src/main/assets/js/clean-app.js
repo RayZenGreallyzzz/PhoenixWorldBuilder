@@ -518,6 +518,22 @@ class CleanBuilder{
   $('socketPanel').style.display=obj&&!builtin&&obj.category==='wall'?'block':'none';
   for(const id of ['moveLeft','moveRight','moveForward','moveBack'])$(id).disabled=!(obj&&this.selected===obj);
   $('openingPanel').style.display=obj&&WallOpenings.supported(obj.kind)?'block':'none';
+  const choices=$('openingNeighbor'),savedNeighbor=choices.value;choices.textContent='';
+  const automatic=document.createElement('option');automatic.value='';
+  automatic.textContent='Авто (ближайшая)';choices.append(automatic);
+  if(obj&&WallOpenings.supported(obj.kind)){
+   const own=CleanGeometry.worldSockets(obj);
+   for(const neighbor of this.entries){
+    if(neighbor===obj||neighbor.category!=='wall'||neighbor.storey!==obj.storey||
+       !WallOpenings.supported(neighbor.kind))continue;
+    const ends=CleanGeometry.worldSockets(neighbor);
+    if(!ends.some(b=>own.some(a=>a.point.distanceTo(b.point)<.15)))continue;
+    const opt=document.createElement('option');opt.value=String(neighbor.id);
+    opt.textContent='#'+neighbor.id+' — '+(this.descriptor(neighbor.kind)?.name||neighbor.kind);
+    choices.append(opt);
+   }
+  }
+  if([...choices.options].some(v=>v.value===savedNeighbor))choices.value=savedNeighbor;
   const openList=$('openingSelect'),prior=openList.value;openList.textContent='';
   for(const o of obj?.openings||[]){
    const opt=document.createElement('option');opt.value=o.id;
@@ -576,7 +592,7 @@ class CleanBuilder{
   const id='doorcut:'+Date.now().toString(36);
   const definition={id,group:id,type:typ,x,y,w,h,
    hinge:$('openingHinge').value,angle:0};
-  const split=WallOpenings.splitAtJunction(obj,this.entries,definition);
+  const split=WallOpenings.splitAtJunction(obj,this.entries,definition,$('openingNeighbor').value);
   if(!split.ok)return notify(split.reason,'warn');
   const changes=new Map();
   for(const part of split.parts){
