@@ -191,8 +191,17 @@ class CleanBuilder{
  }
  physicalSize(obj){
   if(!obj)return null;
-  obj.root.updateMatrixWorld(true);
-  const bounds=CleanGeometry.localBounds(obj.root);
+  obj.root.updateWorldMatrix(true,true);
+  // Completely removed submeshes are hidden by GLB clipping and must not
+  // enlarge the displayed/saved size of the remaining shape.
+  const inverse=obj.root.matrixWorld.clone().invert(),bounds=new THREE.Box3().makeEmpty();
+  obj.root.traverse(mesh=>{
+   if(!mesh.isMesh||!mesh.visible||!mesh.geometry?.attributes?.position)return;
+   if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();
+   if(mesh.geometry.boundingBox.isEmpty())return;
+   const relative=new THREE.Matrix4().multiplyMatrices(inverse,mesh.matrixWorld);
+   bounds.union(mesh.geometry.boundingBox.clone().applyMatrix4(relative));
+  });
   if(bounds.isEmpty())return null;
   const size=bounds.getSize(V()),scale=obj.root.scale;
   return {x:Math.round(Math.abs(size.x*scale.x)*100),
