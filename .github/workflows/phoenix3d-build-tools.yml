@@ -40,6 +40,20 @@ jobs:
           SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
           test -n "$SDK_MANAGER"
           "$SDK_MANAGER" "platforms;android-35" "build-tools;35.0.0"
+      - name: Inspect original builder's available screens before changing its launcher
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree original/com.planner5d.planner5d.apk AndroidManifest.xml > build/original-activities.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('build/original-activities.txt').read_text().splitlines()
+          starts=[i for i,line in enumerate(t) if 'E: activity ' in line or 'E: activity-alias ' in line]
+          print('=== ORIGINAL APPLICATION ACTIVITY MAP ===')
+          for i in starts[:160]:
+              tail=' '.join(t[i+1:i+8])
+              names=[x.strip() for x in t[i+1:i+8] if 'android:name' in x]
+              if names: print(' | '.join(names[:2]))
+          print('=== END ACTIVITY MAP ===')
+          PY
       - name: Compile additive Android Activity as classes19.dex
         run: |
           mkdir -p build/classes build/dex
