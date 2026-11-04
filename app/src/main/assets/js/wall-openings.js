@@ -7,6 +7,9 @@ const WallOpenings=(()=>{
  'use strict';
  const HEIGHT=2.6,MAX=12,EPS=1e-5,R=2;
  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+ const archStyles=['round','gothic','rune'];
+ const kit=typeof ArchitectureKit!=='undefined'?ArchitectureKit:
+  (typeof require==='function'?require('./architecture-kit.js'):null);
  const finite=(v,d)=>Number.isFinite(Number(v))?Number(v):d;
  const supported=kind=>['wall','corner','arc90','arc180'].includes(kind);
  function profile(kind,thickness=.22,axes={x:1,y:1,z:1}){
@@ -41,6 +44,8 @@ const WallOpenings=(()=>{
     w:clamp(finite(o.w,o.type==='door'?.9:1),.05,8),
     h:clamp(finite(o.h,o.type==='door'?2.05:1.05),.1,2.45),
     hinge:o.hinge==='right'?'right':'left',
+    doorStyle:kit?kit.openingStyle(o.doorStyle):'classic',
+    frameStyle:kit?kit.frameStyle(o.frameStyle):'classic',
     angle:clamp(finite(o.angle,0),-160,160),
     omitStartFrame:o.omitStartFrame===true,omitEndFrame:o.omitEndFrame===true}));
  }
