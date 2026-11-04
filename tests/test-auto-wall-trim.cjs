@@ -2,7 +2,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const base=path.join(__dirname,'../app/src/main/assets');
 global.THREE=require(path.join(base,'js/three.min.js'));
 const G=require(path.join(base,'js/clean-geometry.js'));
-const FloorClip=require(path.join(base,'js/floor-clip.js'));
+global.FloorClip=require(path.join(base,'js/floor-clip.js'));
+const FloorClip=global.FloorClip;
 const Edges=require(path.join(base,'js/edge-auto-trim.js'));
 const Mesh=require(path.join(base,'js/clean-mesh-edit.js'));
 const v=(x,y,z)=>new THREE.Vector3(x,y,z);
