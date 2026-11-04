@@ -89,7 +89,7 @@ const WallOpenings=(()=>{
    }else{
     const dir=o.hinge==='left'?1:-1,hingeX=o.hinge==='left'?left+.045:right-.045;
     const pivot=new THREE.Group();pivot.name='phoenixDoorPivot:'+o.id;
-    pivot.position.set(hingeX,0,0);frame.add(pivot);
+    pivot.position.set(hingeX,0,0);pivot.userData.hingeSide=o.hinge;frame.add(pivot);
     const leafW=Math.max(.15,o.w-.11),leafH=Math.max(.2,o.h-.08);
     extra(pivot,leafW,leafH,.065,dir*leafW/2,o.y+.045+leafH/2,0,leafMat,'door:leaf');
     for(const offset of [.35,o.h-.33]){
@@ -107,12 +107,8 @@ const WallOpenings=(()=>{
   let pivot=null;
   root.traverse(o=>{if(o.name==='phoenixDoorPivot:'+match)pivot=o});
   if(!pivot)return false;
-  let hinge='left';
-  root.traverse(o=>{if(o.name==='phoenixOpening:'+match){
-   const p=o.children.find(c=>c.name==='phoenixDoorPivot:'+match);
-   if(p)hinge=p.position.x<0?'left':'right';
-  }});
-  pivot.rotation.y=clamp(Number(angle)||0,-160,160)*Math.PI/180*(hinge==='right'?-1:1);
+  pivot.rotation.y=clamp(Number(angle)||0,-160,160)*Math.PI/180*
+   (pivot.userData.hingeSide==='right'?-1:1);
   return true;
  }
  return {normalize,validate,render,setDoorAngle,WIDTH,HEIGHT,MAX};
