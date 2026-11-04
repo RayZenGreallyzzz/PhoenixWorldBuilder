@@ -239,6 +239,7 @@ class CleanBuilder{
   if(!obj)return notify('Выбери модуль для материала','warn');
   this.activeTextureId=imageId||this.activeTextureId;
   obj.surface=SurfaceMaterials.normalize({...obj.surface,style,imageId:style==='custom'?this.activeTextureId:''});
+  if(style==='none'){this.changeSurface(true);return}
   if(obj.surface.style==='custom'&&!obj.surface.imageId)
    return notify('Загрузи свою текстуру кнопкой PNG / JPG / WebP','warn');
   this.applySurfaceTo(obj);
