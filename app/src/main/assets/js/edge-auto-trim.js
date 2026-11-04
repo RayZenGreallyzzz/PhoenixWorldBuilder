@@ -1,8 +1,8 @@
 /* Automatic wall-face trimming of floor modules.
- * Works with straight walls at any angle and built-in 90-degree corners.
+ * Supports straight walls, corners and tessellated built-in circular arcs.
  * An infinite clipping plane is considered ONLY when its physical wall
  * segment intersects the uncut slab footprint and crosses its area.
- * Curved/non-planar walls are deliberately not guessed.
+ * Unsupported imported non-linear surfaces are deliberately not guessed.
  */
 const EdgeAutoTrim=(()=>{
  'use strict';
@@ -14,8 +14,23 @@ const EdgeAutoTrim=(()=>{
   let skippedCurved=0;
   for(const entry of entries||[]){
    if(entry.category!=='wall'||entry.storey!==storey||!entry.root)continue;
-   if(entry.kind==='arc90'||entry.kind==='arc180'){skippedCurved++;continue}
    entry.root.updateWorldMatrix(true,true);
+   if(entry.kind==='arc90'||entry.kind==='arc180'){
+    const sweep=entry.kind==='arc90'?Math.PI/2:Math.PI;
+    const count=Math.max(12,Math.ceil(sweep*24/Math.PI));
+    const thick=Math.max(.025,Number(entry.thickness)||.22);
+    for(let i=0;i<count;i++){
+     const a0=i*sweep/count,a1=(i+1)*sweep/count;
+     const p=new THREE.Vector3(2*Math.cos(a0),0,2*Math.sin(a0))
+      .applyMatrix4(entry.root.matrixWorld);
+     const q=new THREE.Vector3(2*Math.cos(a1),0,2*Math.sin(a1))
+      .applyMatrix4(entry.root.matrixWorld);
+     const a={x:p.x,z:p.z},b={x:q.x,z:q.z},length=Math.hypot(b.x-a.x,b.z-a.z);
+     if(length>EPS)segments.push({a,b,length,thickness:thick,id:entry.id,kind:entry.kind});
+    }
+    continue;
+   }
+   const before=segments.length;
    entry.root.traverse(mesh=>{
     if(!mesh.isMesh||!mesh.geometry?.attributes?.position||mesh.isSkinnedMesh)return;
     const g=mesh.geometry;
@@ -42,6 +57,7 @@ const EdgeAutoTrim=(()=>{
     const thickness=Math.hypot(short0.x-short1.x,short0.z-short1.z);
     segments.push({a:p,b:q,length,thickness,id:entry.id,kind:entry.kind});
    });
+   if(segments.length===before)skippedCurved++;
   }
   return {segments,skippedCurved};
  }
@@ -84,6 +100,11 @@ const EdgeAutoTrim=(()=>{
    if(cuts.length>=12)break;
    const {s,tx,tz,nx,nz}=item;
    const p=footprintData.world;
+   const pad=s.thickness/2+.08;
+   if(Math.max(s.a.x,s.b.x)<Math.min(...p.map(v=>v.x))-pad||
+      Math.min(s.a.x,s.b.x)>Math.max(...p.map(v=>v.x))+pad||
+      Math.max(s.a.z,s.b.z)<Math.min(...p.map(v=>v.z))-pad||
+      Math.min(s.a.z,s.b.z)>Math.max(...p.map(v=>v.z))+pad)continue;
    const along=p.map(v=>(v.x-s.a.x)*tx+(v.z-s.a.z)*tz);
    // Do not extend a short wall across distant slabs.
    if(Math.max(...along)<-.03||Math.min(...along)>s.length+.03)continue;
