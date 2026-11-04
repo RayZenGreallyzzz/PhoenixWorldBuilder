@@ -8,7 +8,7 @@
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
  <div class="topRight"><button id="btnSave">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
-<section id="catalog" class="panel left"><div class="panelTitle"><b>Детали</b><small>Нажми и установи на сцену</small></div><div id="catalogItems" class="parts"></div>
+<section id="catalog" class="panel left"><div class="panelTitle"><b>Детали</b><small>Нажми и установи на сцену</small></div><div id="catalogItems" class="parts"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
  <div class="importZone">
  <label for="importCategory">Импорт GLB как</label>
  <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
@@ -30,6 +30,8 @@
     <label>Длина Z, %<input id="sizeZ" type="number" min="10" max="1000" step="5" value="100"></label></div>
     <label>Толщина стены, см<input id="thickness" type="number" min="2.5" max="80" step=".5" value="22"></label>
     <small id="thicknessHint" class="tip">Толщина отдельно от общего масштаба. Для полукруга радиус не изменяется.</small>
+    <strong id="physicalDimensions" class="physicalSize" aria-live="polite">Габариты: —</strong>
+    <button id="btnSaveModule" class="primary">💾 Сохранить деталь в «Мои»</button>
   </div>
   <div class="rowSection"><b>Положение объекта в метрах</b>
    <div class="cols3"><label>X<input id="posX" type="number" step=".05"></label><label>Y<input id="posY" type="number" step=".05"></label><label>Z<input id="posZ" type="number" step=".05"></label></div>
@@ -37,6 +39,18 @@
    <div class="cols2"><button id="btnRotate">⟳ Повернуть 90°</button><button id="btnDuplicate">▣ Копия</button></div>
    <button id="btnDelete" class="danger">✕ Удалить выбранное</button>
   </div>
+  <div class="rowSection"><b>↔ Перемещение готовой детали</b>
+    <label>Шаг перемещения<select id="moveStep"><option value="0.01">1 см</option><option value="0.05">5 см</option><option value="0.25" selected>25 см</option><option value="1">1 м</option></select></label>
+    <div class="movePad"><button id="moveForward">↑ Z−</button><button id="moveLeft">← X−</button><button id="moveRight">X+ →</button><button id="moveBack">↓ Z+</button></div>
+    <small class="tip">Нажми «Выделить», затем тяни выбранную деталь пальцем в любую сторону либо используй стрелки. Высота при перетаскивании не меняется.</small>
+   </div>
+   <details class="rowSection" id="floorCutPanel"><summary>✂ Подрезка края плиты / плитки</summary>
+    <p class="tip">Выдели стандартную плиту пола. Линия разреза проходит под заданным углом по X/Z; толщина плиты сохраняется, срез закрывается. Для внешнего края подгони угол и смещение.</p>
+    <label>Направление нормали среза, °<input id="floorCutAngle" type="number" min="-180" max="180" step="5" value="0"></label>
+    <label>Смещение от центра исходной плиты, м<input id="floorCutOffset" type="number" min="-2.8" max="2.8" step=".05" value="0"></label>
+    <label>Оставить сторону<select id="floorCutSide"><option value="less">Со стороны − нормали</option><option value="greater">Со стороны + нормали</option></select></label>
+    <div class="cols2"><button id="btnApplyFloorCut">✂ Подрезать</button><button id="btnResetFloorCut" class="alt">Сбросить срез</button></div>
+   </details>
   <details class="rowSection" id="meshPanel"><summary>✂ Правка своего GLB: обрезать / согнуть</summary>
     <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. Обрезка по плоскости оставляет открытый край; скелетные модели не деформируем.</p>
     <label>Ось обрезки<select id="trimAxis"><option value="x">X — ширина</option><option value="y">Y — высота</option><option value="z">Z — длина</option></select></label>
@@ -65,6 +79,6 @@
 <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
-<script src="js/clean-geometry.js"></script><script src="js/clean-mesh-edit.js"></script>
+<script src="js/clean-geometry.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
