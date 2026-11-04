@@ -258,7 +258,7 @@ const MeshCaps=(()=>{
    if(reason)return;
    if(meshWasCut&&uncapped)openMeshes++;
    if(!meshWasCut)skippedMeshes++;
-   if(!tris.length){prepared.push({mesh,empty:true});continue}
+   if(!tris.length){prepared.push({mesh,empty:true});return}
    total+=tris.length;
    if(total>MAX_TRIS){reason='Слишком много полигонов для Android';return}
    prepared.push({mesh,geometry:makeGeometry(tris,rootToMesh,!!src.attributes.uv,!!src.attributes.color)});
