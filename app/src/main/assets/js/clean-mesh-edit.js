@@ -10,14 +10,27 @@ const CleanMeshEdit=(()=>{
  const cap=(v,a,b)=>Math.max(a,Math.min(b,v));
  const normalize=source=>{
   const e=source||{};
-  return {axis:permitted.includes(e.axis)?e.axis:'x',
+  const result={axis:permitted.includes(e.axis)?e.axis:'x',
    cutStart:cap(Number(e.cutStart)||0,0,90),
    cutEnd:cap(Number(e.cutEnd)||0,0,90),
    bendAxis:e.bendAxis==='z'?'z':'x',
    bend:cap(Number(e.bend)||0,-180,180)};
+  // Arbitrarily oriented vertical clipping planes, expressed in root-local metres.
+  // Keep legacy serialization unchanged when the user has no planar cuts.
+  if(Array.isArray(e.planeCuts)){
+   const cuts=[];
+   for(const c of e.planeCuts.slice(0,16)){
+    if(!c||![c.nx,c.nz,c.offset].every(v=>typeof v==='number'&&Number.isFinite(v)))continue;
+    const length=Math.hypot(c.nx,c.nz);
+    if(length<1e-6||length>1e5||Math.abs(c.offset)>1e5)continue;
+    cuts.push({nx:c.nx/length,nz:c.nz/length,offset:c.offset/length});
+   }
+   if(cuts.length)result.planeCuts=cuts;
+  }
+  return result;
  };
  const active=e=>!!e&&(Number(e.bend)||0)!==0||
-  (Number(e?.cutStart)||0)>0||(Number(e?.cutEnd)||0)>0;
+  (Number(e?.cutStart)||0)>0||(Number(e?.cutEnd)||0)>0||(e?.planeCuts?.length||0)>0;
  function check(root){
   let triangles=0,error=null;
   root.traverse(m=>{
@@ -68,6 +81,21 @@ const CleanMeshEdit=(()=>{
    }
    if(vb>=-1e-7)out.push(b);
    a=b;va=vb;
+  }
+  return out;
+ }
+ function halfPlaneNormal(poly,nx,nz,offset){
+  if(!poly.length)return [];
+  const out=[],signed=v=>nx*v.p[0]+nz*v.p[2]-offset;
+  let a=poly[poly.length-1],prev=signed(a);
+  for(const b of poly){
+   const next=signed(b),insideA=prev>=-1e-7,insideB=next>=-1e-7;
+   if(insideA!==insideB){
+    const t=prev/(prev-next);
+    out.push(interpolate(a,b,cap(t,0,1)));
+   }
+   if(insideB)out.push(b);
+   a=b;prev=next;
   }
   return out;
  }
@@ -143,7 +171,11 @@ const CleanMeshEdit=(()=>{
    for(let t=0;t+2<count;t+=3){
     const tri=[vertex(index?index.getX(t):t),vertex(index?index.getX(t+1):t+1),
      vertex(index?index.getX(t+2):t+2)];
-    const trimmed=halfPlane(halfPlane(tri,cutAxis,1,lower),cutAxis,-1,upper);
+    let trimmed=halfPlane(halfPlane(tri,cutAxis,1,lower),cutAxis,-1,upper);
+    for(const cut of edit.planeCuts||[]){
+     trimmed=halfPlaneNormal(trimmed,cut.nx,cut.nz,cut.offset);
+     if(trimmed.length<3)break;
+    }
     if(trimmed.length<3)continue;
     for(let k=1;k+1<trimmed.length;k++){
      const subs=wantBend?subdivide([trimmed[0],trimmed[k],trimmed[k+1]],
@@ -169,7 +201,7 @@ const CleanMeshEdit=(()=>{
    }
    if(error)return;
    const g=new THREE.BufferGeometry();
-   if(!outP.length){error='Обрезка полностью удалила геометрию';return}
+   if(!outP.length){prepared.push({mesh,empty:true});return}
    g.setAttribute('position',new THREE.Float32BufferAttribute(outP,3));
    if(nativeUV)g.setAttribute('uv',new THREE.Float32BufferAttribute(outUV,2));
    if(nativeColor)g.setAttribute('color',new THREE.Float32BufferAttribute(outC,3));
@@ -177,10 +209,16 @@ const CleanMeshEdit=(()=>{
    g.computeVertexNormals();g.computeBoundingBox();g.computeBoundingSphere();
    prepared.push({mesh,geometry:g});
   });
-  if(error){for(const item of prepared)item.geometry.dispose();return {ok:false,reason:error}}
-  for(const item of prepared)item.mesh.geometry=item.geometry;
+  if(error||total===0){
+   for(const item of prepared)item.geometry?.dispose();
+   return {ok:false,reason:error||'Обрезка полностью удалила геометрию'};
+  }
+  for(const item of prepared){
+   if(item.empty){item.mesh.visible=false;continue}
+   item.mesh.geometry=item.geometry;
+  }
   root.updateWorldMatrix(true,true);
-  return {ok:true,changed:true,triangles:total,openCut:edit.cutStart>0||edit.cutEnd>0};
+  return {ok:true,changed:true,triangles:total,openCut:edit.cutStart>0||edit.cutEnd>0||!!edit.planeCuts?.length};
  }
  return {normalize,active,check,bounds,apply};
 })();
