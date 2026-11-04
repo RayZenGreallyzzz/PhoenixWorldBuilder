@@ -303,8 +303,13 @@ class CleanBuilder{
   // Rebuild on reset to recover original imported GLB PBR maps.
   if(reset){
    if(obj.kind==='floor')this.rebuildFloor(obj,obj.floorTrim);
-   else if(CleanGeometry.isBuiltIn(obj.kind))this.updateGeometry(obj);
-   else this.rebuildImported(obj);
+   else if(WallOpenings.supported(obj.kind))this.updateGeometry(obj);
+   else if(CleanGeometry.isBuiltIn(obj.kind)){
+    const root=this.cloneTemplate(obj.kind,obj.thickness,obj.scale,obj.axes);
+    const old=obj.root;root.position.copy(old.position);root.rotation.copy(old.rotation);
+    root.scale.copy(old.scale);this.scene.add(root);old.removeFromParent();obj.root=root;
+    if(this.outline&&obj===this.selected)this.outline.setFromObject(root);
+   }else this.rebuildImported(obj);
   }else this.applySurfaceTo(obj);
   if(obj===this.preview)this.updatePreview(this.cursor,false);
   this.syncInspector();this.renderTextureLibrary();
