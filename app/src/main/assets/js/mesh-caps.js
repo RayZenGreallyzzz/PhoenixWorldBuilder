@@ -191,7 +191,7 @@ const MeshCaps=(()=>{
     if(Math.hypot(...normal)<1e-10)continue;
     if(dot(n,normal)>0)[b,c]=[c,b]; // Outward cap normal points into discarded half-space.
     const capVert=p=>({p:p.p.slice(),uv:[p.u,p.v],color:p.color||[1,1,1]});
-    caps.push({v:[capVert(a),capVert(b),capVert(c)],mat});
+    caps.push({v:[capVert(a),capVert(b),capVert(c)],mat:material});
    }
   }
   return caps;
