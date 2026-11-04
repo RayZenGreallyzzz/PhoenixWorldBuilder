@@ -285,18 +285,26 @@ const ArchitectureKit=(()=>{
  }
  function openingStyle(value){return ['classic','round','gothic','rune','double'].includes(value)?value:'classic'}
  function frameStyle(value){return ['classic','round','gothic','portal'].includes(value)?value:'classic'}
- function decorateOpening(group,opening){
+ function decorateOpening(group,opening,profile=null){
   const o=opening||{},st=openingStyle(o.doorStyle),fs=frameStyle(o.frameStyle);
-  const accent=st==='rune'||fs==='portal'?rune():gold();
-  const depth=.15;
+  if(!profile)return;
+  const accent=st==='rune'||fs==='portal'?rune():gold(),
+   middle=profile.length/2+(o.x||0),depth=.13;
+  const place=(distance,y,r=.04)=>{
+   const p=profile.pos(distance),nx=p.nx/profile.sx,nz=p.nz/profile.sz,
+    len=Math.hypot(nx,nz)||1;
+   ball(group,p.x+nx/len*depth/profile.sx,y,
+    p.z+nz/len*depth/profile.sz,r,accent);
+  };
   if(st==='rune'||fs==='portal'){
-   for(let i=0;i<4;i++)for(const x of [-o.w/2+.12,o.w/2-.12]){
-    const y=o.y+.33+i*Math.max(.12,(o.h-.7)/3);
-    ball(group,x,y,depth,.045,accent);
+   for(let i=0;i<4;i++)for(const sign of [-1,1]){
+    const distance=middle+sign*(o.w/2-.08);
+    const y=o.y+.32+i*Math.max(.1,(o.h-.65)/3);
+    place(distance,y,.038);
    }
-  }else if(st==='gothic'||fs==='gothic'){
-   ball(group,0,o.y+o.h+.025,.10,.055,accent);
   }
+  if(st==='gothic'||fs==='gothic'||fs==='portal')
+   place(middle,o.y+o.h+.025,.055);
  }
  return {catalog,create,has:kind=>ids.has(kind),openingStyle,frameStyle,decorateOpening,
   facet,archPoints};
