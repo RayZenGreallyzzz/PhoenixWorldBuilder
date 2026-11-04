@@ -538,9 +538,10 @@ class CleanBuilder{
    if(info&&obj.thickness&&Math.abs(info.meters-obj.thickness)>.002)
     CleanGeometry.resizeImportedThickness(temp,obj.thickness);
   }
+  let editResult=null;
   if(CleanMeshEdit.active(requested)){
-   const result=CleanMeshEdit.apply(template,requested);
-   if(!result.ok){notify('Правка модели: '+result.reason,'error');return false}
+   editResult=CleanMeshEdit.apply(template,requested);
+   if(!editResult.ok){notify('Правка модели: '+editResult.reason,'error');return false}
   }
   if(obj===this.preview){
    template.traverse(mesh=>{if(!mesh.isMesh)return;
@@ -552,6 +553,7 @@ class CleanBuilder{
   }
   this.scene.add(template);old.removeFromParent();
   obj.root=template;obj.meshEdit=requested;
+  obj.capResult=editResult;
   obj.thicknessEditable=!CleanMeshEdit.active(requested)&&
    !!CleanGeometry.thicknessInfo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(obj.root);
