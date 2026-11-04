@@ -537,8 +537,8 @@ class CleanBuilder{
   const obj=this.selected;
   if(!obj||this.tool!=='pick')return notify('Нажми «Выделить» и выбери готовую деталь','warn');
   const step=Number($('moveStep').value)||.25;
-  obj.root.position.x=Math.round((obj.root.position.x+dx*step)/step)*step;
-  obj.root.position.z=Math.round((obj.root.position.z+dz*step)/step)*step;
+  obj.root.position.x=rounded(obj.root.position.x+dx*step);
+  obj.root.position.z=rounded(obj.root.position.z+dz*step);
   obj.root.updateMatrixWorld(true);
   if(this.outline)this.outline.setFromObject(obj.root);
   this.syncInspector();
