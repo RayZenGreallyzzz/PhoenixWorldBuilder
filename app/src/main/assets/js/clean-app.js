@@ -63,10 +63,14 @@ class CleanBuilder{
   this.controls.minDistance=1.5;this.controls.maxDistance=140;this.controls.maxPolarAngle=Math.PI*.495;
   this.controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};
   this.ray=new THREE.Raycaster();this.cursor=V();this.pointer=new THREE.Vector2();
+  this.gizmo=new BuilderGizmo(this.scene,this.camera,this.canvas,this.ray);
   this.mode='build';this.tool='place';this.floor=0;this.magnet=true;
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;
+  this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
+  this.activeTextureId='';this.avatarFitGroup=null;this.avatarMetrics=null;
+  this.avatarHeightCm=175;
   this.settings=defaultSettings();this.clock=new THREE.Clock();
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;
@@ -77,7 +81,7 @@ class CleanBuilder{
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
-   this.updatePlayer(dt);this.controls.update();this.renderer.render(this.scene,this.camera);
+   this.updatePlayer(dt);this.controls.update();this.gizmo.update();this.renderer.render(this.scene,this.camera);
   };
   requestAnimationFrame(this.animate);
  }
@@ -87,7 +91,8 @@ class CleanBuilder{
   this.camera.aspect=b.width/b.height;this.camera.updateProjectionMatrix();
  }
  setDefaultAvatar(){
-  this.player.clear();this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';
+  this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
+  this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';
   const cloth=new THREE.MeshStandardMaterial({color:0x355d82});
   const skin=new THREE.MeshStandardMaterial({color:0xe0b783});
   const dark=new THREE.MeshStandardMaterial({color:0x21384b});
@@ -101,18 +106,29 @@ class CleanBuilder{
   make(new THREE.BoxGeometry(.17,.75,.22),skin,-.42,1.18,0);
   make(new THREE.BoxGeometry(.17,.75,.22),skin,.42,1.18,0);
  }
+ applyAvatarHeight(cm=this.avatarHeightCm){
+  const value=clamp(Number(cm)||175,100,210);
+  this.avatarHeightCm=value;
+  $('avatarSizeLabel').textContent=value+' см';
+  if(!$('avatarHeight').matches(':focus'))$('avatarHeight').value=String(value);
+  if(!this.avatarFitGroup||!this.avatarMetrics)return;
+  const fit=AvatarFit.apply(this.avatarFitGroup,this.avatarMetrics,value);
+  // The imported animation stays on the source GLB root, not this fit wrapper.
+  this.player.updateMatrixWorld(true);
+  return fit;
+ }
  async importAvatar(file){
   if(!file)return;
   try{
    const scene=await GLB.load(file);
-   this.player.clear();
    const root=THREE.SkeletonUtils?.clone?
     THREE.SkeletonUtils.clone(scene.root):scene.root.clone(true);
-   const bounds=new THREE.Box3().setFromObject(root),size=bounds.getSize(V());
-   if(bounds.isEmpty()||size.y<.00001)throw Error('Невозможно определить размеры персонажа');
-   const fitted=new THREE.Group();root.scale.multiplyScalar(1.8/Math.max(size.y,size.x/1.5,size.z/1.5));
-   const low=bounds.min.y*root.scale.y;
-   root.position.y-=low;fitted.add(root);this.player.add(fitted);
+   const metrics=AvatarFit.measure(root);
+   const fitted=new THREE.Group();fitted.name='avatar:stable-fit';
+   fitted.add(root);
+   const fit=AvatarFit.apply(fitted,metrics,this.avatarHeightCm);
+   this.player.clear();this.player.add(fitted);
+   this.avatarFitGroup=fitted;this.avatarMetrics=metrics;
    this.avatarClips=scene.animations||[];
    this.avatarMixer=this.avatarClips.length?new THREE.AnimationMixer(root):null;
    this.avatarActions={};this.avatarState='';
@@ -121,9 +137,11 @@ class CleanBuilder{
      this.avatarMixer.clipAction(clip);
     this.setAvatarAnimation(false);
    }
-   notify('Персонаж загружен: '+safeName(file.name),'success');
+   notify('Персонаж подогнан: '+safeName(file.name)+
+    ' — высота '+Math.round(metrics.size.y*fit.uniform*100)+' см','success');
   }catch(err){console.error(err);this.setDefaultAvatar();notify('Ошибка персонажа: '+err.message,'error')}
  }
+
  setMode(mode){
   this.mode=mode;
   for(const m of ['Build','Character','Drone'])$('mode'+m).classList.toggle('active',
