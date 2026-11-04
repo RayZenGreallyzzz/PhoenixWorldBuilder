@@ -17,6 +17,7 @@ const source=[
 "app.setMode('character');if(!app.preview.root.visible)throw Error('Avatar missing preview');",
 "app.place();if(app.entries.length!==count+2)throw Error('Avatar cannot place');",
 "app.setMode('build');",
+"for(const kind of ['doorRound','frameGothic','roofHip4','roofFantasySpire']){app.selectKind(kind);if(!app.preview?.root)throw Error('Missing architecture prefab '+kind);app.place()}",
 "const wall=app.createEntry('wall',{position:[8,0,0]});app.entries.push(wall);app.scene.add(wall.root);",
 "const neighbor=app.createEntry('wall',{position:[10,0,0]});app.entries.push(neighbor);app.scene.add(neighbor.root);",
 "app.setTool('pick');app.selected=wall;",
