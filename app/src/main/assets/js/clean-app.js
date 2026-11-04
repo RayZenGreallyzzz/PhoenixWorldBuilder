@@ -580,6 +580,8 @@ class CleanBuilder{
   if(obj?.openings?.length){
    const chosen=obj.openings.find(o=>o.id===openList.value)||obj.openings[0];
    read('doorSwing',chosen.angle||0);
+   $('openingDoorStyle').value=chosen.doorStyle||'classic';
+   $('openingFrameStyle').value=chosen.frameStyle||'classic';
   }
   $('textureStyle').value=obj?.surface?.style||'none';
   read('textureTint',obj?.surface?.color||'#ffffff');
@@ -627,6 +629,8 @@ class CleanBuilder{
    return notify('Укажи размеры и положение проёма','warn');
   const id='doorcut:'+Date.now().toString(36);
   const definition={id,group:id,type:typ,x,y,w,h,
+   doorStyle:$('openingDoorStyle').value,
+   frameStyle:$('openingFrameStyle').value,
    hinge:$('openingHinge').value,angle:0};
   const split=WallOpenings.splitAtJunction(obj,this.entries,definition,$('openingNeighbor').value);
   if(!split.ok)return notify(split.reason,'warn');
@@ -642,6 +646,27 @@ class CleanBuilder{
   notify('✂ Вырезан '+(typ==='door'?'дверной':'оконный')+' проём'+
    (split.joint?' через стык двух стен':' вдоль формы стены')+
    ', вставлены '+(typ==='door'?'петли и дверные створки':'рама и стекло'),'success');
+ }
+ restyleOpening(){
+  const selected=this.selected;
+  if(this.tool!=='pick'||!selected)return notify('Выдели стену с готовым проёмом','warn');
+  const id=$('openingSelect').value,opening=selected.openings?.find(o=>o.id===id);
+  if(!opening)return notify('Выбери дверной или оконный проём в списке','warn');
+  const group=opening.group||opening.id,changes=new Map();
+  for(const wall of this.entries){
+   if(!WallOpenings.supported(wall.kind))continue;
+   if(!wall.openings?.some(o=>(o.group||o.id)===group))continue;
+   changes.set(wall,wall.openings.map(o=>(o.group||o.id)===group?
+    {...o,doorStyle:$('openingDoorStyle').value,
+     frameStyle:$('openingFrameStyle').value}:o));
+  }
+  const staged=this.openingParts(changes);
+  if(!staged.ok)return notify('Новый стиль нельзя применить: '+staged.reason,'error');
+  if(!this.commitOpenings(staged))return;
+  $('openingSelect').value=id;
+  this.syncInspector();
+  notify('Стиль '+(opening.type==='door'?'двери':'рамы')+
+   ' применён к '+changes.size+' модулям стены. Сохрани проект.','success');
  }
  removeOpening(){
   const obj=this.selected;
@@ -1252,6 +1277,7 @@ class CleanBuilder{
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
   $('btnAddOpening').onclick=()=>this.addOpening();
+  $('btnChangeOpeningStyle').onclick=()=>this.restyleOpening();
   $('btnRemoveOpening').onclick=()=>this.removeOpening();
   $('openingSelect').onchange=()=>this.syncInspector();
   $('doorSwing').oninput=()=>this.setDoorSwing();
