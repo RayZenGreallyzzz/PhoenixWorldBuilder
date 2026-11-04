@@ -1,4 +1,4 @@
-const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
 const root=path.resolve(__dirname,'../app/src/main/assets');let browser=null;
 for(const bin of ['google-chrome','google-chrome-stable','chromium','chromium-browser']){
  const r=cp.spawnSync('which',[bin],{encoding:'utf8'});
@@ -43,12 +43,20 @@ const html=original.replace('</body>','<script>'+source+'</script></body>');
 if(original===html)throw Error('HTML append failed');
 fs.writeFileSync(temp,html);let r;
 try{
- r=cp.spawnSync(browser,[
- '--headless','--no-sandbox','--disable-dev-shm-usage',
- '--enable-webgl','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader',
- '--disable-features=Vulkan','--virtual-time-budget=4500','--dump-dom',
- '--window-size=1440,900','file://'+temp
- ],{encoding:'utf8',timeout:30000,maxBuffer:25*1024*1024});
+ for(let attempt=0;attempt<2;attempt++){
+  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'phoenix-interact-'));
+  try{
+   r=cp.spawnSync(browser,[
+    '--user-data-dir='+profile,'--no-first-run','--disable-extensions',
+    '--headless','--no-sandbox','--disable-dev-shm-usage',
+    '--enable-webgl','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader',
+    '--disable-features=Vulkan','--virtual-time-budget=4500','--dump-dom',
+    '--window-size=1440,900','file://'+temp
+   ],{encoding:'utf8',timeout:45000,maxBuffer:25*1024*1024});
+  }finally{fs.rmSync(profile,{recursive:true,force:true})}
+  if((r.stdout||'').includes('data-interaction-smoke="ok"'))break;
+  console.warn('Retrying transient headless UI interaction failure '+(attempt+1)+'/2');
+ }
 }finally{fs.unlinkSync(temp)}
 if(!(r.stdout||'').includes('data-interaction-smoke="ok"')){
  const error=(r.stdout||'').match(/data-interaction-smoke="([^"]*)"/)?.[1]||'unknown';
