@@ -369,6 +369,7 @@ class CleanBuilder{
    obj.thickness=Number(preset.thickness)||.22;obj.rot=Number(preset.rot)||0;
    obj.sockets=preset.sockets||null;
    obj.meshEdit=CleanMeshEdit.normalize(preset.meshEdit);
+   obj.doorAngle=clamp(Number(preset.doorAngle)||0,-110,110);
    obj.openings=WallOpenings.normalize(preset.openings);
    obj.surface=SurfaceMaterials.normalize(preset.surface);
    obj.manualEdgeCut=preset.manualEdgeCut||null;
@@ -440,7 +441,9 @@ class CleanBuilder{
   const obj={id:config.id||this.nextId++,kind,category:config.category||meta?.category||
     categoryOf(kind),root,sockets:config.sockets||null,
     storey:Number.isInteger(config.storey)?config.storey:this.floor,
-    scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot,meshEdit:CleanMeshEdit.normalize(config.meshEdit),
+    scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot,
+    doorAngle:clamp(Number(config.doorAngle)||0,-110,110),
+    meshEdit:CleanMeshEdit.normalize(config.meshEdit),
     floorTrim:FloorClip.normalize(config.floorTrim),
     manualEdgeCut:config.manualEdgeCut||null,
     autoEdgeCuts:FloorClip.normalizeCuts(config.autoEdgeCuts),
@@ -478,6 +481,8 @@ class CleanBuilder{
   const a=obj.axes||defaultSettings().axes;
   obj.root.scale.set(obj.scale*a.x,obj.scale*a.y,obj.scale*a.z);
   obj.root.rotation.y=obj.rot||0;
+  if(obj.kind.startsWith('door')&&ArchitectureKit.has(obj.kind))
+   ArchitectureKit.setDoorAngle(obj.root,obj.doorAngle||0);
   obj.root.updateMatrixWorld(true);
  }
  disposePreview(){
@@ -554,6 +559,9 @@ class CleanBuilder{
   $('socketPanel').style.display=obj&&!builtin&&obj.category==='wall'?'block':'none';
   for(const id of ['moveLeft','moveRight','moveForward','moveBack'])$(id).disabled=!(obj&&this.selected===obj);
   $('openingPanel').style.display=obj&&WallOpenings.supported(obj.kind)?'block':'none';
+  $('prefabDoorPanel').style.display=obj?.kind?.startsWith('door')&&
+   ArchitectureKit.has(obj.kind)?'block':'none';
+  read('prefabDoorSwing',obj?.doorAngle||0);
   const choices=$('openingNeighbor'),savedNeighbor=choices.value;choices.textContent='';
   const automatic=document.createElement('option');automatic.value='';
   automatic.textContent='Авто (ближайшая)';choices.append(automatic);
@@ -1108,6 +1116,7 @@ class CleanBuilder{
   const data={category:source.category,storey:this.floor,scale:source.scale,
    axes:cloneJSON(source.axes),thickness:source.thickness,
    rot:source._snapRotation??source.rot,sockets:source.sockets?cloneJSON(source.sockets):null,
+   doorAngle:source.doorAngle||0,
    meshEdit:CleanMeshEdit.normalize(source.meshEdit),floorTrim:FloorClip.normalize(source.floorTrim),
    openings:WallOpenings.normalize(source.openings),surface:SurfaceMaterials.normalize(source.surface),
     manualEdgeCut:source.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(source.autoEdgeCuts),
@@ -1120,6 +1129,7 @@ class CleanBuilder{
   this.settings={scale:data.scale,axes:data.axes,thickness:data.thickness};
   this.preview.scale=data.scale;this.preview.axes=data.axes;this.preview.thickness=data.thickness;
   this.preview.meshEdit=CleanMeshEdit.normalize(data.meshEdit);
+  this.preview.doorAngle=data.doorAngle||0;
   this.preview.openings=WallOpenings.normalize(data.openings);
   this.preview.surface=SurfaceMaterials.normalize(data.surface);
   this.preview.floorTrim=FloorClip.normalize(data.floorTrim);
@@ -1175,6 +1185,7 @@ class CleanBuilder{
    position:obj.root.position.toArray().map(rounded),rot:obj.rot,
    displayRotation:obj.root.rotation.y,storey:obj.storey,
    scale:obj.scale,axes:obj.axes,thickness:obj.thickness,sockets:obj.sockets,
+   doorAngle:obj.doorAngle||0,
    meshEdit:CleanMeshEdit.normalize(obj.meshEdit),floorTrim:FloorClip.normalize(obj.floorTrim),
    manualEdgeCut:obj.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(obj.autoEdgeCuts),
    openings:WallOpenings.normalize(obj.openings),surface:SurfaceMaterials.normalize(obj.surface),
@@ -1281,6 +1292,11 @@ class CleanBuilder{
   $('btnRemoveOpening').onclick=()=>this.removeOpening();
   $('openingSelect').onchange=()=>this.syncInspector();
   $('doorSwing').oninput=()=>this.setDoorSwing();
+  $('prefabDoorSwing').oninput=()=>{
+   const obj=this.target();if(!obj||!ArchitectureKit.has(obj.kind))return;
+   obj.doorAngle=clamp(Number($('prefabDoorSwing').value)||0,-110,110);
+   ArchitectureKit.setDoorAngle(obj.root,obj.doorAngle);
+  };
   $('openingType').onchange=()=>{
    if($('openingType').value==='window'){
     $('openingBottom').value=90;$('openingWidth').value=110;$('openingHeight').value=100;
