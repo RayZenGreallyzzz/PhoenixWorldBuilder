@@ -297,11 +297,14 @@ const WallOpenings=(()=>{
    openings:check.openings.length};
  }
  function setDoorAngle(root,id,angle){
-  let pivot=null;
-  root.traverse(o=>{if(o.name==='phoenixDoorPivot:'+id)pivot=o});
-  if(!pivot)return false;
-  pivot.rotation.y=clamp(Number(angle)||0,-160,160)*Math.PI/180*
-   (pivot.userData.hingeSide==='right'?-1:1);
+  const pivots=[],prefix='phoenixDoorPivot:'+id;
+  root.traverse(o=>{
+   if(o.name===prefix||o.name.startsWith(prefix+':'))pivots.push(o);
+  });
+  if(!pivots.length)return false;
+  const radians=clamp(Number(angle)||0,-160,160)*Math.PI/180;
+  for(const pivot of pivots)
+   pivot.rotation.y=radians*(pivot.userData.hingeSide==='right'?-1:1);
   return true;
  }
  function splitAtJunction(owner,neighbors,raw,preferredNeighborId=null){
