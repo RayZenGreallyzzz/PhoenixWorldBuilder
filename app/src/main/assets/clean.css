@@ -23,3 +23,10 @@ input:focus{outline:2px solid #36bdcf}input[type=checkbox]{accent-color:#38e6bf;
 body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .bottombar .hint{display:none}
 @media(max-width:1100px){.panel{width:186px}.right{width:229px}.brand{font-size:14px}.modes button{font-size:11px;padding:8px}.topRight button{padding:7px}.hint{display:none!important}#hud{bottom:62px;max-width:45%;min-width:0}}
 @media(max-width:700px){.panel{width:165px}.right{width:180px}.topbar{gap:5px}.brand small{display:none}.brand{font-size:12px}.modes{gap:2px}.modes button{padding:6px;font-size:10px}.topRight button{font-size:10px;padding:6px}.panelTitle{padding:8px}.scrollArea{padding:7px}.rowSection{padding:7px}.cols3{gap:3px}#hud{font-size:10px;padding:6px}.bottombar{gap:4px}.bottombar button{padding:4px 7px;min-height:34px}}
+
+/* Precision editing controls, adapted for touch screens. */
+.physicalSize{display:block;padding:8px;border:1px solid #398a9f;background:#113949;border-radius:8px;color:#8ff1dc;font-size:12px;line-height:1.5}
+.myCatalog{border-top:1px solid var(--line);padding:8px 10px;overflow:auto;max-height:35vh;flex-shrink:0}
+.myCatalog>b{font-size:12px;color:#8ff1dc}.myCatalog .parts{padding:6px 0}
+.movePad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.movePad button{min-height:42px;border-color:#3b9ca2;font-weight:700}
