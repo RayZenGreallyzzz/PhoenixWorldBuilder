@@ -41,7 +41,8 @@ const WallOpenings=(()=>{
     w:clamp(finite(o.w,o.type==='door'?.9:1),.05,8),
     h:clamp(finite(o.h,o.type==='door'?2.05:1.05),.1,2.45),
     hinge:o.hinge==='right'?'right':'left',
-    angle:clamp(finite(o.angle,0),-160,160)}));
+    angle:clamp(finite(o.angle,0),-160,160),
+    omitStartFrame:o.omitStartFrame===true,omitEndFrame:o.omitEndFrame===true}));
  }
  function validate(list,kind='wall'){
   if(!supported(kind))return {ok:false,reason:'Нужна стандартная стена, угол или дуга'};
@@ -152,18 +153,21 @@ const WallOpenings=(()=>{
    hingeMat=new THREE.MeshStandardMaterial({color:0xe2b960,metalness:.85,roughness:.22}),
    glassMat=new THREE.MeshStandardMaterial({color:0x8ed9ed,metalness:.1,roughness:.15,
     transparent:true,opacity:.4,depthWrite:false,side:THREE.DoubleSide});
-  meshBand(prof,s0,s0+fw,o.y,o.y+o.h,depth,frameMat,frame,'frame:left');
-  meshBand(prof,s1-fw,s1,o.y,o.y+o.h,depth,frameMat,frame,'frame:right');
+  if(!o.omitStartFrame)meshBand(prof,s0,s0+fw,o.y,o.y+o.h,depth,frameMat,frame,'frame:left');
+  if(!o.omitEndFrame)meshBand(prof,s1-fw,s1,o.y,o.y+o.h,depth,frameMat,frame,'frame:right');
   meshBand(prof,s0,s1,o.y+o.h-fw,o.y+o.h,depth,frameMat,frame,'frame:top');
   if(o.type==='window'){
    meshBand(prof,s0,s1,o.y,o.y+fw,depth,frameMat,frame,'frame:bottom');
-   meshBand(prof,s0+fw,s1-fw,o.y+fw,o.y+o.h-fw,.024,glassMat,frame,'window:glass');
+   meshBand(prof,s0+(o.omitStartFrame?.008:fw),s1-(o.omitEndFrame?.008:fw),
+    o.y+fw,o.y+o.h-fw,.024,glassMat,frame,'window:glass');
   }else{
-   const hingeS=o.hinge==='left'?s0+fw:s1-fw,loc=prof.pos(hingeS);
+   const leafStart=s0+(o.omitStartFrame?.008:fw);
+   const leafEnd=s1-(o.omitEndFrame?.008:fw);
+   const hingeS=o.hinge==='left'?leafStart:leafEnd,loc=prof.pos(hingeS);
    const pivot=new THREE.Group();
    pivot.name='phoenixDoorPivot:'+o.id;pivot.userData.hingeSide=o.hinge;
    pivot.position.set(loc.x,0,loc.z);frame.add(pivot);
-   meshBand(prof,s0+fw,s1-fw,o.y+.045,o.y+o.h-.035,.066,
+   meshBand(prof,leafStart,leafEnd,o.y+.045,o.y+o.h-.035,.066,
     leafMat,pivot,'door:leaf',{x:loc.x,y:0,z:loc.z});
    for(const y of [o.y+.3,o.y+o.h-.3]){
     const cyl=new THREE.Mesh(new THREE.CylinderGeometry(.026,.026,.11,10),hingeMat);
@@ -238,6 +242,16 @@ const WallOpenings=(()=>{
    adjacentStart=next.index===0?0:nextProf.length-overflow,
    adjacent={...o,id:group+'-b',group,
     x:adjacentStart+overflow/2-nextProf.length/2,w:overflow};
+  // Two connected parts form a continuous void, without a false doorjamb
+  // standing in the middle of the physical seam. Doors form a double leaf.
+  if(atStart)main.omitStartFrame=true;
+  else main.omitEndFrame=true;
+  if(next.index===0)adjacent.omitStartFrame=true;
+  else adjacent.omitEndFrame=true;
+  if(o.type==='door'){
+   main.hinge=atStart?'right':'left';
+   adjacent.hinge=next.index===0?'right':'left';
+  }
   return {ok:true,parts:[{entry:owner,opening:main},{entry:next.entry,opening:adjacent}],
    joint:true};
  }
