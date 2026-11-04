@@ -54,6 +54,29 @@ jobs:
               if names: print(' | '.join(names[:2]))
           print('=== END ACTIVITY MAP ===')
           PY
+      - name: Inspect whether native Main can open the construction editor without account
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/jadx-download build/jadx-bin build/jadx-out
+          gh release download v1.5.6 --repo skylot/jadx --pattern 'jadx-1.5.6.zip' --dir build/jadx-download
+          unzip -q build/jadx-download/jadx-1.5.6.zip -d build/jadx-bin
+          chmod +x build/jadx-bin/bin/jadx
+          build/jadx-bin/bin/jadx --no-res --single-class com.planner5d.library.activity.Main -d build/jadx-out original/com.planner5d.planner5d.apk || true
+          echo '=== NATIVE MAIN CLASS ==='
+          find build/jadx-out -iname '*Main*.java' | head -15
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for file in Path('build/jadx-out').rglob('Main.java'):
+              text=file.read_text(errors='ignore')
+              if 'com.planner5d.library.activity' not in text[:1500]:continue
+              print('Main.java size:',len(text))
+              for i,line in enumerate(text.splitlines(),1):
+                  if re.search(r'onCreate|login|signIn|auth|registration|guest|project|editor|room|offline|native',line,re.I):
+                      print(f'{i:5}: {line[:230]}')
+                      if i>4000:break
+          PY
       - name: Compile additive Android Activity as classes19.dex
         run: |
           mkdir -p build/classes build/dex
