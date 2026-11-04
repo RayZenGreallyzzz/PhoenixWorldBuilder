@@ -1070,6 +1070,7 @@ class CleanBuilder{
    this.outline=new THREE.BoxHelper(this.selected.root,0x44ffb8);this.scene.add(this.outline);
    notify('Выбрана деталь: '+this.selected.kind,'success');
   }else notify('Коснись строительной детали, чтобы выделить её');
+  this.gizmo.attach(this.selected);
   this.syncInspector();
  }
  duplicate(){
@@ -1080,6 +1081,7 @@ class CleanBuilder{
   this.entries.push(clone);this.scene.add(clone.root);this.selected=clone;this.setTool('pick');
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose()}
   this.outline=new THREE.BoxHelper(clone.root,0x44ffb8);this.scene.add(this.outline);
+  this.gizmo.attach(clone);
   this.syncInspector();notify('Создана копия детали','success');
  }
  delete(){
@@ -1087,6 +1089,7 @@ class CleanBuilder{
   const idx=this.entries.indexOf(this.selected);
   if(idx>=0)this.entries.splice(idx,1);
   this.selected.root.removeFromParent();this.selected=null;
+  this.gizmo.attach(null);
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose();this.outline=null}
   this.syncInspector();notify('Деталь удалена');
  }
@@ -1190,6 +1193,32 @@ class CleanBuilder{
   $('modeBuild').onclick=()=>this.setMode('build');
   $('modeCharacter').onclick=()=>this.setMode('character');
   $('modeDrone').onclick=()=>this.setMode('drone');
+  $('tabParts').onclick=()=>this.setTextureTab('parts');
+  $('tabTextures').onclick=()=>this.setTextureTab('textures');
+  $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
+  $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
+  $('btnApplyTexture').onclick=()=>this.changeSurface();
+  $('btnClearTexture').onclick=()=>this.changeSurface(true);
+  $('btnAddOpening').onclick=()=>this.addOpening();
+  $('btnRemoveOpening').onclick=()=>this.removeOpening();
+  $('openingSelect').onchange=()=>this.syncInspector();
+  $('doorSwing').oninput=()=>this.setDoorSwing();
+  $('openingType').onchange=()=>{
+   if($('openingType').value==='window'){
+    $('openingBottom').value=90;$('openingWidth').value=110;$('openingHeight').value=100;
+   }else{
+    $('openingBottom').value=0;$('openingWidth').value=85;$('openingHeight').value=205;
+   }
+  };
+  for(const mode of ['move','rotate','scale']){
+   const id='gizmo'+mode[0].toUpperCase()+mode.slice(1);
+   $(id).onclick=()=>{
+    this.gizmo.setMode(mode);
+    for(const name of ['move','rotate','scale'])
+     $('gizmo'+name[0].toUpperCase()+name.slice(1)).classList.toggle('active',mode===name);
+    if(this.tool!=='pick')notify('Для гизмо нажми «Выделить» и выбери деталь','warn');
+   };
+  }
   $('btnHideUi').onclick=()=>document.body.classList.toggle('uiHidden');
   $('btnSave').onclick=()=>this.save();
   $('btnLoad').onclick=()=>this.load();
@@ -1229,6 +1258,37 @@ class CleanBuilder{
   $('btnDelete').onclick=()=>this.delete();
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();
+  this.canvas.addEventListener('pointerdown',e=>{
+   if(this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
+   this.gizmoPointer=e.pointerId;this.controls.enabled=false;
+   if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
+   e.preventDefault();e.stopImmediatePropagation();
+  },true);
+  this.canvas.addEventListener('pointermove',e=>{
+   if(this.gizmoPointer!==e.pointerId)return;
+   const step=Number($('moveStep').value)||.05;
+   this.gizmo.move(e,this.selected,step);
+   if(this.outline&&this.selected)this.outline.setFromObject(this.selected.root);
+   e.preventDefault();e.stopImmediatePropagation();
+  },true);
+  const finishGizmo=e=>{
+   if(this.gizmoPointer!==e.pointerId)return;
+   const drag=this.gizmo.end(e);this.gizmoPointer=null;this.controls.enabled=true;
+   if(this.canvas.hasPointerCapture?.(e.pointerId))this.canvas.releasePointerCapture(e.pointerId);
+   if(drag?.mode==='scale'&&drag.changed&&this.selected){
+    if(WallOpenings.supported(this.selected.kind))this.updateGeometry(this.selected);
+    else if(this.selected.kind==='floor')this.rebuildFloor(this.selected,this.selected.floorTrim);
+    else if(this.selected.thicknessEditable)this.rebuildImported(this.selected);
+   }
+   if(drag?.changed){
+    if(this.selected)this.selected.root.updateMatrixWorld(true);
+    this.syncInspector();
+    notify('Гизмо: изменение выполнено, параметры сохраняются в проекте','success');
+   }
+   e.preventDefault();e.stopImmediatePropagation();
+  };
+  for(const type of ['pointerup','pointercancel'])
+   this.canvas.addEventListener(type,finishGizmo,true);
   this.canvas.addEventListener('pointerdown',e=>this.beginObjectDrag(e),true);
   this.canvas.addEventListener('pointermove',e=>this.continueObjectDrag(e),true);
   for(const type of ['pointerup','pointercancel'])
