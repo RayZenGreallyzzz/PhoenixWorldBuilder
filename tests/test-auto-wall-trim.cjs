@@ -55,11 +55,15 @@ function rawBounds(module){return G.localBounds(G.create(module.kind))}
  assert(FloorClip.apply(G.create('floor'),{cuts:result.cuts}).ok);
 }
 {
- const floor=module(25,'floor',[0,0,.5]);
+ const floor=module(25,'floor',[1.3,0,1.3]);
  const arc=module(26,'arc90',[0,0,0]);
  const result=Edges.resolve(floor,[arc],rawBounds(floor));
- assert.equal(result.ok,false,'Unsupported curved wall must never trigger a fake straight cut');
- assert.equal(result.skippedCurved,1);
+ assert(result.ok&&result.cuts.length>=1,'Circular wall follows multiple real arc segments');
+ const clipped=G.create('floor');
+ assert(FloorClip.apply(clipped,{cuts:result.cuts}).ok,'Curved inner edge generates a valid closed tile');
+ assert(FloorClip.polygonArea(FloorClip.clipPolygon(
+  [{x:-1,z:-1},{x:1,z:-1},{x:1,z:1},{x:-1,z:1}],{cuts:result.cuts}))<4,
+  'Curved wall removes a portion of the surrounding tile');
 }
 {
  const source=new THREE.Group();
