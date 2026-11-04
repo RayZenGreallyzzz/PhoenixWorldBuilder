@@ -9,13 +9,16 @@ const CleanGeometry=(()=>{
  const rotate=(p,yaw)=>V(p.x*Math.cos(yaw)+p.z*Math.sin(yaw),p.y,
    -p.x*Math.sin(yaw)+p.z*Math.cos(yaw));
  const cap=(a,b,out)=>({point:V(a,0,b),out:V(out[0],0,out[1]).normalize()});
+ const architecture=typeof ArchitectureKit!=='undefined'?ArchitectureKit:
+  (typeof require==='function'?require('./architecture-kit.js'):null);
  const catalog=[
   {kind:'floor',name:'Пол 2 × 2 м',category:'floor'},
   {kind:'wall',name:'Прямая стена 2 м',category:'wall'},
   {kind:'corner',name:'Угол 90°',category:'wall'},
   {kind:'arc90',name:'Четверть круга 90°',category:'wall'},
   {kind:'arc180',name:'Полукруг 180°',category:'wall'},
-  {kind:'roof',name:'Крыша — секция',category:'roof'}
+  {kind:'roof',name:'Крыша — секция',category:'roof'},
+  ...(architecture?architecture.catalog:[])
  ];
  const isBuiltIn=kind=>catalog.some(x=>x.kind===kind);
  function annularMesh(angle,width=2,height=2.6,thickness=.22,sx=1,sz=1){
@@ -46,6 +49,7 @@ const CleanGeometry=(()=>{
   return g;
  }
  function create(kind,thickness=.22,sx=1,sz=1){
+  if(architecture?.has(kind))return architecture.create(kind);
   sx=Math.max(.1,Math.abs(sx));sz=Math.max(.1,Math.abs(sz));
   const mat=new THREE.MeshStandardMaterial({color:'#d2c5ac',roughness:.86,side:THREE.DoubleSide});
   const root=new THREE.Group();root.name=kind;
