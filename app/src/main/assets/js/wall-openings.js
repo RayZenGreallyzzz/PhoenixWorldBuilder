@@ -1,116 +1,242 @@
-/* Phoenix Builder: real through-openings and inserted hinged doors/windows.
- * Only for the built-in straight, static wall; no fake flat window stickers.
- * Saved in unscaled wall-local metres so holes survive project restore.
+/* Phoenix Builder v2: genuine openings following straight, corner and curved
+ * wall centrelines, including join-spanning cuts across adjacent modules.
+ * All opening measurements are unscaled path metres, heights local metres.
+ * Shared group IDs support atomic create/remove across a physical seam.
  */
 const WallOpenings=(()=>{
  'use strict';
- const WIDTH=2,HEIGHT=2.6,MAX=6;
+ const HEIGHT=2.6,MAX=12,EPS=1e-5,R=2;
  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
- const num=(v,f)=>Number.isFinite(Number(v))?Number(v):f;
- function normalize(list){
-  if(!Array.isArray(list))return [];
-  return list.slice(0,MAX).filter(o=>o&&['door','window'].includes(o.type))
-   .map((o,i)=>({id:String(o.id||('cut-'+i)).replace(/[^\w-]/g,'').slice(0,28),
-    type:o.type,x:clamp(num(o.x,0),-.95,.95),
-    y:clamp(num(o.y,o.type==='door'?0:.85),0,2.45),
-    w:clamp(num(o.w,o.type==='door'?.9:1),.35,1.85),
-    h:clamp(num(o.h,o.type==='door'?2.05:1.05),.35,2.35),
-    hinge:o.hinge==='right'?'right':'left',
-    angle:clamp(num(o.angle,0),-160,160)}));
+ const finite=(v,d)=>Number.isFinite(Number(v))?Number(v):d;
+ const supported=kind=>['wall','corner','arc90','arc180'].includes(kind);
+ function profile(kind,thickness=.22,axes={x:1,y:1,z:1}){
+  if(!supported(kind))return null;
+  const sx=Math.max(.1,Math.abs(finite(axes.x,1))),sz=Math.max(.1,Math.abs(finite(axes.z,1)));
+  const thick=clamp(finite(thickness,.22),.025,.8);
+  const length=kind==='wall'?2:kind==='corner'?3.8:
+   kind==='arc90'?Math.PI:2*Math.PI;
+  const pos=s=>{
+   const t=clamp(s,0,length);
+   if(kind==='wall')return {x:t-1,z:0,nx:0,nz:1};
+   if(kind==='corner'){
+    // Smooth centreline follows the actual two straight arms of the L-module.
+    if(t<=1.9)return {x:-1.9+t,z:0,nx:0,nz:1};
+    return {x:0,z:-(t-1.9),nx:1,nz:0};
+   }
+   const theta=t/R;
+   return {x:R*Math.cos(theta),z:R*Math.sin(theta),nx:Math.cos(theta),nz:Math.sin(theta)};
+  };
+  const sides=(s,side)=>{
+   const p=pos(s),nx=p.nx/sx,nz=p.nz/sz,n=Math.hypot(nx,nz)||1;
+   return {x:p.x+side*thick/2*nx/n/sx,z:p.z+side*thick/2*nz/n/sz};
+  };
+  return {kind,length,thickness:thick,pos,sides,sx,sz};
  }
- function validate(list){
+ function normalize(raw){
+  if(!Array.isArray(raw))return [];
+  return raw.slice(0,MAX).filter(o=>o&&['door','window'].includes(o.type))
+   .map((o,i)=>({id:String(o.id||'cut-'+i).replace(/[^a-z\d:_-]/gi,'').slice(0,64),
+    group:String(o.group||o.id||'cut-'+i).replace(/[^a-z\d:_-]/gi,'').slice(0,64),
+    type:o.type,x:clamp(finite(o.x,0),-10,10),y:clamp(finite(o.y,o.type==='door'?0:.85),0,2.45),
+    w:clamp(finite(o.w,o.type==='door'?.9:1),.05,8),
+    h:clamp(finite(o.h,o.type==='door'?2.05:1.05),.1,2.45),
+    hinge:o.hinge==='right'?'right':'left',
+    angle:clamp(finite(o.angle,0),-160,160)}));
+ }
+ function validate(list,kind='wall'){
+  if(!supported(kind))return {ok:false,reason:'Нужна стандартная стена, угол или дуга'};
   const a=normalize(list);
-  if(a.length!==list.length)return {ok:false,reason:'Не более шести проёмов на одной стене'};
+  if(a.length!==list.length)return {ok:false,reason:'Не больше '+MAX+' проёмов на одном модуле'};
+  const prof=profile(kind);
   for(const o of a){
-   if(o.x-o.w/2<-.965||o.x+o.w/2>.965)
-    return {ok:false,reason:'Проём выходит за левый или правый край стены'};
-   if(o.y<0||o.y+o.h>HEIGHT-.08)
-    return {ok:false,reason:'Проём не помещается по высоте стены'};
+   const s=prof.length/2+o.x;
+   if(s-o.w/2<-.002||s+o.w/2>prof.length+.002)
+    return {ok:false,reason:'Проём выходит за конец этого участка стены'};
+   if(o.y<-.001||o.y+o.h>HEIGHT-.07)
+    return {ok:false,reason:'Проём слишком высокий или выходит за стену'};
   }
   for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
    const p=a[i],q=a[j];
-   if(Math.abs(p.x-q.x)<(p.w+q.w)/2+.025&&
-      p.y<q.y+q.h+.025&&q.y<p.y+p.h+.025)
-    return {ok:false,reason:'Проёмы пересекаются, сдвинь один из них'};
+   if(Math.abs(p.x-q.x)<(p.w+q.w)/2+.024&&
+      p.y<q.y+q.h+.024&&q.y<p.y+p.h+.024)
+    return {ok:false,reason:'Проёмы перекрываются'};
   }
   return {ok:true,openings:a};
  }
- function render(root,raw){
-  if(!root||root.name!=='wall')return {ok:false,reason:'Выбери прямую стену из каталога'};
-  const check=validate(raw||[]);
-  if(!check.ok)return check;
-  if(!check.openings.length)return {ok:true,changed:false};
-  const base=root.children.find(c=>c.isMesh&&c.geometry?.isBufferGeometry);
-  if(!base)return {ok:false,reason:'У стены нет исходной геометрии'};
-  const g=base.geometry;
-  g.computeBoundingBox();const box=g.boundingBox;
-  // Base wall BoxGeometry is 2 x 2.6 x (physical thickness / horizontal scale).
-  const depth=box.max.z-box.min.z,wallMat=base.material;
-  root.remove(base);g.dispose();
-  const parts=[];
-  const wall=(w,h,d,x,y,z=0)=>{
-   if(w<.001||h<.001)return;
-   const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),wallMat);
-   m.position.set(x,y,z);m.name='structure:wall';
-   m.userData.phoenixWallSurface=true;root.add(m);parts.push(m);
+ function pathEdges(prof,list){
+  const keys=[0,prof.length];
+  for(const o of list){keys.push(prof.length/2+o.x-o.w/2,prof.length/2+o.x+o.w/2)}
+  if(prof.kind==='corner')keys.push(1.9);
+  const maxStep=prof.kind.startsWith('arc')?.06:.22;
+  for(let s=0;s<prof.length;s+=maxStep)keys.push(Math.min(prof.length,s));
+  return [...new Set(keys.map(v=>Math.round(v*100000)/100000))]
+   .sort((a,b)=>a-b);
+ }
+ function geometry(prof,list){
+  const coords=[],uv=[];
+  const pts=(s,y,side)=>{const p=prof.sides(s,side);return [p.x,y,p.z]};
+  const vertex=(p,u,v)=>{coords.push(...p);uv.push(u,v)};
+  const tri=(a,b,c,ua,va,ub,vb,uc,vc)=>{
+   vertex(a,ua,va);vertex(b,ub,vb);vertex(c,uc,vc);
   };
-  const xs=[-WIDTH/2,WIDTH/2],ys=[0,HEIGHT];
-  for(const o of check.openings){xs.push(o.x-o.w/2,o.x+o.w/2);ys.push(o.y,o.y+o.h)}
-  const unique=arr=>[...new Set(arr.map(v=>Math.round(v*100000)/100000))].sort((a,b)=>a-b);
-  const xLines=unique(xs),yLines=unique(ys);
-  for(let xi=0;xi<xLines.length-1;xi++)for(let yi=0;yi<yLines.length-1;yi++){
-   const x0=xLines[xi],x1=xLines[xi+1],y0=yLines[yi],y1=yLines[yi+1];
-   const midX=(x0+x1)/2,midY=(y0+y1)/2;
-   if(check.openings.some(o=>midX>o.x-o.w/2-1e-5&&midX<o.x+o.w/2+1e-5&&
-       midY>o.y-1e-5&&midY<o.y+o.h+1e-5))continue;
-   wall(x1-x0,y1-y0,depth,midX,midY);
+  const quad=(a,b,c,d,u0,u1,v0,v1)=>{
+   tri(a,b,c,u0,v0,u1,v0,u1,v1);tri(a,c,d,u0,v0,u1,v1,u0,v1);
+  };
+  const xs=pathEdges(prof,list),ys=[0,HEIGHT];
+  for(const o of list)ys.push(o.y,o.y+o.h);
+  const heights=[...new Set(ys.map(y=>Math.round(y*100000)/100000))].sort((a,b)=>a-b);
+  const inside=(s,y)=>list.some(o=>
+   s>prof.length/2+o.x-o.w/2-EPS&&s<prof.length/2+o.x+o.w/2+EPS&&
+   y>o.y-EPS&&y<o.y+o.h+EPS);
+  for(let i=0;i<xs.length-1;i++)for(let j=0;j<heights.length-1;j++){
+   const s0=xs[i],s1=xs[i+1],y0=heights[j],y1=heights[j+1];
+   if(s1-s0<EPS||y1-y0<EPS||inside((s0+s1)/2,(y0+y1)/2))continue;
+   const a=pts(s0,y0,-1),b=pts(s1,y0,-1),c=pts(s1,y1,-1),d=pts(s0,y1,-1);
+   const e=pts(s0,y0,1),f=pts(s1,y0,1),g=pts(s1,y1,1),h=pts(s0,y1,1);
+   quad(a,b,c,d,s0,s1,y0,y1);quad(f,e,h,g,s0,s1,y0,y1);
+   const hasBelow=j>0&&!inside((s0+s1)/2,(heights[j-1]+heights[j])/2);
+   const hasAbove=j<heights.length-2&&!inside((s0+s1)/2,(heights[j+1]+heights[j+2])/2);
+   const hasBefore=i>0&&!inside((xs[i-1]+xs[i])/2,(y0+y1)/2);
+   const hasAfter=i<xs.length-2&&!inside((xs[i+1]+xs[i+2])/2,(y0+y1)/2);
+   if(!hasBelow)quad(e,f,b,a,s0,s1,0,prof.thickness);
+   if(!hasAbove)quad(d,c,g,h,s0,s1,0,prof.thickness);
+   if(!hasBefore)quad(e,a,d,h,0,prof.thickness,y0,y1);
+   if(!hasAfter)quad(b,f,g,c,0,prof.thickness,y0,y1);
   }
-  const frameMat=new THREE.MeshStandardMaterial({color:0xb1a99a,metalness:.2,roughness:.55}),
-   leafMat=new THREE.MeshStandardMaterial({color:0x795439,roughness:.63,metalness:.08}),
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  g.computeVertexNormals();g.computeBoundingBox();g.computeBoundingSphere();
+  return g;
+ }
+ function meshBand(prof,s0,s1,y0,y1,depth,mat,parent,name,offset=null){
+  if(s1-s0<EPS||y1-y0<EPS)return null;
+  const sections=[],step=prof.kind.startsWith('arc')?.06:.18;
+  for(let x=s0;x<s1;x+=step)sections.push(x);
+  sections.push(s1);
+  const ps=[],uv=[];
+  const add=(p,u,v)=>{ps.push(p.x-(offset?.x||0),p.y-(offset?.y||0),p.z-(offset?.z||0));uv.push(u,v)};
+  const tri=(a,b,c,u0,v0,u1,v1,u2,v2)=>{add(a,u0,v0);add(b,u1,v1);add(c,u2,v2)};
+  const quad=(a,b,c,d,u0,u1,v0,v1)=>{
+   tri(a,b,c,u0,v0,u1,v0,u1,v1);tri(a,c,d,u0,v0,u1,v1,u0,v1);
+  };
+  const pt=(s,y,sign)=>{
+   const p=prof.pos(s),nx=p.nx/prof.sx,nz=p.nz/prof.sz,n=Math.hypot(nx,nz)||1;
+   return {x:p.x+sign*depth/2*nx/n/prof.sx,z:p.z+sign*depth/2*nz/n/prof.sz,y};
+  };
+  for(let i=0;i<sections.length-1;i++){
+   const a=sections[i],b=sections[i+1];
+   for(const side of [-1,1]){
+    const q0=pt(a,y0,side),q1=pt(b,y0,side),q2=pt(b,y1,side),q3=pt(a,y1,side);
+    quad(q0,q1,q2,q3,a,b,y0,y1);
+   }
+   quad(pt(a,y1,-1),pt(b,y1,-1),pt(b,y1,1),pt(a,y1,1),a,b,0,depth);
+   quad(pt(a,y0,1),pt(b,y0,1),pt(b,y0,-1),pt(a,y0,-1),a,b,0,depth);
+  }
+  for(const s of [s0,s1]){
+   quad(pt(s,y0,-1),pt(s,y0,1),pt(s,y1,1),pt(s,y1,-1),0,depth,y0,y1);
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(ps,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  g.computeVertexNormals();g.computeBoundingBox();g.computeBoundingSphere();
+  const mesh=new THREE.Mesh(g,mat);mesh.name=name;
+  mesh.userData.phoenixInsert=true;parent.add(mesh);return mesh;
+ }
+ function infill(root,prof,o){
+  const s0=prof.length/2+o.x-o.w/2,s1=s0+o.w,
+   fw=Math.min(.045,o.w/6),depth=prof.thickness+.035;
+  const frame=new THREE.Group();frame.name='phoenixOpening:'+o.id;root.add(frame);
+  const frameMat=new THREE.MeshStandardMaterial({color:0xb1a99a,metalness:.2,roughness:.55,side:THREE.DoubleSide}),
+   leafMat=new THREE.MeshStandardMaterial({color:0x795439,roughness:.63,metalness:.08,side:THREE.DoubleSide}),
    hingeMat=new THREE.MeshStandardMaterial({color:0xe2b960,metalness:.85,roughness:.22}),
    glassMat=new THREE.MeshStandardMaterial({color:0x8ed9ed,metalness:.1,roughness:.15,
     transparent:true,opacity:.4,depthWrite:false,side:THREE.DoubleSide});
-  const extra=(group,w,h,d,x,y,z,mat,name)=>{
-   if(w<=0||h<=0||d<=0)return;
-   const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-   mesh.position.set(x,y,z);mesh.name=name;mesh.userData.phoenixInsert=true;
-   group.add(mesh);return mesh;
-  };
-  for(const o of check.openings){
-   const frame=new THREE.Group();frame.name='phoenixOpening:'+o.id;root.add(frame);
-   const left=o.x-o.w/2,right=o.x+o.w/2,frameWidth=.045;
-   extra(frame,frameWidth,o.h,depth+.035,left,o.y+o.h/2,0,frameMat,'frame:left');
-   extra(frame,frameWidth,o.h,depth+.035,right,o.y+o.h/2,0,frameMat,'frame:right');
-   extra(frame,o.w,frameWidth,depth+.035,o.x,o.y+o.h,0,frameMat,'frame:top');
-   if(o.type==='window'){
-    extra(frame,o.w,frameWidth,depth+.035,o.x,o.y,0,frameMat,'frame:bottom');
-    extra(frame,o.w-frameWidth*2,o.h-frameWidth*2,.025,o.x,o.y+o.h/2,0,glassMat,'window:glass');
-    extra(frame,.035,o.h,.09,o.x,o.y+o.h/2,0,frameMat,'frame:cross');
-   }else{
-    const dir=o.hinge==='left'?1:-1,hingeX=o.hinge==='left'?left+.045:right-.045;
-    const pivot=new THREE.Group();pivot.name='phoenixDoorPivot:'+o.id;
-    pivot.position.set(hingeX,0,0);pivot.userData.hingeSide=o.hinge;frame.add(pivot);
-    const leafW=Math.max(.15,o.w-.11),leafH=Math.max(.2,o.h-.08);
-    extra(pivot,leafW,leafH,.065,dir*leafW/2,o.y+.045+leafH/2,0,leafMat,'door:leaf');
-    for(const offset of [.35,o.h-.33]){
-     const hinge=new THREE.Mesh(new THREE.CylinderGeometry(.024,.024,.09,10),hingeMat);
-     hinge.position.set(0,o.y+offset,.045);hinge.name='door:hinge';
-     pivot.add(hinge);
-    }
-    pivot.rotation.y=(o.angle*Math.PI/180)*(o.hinge==='right'?-1:1);
+  meshBand(prof,s0,s0+fw,o.y,o.y+o.h,depth,frameMat,frame,'frame:left');
+  meshBand(prof,s1-fw,s1,o.y,o.y+o.h,depth,frameMat,frame,'frame:right');
+  meshBand(prof,s0,s1,o.y+o.h-fw,o.y+o.h,depth,frameMat,frame,'frame:top');
+  if(o.type==='window'){
+   meshBand(prof,s0,s1,o.y,o.y+fw,depth,frameMat,frame,'frame:bottom');
+   meshBand(prof,s0+fw,s1-fw,o.y+fw,o.y+o.h-fw,.024,glassMat,frame,'window:glass');
+  }else{
+   const hingeS=o.hinge==='left'?s0+fw:s1-fw,loc=prof.pos(hingeS);
+   const pivot=new THREE.Group();
+   pivot.name='phoenixDoorPivot:'+o.id;pivot.userData.hingeSide=o.hinge;
+   pivot.position.set(loc.x,0,loc.z);frame.add(pivot);
+   meshBand(prof,s0+fw,s1-fw,o.y+.045,o.y+o.h-.035,.066,
+    leafMat,pivot,'door:leaf',{x:loc.x,y:0,z:loc.z});
+   for(const y of [o.y+.3,o.y+o.h-.3]){
+    const cyl=new THREE.Mesh(new THREE.CylinderGeometry(.026,.026,.11,10),hingeMat);
+    cyl.name='door:hinge';cyl.position.set(0,y,.04);pivot.add(cyl);
    }
+   pivot.rotation.y=o.angle*Math.PI/180*(o.hinge==='right'?-1:1);
   }
-  return {ok:true,changed:true,wallPieces:parts.length,openings:check.openings.length};
+ }
+ function render(root,kind,raw,settings={}){
+  if(!supported(kind))return {ok:false,reason:'Вырезание поддерживает прямые, угловые и кривые стены'};
+  const check=validate(raw||[],kind);
+  if(!check.ok)return check;
+  if(!check.openings.length)return {ok:true,changed:false};
+  const prof=profile(kind,settings.thickness,settings.axes),wallMat=root.children.find(o=>o.isMesh)?.material;
+  if(!wallMat)return {ok:false,reason:'Не найдена основная поверхность стены'};
+  const shape=geometry(prof,check.openings);
+  if(shape.attributes.position.count<3)return {ok:false,reason:'Проём полностью разрушает стену'};
+  // The new shape contains actual full-depth openings, not an overlay mask.
+  for(const o of [...root.children])o.removeFromParent();
+  const wall=new THREE.Mesh(shape,wallMat);wall.name='structure:wall';
+  wall.userData.phoenixWallSurface=true;root.add(wall);
+  for(const o of check.openings)infill(root,prof,o);
+  return {ok:true,changed:true,triangles:shape.attributes.position.count/3,
+   openings:check.openings.length};
  }
  function setDoorAngle(root,id,angle){
-  const match=String(id);
   let pivot=null;
-  root.traverse(o=>{if(o.name==='phoenixDoorPivot:'+match)pivot=o});
+  root.traverse(o=>{if(o.name==='phoenixDoorPivot:'+id)pivot=o});
   if(!pivot)return false;
   pivot.rotation.y=clamp(Number(angle)||0,-160,160)*Math.PI/180*
    (pivot.userData.hingeSide==='right'?-1:1);
   return true;
  }
- return {normalize,validate,render,setDoorAngle,WIDTH,HEIGHT,MAX};
+ function splitAtJunction(owner,neighbors,raw){
+  const prof=profile(owner.kind,owner.thickness,owner.axes);
+  if(!prof)return {ok:false,reason:'Выбери стандартную стену, угол или дугу'};
+  const o=normalize([raw])[0];
+  if(!o)return {ok:false,reason:'Нужен проём двери или окна'};
+  const s=prof.length/2+o.x,left=s-o.w/2,right=s+o.w/2;
+  if(left>=0&&right<=prof.length)return {ok:true,parts:[{entry:owner,opening:o}]};
+  if(left<0&&right>prof.length)return {ok:false,reason:'Ширина проёма превышает два соединённых участка'};
+  const atStart=left<0,overflow=atStart?-left:right-prof.length;
+  const mainStart=Math.max(0,left),mainEnd=Math.min(prof.length,right);
+  if(mainEnd-mainStart<.06||overflow<.06)return {ok:false,
+   reason:'Положение у стыка слишком близко к краю; сдвинь центр проёма на несколько сантиметров'};
+  const ownSocket=CleanGeometry.worldSockets(owner)[atStart?0:1];
+  const matches=[];
+  for(const entry of neighbors||[]){
+   if(entry===owner||entry.id===owner.id||entry.category!=='wall'||entry.storey!==owner.storey||
+       !supported(entry.kind))continue;
+   const sockets=CleanGeometry.worldSockets(entry);
+   for(let i=0;i<sockets.length;i++){
+    const dst=sockets[i].point.distanceTo(ownSocket.point);
+    if(dst<=.12)matches.push({entry,index:i,distance:dst});
+   }
+  }
+  matches.sort((a,b)=>a.distance-b.distance);
+  if(!matches.length)return {ok:false,
+   reason:'Проём пересекает край стены, но рядом нет соединённой стены'};
+  if(matches.length>1&&matches[1].distance-matches[0].distance<.02)
+   return {ok:false,reason:'На стыке несколько стен — укажи конкретную соседнюю стену'};
+  const next=matches[0],nextProf=profile(next.entry.kind,next.entry.thickness,next.entry.axes);
+  if(overflow>nextProf.length-.05)return {ok:false,
+   reason:'Проём слишком широк для двух соединённых стен'};
+  const group=o.group||o.id,mainWidth=mainEnd-mainStart,
+   main={...o,id:group+'-a',group,x:(mainStart+mainEnd)/2-prof.length/2,w:mainWidth},
+   adjacentStart=next.index===0?0:nextProf.length-overflow,
+   adjacent={...o,id:group+'-b',group,
+    x:adjacentStart+overflow/2-nextProf.length/2,w:overflow};
+  return {ok:true,parts:[{entry:owner,opening:main},{entry:next.entry,opening:adjacent}],
+   joint:true};
+ }
+ return {supported,profile,normalize,validate,geometry,render,setDoorAngle,
+  splitAtJunction,HEIGHT,MAX};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=WallOpenings;
