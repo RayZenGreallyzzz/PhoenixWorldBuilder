@@ -197,7 +197,7 @@ const WallOpenings=(()=>{
    (pivot.userData.hingeSide==='right'?-1:1);
   return true;
  }
- function splitAtJunction(owner,neighbors,raw){
+ function splitAtJunction(owner,neighbors,raw,preferredNeighborId=null){
   const prof=profile(owner.kind,owner.thickness,owner.axes);
   if(!prof)return {ok:false,reason:'Выбери стандартную стену, угол или дугу'};
   const o=normalize([raw])[0];
@@ -221,6 +221,11 @@ const WallOpenings=(()=>{
    }
   }
   matches.sort((a,b)=>a.distance-b.distance);
+  if(preferredNeighborId!==null&&preferredNeighborId!==undefined&&preferredNeighborId!==''){
+   const found=matches.find(m=>String(m.entry.id)===String(preferredNeighborId));
+   if(!found)return {ok:false,reason:'Выбранная вторая стена не подключена к этому краю'};
+   matches.length=0;matches.push(found);
+  }
   if(!matches.length)return {ok:false,
    reason:'Проём пересекает край стены, но рядом нет соединённой стены'};
   if(matches.length>1&&matches[1].distance-matches[0].distance<.02)
