@@ -202,6 +202,113 @@ class CleanBuilder{
  descriptor(kind){
   return builtins.find(x=>x.kind===kind)||this.assets.get(kind);
  }
+ loadTextureFiles(){
+  try{const list=JSON.parse(localStorage.getItem('phoenix-builder-v2-textures')||'[]');
+   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-60):[];
+  }catch(e){return []}
+ }
+ setTextureTab(active='parts'){
+  const textures=active==='textures';
+  $('tabParts').classList.toggle('active',!textures);
+  $('tabTextures').classList.toggle('active',textures);
+  $('catalogItems').hidden=textures;
+  document.querySelector('.myCatalog').hidden=textures;
+  $('catalogImport').hidden=textures;
+  $('textureLibrary').hidden=!textures;
+  if(textures)this.renderTextureLibrary();
+ }
+ renderTextureLibrary(){
+  const container=$('textureCards');container.textContent='';
+  const selected=this.target()?.surface||{style:'none'};
+  for(const [style,label] of Object.entries(SurfaceMaterials.labels)){
+   if(style==='custom')continue;
+   const btn=document.createElement('button');btn.textContent=label;
+   btn.classList.toggle('active',selected.style===style);
+   btn.onclick=()=>this.chooseTexture(style);
+   container.append(btn);
+  }
+  for(const item of this.textureFiles){
+   const btn=document.createElement('button');btn.textContent='🖼 '+item.name;
+   btn.classList.toggle('active',selected.style==='custom'&&selected.imageId===item.id);
+   btn.onclick=()=>this.chooseTexture('custom',item.id);
+   container.append(btn);
+  }
+ }
+ chooseTexture(style,imageId=''){
+  const obj=this.target();
+  if(!obj)return notify('Выбери модуль для материала','warn');
+  this.activeTextureId=imageId||this.activeTextureId;
+  obj.surface=SurfaceMaterials.normalize({...obj.surface,style,imageId:style==='custom'?this.activeTextureId:''});
+  if(obj.surface.style==='custom'&&!obj.surface.imageId)
+   return notify('Загрузи свою текстуру кнопкой PNG / JPG / WebP','warn');
+  this.applySurfaceTo(obj);
+  this.syncInspector();this.renderTextureLibrary();
+  notify('Материал «'+(SurfaceMaterials.labels[style]||style)+'» выбран. Размер рисунка можно настроить справа.','success');
+ }
+ async importTextureFile(file){
+  if(!file)return;
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>3*1024*1024)
+   return notify('Нужна картинка PNG / JPG / WebP размером до 3 МБ','warn');
+  try{
+   const id='texture:'+Date.now().toString(36);
+   const bytes=await file.arrayBuffer();
+   await putAsset(id,bytes);
+   this.textureFiles=[...this.textureFiles,{id,name:safeName(file.name),type:file.type}].slice(-60);
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+   this.setTextureTab('textures');
+   if(this.target())this.chooseTexture('custom',id);
+   else notify('Текстура добавлена в библиотеку: '+file.name,'success');
+  }catch(err){console.error(err);notify('Не удалось загрузить изображение: '+err.message,'error')}
+ }
+ async textureAsset(id){
+  if(this.textureCache.has(id))return this.textureCache.get(id);
+  const buf=await getAsset(id);
+  if(!buf)throw Error('Файл текстуры больше не найден на этом устройстве');
+  const info=this.textureFiles.find(item=>item.id===id);
+  const url=URL.createObjectURL(new Blob([buf],{type:info?.type||'image/png'}));
+  try{
+   const tex=await new Promise((resolve,reject)=>{
+    new THREE.TextureLoader().load(url,resolve,undefined,reject);
+   });
+   tex.encoding=THREE.sRGBEncoding;tex.flipY=false;
+   this.textureCache.set(id,tex);return tex;
+  }finally{URL.revokeObjectURL(url)}
+ }
+ applySurfaceTo(obj){
+  if(!obj)return;
+  const settings=SurfaceMaterials.normalize(obj.surface);
+  if(settings.style==='none')return;
+  const root=obj.root;
+  if(settings.style==='custom'){
+   if(this.textureCache.has(settings.imageId)){
+    SurfaceMaterials.apply(root,settings,this.textureCache.get(settings.imageId));
+   }else if(settings.imageId){
+    this.textureAsset(settings.imageId).then(tex=>{
+     if(obj.root===root&&obj.surface?.imageId===settings.imageId)
+      SurfaceMaterials.apply(root,settings,tex);
+    }).catch(err=>notify('Текстура: '+err.message,'warn'));
+   }
+  }else SurfaceMaterials.apply(root,settings);
+ }
+ changeSurface(reset=false){
+  const obj=this.target();
+  if(!obj)return notify('Выбери деталь','warn');
+  const settings=reset?{style:'none'}:{
+   style:$('textureStyle').value,color:$('textureTint').value,
+   repeat:Number($('textureRepeat').value),imageId:this.activeTextureId||obj.surface?.imageId||''};
+  const next=SurfaceMaterials.normalize(settings);
+  if(next.style==='custom'&&!next.imageId)return notify('Выбери или загрузи картинку слева','warn');
+  obj.surface=next;
+  // Rebuild on reset to recover original imported GLB PBR maps.
+  if(reset){
+   if(obj.kind==='floor')this.rebuildFloor(obj,obj.floorTrim);
+   else if(CleanGeometry.isBuiltIn(obj.kind))this.updateGeometry(obj);
+   else this.rebuildImported(obj);
+  }else this.applySurfaceTo(obj);
+  if(obj===this.preview)this.updatePreview(this.cursor,false);
+  this.syncInspector();this.renderTextureLibrary();
+  notify(reset?'Исходный материал восстановлен':'Материал применён к модулю','success');
+ }
  loadPresets(){
   try{const records=JSON.parse(localStorage.getItem('phoenix-builder-clean-presets-v1')||'[]');
    return Array.isArray(records)?records.filter(p=>p&&typeof p.kind==='string'&&typeof p.name==='string').slice(0,100):[];
