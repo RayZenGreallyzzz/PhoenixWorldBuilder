@@ -67,7 +67,7 @@ function rawBounds(module){return G.localBounds(G.create(module.kind))}
  source.add(a);
  const original=Array.from(a.geometry.attributes.position.array),uv=Array.from(a.geometry.attributes.uv.array);
  const importCopy=source.clone(true);
- const result=Mesh.apply(importCopy,{planeCuts:[{nx:1,nz:0,offset:.5}]});
+ const result=Mesh.apply(importCopy,{planeCuts:[{nx:-1,nz:0,offset:-.5}]});
  assert(result.ok&&result.openCut,'Imported GLB supports exact vertical plane clipping');
  const box=G.localBounds(importCopy);
  near(box.max.x,.5,'Clipped imported GLB has correct physical limit');
