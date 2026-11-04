@@ -8,12 +8,14 @@
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
  <div class="topRight"><button id="btnSave">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
-<section id="catalog" class="panel left"><div class="panelTitle"><b>Детали</b><small>Нажми и установи на сцену</small></div><div id="catalogItems" class="parts"></div>
- <div class="importZone">
+<section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active">🧱 Детали</button><button id="tabTextures">🎨 Текстуры</button></div><small>Выбери модуль или материал</small></div><div id="catalogItems" class="parts"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
+ <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b><div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Текстуры хранятся на этом устройстве. При выборе применяется к выделенной или новой детали.</small></div><div id="catalogImport" class="importZone">
  <label for="importCategory">Импорт GLB как</label>
  <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
  <label class="fileButton">＋ Загрузить свой GLB<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
  <label class="fileButton ghostButton">🧍 Загрузить персонажа GLB<input id="importAvatar" type="file" accept=".glb,model/gltf-binary" hidden></label>
+   <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
+   <small class="tip">Модель автоматически подгоняется под рост и ширину. Анимация не изменяет внешний масштаб.</small>
  <p class="tip">Выбери правильный тип: декор свободно ставится на пол, а настенный декор закрепляется на поверхности стены.</p><p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
  </div>
 </section>
@@ -30,6 +32,8 @@
     <label>Длина Z, %<input id="sizeZ" type="number" min="10" max="1000" step="5" value="100"></label></div>
     <label>Толщина стены, см<input id="thickness" type="number" min="2.5" max="80" step=".5" value="22"></label>
     <small id="thicknessHint" class="tip">Толщина отдельно от общего масштаба. Для полукруга радиус не изменяется.</small>
+    <strong id="physicalDimensions" class="physicalSize" aria-live="polite">Габариты: —</strong>
+    <button id="btnSaveModule" class="primary">💾 Сохранить деталь в «Мои»</button>
   </div>
   <div class="rowSection"><b>Положение объекта в метрах</b>
    <div class="cols3"><label>X<input id="posX" type="number" step=".05"></label><label>Y<input id="posY" type="number" step=".05"></label><label>Z<input id="posZ" type="number" step=".05"></label></div>
@@ -37,8 +41,65 @@
    <div class="cols2"><button id="btnRotate">⟳ Повернуть 90°</button><button id="btnDuplicate">▣ Копия</button></div>
    <button id="btnDelete" class="danger">✕ Удалить выбранное</button>
   </div>
+  <div class="rowSection"><b>↔ Перемещение готовой детали</b>
+    <label>Шаг перемещения<select id="moveStep"><option value="0.01">1 см</option><option value="0.05">5 см</option><option value="0.25" selected>25 см</option><option value="1">1 м</option></select></label>
+    <div class="movePad"><button id="moveForward">↑ Z−</button><button id="moveLeft">← X−</button><button id="moveRight">X+ →</button><button id="moveBack">↓ Z+</button></div>
+    <small class="tip">Нажми «Выделить», затем тяни выбранную деталь пальцем в любую сторону либо используй стрелки. Высота при перетаскивании не меняется.</small>
+   </div>
+   <details class="rowSection" id="gizmoPanel" open><summary>🎛 Гизмо — 3D управление</summary>
+    <div class="gizmoModes"><button id="gizmoMove" class="active">↔ Двигать</button><button id="gizmoRotate">⟳ Крутить</button><button id="gizmoScale">◇ Масштаб</button></div>
+    <small class="tip">Нажми «Выделить», выбери деталь и потяни цветную стрелку X/Y/Z, кольцо поворота или кубик масштаба. Белый кубик меняет общий масштаб.</small>
+   </details>
+   <details class="rowSection" id="textureInspector"><summary>🎨 Материалы и текстуры</summary>
+    <label>Покрытие<select id="textureStyle"><option value="none">Исходный материал</option><option value="paint">Однотонная краска</option><option value="brick">Кирпич</option><option value="stone">Камень</option><option value="wood">Дерево</option><option value="tile">Плитка</option><option value="concrete">Бетон</option><option value="metal">Металл</option><option value="custom">Моё изображение</option></select></label>
+    <label>Оттенок / цвет<input id="textureTint" type="color" value="#ffffff"></label>
+    <label>Повтор рисунка<input id="textureRepeat" type="number" min=".2" max="12" step=".2" value="1"></label>
+    <div class="cols2"><button id="btnApplyTexture" class="primary">Применить</button><button id="btnClearTexture" class="alt">Сбросить</button></div>
+    <small id="textureSelection" class="tip">Можно выбрать узор слева во вкладке «Текстуры».</small>
+   </details>
+   <details class="rowSection" id="prefabDoorPanel"><summary>🚪 Петли готовой двери</summary>
+    <label>Угол открытия дверной створки, °<input type="range" id="prefabDoorSwing" min="-110" max="110" value="0" step="5"></label>
+    <small class="tip">Двери из библиотеки имеют собственные петли; у двустворчатых створки открываются в противоположные стороны. Угол сохраняется в проекте.</small>
+   </details>
+   <details class="rowSection" id="openingPanel"><summary>🚪 Двери, петли и окна</summary>
+    <p class="tip">Выдели уже построенную прямую стену. Отверстие будет настоящим: геометрия стены удаляется, а дверь на петлях или оконная рама со стеклом вставляется в проём.</p>
+    <label>Тип проёма<select id="openingType"><option value="door">Дверь с петлями</option><option value="window">Окно со стеклом</option></select></label>
+    <div class="cols2"><label>Смещение по длине / дуге от середины стены, см<input id="openingX" type="number" step="5" value="0"></label><label>Низ от пола, см<input id="openingBottom" type="number" step="5" value="0"></label></div>
+    <div class="cols2"><label>Ширина, см<input id="openingWidth" type="number" min="35" max="180" step="5" value="85"></label><label>Высота, см<input id="openingHeight" type="number" min="35" max="235" step="5" value="205"></label></div>
+    <label>Соседняя стена на стыке<select id="openingNeighbor"><option value="">Авто (ближайшая)</option></select></label>
+    <small class="tip">На полукруглой стене ширина измеряется вдоль дуги. Если проём пересекает стык стен, выбери соседний модуль — отверстие вырежется в обоих.</small>
+    <label>Вид двери<select id="openingDoorStyle"><option value="classic">Обычная филёнчатая</option><option value="round">С округлым верхом</option><option value="gothic">Стрельчатая / готика</option><option value="rune">Фэнтези с рунами</option><option value="double">Двустворчатая</option></select></label>
+    <label>Вид рамы<select id="openingFrameStyle"><option value="classic">Обычная прямая</option><option value="round">Круглая арка</option><option value="gothic">Готическая арка</option><option value="portal">Фэнтези-портал</option></select></label>
+    <label>Петли<select id="openingHinge"><option value="left">Слева</option><option value="right">Справа</option></select></label>
+    <button id="btnAddOpening" class="primary">✂ Вырезать проём и вставить</button>
+    <button id="btnChangeOpeningStyle" class="alt">🎨 Поменять стиль готовой двери или рамы</button>
+    <label>Готовые проёмы<select id="openingSelect"></select></label>
+    <label>Открыть дверь, °<input id="doorSwing" type="range" min="-110" max="110" value="0"></label>
+    <button id="btnRemoveOpening" class="alt">Удалить выбранный проём</button>
+   </details>
+   <details class="rowSection" id="autoCutPanel"><summary>🏠 Автоподрезка по границе стен</summary>
+    <p class="tip">Выбери плиту пола или импортированный GLB типа «Пол». Подрезка учитывает прямые стены и углы на текущем этаже, срезая часть плитки за внутренней гранью стены. Встроенные дуги учитываются с приближением по коротким участкам; сложные импортированные кривые пока пропускаются.</p>
+    <div class="cols2"><button id="btnAutoTrim" class="primary">✂ По стенам</button><button id="btnResetAutoTrim" class="alt">Снять автосрез</button></div>
+    <div class="cols2"><button id="btnBulkTrim" class="primary">✂ Все плиты</button><button id="btnBulkTrimReset" class="alt">Вернуть все плиты</button></div>
+    <small class="tip">«Все плиты» обрабатывает плитки на всех этажах, учитывая только стены того же этажа. Можно отменить автосрезы кнопкой «Вернуть все плиты».</small>
+    <small class="tip">Перед массовой обработкой сохрани проект. Результат можно сохранить в «Мои детали».</small>
+   </details>
+  <details class="rowSection" id="floorCutPanel"><summary>✂ Подрезка края плиты / плитки</summary>
+    <p class="tip">Выдели стандартную плиту пола. Линия разреза проходит под заданным углом по X/Z; толщина плиты сохраняется, срез закрывается. Для внешнего края подгони угол и смещение.</p>
+    <label>Направление нормали среза, °<input id="floorCutAngle" type="number" min="-180" max="180" step="5" value="0"></label>
+    <label>Смещение от центра исходной плиты, м<input id="floorCutOffset" type="number" min="-2.8" max="2.8" step=".05" value="0"></label>
+    <label>Оставить сторону<select id="floorCutSide"><option value="less">Со стороны − нормали</option><option value="greater">Со стороны + нормали</option></select></label>
+    <div class="cols2"><button id="btnApplyFloorCut">✂ Подрезать</button><button id="btnResetFloorCut" class="alt">Сбросить срез</button></div>
+   </details>
+  <details class="rowSection" id="glbCutPanel"><summary>✂ Точный наклонный срез GLB</summary>
+    <p class="tip">Для статических импортированных GLB: режет геометрию по прямой под любым углом (плоскость вертикальна). UV сохраняются. Замкнутые статические GLB получают закрытый торец, исходные материалы и UV сохраняются; открытые/повреждённые сетки не закрываются автоматически. Оригинал GLB не изменяется.</p>
+    <label>Угол нормали, °<input id="glbCutAngle" type="number" min="-180" max="180" step="1" value="0"></label>
+    <label>Положение плоскости от центра модели, м<input id="glbCutOffset" type="number" step=".01" value="0"></label>
+    <label>Оставить сторону<select id="glbCutSide"><option value="less">− нормали</option><option value="greater">+ нормали</option></select></label>
+    <div class="cols2"><button id="btnApplyGlbCut">✂ Подрезать GLB</button><button id="btnResetGlbCut" class="alt">Снять этот срез</button></div>
+   </details>
   <details class="rowSection" id="meshPanel"><summary>✂ Правка своего GLB: обрезать / согнуть</summary>
-    <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. Обрезка по плоскости оставляет открытый край; скелетные модели не деформируем.</p>
+    <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. После среза замкнутые статические сетки закрываются. У открытых GLB торец останется открытым; скелетные модели не деформируем.</p>
     <label>Ось обрезки<select id="trimAxis"><option value="x">X — ширина</option><option value="y">Y — высота</option><option value="z">Z — длина</option></select></label>
     <div class="cols2"><label>Срезать с начала, %<input id="trimStart" type="number" min="0" max="90" step="1" value="0"></label>
     <label>Срезать с конца, %<input id="trimEnd" type="number" min="0" max="90" step="1" value="0"></label></div>
@@ -65,6 +126,11 @@
 <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
-<script src="js/clean-geometry.js"></script><script src="js/clean-mesh-edit.js"></script>
-<script src="js/clean-app.js"></script>
+<script src="js/architecture-kit.js"></script>
+ <script src="js/clean-geometry.js"></script><script src="js/mesh-caps.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script><script src="js/bulk-floor-trim.js"></script>
+<script src="js/avatar-fit.js"></script>
+ <script src="js/surface-materials.js"></script>
+ <script src="js/wall-openings.js"></script>
+ <script src="js/builder-gizmo.js"></script>
+ <script src="js/clean-app.js"></script>
 </body></html>

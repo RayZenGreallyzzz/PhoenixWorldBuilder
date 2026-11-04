@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: phoenix-apk-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -51,6 +55,13 @@ jobs:
           for file in app/src/main/assets/js/*.js; do node --check "$file"; done
           node tests/test-clean-builder.cjs
           node tests/test-clean-mesh-edit.cjs
+          node tests/test-mesh-caps.cjs
+          node tests/test-curved-openings.cjs
+          node tests/test-studio-tools.cjs
+          node tests/test-architecture-kit.cjs
+          node tests/test-bulk-floor-trim.cjs
+          node tests/test-planner-tools.cjs
+          node tests/test-auto-wall-trim.cjs
           node tests/test-clean-browser-smoke.cjs
           node tests/test-clean-interactions.cjs
           node tests/test-android-branding.cjs

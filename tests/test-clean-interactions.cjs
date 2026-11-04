@@ -1,4 +1,4 @@
-const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
 const root=path.resolve(__dirname,'../app/src/main/assets');let browser=null;
 for(const bin of ['google-chrome','google-chrome-stable','chromium','chromium-browser']){
  const r=cp.spawnSync('which',[bin],{encoding:'utf8'});
@@ -17,7 +17,17 @@ const source=[
 "app.setMode('character');if(!app.preview.root.visible)throw Error('Avatar missing preview');",
 "app.place();if(app.entries.length!==count+2)throw Error('Avatar cannot place');",
 "app.setMode('build');",
+"for(const kind of ['doorRound','frameGothic','roofHip4','roofFantasySpire']){app.selectKind(kind);if(!app.preview?.root)throw Error('Missing architecture prefab '+kind);app.place()}",
 "const wall=app.createEntry('wall',{position:[8,0,0]});app.entries.push(wall);app.scene.add(wall.root);",
+"const neighbor=app.createEntry('wall',{position:[10,0,0]});app.entries.push(neighbor);app.scene.add(neighbor.root);",
+"app.setTool('pick');app.selected=wall;",
+"for(const [id,value] of Object.entries({openingType:'window',openingX:75,openingBottom:90,openingWidth:90,openingHeight:100}))document.getElementById(id).value=value;",
+"app.addOpening();if(wall.openings.length!==1||neighbor.openings.length!==1)throw Error('Window did not span joined walls');",
+"const arcWall=app.createEntry('arc180',{position:[15,0,0]});app.entries.push(arcWall);app.scene.add(arcWall.root);",
+"app.selected=arcWall;",
+"for(const [id,value] of Object.entries({openingX:0,openingBottom:90,openingWidth:100,openingHeight:100}))document.getElementById(id).value=value;",
+"app.addOpening();if(arcWall.openings.length!==1)throw Error('Semicircular window did not cut real wall');",
+
 "const decor=new THREE.Group();decor.add(new THREE.Mesh(new THREE.BoxGeometry(.8,.6,.08),new THREE.MeshStandardMaterial()));",
 "app.assets.set('glb:decor',{template:decor,name:'Picture',category:'decor'});",
 "app.selectKind('glb:decor');app.surfaceHit={point:new THREE.Vector3(8,1.4,.11),normal:new THREE.Vector3(0,0,1),entry:wall};",
@@ -43,12 +53,20 @@ const html=original.replace('</body>','<script>'+source+'</script></body>');
 if(original===html)throw Error('HTML append failed');
 fs.writeFileSync(temp,html);let r;
 try{
- r=cp.spawnSync(browser,[
- '--headless','--no-sandbox','--disable-dev-shm-usage',
- '--enable-webgl','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader',
- '--disable-features=Vulkan','--virtual-time-budget=4500','--dump-dom',
- '--window-size=1440,900','file://'+temp
- ],{encoding:'utf8',timeout:30000,maxBuffer:25*1024*1024});
+ for(let attempt=0;attempt<2;attempt++){
+  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'phoenix-interact-'));
+  try{
+   r=cp.spawnSync(browser,[
+    '--user-data-dir='+profile,'--no-first-run','--disable-extensions',
+    '--headless','--no-sandbox','--disable-dev-shm-usage',
+    '--enable-webgl','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader',
+    '--disable-features=Vulkan','--virtual-time-budget=4500','--dump-dom',
+    '--window-size=1440,900','file://'+temp
+   ],{encoding:'utf8',timeout:45000,maxBuffer:25*1024*1024});
+  }finally{fs.rmSync(profile,{recursive:true,force:true})}
+  if((r.stdout||'').includes('data-interaction-smoke="ok"'))break;
+  console.warn('Retrying transient headless UI interaction failure '+(attempt+1)+'/2');
+ }
 }finally{fs.unlinkSync(temp)}
 if(!(r.stdout||'').includes('data-interaction-smoke="ok"')){
  const error=(r.stdout||'').match(/data-interaction-smoke="([^"]*)"/)?.[1]||'unknown';

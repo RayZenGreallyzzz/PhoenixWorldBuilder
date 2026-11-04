@@ -1,4 +1,4 @@
-const fs=require('node:fs'),path=require('node:path');
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {spawnSync}=require('node:child_process');
 const candidates=['google-chrome','google-chrome-stable','chromium','chromium-browser'];
 let executable=null;
@@ -16,11 +16,20 @@ const args=[
  '--enable-webgl','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader',
  '--disable-features=Vulkan','--virtual-time-budget=3000','--dump-dom',
  '--window-size=1440,900',file];
-const result=spawnSync(executable,args,{encoding:'utf8',timeout:25000,maxBuffer:20*1024*1024});
-const dom=result.stdout||'';
-if(dom.includes('data-clean-ready="true"')){
- console.log('Clean Builder WebGL starts in headless Chromium with UI and Three.js active.');
- process.exit(0);
+let result,dom='';
+for(let attempt=0;attempt<2;attempt++){
+ const profile=fs.mkdtempSync(path.join(os.tmpdir(),'phoenix-ui-'));
+ try{
+  result=spawnSync(executable,['--user-data-dir='+profile,'--no-first-run',
+   '--disable-extensions',...args],
+   {encoding:'utf8',timeout:45000,maxBuffer:20*1024*1024});
+  dom=result.stdout||'';
+ }finally{fs.rmSync(profile,{recursive:true,force:true})}
+ if(dom.includes('data-clean-ready="true"')){
+  console.log('Clean Builder WebGL starts in headless Chromium with UI and Three.js active.');
+  process.exit(0);
+ }
+ console.warn('Transient Chrome start failure (attempt '+(attempt+1)+'/2)');
 }
 const error=(dom.match(/<span id="status">([^<]+)/)||[])[1]||'';
 console.error('Clean viewer failed headless start', {exit:result.status,status:error,stderr:(result.stderr||'').slice(-1500)});
