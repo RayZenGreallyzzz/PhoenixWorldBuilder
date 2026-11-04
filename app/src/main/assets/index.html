@@ -44,12 +44,24 @@
     <div class="movePad"><button id="moveForward">↑ Z−</button><button id="moveLeft">← X−</button><button id="moveRight">X+ →</button><button id="moveBack">↓ Z+</button></div>
     <small class="tip">Нажми «Выделить», затем тяни выбранную деталь пальцем в любую сторону либо используй стрелки. Высота при перетаскивании не меняется.</small>
    </div>
-   <details class="rowSection" id="floorCutPanel"><summary>✂ Подрезка края плиты / плитки</summary>
+   <details class="rowSection" id="autoCutPanel"><summary>🏠 Автоподрезка по границе стен</summary>
+    <p class="tip">Выбери плиту пола или импортированный GLB типа «Пол». Подрезка учитывает прямые стены и углы на текущем этаже, срезая часть плитки за внутренней гранью стены. Изогнутые стены пока пропускаются.</p>
+    <div class="cols2"><button id="btnAutoTrim" class="primary">✂ По стенам</button><button id="btnResetAutoTrim" class="alt">Снять автосрез</button></div>
+    <small class="tip">Перед массовой обработкой сохрани проект. Результат можно сохранить в «Мои детали».</small>
+   </details>
+  <details class="rowSection" id="floorCutPanel"><summary>✂ Подрезка края плиты / плитки</summary>
     <p class="tip">Выдели стандартную плиту пола. Линия разреза проходит под заданным углом по X/Z; толщина плиты сохраняется, срез закрывается. Для внешнего края подгони угол и смещение.</p>
     <label>Направление нормали среза, °<input id="floorCutAngle" type="number" min="-180" max="180" step="5" value="0"></label>
     <label>Смещение от центра исходной плиты, м<input id="floorCutOffset" type="number" min="-2.8" max="2.8" step=".05" value="0"></label>
     <label>Оставить сторону<select id="floorCutSide"><option value="less">Со стороны − нормали</option><option value="greater">Со стороны + нормали</option></select></label>
     <div class="cols2"><button id="btnApplyFloorCut">✂ Подрезать</button><button id="btnResetFloorCut" class="alt">Сбросить срез</button></div>
+   </details>
+  <details class="rowSection" id="glbCutPanel"><summary>✂ Точный наклонный срез GLB</summary>
+    <p class="tip">Для статических импортированных GLB: режет геометрию по прямой под любым углом (плоскость вертикальна). UV сохраняются. У сложных моделей срез остаётся открытым; исходный GLB не изменяется.</p>
+    <label>Угол нормали, °<input id="glbCutAngle" type="number" min="-180" max="180" step="1" value="0"></label>
+    <label>Положение плоскости от центра модели, м<input id="glbCutOffset" type="number" step=".01" value="0"></label>
+    <label>Оставить сторону<select id="glbCutSide"><option value="less">− нормали</option><option value="greater">+ нормали</option></select></label>
+    <div class="cols2"><button id="btnApplyGlbCut">✂ Подрезать GLB</button><button id="btnResetGlbCut" class="alt">Снять этот срез</button></div>
    </details>
   <details class="rowSection" id="meshPanel"><summary>✂ Правка своего GLB: обрезать / согнуть</summary>
     <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. Обрезка по плоскости оставляет открытый край; скелетные модели не деформируем.</p>
@@ -79,6 +91,6 @@
 <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
-<script src="js/clean-geometry.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script>
+<script src="js/clean-geometry.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
