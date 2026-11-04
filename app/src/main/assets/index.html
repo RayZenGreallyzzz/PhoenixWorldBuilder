@@ -60,8 +60,10 @@
    <details class="rowSection" id="openingPanel"><summary>🚪 Двери, петли и окна</summary>
     <p class="tip">Выдели уже построенную прямую стену. Отверстие будет настоящим: геометрия стены удаляется, а дверь на петлях или оконная рама со стеклом вставляется в проём.</p>
     <label>Тип проёма<select id="openingType"><option value="door">Дверь с петлями</option><option value="window">Окно со стеклом</option></select></label>
-    <div class="cols2"><label>Центр X от середины стены, см<input id="openingX" type="number" step="5" value="0"></label><label>Низ от пола, см<input id="openingBottom" type="number" step="5" value="0"></label></div>
+    <div class="cols2"><label>Смещение по длине / дуге от середины стены, см<input id="openingX" type="number" step="5" value="0"></label><label>Низ от пола, см<input id="openingBottom" type="number" step="5" value="0"></label></div>
     <div class="cols2"><label>Ширина, см<input id="openingWidth" type="number" min="35" max="180" step="5" value="85"></label><label>Высота, см<input id="openingHeight" type="number" min="35" max="235" step="5" value="205"></label></div>
+    <label>Соседняя стена на стыке<select id="openingNeighbor"><option value="">Авто (ближайшая)</option></select></label>
+    <small class="tip">На полукруглой стене ширина измеряется вдоль дуги. Если проём пересекает стык стен, выбери соседний модуль — отверстие вырежется в обоих.</small>
     <label>Петли<select id="openingHinge"><option value="left">Слева</option><option value="right">Справа</option></select></label>
     <button id="btnAddOpening" class="primary">✂ Вырезать проём и вставить</button>
     <label>Готовые проёмы<select id="openingSelect"></select></label>
