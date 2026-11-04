@@ -214,35 +214,70 @@ const WallOpenings=(()=>{
  }
  function infill(root,prof,o){
   const s0=prof.length/2+o.x-o.w/2,s1=s0+o.w,
-   fw=Math.min(.045,o.w/6),depth=prof.thickness+.035;
+   fw=Math.min(.045,o.w/6),depth=prof.thickness+.035,mode=archMode(o);
   const frame=new THREE.Group();frame.name='phoenixOpening:'+o.id;root.add(frame);
-  const frameMat=new THREE.MeshStandardMaterial({color:0xb1a99a,metalness:.2,roughness:.55,side:THREE.DoubleSide}),
-   leafMat=new THREE.MeshStandardMaterial({color:0x795439,roughness:.63,metalness:.08,side:THREE.DoubleSide}),
+  const frameMat=new THREE.MeshStandardMaterial({
+   color:o.frameStyle==='portal'?0x4f4e66:o.frameStyle==='gothic'?0x85838b:0xb1a99a,
+   metalness:o.frameStyle==='portal'?.55:.2,roughness:.55,side:THREE.DoubleSide}),
+   leafMat=new THREE.MeshStandardMaterial({
+    color:o.doorStyle==='rune'?0x383141:o.doorStyle==='gothic'?0x554039:0x795439,
+    roughness:.63,metalness:.08,side:THREE.DoubleSide}),
    hingeMat=new THREE.MeshStandardMaterial({color:0xe2b960,metalness:.85,roughness:.22}),
    glassMat=new THREE.MeshStandardMaterial({color:0x8ed9ed,metalness:.1,roughness:.15,
     transparent:true,opacity:.4,depthWrite:false,side:THREE.DoubleSide});
   if(!o.omitStartFrame)meshBand(prof,s0,s0+fw,o.y,o.y+o.h,depth,frameMat,frame,'frame:left');
   if(!o.omitEndFrame)meshBand(prof,s1-fw,s1,o.y,o.y+o.h,depth,frameMat,frame,'frame:right');
-  meshBand(prof,s0,s1,o.y+o.h-fw,o.y+o.h,depth,frameMat,frame,'frame:top');
+  if(mode){
+   const arch=s=>archTop(o,s,prof,mode),maxHeight=()=>o.y+o.h;
+   // Architectural wall is actually rebuilt up to the shaped arch profile.
+   const wall=root.children.find(mesh=>mesh.name==='structure:wall');
+   const cap=variableBand(prof,s0,s1,arch,maxHeight,prof.thickness,wall.material,
+    root,'structure:arched-lintel');
+   cap.userData.phoenixInsert=false;
+   cap.userData.phoenixWallSurface=true;
+   variableBand(prof,s0,s1,s=>arch(s)-fw/2,s=>arch(s)+fw/2,
+    depth+.03,frameMat,frame,'frame:curved-arch');
+  }else{
+   meshBand(prof,s0,s1,o.y+o.h-fw,o.y+o.h,depth,frameMat,frame,'frame:top');
+  }
   if(o.type==='window'){
    meshBand(prof,s0,s1,o.y,o.y+fw,depth,frameMat,frame,'frame:bottom');
-   meshBand(prof,s0+(o.omitStartFrame?.008:fw),s1-(o.omitEndFrame?.008:fw),
-    o.y+fw,o.y+o.h-fw,.024,glassMat,frame,'window:glass');
+   const from=s0+(o.omitStartFrame?.008:fw),to=s1-(o.omitEndFrame?.008:fw);
+   if(mode){
+    variableBand(prof,from,to,()=>o.y+fw,
+     s=>Math.max(o.y+fw+.005,archTop(o,s,prof,mode)-fw),
+     .024,glassMat,frame,'window:glass');
+   }else meshBand(prof,from,to,o.y+fw,o.y+o.h-fw,.024,glassMat,frame,'window:glass');
   }else{
-   const leafStart=s0+(o.omitStartFrame?.008:fw);
-   const leafEnd=s1-(o.omitEndFrame?.008:fw);
-   const hingeS=o.hinge==='left'?leafStart:leafEnd,loc=prof.pos(hingeS);
-   const pivot=new THREE.Group();
-   pivot.name='phoenixDoorPivot:'+o.id;pivot.userData.hingeSide=o.hinge;
-   pivot.position.set(loc.x,0,loc.z);frame.add(pivot);
-   meshBand(prof,leafStart,leafEnd,o.y+.045,o.y+o.h-.035,.066,
-    leafMat,pivot,'door:leaf',{x:loc.x,y:0,z:loc.z});
-   for(const y of [o.y+.3,o.y+o.h-.3]){
-    const cyl=new THREE.Mesh(new THREE.CylinderGeometry(.026,.026,.11,10),hingeMat);
-    cyl.name='door:hinge';cyl.position.set(0,y,.04);pivot.add(cyl);
+   const leafStart=s0+(o.omitStartFrame?.008:fw),leafEnd=s1-(o.omitEndFrame?.008:fw);
+   const double=o.doorStyle==='double'&&!o.omitStartFrame&&!o.omitEndFrame,
+    segments=double?[[leafStart,(leafStart+leafEnd)/2,'left'],
+     [(leafStart+leafEnd)/2,leafEnd,'right']]:
+    [[leafStart,leafEnd,o.hinge]];
+   for(const [a,b,hingeSide] of segments){
+    const hingeS=hingeSide==='left'?a:b,loc=prof.pos(hingeS);
+    const pivot=new THREE.Group();
+    pivot.name='phoenixDoorPivot:'+o.id+(double?':'+hingeSide:'');
+    pivot.userData.hingeSide=hingeSide;
+    pivot.position.set(loc.x,0,loc.z);frame.add(pivot);
+    if(mode){
+     variableBand(prof,a,b,()=>o.y+.045,s=>
+      Math.max(o.y+.12,archTop(o,s,prof,mode)-.052),.066,
+      leafMat,pivot,'door:leaf',{x:loc.x,y:0,z:loc.z});
+    }else meshBand(prof,a,b,o.y+.045,o.y+o.h-.035,.066,
+     leafMat,pivot,'door:leaf',{x:loc.x,y:0,z:loc.z});
+    for(const y of [o.y+.3,o.y+o.h-.3]){
+     const cyl=new THREE.Mesh(new THREE.CylinderGeometry(.026,.026,.11,10),hingeMat);
+     cyl.name='door:hinge';cyl.position.set(0,y,.045);pivot.add(cyl);
+    }
+    const handle=new THREE.Mesh(new THREE.SphereGeometry(.043,8,6),hingeMat);
+    const far=prof.pos(hingeSide==='left'?b-.13:a+.13);
+    handle.position.set(far.x-loc.x,o.y+o.h*.52,far.z-loc.z+.085);
+    handle.name='door:handle';pivot.add(handle);
+    pivot.rotation.y=o.angle*Math.PI/180*(hingeSide==='right'?-1:1);
    }
-   pivot.rotation.y=o.angle*Math.PI/180*(o.hinge==='right'?-1:1);
   }
+  if(kit)kit.decorateOpening(frame,o,prof);
  }
  function render(root,kind,raw,settings={}){
   if(!supported(kind))return {ok:false,reason:'Вырезание поддерживает прямые, угловые и кривые стены'};
