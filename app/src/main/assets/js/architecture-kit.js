@@ -306,7 +306,17 @@ const ArchitectureKit=(()=>{
   if(st==='gothic'||fs==='gothic'||fs==='portal')
    place(middle,o.y+o.h+.025,.055);
  }
+ function setDoorAngle(root,angle){
+  if(!root||!root.name.startsWith('door'))return false;
+  const value=Math.max(-110,Math.min(110,Number(angle)||0))*Math.PI/180;
+  let count=0;
+  root.traverse(group=>{
+   if(!group.isGroup||!group.name.startsWith('door:pivot'))return;
+   group.rotation.y=value*(group.name.endsWith('right')?-1:1);count++;
+  });
+  return count>0;
+ }
  return {catalog,create,has:kind=>ids.has(kind),openingStyle,frameStyle,decorateOpening,
-  facet,archPoints};
+  setDoorAngle,facet,archPoints};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=ArchitectureKit;
