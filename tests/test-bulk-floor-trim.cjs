@@ -10,6 +10,7 @@ const Bulk=require(path.join(base,'js/bulk-floor-trim.js'));
 const round=v=>Math.round(v*1000)/1000;
 const sources=new Map(),scene=new THREE.Scene(),entries=[];
 sources.set('floor',CleanGeometry.create('floor'));
+sources.set('wall',CleanGeometry.create('wall'));
 const glbSource=new THREE.Group();
 glbSource.add(new THREE.Mesh(new THREE.BoxGeometry(2,.18,2),new THREE.MeshStandardMaterial()));
 sources.set('glb:tile',glbSource);
