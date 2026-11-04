@@ -134,7 +134,7 @@ const CleanMeshEdit=(()=>{
   const box=bounds(root);
   if(box.isEmpty())return {ok:false,reason:'Пустая модель'};
   const cutAxis=axes[edit.axis],min=box.min[edit.axis],span=box.max[edit.axis]-min;
-  if(span<1e-5)return {ok:false,reason:'Модель слишком тонкая по выбранной оси'};
+  if(span<1e-5&&(edit.cutStart>0||edit.cutEnd>0))return {ok:false,reason:'Модель слишком тонкая по выбранной оси'};
   const lower=min+span*edit.cutStart/100,upper=box.max[edit.axis]-span*edit.cutEnd/100;
   const bendAxis=axes[edit.bendAxis];
   const bendLength=box.max[edit.bendAxis]-box.min[edit.bendAxis];
