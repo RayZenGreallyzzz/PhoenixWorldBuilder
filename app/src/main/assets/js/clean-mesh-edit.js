@@ -133,6 +133,19 @@ const CleanMeshEdit=(()=>{
   if(!validation.ok)return validation;
   const box=bounds(root);
   if(box.isEmpty())return {ok:false,reason:'Пустая модель'};
+  // For planar GLB cuts generate watertight caps on sealed source meshes.
+  // On genuinely open GLB surfaces, keep the crop but report openCut=true.
+  const cutRequested=edit.cutStart>0||edit.cutEnd>0||!!edit.planeCuts?.length;
+  const capper=typeof MeshCaps!=='undefined'?MeshCaps:
+   (typeof require==='function'?require('./mesh-caps.js'):null);
+  if(cutRequested&&capper){
+   const cut=capper.run(root,edit,box);
+   if(!cut.ok||!edit.bend)return cut;
+   // Bend the already capped faces in the same way as the existing geometry.
+   const bent=apply(root,{bend:edit.bend,bendAxis:edit.bendAxis,axis:edit.axis,
+    cutStart:0,cutEnd:0});
+   return bent.ok?{...cut,triangles:bent.triangles,changed:true}:bent;
+  }
   const cutAxis=axes[edit.axis],min=box.min[edit.axis],span=box.max[edit.axis]-min;
   if(span<1e-5&&(edit.cutStart>0||edit.cutEnd>0))return {ok:false,reason:'Модель слишком тонкая по выбранной оси'};
   const lower=min+span*edit.cutStart/100,upper=box.max[edit.axis]-span*edit.cutEnd/100;
