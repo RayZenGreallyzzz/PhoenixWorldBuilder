@@ -191,7 +191,10 @@ class CleanBuilder{
   this.controls.update();this.aimPlacement();
  }
  async cacheModel(id,buffer,category='wall',name='GLB',keep=true){
+  const started=typeof performance!=='undefined'?performance.now():Date.now();
   const parsed=await GLB.load(buffer),root=parsed.root;
+  const decodeMs=Math.max(0,Math.round((typeof performance!=='undefined'?
+   performance.now():Date.now())-started));
   const textureStats=AndroidAssetOpt.optimize(root,this.optimizationQuality);
   // Make a stable axis-aligned origin at ground/base, independent of source pivot.
   const b=new THREE.Box3().setFromObject(root);if(b.isEmpty())throw Error('В GLB нет геометрии');
@@ -203,8 +206,12 @@ class CleanBuilder{
    animations:parsed.animations||[],glbInfo:parsed.info||null,textureStats});
   const used=(parsed.info?.extensions||[]).filter(e=>
    ['EXT_meshopt_compression','KHR_draco_mesh_compression','KHR_texture_basisu'].includes(e));
+  this.lastGLBImport={decodedMs:decodeMs,
+   fileMiB:Math.round((buffer.byteLength||0)/1048576*100)/100,
+   triangles:Math.round(parsed.triangles),extensions:used.slice()};
   $('optimizationStats').textContent='GLB: '+Math.round(parsed.triangles).toLocaleString('ru-RU')+
    ' треугольников · сжатие: '+(used.join(', ')||'обычное')+
+   ' · декодирование: '+decodeMs+' мс'+
    ' · уменьшено текстур: '+textureStats.resized;
   if(keep)await putAsset(id,buffer);
   this.renderCatalog();
@@ -226,6 +233,7 @@ class CleanBuilder{
    objects:this.entries.length,
    imported:this.entries.filter(e=>!CleanGeometry.isBuiltIn(e.kind)).length,
    codecs:GLB.codecStatus(),
+   importStats:this.lastGLBImport||null,
    userAgent:navigator.userAgent
   });
   const reportText=JSON.stringify(report,null,2);
