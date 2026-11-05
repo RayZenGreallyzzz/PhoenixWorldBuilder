@@ -45,6 +45,11 @@ class CleanBuilder{
   this.scene.fog=new THREE.Fog('#7e9eae',70,220);
   this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:false,powerPreference:'low-power'});
   this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.25));
+  this.performanceMonitor=new AndroidPerformance.Monitor({
+   maxPixelRatio:this.renderer.getPixelRatio()
+  });
+  this.autoResolution=localStorage.getItem('phoenix-builder-auto-resolution')==='on';
+  this.performanceMonitor.setAuto(this.autoResolution);
   this.renderer.outputEncoding=THREE.sRGBEncoding;
   this.decoderStatus=GLB.configure(this.renderer);
   this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.95;
@@ -83,12 +88,27 @@ class CleanBuilder{
   this.bind();
   $('optimizationQuality').value=this.optimizationQuality;
   $('optimizationLOD').checked=this.lodEnabled;
+  $('optimizationAutoResolution').checked=this.autoResolution;
   this.setMode('build');this.selectKind('wall');
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
    this.updatePlayer(dt);this.controls.update();this.gizmo.update();this.renderer.render(this.scene,this.camera);
+   // Read renderer counters AFTER drawing the visible frame.
+   const stats=this.performanceMonitor.frame(now,this.renderer,
+    typeof performance!=='undefined'?performance.memory?.usedJSHeapSize:null);
+   if(stats){
+    if(Math.abs(this.renderer.getPixelRatio()-this.performanceMonitor.pixelRatio)>.025){
+     this.renderer.setPixelRatio(this.performanceMonitor.pixelRatio);
+     this.resize();
+    }
+    $('performanceStats').textContent='FPS: '+stats.fps+
+     ' · Draw calls: '+stats.calls+' · Треугольники: '+
+     stats.triangles.toLocaleString('ru-RU')+
+     ' · Текстуры: '+stats.textures+' · Геометрии: '+stats.geometries+
+     ' · Чёткость: '+Math.round(stats.pixelRatio*100)+'%';
+   }
   };
   requestAnimationFrame(this.animate);
  }
@@ -189,6 +209,33 @@ class CleanBuilder{
   if(keep)await putAsset(id,buffer);
   this.renderCatalog();
   return wrapper;
+ }
+ updateAutoResolution(){
+  this.autoResolution=$('optimizationAutoResolution').checked;
+  localStorage.setItem('phoenix-builder-auto-resolution',this.autoResolution?'on':'off');
+  const ratio=this.performanceMonitor.setAuto(this.autoResolution);
+  if(Math.abs(this.renderer.getPixelRatio()-ratio)>.025){
+   this.renderer.setPixelRatio(ratio);this.resize();
+  }
+  notify(this.autoResolution?
+   'Авторазрешение включено: при длительном снижении FPS уменьшается только разрешение отрисовки':
+   'Авторазрешение выключено: исходная чёткость восстановлена','success');
+ }
+ async exportPerformanceReport(){
+  const report=this.performanceMonitor.report({
+   objects:this.entries.length,
+   imported:this.entries.filter(e=>!CleanGeometry.isBuiltIn(e.kind)).length,
+   codecs:GLB.codecStatus(),
+   userAgent:navigator.userAgent
+  });
+  const reportText=JSON.stringify(report,null,2);
+  if(navigator.clipboard?.writeText){
+   try{await navigator.clipboard.writeText(reportText);
+    notify('📋 Отчёт FPS скопирован: можно отправить разработчику','success');return;
+   }catch(e){console.warn('Clipboard permission unavailable',e)}
+  }
+  // Android file:// WebViews may not grant clipboard permissions.
+  window.prompt('Скопируй диагностический отчёт (он не содержит модель или проект)',reportText);
  }
  updateOptimizer(){
   this.optimizationQuality=AndroidAssetOpt.quality($('optimizationQuality').value);
@@ -1331,6 +1378,8 @@ class CleanBuilder{
   $('modeDrone').onclick=()=>this.setMode('drone');
   $('optimizationQuality').onchange=()=>this.updateOptimizer();
   $('optimizationLOD').onchange=()=>this.updateOptimizer();
+  $('optimizationAutoResolution').onchange=()=>this.updateAutoResolution();
+  $('btnPerfReport').onclick=()=>this.exportPerformanceReport();
   $('tabParts').onclick=()=>this.setTextureTab('parts');
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
