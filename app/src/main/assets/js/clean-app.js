@@ -71,6 +71,9 @@ class CleanBuilder{
   this.ray=new THREE.Raycaster();this.cursor=V();this.pointer=new THREE.Vector2();
   this.gizmo=new BuilderGizmo(this.scene,this.camera,this.canvas,this.ray);
   this.mode='build';this.tool='place';this.floor=0;this.magnet=true;
+  this.gridSnap=localStorage.getItem('phoenix-builder-grid-snap')==='on';
+  this.gridStep=PrecisionPlacement.step(
+   localStorage.getItem('phoenix-builder-grid-step'),.25);
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;
@@ -86,6 +89,10 @@ class CleanBuilder{
   this.setDefaultAvatar();
   this.keys=new Set();this.pointerStart=null;this.lastFrame=0;
   this.bind();
+  $('gridSnap').checked=this.gridSnap;
+  $('gridStep').value=String(this.gridStep);
+  $('moveStep').value=String(PrecisionPlacement.step(
+   localStorage.getItem('phoenix-builder-move-step'),.001));
   $('optimizationQuality').value=this.optimizationQuality;
   $('optimizationLOD').checked=this.lodEnabled;
   $('optimizationAutoResolution').checked=this.autoResolution;
@@ -856,7 +863,13 @@ class CleanBuilder{
    }else return notify('У этого GLB невозможно безопасно изменить реальную толщину','error');
   }
   for(const [field,axis] of [['posX','x'],['posY','y'],['posZ','z']])
-   if(id===field)obj.root.position[axis]=clamp(value,-100,100);
+   if(id===field){
+    obj.root.position[axis]=PrecisionPlacement.roundMM(clamp(value,-100,100));
+    if(obj===this.preview){
+     if(axis==='y')obj.manualPlacementY=obj.root.position.y;
+     else this.cursor[axis]=obj.root.position[axis];
+    }
+   }
   if(id==='rotY')obj.rot=value*Math.PI/180;
   if(['scaleAll','sizeX','sizeY','sizeZ'].includes(id)&&
     CleanGeometry.isBuiltIn(obj.kind)&&['wall','corner','arc90','arc180'].includes(obj.kind))
@@ -864,7 +877,10 @@ class CleanBuilder{
   this.applyTransform(obj);
   if(['scaleAll','sizeX','sizeY','sizeZ'].includes(id)&&obj.thicknessEditable)
    this.rebuildImported(obj);
-  if(obj===this.preview)this.updatePreview(this.cursor,false);
+  // Direct XYZ entry is authoritative: never overwrite a manually typed
+  // millimetre position with a cursor position (or 25 cm grid rounding).
+  if(obj===this.preview&&!['posX','posY','posZ'].includes(id))
+   this.updatePreview(this.cursor,false);
   if(this.outline){this.outline.setFromObject(obj.root)}
   this.syncInspector();
  }
@@ -1074,16 +1090,20 @@ class CleanBuilder{
   const plane=new THREE.Plane(V(0,1,0),-planeY);
   const hit=V();return this.ray.ray.intersectPlane(plane,hit)?hit:null;
  }
- nudgeSelected(dx,dz){
+ nudgeSelected(dx,dz,dy=0){
   const obj=this.selected;
   if(!obj||this.tool!=='pick')return notify('Нажми «Выделить» и выбери готовую деталь','warn');
-  const step=Number($('moveStep').value)||.25;
-  obj.root.position.x=rounded(obj.root.position.x+dx*step);
-  obj.root.position.z=rounded(obj.root.position.z+dz*step);
+  const step=PrecisionPlacement.step($('moveStep').value,.001);
+  obj.root.position.x=PrecisionPlacement.nudge(obj.root.position.x,dx,step);
+  obj.root.position.y=PrecisionPlacement.nudge(obj.root.position.y,dy,step);
+  obj.root.position.z=PrecisionPlacement.nudge(obj.root.position.z,dz,step);
   obj.root.updateMatrixWorld(true);
   if(this.outline)this.outline.setFromObject(obj.root);
   this.syncInspector();
-  notify('Перемещено: X '+rounded(obj.root.position.x)+' м, Z '+rounded(obj.root.position.z)+' м','success');
+  this.gizmo.update();
+  notify('Точная подгонка: X '+rounded(obj.root.position.x)+
+   ' м · Y '+rounded(obj.root.position.y)+
+   ' м · Z '+rounded(obj.root.position.z)+' м','success');
  }
  // Two-stage touch drag: first tap selects, second gesture moves in any X/Z direction.
  beginObjectDrag(e){
@@ -1107,13 +1127,15 @@ class CleanBuilder{
   drag.moved=true;
   const point=this.rayPoint(e,drag.base.y);
   if(!point)return;
-  const step=Number($('moveStep').value)||.25,obj=this.selected;
+  const obj=this.selected;
   if(!obj)return;
-  obj.root.position.x=Math.round((drag.base.x+point.x-drag.hit.x)/step)*step;
-  obj.root.position.z=Math.round((drag.base.z+point.z-drag.hit.z)/step)*step;
+  obj.root.position.x=PrecisionPlacement.drag(
+   drag.base.x,drag.hit.x,point.x,this.gridSnap,this.gridStep);
+  obj.root.position.z=PrecisionPlacement.drag(
+   drag.base.z,drag.hit.z,point.z,this.gridSnap,this.gridStep);
   obj.root.updateMatrixWorld(true);
   if(this.outline)this.outline.setFromObject(obj.root);
-  this.syncInspector();
+  this.gizmo.update();this.syncInspector();
   e.preventDefault();e.stopImmediatePropagation();
  }
  finishObjectDrag(e){
@@ -1181,8 +1203,11 @@ class CleanBuilder{
  }
  updatePreview(cursor,snapAllowed=true){
   const obj=this.preview;if(!obj||this.tool!=='place')return;
-  const pos=cursor||V(),q=(x)=>Math.round(x*4)/4;
-  obj.root.position.set(q(pos.x),this.floor*2.6,q(pos.z));
+  const pos=cursor||V();
+  obj.root.position.set(
+   PrecisionPlacement.coordinate(pos.x,this.gridSnap,this.gridStep),
+   obj.manualPlacementY??this.floor*2.6,
+   PrecisionPlacement.coordinate(pos.z,this.gridSnap,this.gridStep));
   if(obj.category==='decor'){
    obj._hasWallTarget=this.attachDecor(obj,this.surfaceHit);
    if(!obj._hasWallTarget){
@@ -1190,7 +1215,7 @@ class CleanBuilder{
    }else notify('🟢 Декор прикреплён к поверхности стены','success');
    obj.root.updateMatrixWorld(true);this.syncInspector();return;
   }
-  if(obj.category==='roof')
+  if(obj.category==='roof'&&obj.manualPlacementY===undefined)
    obj.root.position.y=CleanGeometry.autoRoofHeight(obj,this.entries,pos,this.floor*2.6);
   obj.storey=this.floor;
   obj.root.rotation.y=obj.rot;
@@ -1435,6 +1460,21 @@ class CleanBuilder{
   $('btnLevelUp').onclick=()=>{this.floor=clamp(this.floor+1,0,49);
    $('levelLabel').textContent=this.floor+1;this.updatePreview(this.cursor)};
   $('magnet').onchange=e=>{this.magnet=e.target.checked;this.updatePreview(this.cursor)};
+  $('gridSnap').onchange=e=>{
+   this.gridSnap=e.target.checked;
+   localStorage.setItem('phoenix-builder-grid-snap',this.gridSnap?'on':'off');
+   if(this.tool==='place')this.updatePreview(this.cursor);
+   else notify(this.gridSnap?'Сетка включена':'Сетка выключена: свободное перемещение до 1 мм','success');
+  };
+  $('gridStep').onchange=e=>{
+   this.gridStep=PrecisionPlacement.step(e.target.value,.25);
+   localStorage.setItem('phoenix-builder-grid-step',String(this.gridStep));
+   if(this.tool==='place')this.updatePreview(this.cursor);
+  };
+  $('moveStep').onchange=e=>{
+   const size=PrecisionPlacement.step(e.target.value,.001);
+   localStorage.setItem('phoenix-builder-move-step',String(size));
+  };
   $('moduleCategory').onchange=()=>this.changeCategory();
   $('btnSaveModule').onclick=()=>this.saveModulePreset();
   $('btnApplyFloorCut').onclick=()=>this.applyFloorSettings();
@@ -1445,8 +1485,10 @@ class CleanBuilder{
   $('btnBulkTrimReset').onclick=()=>this.trimWholeProject(true);
   $('btnApplyGlbCut').onclick=()=>this.applyImportedCut();
   $('btnResetGlbCut').onclick=()=>this.applyImportedCut(true);
-  for(const [id,dx,dz] of [['moveLeft',-1,0],['moveRight',1,0],['moveForward',0,-1],['moveBack',0,1]])
-   $(id).onclick=()=>this.nudgeSelected(dx,dz);
+  for(const [id,dx,dz,dy] of [['moveLeft',-1,0,0],['moveRight',1,0,0],
+   ['moveForward',0,-1,0],['moveBack',0,1,0],
+   ['moveDown',0,0,-1],['moveUp',0,0,1]])
+   $(id).onclick=()=>this.nudgeSelected(dx,dz,dy);
   $('btnApplyMeshEdit').onclick=()=>this.applyMeshSettings();
   $('btnResetMeshEdit').onclick=()=>this.applyMeshSettings(true);
   $('importModel').onchange=e=>{this.importGLB(e.target.files?.[0]);e.target.value=''};
@@ -1470,8 +1512,9 @@ class CleanBuilder{
   },true);
   this.canvas.addEventListener('pointermove',e=>{
    if(this.gizmoPointer!==e.pointerId)return;
-   const step=Number($('moveStep').value)||.05;
-   this.gizmo.move(e,this.selected,step);
+   this.gizmo.move(e,this.selected,{
+    gridEnabled:this.gridSnap,gridStep:this.gridStep
+   });
    if(this.outline&&this.selected)this.outline.setFromObject(this.selected.root);
    e.preventDefault();e.stopImmediatePropagation();
   },true);
