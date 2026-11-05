@@ -29,12 +29,18 @@ function runSamples(m,r,from,periodMs,count){
  assert.equal(m.pixelRatio,1.25,'Disabled adaptive mode does not reduce quality');
  const rep=m.report({objects:126,imported:12,
   codecs:{meshopt:true,draco:true,ktx2:true,password:'must-not-appear'},
-  userAgent:'Android test'});
+  importStats:{decodedMs:315,fileMiB:1.6,triangles:45678,
+   extensions:['EXT_meshopt_compression','malicious_custom_extension'],
+   fileName:'secret.glb'},userAgent:'Android test'});
  assert.equal(rep.scene.objects,126);
  assert.equal(rep.scene.imported,12);
  assert.equal(rep.codecs.meshopt,true);
  assert(!('password' in rep.codecs),'Only decoder availability is exported');
  assert(!JSON.stringify(rep).includes('.glb'),'No imported model paths or project data');
+ assert.equal(rep.lastGLBImport.decodedMs,315);
+ assert.equal(rep.lastGLBImport.triangles,45678);
+ assert.deepEqual(rep.lastGLBImport.extensions,['EXT_meshopt_compression']);
+ assert(!JSON.stringify(rep).includes('secret'),'Import report does not include private file names');
  assert(rep.avgFps>0&&rep.recordedWindows>0);
 }
 {
@@ -70,7 +76,7 @@ assert(html.indexOf('js/android-performance.js')<html.indexOf('js/clean-app.js')
  'Profiler is available before the editor starts');
 for(const token of ['new AndroidPerformance.Monitor','this.performanceMonitor.frame',
  'this.performanceMonitor.report','updateAutoResolution()','exportPerformanceReport()',
- 'this.renderer.setPixelRatio(this.performanceMonitor.pixelRatio)'])
+ 'this.renderer.setPixelRatio(this.performanceMonitor.pixelRatio)','this.lastGLBImport='])
  assert(app.includes(token),'Performance monitor not correctly wired: '+token);
 assert(css.includes('.perfDiagnostic'),'Diagnostic UI lacks mobile styling');
 console.log('Android measured FPS, renderer counts, adaptive quality, privacy and UI integration OK');
