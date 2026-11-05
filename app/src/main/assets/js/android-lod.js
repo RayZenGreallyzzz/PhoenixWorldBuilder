@@ -78,6 +78,8 @@ const AndroidLOD=(()=>{
   if(typeof MeshoptSimplifier==='undefined'||!MeshoptSimplifier.supported)
    return {attached:0,trianglesSaved:0,skipped:'decoder'};
   await MeshoptSimplifier.ready;
+  if(typeof settings?.shouldAbort==='function'&&settings.shouldAbort())
+   return {attached:0,trianglesSaved:0,skipped:'stale'};
   if(!root.parent&&root.userData.phoenixLODDropped)return {attached:0,trianglesSaved:0};
   const candidates=[];
   root.traverse(mesh=>{
@@ -87,7 +89,16 @@ const AndroidLOD=(()=>{
   if(candidates.reduce((sum,mesh)=>sum+nTri(mesh.geometry),0)>MAX_MODEL_TRIS)
    return {attached:0,trianglesSaved:0,skipped:'too-heavy'};
   let count=0,reduced=0;
-  for(const mesh of candidates){
+  for(let i=0;i<candidates.length;i++){
+   // Yield to Android WebView after every third simplification batch.
+   if(i&&i%3===0)await new Promise(resolve=>{
+    if(typeof requestIdleCallback==='function')
+     requestIdleCallback(resolve,{timeout:120});
+    else setTimeout(resolve,0);
+   });
+   if(typeof settings?.shouldAbort==='function'&&settings.shouldAbort())
+    return {attached:count,trianglesSaved:Math.round(reduced),skipped:'stale'};
+   const mesh=candidates[i];
    if(mesh.userData.phoenixLODInstalled||!mesh.parent)continue;
    const geo=mesh.geometry;
    let levels=baseData.get(geo);
