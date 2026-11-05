@@ -370,7 +370,9 @@ class CleanBuilder{
   // enlarge the displayed/saved size of the remaining shape.
   const inverse=obj.root.matrixWorld.clone().invert(),bounds=new THREE.Box3().makeEmpty();
   obj.root.traverse(mesh=>{
-   if(!mesh.isMesh||!mesh.visible||!mesh.geometry?.attributes?.position)return;
+   if(!mesh.isMesh||mesh.userData.phoenixLODProxy||
+      (!mesh.visible&&!mesh.userData.phoenixLODInstalled)||
+      !mesh.geometry?.attributes?.position)return;
    if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();
    if(mesh.geometry.boundingBox.isEmpty())return;
    const relative=new THREE.Matrix4().multiplyMatrices(inverse,mesh.matrixWorld);
@@ -955,6 +957,7 @@ class CleanBuilder{
   obj.root=template;obj.meshEdit=requested;
   this.applySurfaceTo(obj);
   obj.capResult=editResult;
+  if(obj!==this.preview)this.attachImportedLOD(obj);
   obj.thicknessEditable=!CleanMeshEdit.active(requested)&&
    !!CleanGeometry.thicknessInfo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(obj.root);
@@ -1167,6 +1170,7 @@ class CleanBuilder{
   const entry=this.createEntry(source.kind,data);
   if(!entry){notify('Не удалось разместить модуль','error');return}
   this.scene.add(entry.root);this.entries.push(entry);
+  this.attachImportedLOD(entry);
   this.selectKind(source.kind);
   this.preview.root.position.fromArray(data.position);
   this.settings={scale:data.scale,axes:data.axes,thickness:data.thickness};
@@ -1208,7 +1212,8 @@ class CleanBuilder{
   const data=this.encode(obj);delete data.id;
   data.position[0]+=1.5;
   const clone=this.createEntry(obj.kind,data);if(!clone)return;
-  this.entries.push(clone);this.scene.add(clone.root);this.selected=clone;this.setTool('pick');
+  this.entries.push(clone);this.scene.add(clone.root);this.selected=clone;
+  this.attachImportedLOD(clone);this.setTool('pick');
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose()}
   this.outline=new THREE.BoxHelper(clone.root,0x44ffb8);this.scene.add(this.outline);
   this.gizmo.attach(clone);
@@ -1273,7 +1278,7 @@ class CleanBuilder{
   }
   // All-or-nothing restore: keep current scene if a GLB was lost.
   for(const obj of this.entries)obj.root.removeFromParent();
-  this.entries=staged;for(const e of staged)this.scene.add(e.root);
+  this.entries=staged;for(const e of staged){this.scene.add(e.root);this.attachImportedLOD(e)}
   this.floor=Number.isInteger(doc.floor)?clamp(doc.floor,0,49):0;
   this.nextId=Math.max(1,...this.entries.map(e=>e.id+1),doc.nextId||1);
   this.selected=null;this.setTool('place');this.selectKind('wall');
@@ -1324,6 +1329,8 @@ class CleanBuilder{
   $('modeBuild').onclick=()=>this.setMode('build');
   $('modeCharacter').onclick=()=>this.setMode('character');
   $('modeDrone').onclick=()=>this.setMode('drone');
+  $('optimizationQuality').onchange=()=>this.updateOptimizer();
+  $('optimizationLOD').onchange=()=>this.updateOptimizer();
   $('tabParts').onclick=()=>this.setTextureTab('parts');
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
