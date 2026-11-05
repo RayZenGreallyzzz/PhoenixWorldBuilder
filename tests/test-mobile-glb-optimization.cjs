@@ -112,7 +112,7 @@ function testMaterials(){
  assert.equal(AssetOpt.budget('original'),Infinity);
 }
 function testDecoderSetup(){
- const codecs=GLB.configure({extensions:{has:()=>false}});
+ const codecs=GLB.configure({extensions:{has:()=>false},capabilities:{isWebGL2:false}});
  assert(codecs.meshopt&&codecs.draco&&codecs.ktx2,
   'All 3 local decoders can be registered against bundled Three.js r140');
  assert.equal(GLB.codecStatus().ktx2,true);
