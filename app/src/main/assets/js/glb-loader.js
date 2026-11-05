@@ -18,7 +18,8 @@ const GLB = (()=>{
   if(code!==0x4e4f534a||size<2||size>array.byteLength-20)throw Error('Повреждён заголовок GLB');
   const json=JSON.parse(td.decode(new Uint8Array(array,20,size)).replace(/\0+$/g,''));
   const extensions=[...(json.extensionsUsed||[])];
-  return {extensions,bytes:array.byteLength,
+  const required=[...(json.extensionsRequired||[])];
+  return {extensions,required,bytes:array.byteLength,
    compressed:extensions.some(e=>compressorName.includes(e)),
    meshes:json.meshes?.length||0,animations:json.animations?.length||0,
    textureCount:json.textures?.length||0};
@@ -43,12 +44,12 @@ const GLB = (()=>{
    loader.setMeshoptDecoder(MeshoptDecoder);
   if(state.draco)loader.setDRACOLoader(state.draco);
   if(state.ktx2)loader.setKTX2Loader(state.ktx2);
-  if(info.extensions.includes('EXT_meshopt_compression')&&
+  if(info.required?.includes('EXT_meshopt_compression')&&
    (typeof MeshoptDecoder==='undefined'||!MeshoptDecoder.supported))
    throw Error('Для этого GLB требуется MeshoptDecoder (нет WASM-декодера)');
-  if(info.extensions.includes('KHR_draco_mesh_compression')&&!state.draco)
+  if(info.required?.includes('KHR_draco_mesh_compression')&&!state.draco)
    throw Error('Для этого GLB требуется DracoDecoder (в APK не установлен)');
-  if(info.extensions.includes('KHR_texture_basisu')&&!state.ktx2)
+  if(info.required?.includes('KHR_texture_basisu')&&!state.ktx2)
    throw Error('Для этого GLB с текстурами KTX2 нужно открыть редактор с WebGL');
   return loader;
  }
