@@ -46,6 +46,7 @@ class CleanBuilder{
   this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:false,powerPreference:'low-power'});
   this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.25));
   this.renderer.outputEncoding=THREE.sRGBEncoding;
+  this.decoderStatus=GLB.configure(this.renderer);
   this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.95;
   this.scene.add(new THREE.HemisphereLight(0xe2efff,0x6b765f,.95));
   const sun=new THREE.DirectionalLight(0xffedcf,1);
@@ -71,12 +72,18 @@ class CleanBuilder{
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
+  this.optimizationQuality=AndroidAssetOpt.quality(
+   localStorage.getItem('phoenix-builder-optimization-quality')||'balanced');
+  this.lodEnabled=localStorage.getItem('phoenix-builder-optimization-lod')!=='off';
   this.settings=defaultSettings();this.clock=new THREE.Clock();
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;
   this.setDefaultAvatar();
   this.keys=new Set();this.pointerStart=null;this.lastFrame=0;
-  this.bind();this.setMode('build');this.selectKind('wall');
+  this.bind();
+  $('optimizationQuality').value=this.optimizationQuality;
+  $('optimizationLOD').checked=this.lodEnabled;
+  this.setMode('build');this.selectKind('wall');
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
@@ -121,6 +128,7 @@ class CleanBuilder{
   if(!file)return;
   try{
    const scene=await GLB.load(file);
+   AndroidAssetOpt.optimize(scene.root,this.optimizationQuality);
    const root=THREE.SkeletonUtils?.clone?
     THREE.SkeletonUtils.clone(scene.root):scene.root.clone(true);
    const metrics=AvatarFit.measure(root);
@@ -164,16 +172,50 @@ class CleanBuilder{
  }
  async cacheModel(id,buffer,category='wall',name='GLB',keep=true){
   const parsed=await GLB.load(buffer),root=parsed.root;
+  const textureStats=AndroidAssetOpt.optimize(root,this.optimizationQuality);
   // Make a stable axis-aligned origin at ground/base, independent of source pivot.
   const b=new THREE.Box3().setFromObject(root);if(b.isEmpty())throw Error('В GLB нет геометрии');
   const centre=b.getCenter(V());
   const wrapper=new THREE.Group();
   root.position.x-=centre.x;root.position.y-=b.min.y;root.position.z-=centre.z;
   wrapper.add(root);
-  this.assets.set(id,{template:wrapper,name:safeName(name),category,animations:parsed.animations||[]});
+  this.assets.set(id,{template:wrapper,name:safeName(name),category,
+   animations:parsed.animations||[],glbInfo:parsed.info||null,textureStats});
+  const used=(parsed.info?.extensions||[]).filter(e=>
+   ['EXT_meshopt_compression','KHR_draco_mesh_compression','KHR_texture_basisu'].includes(e));
+  $('optimizationStats').textContent='GLB: '+Math.round(parsed.triangles).toLocaleString('ru-RU')+
+   ' треугольников · сжатие: '+(used.join(', ')||'обычное')+
+   ' · уменьшено текстур: '+textureStats.resized;
   if(keep)await putAsset(id,buffer);
   this.renderCatalog();
   return wrapper;
+ }
+ updateOptimizer(){
+  this.optimizationQuality=AndroidAssetOpt.quality($('optimizationQuality').value);
+  this.lodEnabled=$('optimizationLOD').checked;
+  localStorage.setItem('phoenix-builder-optimization-quality',this.optimizationQuality);
+  localStorage.setItem('phoenix-builder-optimization-lod',this.lodEnabled?'on':'off');
+  for(const obj of this.entries){
+   if(CleanGeometry.isBuiltIn(obj.kind))continue;
+   AndroidLOD.setEnabled(obj.root,this.lodEnabled);
+   if(this.lodEnabled)this.attachImportedLOD(obj);
+  }
+  $('optimizationStats').textContent='Настройки сохранены. Для новых GLB: '+
+   (this.optimizationQuality==='original'?'без уменьшения текстур':
+    this.optimizationQuality==='battery'?'не более 1024 px':'не более 2048 px')+
+   '. LOD: '+(this.lodEnabled?'вкл.':'выкл.');
+ }
+ attachImportedLOD(obj){
+  if(!obj||CleanGeometry.isBuiltIn(obj.kind)||!this.lodEnabled||
+     CleanMeshEdit.active(obj.meshEdit)||obj.autoEdgeCuts?.length||obj.manualEdgeCut||
+     obj.floorTrim?.enabled)return;
+  const original=obj.root;
+  const source=this.assets.get(obj.kind);
+  AndroidLOD.prepare(original,source?.animations||[],
+   {enabled:this.lodEnabled}).then(summary=>{
+   if(obj.root!==original)return;
+   if(summary.attached)console.info('Phoenix LOD:',obj.kind,summary);
+  }).catch(err=>console.warn('LOD skipped for '+obj.kind,err));
  }
  async importGLB(file){
   if(!file)return;
@@ -182,7 +224,8 @@ class CleanBuilder{
    const buf=await file.arrayBuffer();
    await this.cacheModel(id,buf,$('importCategory').value,file.name);
    this.selectKind(id);
-   notify('Модель импортирована и сохранена на устройстве: '+safeName(file.name),'success');
+   notify('GLB импортирован: '+safeName(file.name)+' · '+
+    $('optimizationStats').textContent+'. Оригинальный файл сохранён.','success');
   }catch(err){console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')}
  }
  async ensureTemplate(kind,category='wall'){
