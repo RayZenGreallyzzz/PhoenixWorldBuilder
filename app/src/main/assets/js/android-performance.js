@@ -65,7 +65,7 @@ const AndroidPerformance=(()=>{
    if(this.samples.length>18)this.samples.shift();
    return stats;
   }
-  report({objects=0,imported=0,codecs={},userAgent=''}={}){
+  report({objects=0,imported=0,codecs={},importStats=null,userAgent=''}={}){
    const values=this.samples.filter(s=>s.fps>0).map(s=>s.fps),
     mean=values.length?round(values.reduce((a,b)=>a+b,0)/values.length):0;
    return {
@@ -80,6 +80,14 @@ const AndroidPerformance=(()=>{
     automaticResolution:this.auto,
     scene:{objects:Math.max(0,Math.floor(n(objects))),
      imported:Math.max(0,Math.floor(n(imported)))},
+    lastGLBImport:importStats&&typeof importStats==='object'?{
+     decodedMs:Math.round(Math.max(0,n(importStats.decodedMs))),
+     fileMiB:round(Math.max(0,n(importStats.fileMiB))),
+     triangles:Math.round(Math.max(0,n(importStats.triangles))),
+     extensions:(Array.isArray(importStats.extensions)?importStats.extensions:[])
+      .filter(v=>['EXT_meshopt_compression','KHR_draco_mesh_compression',
+       'KHR_texture_basisu'].includes(v)).slice(0,3)
+    }:null,
     codecs:Object.fromEntries(Object.entries(codecs)
      .filter(([k])=>['meshopt','draco','ktx2'].includes(k)).map(([k,v])=>[k,!!v])),
     // Deliberately do not include project names, file paths or imported assets.
