@@ -41,7 +41,10 @@
  <div class="panelTitle"><b id="currentLabel">Выбери деталь</b><small id="currentHint">Установка или точная подгонка</small></div>
  <div class="scrollArea">
   <div class="modeTools"><button id="btnPick" class="alt">☝ Выделить</button><button id="btnPlace" class="active">＋ Поставить</button></div>
-  <div class="rowSection"><label class="check"><input type="checkbox" id="magnet" checked><span>🧲 Магнит по настоящим торцам</span></label><small class="tip">Зелёный — есть точное соединение, жёлтый — свободная установка. Для дуг используются касательные к торцам, а не углы прямоугольника.</small></div>
+  <div class="rowSection"><label class="check"><input type="checkbox" id="magnet" checked><span>🧲 Магнит по настоящим торцам</span></label>
+    <label class="check"><input type="checkbox" id="gridSnap"><span>▦ Привязка к сетке (независимо от магнита)</span></label>
+    <label>Шаг сетки<select id="gridStep"><option value="0.001">1 мм</option><option value="0.005">5 мм</option><option value="0.01">1 см</option><option value="0.05">5 см</option><option value="0.25" selected>25 см</option><option value="1">1 м</option></select></label>
+    <small class="tip">Сетка по умолчанию выключена. С выключенным магнитом и сеткой модули ставятся свободно, без скачков по 25 см. Магнит притягивает только настоящие торцы.</small></div>
   <div class="rowSection"><label>Назначение детали (можно исправить после загрузки GLB)<select id="moduleCategory"><option value="wall">Стена / угол</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select></label></div>
   <div class="rowSection"><b>Масштаб модели</b><label>Общий, %<input id="scaleAll" type="number" min="10" max="1000" step="5" value="100"></label></div>
   <div class="rowSection"><b>Независимые размеры</b>
@@ -54,15 +57,16 @@
     <button id="btnSaveModule" class="primary">💾 Сохранить деталь в «Мои»</button>
   </div>
   <div class="rowSection"><b>Положение объекта в метрах</b>
-   <div class="cols3"><label>X<input id="posX" type="number" step=".05"></label><label>Y<input id="posY" type="number" step=".05"></label><label>Z<input id="posZ" type="number" step=".05"></label></div>
+   <div class="cols3"><label>X<input id="posX" type="number" step=".001" inputmode="decimal"></label><label>Y<input id="posY" type="number" step=".001" inputmode="decimal"></label><label>Z<input id="posZ" type="number" step=".001" inputmode="decimal"></label></div>
+   <small class="tip">Можно ввести позицию до 0,001 м = 1 мм. Координаты сохраняются с точностью до миллиметра.</small>
    <label>Поворот по Y, °<input id="rotY" type="number" step="5" value="0"></label>
    <div class="cols2"><button id="btnRotate">⟳ Повернуть 90°</button><button id="btnDuplicate">▣ Копия</button></div>
    <button id="btnDelete" class="danger">✕ Удалить выбранное</button>
   </div>
   <div class="rowSection"><b>↔ Перемещение готовой детали</b>
-    <label>Шаг перемещения<select id="moveStep"><option value="0.01">1 см</option><option value="0.05">5 см</option><option value="0.25" selected>25 см</option><option value="1">1 м</option></select></label>
-    <div class="movePad"><button id="moveForward">↑ Z−</button><button id="moveLeft">← X−</button><button id="moveRight">X+ →</button><button id="moveBack">↓ Z+</button></div>
-    <small class="tip">Нажми «Выделить», затем тяни выбранную деталь пальцем в любую сторону либо используй стрелки. Высота при перетаскивании не меняется.</small>
+    <label>Шаг кнопок точной подгонки<select id="moveStep"><option value="0.001" selected>1 мм</option><option value="0.005">5 мм</option><option value="0.01">1 см</option><option value="0.05">5 см</option><option value="0.25">25 см</option><option value="1">1 м</option></select></label>
+    <div class="movePad"><button id="moveForward">Z−</button><button id="moveLeft">X−</button><button id="moveRight">X+</button><button id="moveBack">Z+</button><button id="moveDown">Y−</button><button id="moveUp">Y+</button></div>
+    <small class="tip">Без сетки перетаскивай деталь плавно; кнопки сдвигают точно на выбранное число миллиметров по X, Y или Z. Для идеального примыкания колонны к стене приблизь пальцем, затем доведи шагом 1 мм.</small>
    </div>
    <details class="rowSection" id="gizmoPanel" open><summary>🎛 Гизмо — 3D управление</summary>
     <div class="gizmoModes"><button id="gizmoMove" class="active">↔ Двигать</button><button id="gizmoRotate">⟳ Крутить</button><button id="gizmoScale">◇ Масштаб</button></div>
@@ -157,6 +161,7 @@
 <script src="js/avatar-fit.js"></script>
  <script src="js/surface-materials.js"></script>
  <script src="js/wall-openings.js"></script>
+ <script src="js/precision-placement.js"></script>
  <script src="js/builder-gizmo.js"></script>
  <script src="js/clean-app.js"></script>
 </body></html>
