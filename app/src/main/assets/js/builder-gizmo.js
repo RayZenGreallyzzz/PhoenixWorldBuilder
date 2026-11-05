@@ -83,7 +83,10 @@ const BuilderGizmo=(()=>{
     scale:obj.scale,axes:{...obj.axes},p,angle,changed:false};
    return true;
   }
-  move(e,obj,step=.05){
+  move(e,obj,options={}){
+   // Grid is optional and independent of fine nudge step and socket magnet.
+   const gridEnabled=options?.gridEnabled===true,
+    gridStep=PrecisionPlacement.step(options?.gridStep,.25);
    const drag=this.drag;
    if(!drag||drag.pointerId!==e.pointerId||!obj)return false;
    const dy=e.clientY-drag.sy,dx=e.clientX-drag.sx;
@@ -94,12 +97,14 @@ const BuilderGizmo=(()=>{
     if(axis==='y'){
      const distance=this.camera.position.distanceTo(obj.root.position);
      const units=-(dy*.005*Math.max(1,distance));
-     obj.root.position.y=Math.round((drag.basePosition.y+units)/step)*step;
+     obj.root.position.y=PrecisionPlacement.coordinate(
+      drag.basePosition.y+units,gridEnabled,gridStep);
     }else{
      const hit=this.onPlane(e,drag.basePosition.y);
      if(hit&&drag.p){
       const units=hit[axis]-drag.p[axis];
-      obj.root.position[axis]=Math.round((drag.basePosition[axis]+units)/step)*step;
+      obj.root.position[axis]=PrecisionPlacement.coordinate(
+       drag.basePosition[axis]+units,gridEnabled,gridStep);
      }
     }
    }else if(drag.mode==='rotate'){
