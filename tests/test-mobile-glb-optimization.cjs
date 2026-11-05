@@ -5,6 +5,7 @@ global.THREE=require(path.join(base,'js/three.min.js'));
 global.MeshoptDecoder=require(path.join(base,'js/meshopt_decoder.js'));
 global.MeshoptSimplifier=require(path.join(base,'js/meshopt_simplifier.js'));
 require(path.join(base,'js/GLTFLoader.js'));
+require(path.join(base,'js/WorkerPool.js'));
 require(path.join(base,'js/DRACOLoader.js'));
 require(path.join(base,'js/KTX2Loader.js'));
 const MeshoptEncoder=require('./vendor/meshopt_encoder.js');
