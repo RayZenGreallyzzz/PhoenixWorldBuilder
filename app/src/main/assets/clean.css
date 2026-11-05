@@ -57,3 +57,9 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
 .catalogRows{display:flex;flex-direction:column;gap:6px;padding:6px}
 .catalogRows button{min-height:46px;padding:6px 8px}
 .catalogRows button span{font-size:10px;color:#a8bec8}
+
+/* Android performance monitor: compact, readable, touch-safe. */
+.perfDiagnostic{margin-top:8px;padding:9px 8px;display:flex;flex-direction:column;gap:7px;background:#0b2936;border:1px solid #42778a;border-radius:8px}
+.perfDiagnostic>b{font-size:12px;color:#a0e9e7}
+.perfDiagnostic #performanceStats{font-size:11px;font-variant-numeric:tabular-nums;color:#cbe9f2;line-height:1.6;word-break:normal}
+.perfDiagnostic #btnPerfReport{font-size:11px;min-height:42px;white-space:normal}

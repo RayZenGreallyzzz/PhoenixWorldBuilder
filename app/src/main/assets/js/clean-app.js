@@ -45,7 +45,13 @@ class CleanBuilder{
   this.scene.fog=new THREE.Fog('#7e9eae',70,220);
   this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:false,powerPreference:'low-power'});
   this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.25));
+  this.performanceMonitor=new AndroidPerformance.Monitor({
+   maxPixelRatio:this.renderer.getPixelRatio()
+  });
+  this.autoResolution=localStorage.getItem('phoenix-builder-auto-resolution')==='on';
+  this.performanceMonitor.setAuto(this.autoResolution);
   this.renderer.outputEncoding=THREE.sRGBEncoding;
+  this.decoderStatus=GLB.configure(this.renderer);
   this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.95;
   this.scene.add(new THREE.HemisphereLight(0xe2efff,0x6b765f,.95));
   const sun=new THREE.DirectionalLight(0xffedcf,1);
@@ -71,17 +77,38 @@ class CleanBuilder{
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
+  this.optimizationQuality=AndroidAssetOpt.quality(
+   localStorage.getItem('phoenix-builder-optimization-quality')||'balanced');
+  this.lodEnabled=localStorage.getItem('phoenix-builder-optimization-lod')!=='off';
   this.settings=defaultSettings();this.clock=new THREE.Clock();
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;
   this.setDefaultAvatar();
   this.keys=new Set();this.pointerStart=null;this.lastFrame=0;
-  this.bind();this.setMode('build');this.selectKind('wall');
+  this.bind();
+  $('optimizationQuality').value=this.optimizationQuality;
+  $('optimizationLOD').checked=this.lodEnabled;
+  $('optimizationAutoResolution').checked=this.autoResolution;
+  this.setMode('build');this.selectKind('wall');
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
    this.updatePlayer(dt);this.controls.update();this.gizmo.update();this.renderer.render(this.scene,this.camera);
+   // Read renderer counters AFTER drawing the visible frame.
+   const stats=this.performanceMonitor.frame(now,this.renderer,
+    typeof performance!=='undefined'?performance.memory?.usedJSHeapSize:null);
+   if(stats){
+    if(Math.abs(this.renderer.getPixelRatio()-this.performanceMonitor.pixelRatio)>.025){
+     this.renderer.setPixelRatio(this.performanceMonitor.pixelRatio);
+     this.resize();
+    }
+    $('performanceStats').textContent='FPS: '+stats.fps+
+     ' · Draw calls: '+stats.calls+' · Треугольники: '+
+     stats.triangles.toLocaleString('ru-RU')+
+     ' · Текстуры: '+stats.textures+' · Геометрии: '+stats.geometries+
+     ' · Чёткость: '+Math.round(stats.pixelRatio*100)+'%';
+   }
   };
   requestAnimationFrame(this.animate);
  }
@@ -121,6 +148,7 @@ class CleanBuilder{
   if(!file)return;
   try{
    const scene=await GLB.load(file);
+   AndroidAssetOpt.optimize(scene.root,this.optimizationQuality);
    const root=THREE.SkeletonUtils?.clone?
     THREE.SkeletonUtils.clone(scene.root):scene.root.clone(true);
    const metrics=AvatarFit.measure(root);
@@ -163,17 +191,89 @@ class CleanBuilder{
   this.controls.update();this.aimPlacement();
  }
  async cacheModel(id,buffer,category='wall',name='GLB',keep=true){
+  const started=typeof performance!=='undefined'?performance.now():Date.now();
   const parsed=await GLB.load(buffer),root=parsed.root;
+  const decodeMs=Math.max(0,Math.round((typeof performance!=='undefined'?
+   performance.now():Date.now())-started));
+  const textureStats=AndroidAssetOpt.optimize(root,this.optimizationQuality);
   // Make a stable axis-aligned origin at ground/base, independent of source pivot.
   const b=new THREE.Box3().setFromObject(root);if(b.isEmpty())throw Error('В GLB нет геометрии');
   const centre=b.getCenter(V());
   const wrapper=new THREE.Group();
   root.position.x-=centre.x;root.position.y-=b.min.y;root.position.z-=centre.z;
   wrapper.add(root);
-  this.assets.set(id,{template:wrapper,name:safeName(name),category,animations:parsed.animations||[]});
+  this.assets.set(id,{template:wrapper,name:safeName(name),category,
+   animations:parsed.animations||[],glbInfo:parsed.info||null,textureStats});
+  const used=(parsed.info?.extensions||[]).filter(e=>
+   ['EXT_meshopt_compression','KHR_draco_mesh_compression','KHR_texture_basisu'].includes(e));
+  this.lastGLBImport={decodedMs:decodeMs,
+   fileMiB:Math.round((buffer.byteLength||0)/1048576*100)/100,
+   triangles:Math.round(parsed.triangles),extensions:used.slice()};
+  $('optimizationStats').textContent='GLB: '+Math.round(parsed.triangles).toLocaleString('ru-RU')+
+   ' треугольников · сжатие: '+(used.join(', ')||'обычное')+
+   ' · декодирование: '+decodeMs+' мс'+
+   ' · уменьшено текстур: '+textureStats.resized;
   if(keep)await putAsset(id,buffer);
   this.renderCatalog();
   return wrapper;
+ }
+ updateAutoResolution(){
+  this.autoResolution=$('optimizationAutoResolution').checked;
+  localStorage.setItem('phoenix-builder-auto-resolution',this.autoResolution?'on':'off');
+  const ratio=this.performanceMonitor.setAuto(this.autoResolution);
+  if(Math.abs(this.renderer.getPixelRatio()-ratio)>.025){
+   this.renderer.setPixelRatio(ratio);this.resize();
+  }
+  notify(this.autoResolution?
+   'Авторазрешение включено: при длительном снижении FPS уменьшается только разрешение отрисовки':
+   'Авторазрешение выключено: исходная чёткость восстановлена','success');
+ }
+ async exportPerformanceReport(){
+  const report=this.performanceMonitor.report({
+   objects:this.entries.length,
+   imported:this.entries.filter(e=>!CleanGeometry.isBuiltIn(e.kind)).length,
+   codecs:GLB.codecStatus(),
+   importStats:this.lastGLBImport||null,
+   userAgent:navigator.userAgent
+  });
+  const reportText=JSON.stringify(report,null,2);
+  if(navigator.clipboard?.writeText){
+   try{await navigator.clipboard.writeText(reportText);
+    notify('📋 Отчёт FPS скопирован: можно отправить разработчику','success');return;
+   }catch(e){console.warn('Clipboard permission unavailable',e)}
+  }
+  // Android file:// WebViews may not grant clipboard permissions.
+  window.prompt('Скопируй диагностический отчёт (он не содержит модель или проект)',reportText);
+ }
+ updateOptimizer(){
+  this.optimizationQuality=AndroidAssetOpt.quality($('optimizationQuality').value);
+  this.lodEnabled=$('optimizationLOD').checked;
+  localStorage.setItem('phoenix-builder-optimization-quality',this.optimizationQuality);
+  localStorage.setItem('phoenix-builder-optimization-lod',this.lodEnabled?'on':'off');
+  for(const obj of this.entries){
+   if(CleanGeometry.isBuiltIn(obj.kind))continue;
+   AndroidLOD.setEnabled(obj.root,this.lodEnabled);
+   if(this.lodEnabled)this.attachImportedLOD(obj);
+  }
+  $('optimizationStats').textContent='Настройки сохранены. Для новых GLB: '+
+   (this.optimizationQuality==='original'?'без уменьшения текстур':
+    this.optimizationQuality==='battery'?'не более 1024 px':'не более 2048 px')+
+   '. LOD: '+(this.lodEnabled?'вкл.':'выкл.');
+ }
+ attachImportedLOD(obj){
+  if(!obj||CleanGeometry.isBuiltIn(obj.kind)||!this.lodEnabled||
+     CleanMeshEdit.active(obj.meshEdit)||obj.autoEdgeCuts?.length||obj.manualEdgeCut||
+     obj.floorTrim?.enabled)return;
+  const original=obj.root;
+  const source=this.assets.get(obj.kind);
+  const isStale=()=>obj.root!==original||!this.lodEnabled||
+   !this.entries.includes(obj)||CleanMeshEdit.active(obj.meshEdit)||
+   !!obj.autoEdgeCuts?.length||!!obj.manualEdgeCut;
+  AndroidLOD.prepare(original,source?.animations||[],
+   {enabled:true,shouldAbort:isStale}).then(summary=>{
+   if(isStale())return;
+   if(summary.attached)console.info('Phoenix LOD:',obj.kind,summary);
+  }).catch(err=>console.warn('LOD skipped for '+obj.kind,err));
  }
  async importGLB(file){
   if(!file)return;
@@ -182,7 +282,8 @@ class CleanBuilder{
    const buf=await file.arrayBuffer();
    await this.cacheModel(id,buf,$('importCategory').value,file.name);
    this.selectKind(id);
-   notify('Модель импортирована и сохранена на устройстве: '+safeName(file.name),'success');
+   notify('GLB импортирован: '+safeName(file.name)+' · '+
+    $('optimizationStats').textContent+'. Оригинальный файл сохранён.','success');
   }catch(err){console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')}
  }
  async ensureTemplate(kind,category='wall'){
@@ -327,7 +428,9 @@ class CleanBuilder{
   // enlarge the displayed/saved size of the remaining shape.
   const inverse=obj.root.matrixWorld.clone().invert(),bounds=new THREE.Box3().makeEmpty();
   obj.root.traverse(mesh=>{
-   if(!mesh.isMesh||!mesh.visible||!mesh.geometry?.attributes?.position)return;
+   if(!mesh.isMesh||mesh.userData.phoenixLODProxy||
+      (!mesh.visible&&!mesh.userData.phoenixLODInstalled)||
+      !mesh.geometry?.attributes?.position)return;
    if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();
    if(mesh.geometry.boundingBox.isEmpty())return;
    const relative=new THREE.Matrix4().multiplyMatrices(inverse,mesh.matrixWorld);
@@ -912,6 +1015,7 @@ class CleanBuilder{
   obj.root=template;obj.meshEdit=requested;
   this.applySurfaceTo(obj);
   obj.capResult=editResult;
+  if(obj!==this.preview)this.attachImportedLOD(obj);
   obj.thicknessEditable=!CleanMeshEdit.active(requested)&&
    !!CleanGeometry.thicknessInfo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(obj.root);
@@ -1124,6 +1228,7 @@ class CleanBuilder{
   const entry=this.createEntry(source.kind,data);
   if(!entry){notify('Не удалось разместить модуль','error');return}
   this.scene.add(entry.root);this.entries.push(entry);
+  this.attachImportedLOD(entry);
   this.selectKind(source.kind);
   this.preview.root.position.fromArray(data.position);
   this.settings={scale:data.scale,axes:data.axes,thickness:data.thickness};
@@ -1165,7 +1270,8 @@ class CleanBuilder{
   const data=this.encode(obj);delete data.id;
   data.position[0]+=1.5;
   const clone=this.createEntry(obj.kind,data);if(!clone)return;
-  this.entries.push(clone);this.scene.add(clone.root);this.selected=clone;this.setTool('pick');
+  this.entries.push(clone);this.scene.add(clone.root);this.selected=clone;
+  this.attachImportedLOD(clone);this.setTool('pick');
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose()}
   this.outline=new THREE.BoxHelper(clone.root,0x44ffb8);this.scene.add(this.outline);
   this.gizmo.attach(clone);
@@ -1230,7 +1336,7 @@ class CleanBuilder{
   }
   // All-or-nothing restore: keep current scene if a GLB was lost.
   for(const obj of this.entries)obj.root.removeFromParent();
-  this.entries=staged;for(const e of staged)this.scene.add(e.root);
+  this.entries=staged;for(const e of staged){this.scene.add(e.root);this.attachImportedLOD(e)}
   this.floor=Number.isInteger(doc.floor)?clamp(doc.floor,0,49):0;
   this.nextId=Math.max(1,...this.entries.map(e=>e.id+1),doc.nextId||1);
   this.selected=null;this.setTool('place');this.selectKind('wall');
@@ -1281,6 +1387,10 @@ class CleanBuilder{
   $('modeBuild').onclick=()=>this.setMode('build');
   $('modeCharacter').onclick=()=>this.setMode('character');
   $('modeDrone').onclick=()=>this.setMode('drone');
+  $('optimizationQuality').onchange=()=>this.updateOptimizer();
+  $('optimizationLOD').onchange=()=>this.updateOptimizer();
+  $('optimizationAutoResolution').onchange=()=>this.updateAutoResolution();
+  $('btnPerfReport').onclick=()=>this.exportPerformanceReport();
   $('tabParts').onclick=()=>this.setTextureTab('parts');
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);

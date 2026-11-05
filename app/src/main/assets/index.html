@@ -12,7 +12,25 @@
  <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b><div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Текстуры хранятся на этом устройстве. При выборе применяется к выделенной или новой детали.</small></div><div id="catalogImport" class="importZone">
  <label for="importCategory">Импорт GLB как</label>
  <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
- <label class="fileButton">＋ Загрузить свой GLB<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
+ <label class="fileButton">＋ Загрузить GLB / GLB Meshopt / Draco / KTX2<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
+  <details id="importOptimizer"><summary>⚡ Оптимизация для Android</summary>
+   <label>Качество текстур при импорте<select id="optimizationQuality">
+    <option value="balanced" selected>Баланс: максимум 2048 px</option>
+    <option value="battery">Экономия: максимум 1024 px</option>
+    <option value="original">Исходное: без уменьшения</option>
+   </select></label>
+   <label class="check"><input id="optimizationLOD" type="checkbox" checked>
+    <span>Автоматический LOD для статических GLB вдали</span></label>
+   <small class="tip">Анимация, кости, петли и материалы останутся целыми. Исходный GLB сохраняется без перезаписи. Все декодеры работают без интернета.</small>
+   <small id="optimizationStats" class="tip">Оптимизация применяется к следующему импорту.</small>
+   <label class="check"><input id="optimizationAutoResolution" type="checkbox">
+    <span>Авторазрешение при просадках FPS (выключено по умолчанию)</span></label>
+   <div class="perfDiagnostic"><b>📊 Проверка скорости</b>
+    <small id="performanceStats" class="tip" aria-live="off">FPS: собирается · Draw calls: — · Треугольники: —</small>
+    <button id="btnPerfReport" class="alt">📋 Скопировать отчёт о производительности</button>
+    <small class="tip">FPS, вызовы рисования и счётчики Three.js — это не измерение GPU-памяти. Авторазрешение не меняет 3D-модели.</small>
+   </div>
+  </details>
  <label class="fileButton ghostButton">🧍 Загрузить персонажа GLB<input id="importAvatar" type="file" accept=".glb,model/gltf-binary" hidden></label>
    <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
    <small class="tip">Модель автоматически подгоняется под рост и ширину. Анимация не изменяет внешний масштаб.</small>
@@ -123,9 +141,17 @@
 <input id="openProject" type="file" accept=".json" hidden>
 <script src="js/three.min.js"></script>
 <script src="js/OrbitControls.js"></script>
-<script src="js/GLTFLoader.js"></script>
+<script src="js/WorkerPool.js"></script>
+ <script src="js/DRACOLoader.js"></script>
+ <script src="js/KTX2Loader.js"></script>
+ <script src="js/meshopt_decoder.js"></script>
+ <script src="js/meshopt_simplifier.js"></script>
+ <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
+ <script src="js/android-asset-opt.js"></script>
+ <script src="js/android-lod.js"></script>
+ <script src="js/android-performance.js"></script>
 <script src="js/architecture-kit.js"></script>
  <script src="js/clean-geometry.js"></script><script src="js/mesh-caps.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script><script src="js/bulk-floor-trim.js"></script>
 <script src="js/avatar-fit.js"></script>

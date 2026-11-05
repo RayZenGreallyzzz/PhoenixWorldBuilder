@@ -2,9 +2,9 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod]
   pull_request:
-    branches: [main]
+    branches: [main, feature/planner5d-precision-tools]
 
 concurrency:
   group: phoenix-apk-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -50,6 +50,13 @@ jobs:
           cp /tmp/phoenix-three/node_modules/three/examples/js/controls/OrbitControls.js app/src/main/assets/js/OrbitControls.js
           cp /tmp/phoenix-three/node_modules/three/LICENSE THREEJS_LICENSE.txt
 
+      - name: Bundle offline Draco and KTX2 decoders (Three.js r140)
+        run: |
+          npm install --prefix /tmp/phoenix-codecs --no-save --no-package-lock --ignore-scripts --no-audit --no-fund three@0.140.0
+          node scripts/copy-glb-codecs.cjs /tmp/phoenix-codecs/node_modules/three
+          test -s app/src/main/assets/js/draco/draco_decoder.wasm
+          test -s app/src/main/assets/js/basis/basis_transcoder.wasm
+
       - name: Validate Phoenix Builder v2
         run: |
           for file in app/src/main/assets/js/*.js; do node --check "$file"; done
@@ -59,6 +66,8 @@ jobs:
           node tests/test-curved-openings.cjs
           node tests/test-studio-tools.cjs
           node tests/test-architecture-kit.cjs
+          node tests/test-mobile-glb-optimization.cjs
+          node tests/test-android-performance.cjs
           node tests/test-bulk-floor-trim.cjs
           node tests/test-planner-tools.cjs
           node tests/test-auto-wall-trim.cjs
