@@ -50,6 +50,13 @@ jobs:
           cp /tmp/phoenix-three/node_modules/three/examples/js/controls/OrbitControls.js app/src/main/assets/js/OrbitControls.js
           cp /tmp/phoenix-three/node_modules/three/LICENSE THREEJS_LICENSE.txt
 
+      - name: Bundle offline Draco and KTX2 decoders (Three.js r140)
+        run: |
+          npm install --prefix /tmp/phoenix-codecs --no-save --no-package-lock --ignore-scripts --no-audit --no-fund three@0.140.0
+          node scripts/copy-glb-codecs.cjs /tmp/phoenix-codecs/node_modules/three
+          test -s app/src/main/assets/js/draco/draco_decoder.wasm
+          test -s app/src/main/assets/js/basis/basis_transcoder.wasm
+
       - name: Validate Phoenix Builder v2
         run: |
           for file in app/src/main/assets/js/*.js; do node --check "$file"; done
