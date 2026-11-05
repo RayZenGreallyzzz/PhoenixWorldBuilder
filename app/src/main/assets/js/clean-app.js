@@ -258,9 +258,12 @@ class CleanBuilder{
      obj.floorTrim?.enabled)return;
   const original=obj.root;
   const source=this.assets.get(obj.kind);
+  const isStale=()=>obj.root!==original||!this.lodEnabled||
+   !this.entries.includes(obj)||CleanMeshEdit.active(obj.meshEdit)||
+   !!obj.autoEdgeCuts?.length||!!obj.manualEdgeCut;
   AndroidLOD.prepare(original,source?.animations||[],
-   {enabled:this.lodEnabled}).then(summary=>{
-   if(obj.root!==original)return;
+   {enabled:true,shouldAbort:isStale}).then(summary=>{
+   if(isStale())return;
    if(summary.attached)console.info('Phoenix LOD:',obj.kind,summary);
   }).catch(err=>console.warn('LOD skipped for '+obj.kind,err));
  }
