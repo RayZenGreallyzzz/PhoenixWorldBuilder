@@ -34,6 +34,30 @@ assert.equal(P.formatMM(.017),'17 мм');
 const columnX=1.234,desiredX=1.236;
 assert(Math.abs(P.coordinate(desiredX,false,.25)-columnX)<.005,
  'Decorated column can approach a wall within 2 mm instead of jumping 25 cm');
+{
+ global.THREE=require(path.join(assets,'js/three.min.js'));
+ global.PrecisionPlacement=P;
+ const Gizmo=require(path.join(assets,'js/builder-gizmo.js'));
+ const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera();
+ cam.position.set(6,6,8);
+ const canvas={getBoundingClientRect:()=>({left:0,top:0,width:800,height:600})};
+ const widget=new Gizmo(scene,cam,canvas,new THREE.Raycaster());
+ const root=new THREE.Group();root.position.set(1.234,0,0);
+ const obj={root,rot:0,scale:1,axes:{x:1,y:1,z:1}};
+ widget.attach(obj);
+ widget.onPlane=()=>new THREE.Vector3(.0036,0,0);
+ const makeDrag=()=>{widget.drag={pointerId:7,mode:'move',axis:'x',sx:0,sy:0,
+  basePosition:root.position.clone(),p:new THREE.Vector3(0,0,0),changed:false}};
+ makeDrag();
+ assert(widget.move({pointerId:7,clientX:10,clientY:10},obj,
+  {gridEnabled:false,gridStep:.25}),'Free gizmo drag runs');
+ eq(root.position.x,1.238,'Gizmo moves to a millimetre value, not 25cm grid');
+ root.position.set(1.234,0,0);makeDrag();
+ widget.move({pointerId:7,clientX:10,clientY:10},obj,
+  {gridEnabled:true,gridStep:.25});
+ eq(root.position.x,1.25,'Gizmo snaps only when grid explicitly enabled');
+ widget.drag=null;widget.attach(null);
+}
 const html=fs.readFileSync(path.join(assets,'index.html'),'utf8'),
  app=fs.readFileSync(path.join(assets,'js/clean-app.js'),'utf8'),
  gizmo=fs.readFileSync(path.join(assets,'js/builder-gizmo.js'),'utf8');
