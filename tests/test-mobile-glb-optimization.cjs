@@ -97,6 +97,16 @@ async function testLOD(){
  hinged.add(new THREE.Mesh(new THREE.SphereGeometry(1,66,44)));
  assert.equal((await LOD.prepare(hinged,[])).attached,0,
   'Door hinges and editable moving parts are protected');
+ const staleRoot=new THREE.Group();
+ const staleMesh=new THREE.Mesh(new THREE.SphereGeometry(1,66,44));
+ staleMesh.name='rock-stale';staleRoot.add(staleMesh);
+ const staleResult=await LOD.prepare(staleRoot,[],{
+  enabled:true,shouldAbort:()=>true
+ });
+ assert.equal(staleResult.skipped,'stale','Obsolete async LOD job gets cancelled');
+ assert.strictEqual(staleRoot.children[0],staleMesh,'Cancellation leaves mesh intact');
+ assert(!staleRoot.children.some(c=>c.isLOD),
+  'Deleted/replaced GLB never gets a late LOD mutation');
 }
 function testMaterials(){
  const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial());
@@ -135,6 +145,7 @@ function testDecoderSetup(){
  assert(app.includes('GLB.configure(this.renderer)'),'Decoder not linked to real renderer');
  assert(app.includes('this.attachImportedLOD(entry)'),'LOD not wired into placement');
  assert(app.includes('this.attachImportedLOD(e)'),'LOD not wired into restore');
+ assert(app.includes('shouldAbort:isStale'),'Edited/removed models must cancel stale LOD work');
 }
 (async()=>{testMaterials();testDecoderSetup();await testMeshopt();await testLOD();
  console.log('Compressed GLB Meshopt loading + Draco KTX2 setup + safe static LOD + quality tests OK');
