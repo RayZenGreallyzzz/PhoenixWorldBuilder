@@ -67,6 +67,7 @@ jobs:
           node tests/test-studio-tools.cjs
           node tests/test-architecture-kit.cjs
           node tests/test-mobile-glb-optimization.cjs
+          node tests/test-android-performance.cjs
           node tests/test-bulk-floor-trim.cjs
           node tests/test-planner-tools.cjs
           node tests/test-auto-wall-trim.cjs
