@@ -155,3 +155,4 @@ const GLB = (()=>{
   meshopt:typeof MeshoptDecoder!=='undefined'&&MeshoptDecoder.supported===true,
   draco:!!state.draco,ktx2:!!state.ktx2})};
 })();
+if(typeof module!=='undefined'&&module.exports)module.exports=GLB;
