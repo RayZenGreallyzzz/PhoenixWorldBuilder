@@ -37,7 +37,7 @@ const WallOpenings=(()=>{
  }
  function normalize(raw){
   if(!Array.isArray(raw))return [];
-  return raw.slice(0,MAX).filter(o=>o&&['door','window'].includes(o.type))
+  return raw.slice(0,MAX).filter(o=>o&&['door','window','passage'].includes(o.type))
    .map((o,i)=>({id:String(o.id||'cut-'+i).replace(/[^a-z\d:_-]/gi,'').slice(0,64),
     group:String(o.group||o.id||'cut-'+i).replace(/[^a-z\d:_-]/gi,'').slice(0,64),
     type:o.type,x:clamp(finite(o.x,0),-10,10),y:clamp(finite(o.y,o.type==='door'?0:.85),0,2.45),
@@ -215,6 +215,8 @@ const WallOpenings=(()=>{
  function infill(root,prof,o){
   const s0=prof.length/2+o.x-o.w/2,s1=s0+o.w,
    fw=Math.min(.045,o.w/6),depth=prof.thickness+.035,mode=archMode(o);
+  // An empty opening should remain an actual walk-through void.
+  if(o.type==='passage')return;
   const frame=new THREE.Group();frame.name='phoenixOpening:'+o.id;root.add(frame);
   const frameMat=new THREE.MeshStandardMaterial({
    color:o.frameStyle==='portal'?0x4f4e66:o.frameStyle==='gothic'?0x85838b:0xb1a99a,
@@ -296,6 +298,33 @@ const WallOpenings=(()=>{
   return {ok:true,changed:true,triangles:shape.attributes.position.count/3,
    openings:check.openings.length};
  }
+ // Nearest arc-length position for a tap on an actual wall surface.
+ // Input point is in the wall's local space (worldToLocal before call).
+ function pathAtPoint(kind,point,thickness=.22,axes={x:1,y:1,z:1}){
+  const prof=profile(kind,thickness,axes);
+  if(!prof||!point||!Number.isFinite(point.x)||!Number.isFinite(point.z))
+   return null;
+  let s=0;
+  if(kind==='wall')s=point.x+1;
+  else if(kind==='corner'){
+   const a=clamp(point.x+1.9,0,1.9),b=clamp(-point.z,0,1.9);
+   const da=(point.x-(-1.9+a))**2+point.z**2;
+   const db=point.x**2+(point.z+b)**2;
+   s=da<=db?a:1.9+b;
+  }else{
+   let angle=Math.atan2(point.z,point.x);
+   if(angle<0)angle+=Math.PI*2;
+   s=clamp(angle,0,kind==='arc90'?Math.PI/2:Math.PI)*R;
+   const q0=prof.pos(0),q1=prof.pos(prof.length),q=prof.pos(s);
+   const ds=(point.x-q.x)**2+(point.z-q.z)**2;
+   const d0=(point.x-q0.x)**2+(point.z-q0.z)**2;
+   const d1=(point.x-q1.x)**2+(point.z-q1.z)**2;
+   if(d0<ds||d1<ds)s=d0<d1?0:prof.length;
+  }
+  s=clamp(s,0,prof.length);
+  return {s,offset:s-prof.length/2,metersFromStart:s,
+   length:prof.length,position:prof.pos(s)};
+ }
  function setDoorAngle(root,id,angle){
   const pivots=[],prefix='phoenixDoorPivot:'+id;
   root.traverse(o=>{
@@ -362,6 +391,6 @@ const WallOpenings=(()=>{
    joint:true};
  }
  return {supported,profile,normalize,validate,geometry,render,setDoorAngle,
-  splitAtJunction,HEIGHT,MAX};
+  splitAtJunction,pathAtPoint,HEIGHT,MAX};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=WallOpenings;
