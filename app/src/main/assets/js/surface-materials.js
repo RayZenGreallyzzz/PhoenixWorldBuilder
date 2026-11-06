@@ -8,6 +8,7 @@ const SurfaceMaterials=(()=>{
  const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
  const modes=['auto','repeat','tile','module','joined','source'];
  const cache=new WeakMap();
+ const proceduralCache=new Map();
  const numeric=(v,def,min,max)=>{
   const x=Number(v);
   return v===undefined||v===null||v===''||!Number.isFinite(x)?def:clamp(x,min,max);
@@ -37,6 +38,7 @@ const SurfaceMaterials=(()=>{
   };
  }
  function canvasPattern(style){
+  if(proceduralCache.has(style))return proceduralCache.get(style);
   const el=document.createElement('canvas');el.width=256;el.height=256;
   const c=el.getContext('2d');if(!c)return null;
   const fill=(color,x=0,y=0,w=256,h=256)=>{c.fillStyle=color;c.fillRect(x,y,w,h)};
@@ -78,7 +80,7 @@ const SurfaceMaterials=(()=>{
   }else return null;
   const t=new THREE.CanvasTexture(el);
   t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;
-  t.anisotropy=2;return t;
+  t.anisotropy=4;proceduralCache.set(style,t);return t;
  }
  function apply(root,raw,customTexture=null,options={}){
   const style=normalize(raw),kind=String(options.kind||root?.name||'');
@@ -99,11 +101,11 @@ const SurfaceMaterials=(()=>{
    texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
    texture.flipY=false;texture.repeat.set(1,1);
    texture.offset.set(0,0);texture.rotation=0;
-   texture.encoding=THREE.sRGBEncoding;texture.needsUpdate=true;
+   texture.encoding=THREE.sRGBEncoding;texture.anisotropy=4;texture.needsUpdate=true;
   }
   const workshop=typeof SurfaceWorkshop!=='undefined'?SurfaceWorkshop:null;
   const normal=style.relief>0&&texture&&workshop?
-   workshop.normalFromTexture(texture):null;
+   workshop.normalFromTexture(template):null;
   root.traverse(mesh=>{
    if(!mesh.isMesh||mesh.userData.phoenixLODProxy)return;
    const isFrame=mesh.name?.startsWith('frame:');
