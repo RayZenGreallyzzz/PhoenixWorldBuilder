@@ -175,5 +175,5 @@ for(const id of ['textureMapping','textureTileMeters','textureImageScale',
 assert(html.indexOf('js/surface-workshop.js')<html.indexOf('js/surface-materials.js'));
 assert(html.indexOf('js/surface-materials.js')<html.indexOf('js/clean-app.js'));
 for(const token of ['SurfaceMaterials.normalize','surfaceFromControls(obj)',
- 'applySurfaceToAllWalls(){','mapping:$('])
+ 'applySurfaceToAllWalls(){','mapping:mode'])
  assert(app.includes(token),'Workshop settings not saved in Builder: '+token);
