@@ -129,7 +129,34 @@
     <label>Покрытие<select id="textureStyle"><option value="none">Исходный материал</option><option value="paint">Однотонная краска</option><option value="brick">Кирпич</option><option value="stone">Камень</option><option value="wood">Дерево</option><option value="tile">Плитка</option><option value="concrete">Бетон</option><option value="metal">Металл</option><option value="custom">Моё изображение</option></select></label>
     <label>Оттенок / цвет<input id="textureTint" type="color" value="#ffffff"></label>
     <label>Повтор рисунка<input id="textureRepeat" type="number" min=".2" max="12" step=".2" value="1"></label>
-    <div class="cols2"><button id="btnApplyTexture" class="primary">Применить</button><button id="btnClearTexture" class="alt">Сбросить</button></div>
+    <label>Укладка текстуры<select id="textureMapping">
+      <option value="auto">Авто: исходные UV GLB / стены по метрам</option>
+      <option value="repeat">Повтор по метрам — одинаковый кирпич</option>
+      <option value="tile">Плитка: сохранить пропорции</option>
+      <option value="module">Одно изображение на модуль</option>
+      <option value="joined">Общая непрерывная разметка</option>
+      <option value="source">Исходная UV-развёртка GLB</option>
+     </select></label>
+     <div class="cols2">
+      <label>Метров на рисунок<input id="textureTileMeters" type="number" min=".05" max="100" step=".05" value="1"></label>
+      <label>Масштаб кадра<input id="textureImageScale" type="number" min=".1" max="10" step=".1" value="1"></label>
+      <label>Поворот, °<input id="textureRotation" type="number" min="-360" max="360" step="1" value="0"></label>
+      <label>Сдвиг U<input id="textureOffsetU" type="number" min="-1000" max="1000" step=".01" value="0"></label>
+      <label>Сдвиг V<input id="textureOffsetV" type="number" min="-1000" max="1000" step=".01" value="0"></label>
+     </div>
+     <div class="materialSliders">
+      <label>Шероховатость — матовый/глянцевый <output id="textureRoughnessValue">0.92</output>
+       <input id="textureRoughness" type="range" min="0" max="1" step=".01" value=".92"></label>
+      <label>Металличность <output id="textureMetalnessValue">0.00</output>
+       <input id="textureMetalness" type="range" min="0" max="1" step=".01" value="0"></label>
+      <label>Рельеф текстуры <output id="textureReliefValue">0.00</output>
+       <input id="textureRelief" type="range" min="0" max="2" step=".05" value="0"></label>
+     </div>
+     <label class="check"><input id="textureApplyFrames" type="checkbox">
+      <span>Покрыть оконные и дверные рамы (стекло оставить прозрачным)</span></label>
+    <div class="cols2"><button id="btnApplyTexture" class="primary">Применить к детали</button><button id="btnClearTexture" class="alt">Сбросить</button></div>
+    <button id="btnSurfaceAllWalls" class="alt">🧱 Нанести на все стены этого этажа</button>
+    <small class="tip">Повтор по метрам даёт одинаковый размер рисунка на прямых, угловых и круглых стенах. Настроенные UV переносятся в экспорт GLB. Обрезка и сгибание моделей сохраняются.</small>
     <small id="textureSelection" class="tip">Можно выбрать узор слева во вкладке «Текстуры».</small>
    </details>
    <details class="rowSection" id="prefabDoorPanel"><summary>🚪 Петли готовой двери</summary>
@@ -200,6 +227,7 @@
 <script src="js/architecture-kit.js"></script>
  <script src="js/clean-geometry.js"></script><script src="js/mesh-caps.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script><script src="js/bulk-floor-trim.js"></script>
 <script src="js/avatar-fit.js"></script>
+ <script src="js/surface-workshop.js"></script>
  <script src="js/surface-materials.js"></script>
  <script src="js/wall-openings.js"></script>
  <script src="js/precision-placement.js"></script>
