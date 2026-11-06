@@ -429,22 +429,53 @@ class CleanBuilder{
   const root=obj.root;
   if(settings.style==='custom'){
    if(this.textureCache.has(settings.imageId)){
-    SurfaceMaterials.apply(root,settings,this.textureCache.get(settings.imageId));
+    SurfaceMaterials.apply(root,settings,this.textureCache.get(settings.imageId),{kind:obj.kind});
    }else if(settings.imageId){
     this.textureAsset(settings.imageId).then(tex=>{
      if(obj.root===root&&obj.surface?.imageId===settings.imageId)
-      SurfaceMaterials.apply(root,settings,tex);
+      SurfaceMaterials.apply(root,settings,tex,{kind:obj.kind});
     }).catch(err=>notify('Текстура: '+err.message,'warn'));
    }
-  }else SurfaceMaterials.apply(root,settings);
+  }else SurfaceMaterials.apply(root,settings,null,{kind:obj.kind});
+ }
+ surfaceFromControls(obj){
+  const prev=SurfaceMaterials.normalize(obj?.surface);
+  return SurfaceMaterials.normalize({...prev,
+   style:$('textureStyle').value,color:$('textureTint').value,
+   repeat:Number($('textureRepeat').value),
+   mapping:$('textureMapping').value,
+   tileMeters:Number($('textureTileMeters').value),
+   imageScale:Number($('textureImageScale').value),
+   offsetU:Number($('textureOffsetU').value),
+   offsetV:Number($('textureOffsetV').value),
+   rotation:Number($('textureRotation').value),
+   roughness:Number($('textureRoughness').value),
+   metalness:Number($('textureMetalness').value),
+   relief:Number($('textureRelief').value),
+   applyFrames:$('textureApplyFrames').checked,
+   imageId:this.activeTextureId||prev.imageId||''});
+ }
+ applySurfaceToAllWalls(){
+  const source=this.selected;
+  if(this.tool!=='pick'||!source||source.category!=='wall')
+   return notify('Выдели построенную стену для копирования материала','warn');
+  const surface=this.surfaceFromControls(source);
+  if(surface.style==='custom'&&!surface.imageId)
+   return notify('Сначала выбери своё изображение','warn');
+  let count=0;
+  for(const target of this.entries){
+   if(target.category!=='wall'||target.storey!==source.storey)continue;
+   target.surface=SurfaceMaterials.normalize(surface);
+   this.applySurfaceTo(target);count++;
+  }
+  this.syncInspector();this.renderTextureLibrary();
+  notify('🎨 Единая настройка рисунка: '+count+' стен(ы) на этаже','success');
  }
  changeSurface(reset=false){
   const obj=this.target();
   if(!obj)return notify('Выбери деталь','warn');
-  const settings=reset?{style:'none'}:{
-   style:$('textureStyle').value,color:$('textureTint').value,
-   repeat:Number($('textureRepeat').value),imageId:this.activeTextureId||obj.surface?.imageId||''};
-  const next=SurfaceMaterials.normalize(settings);
+  const next=reset?SurfaceMaterials.normalize({style:'none'}):
+   this.surfaceFromControls(obj);
   if(next.style==='custom'&&!next.imageId)return notify('Выбери или загрузи картинку слева','warn');
   obj.surface=next;
   // Rebuild on reset to recover original imported GLB PBR maps.
@@ -762,9 +793,20 @@ class CleanBuilder{
    $('openingDoorStyle').value=chosen.doorStyle||'classic';
    $('openingFrameStyle').value=chosen.frameStyle||'classic';
   }
-  $('textureStyle').value=obj?.surface?.style||'none';
-  read('textureTint',obj?.surface?.color||'#ffffff');
-  read('textureRepeat',obj?.surface?.repeat||1);
+  const surf=SurfaceMaterials.normalize(obj?.surface);
+  read('textureStyle',surf.style);read('textureTint',surf.color);
+  read('textureRepeat',surf.repeat);
+  const controls={textureMapping:surf.mapping,textureTileMeters:surf.tileMeters,
+   textureImageScale:surf.imageScale,textureRotation:surf.rotation,
+   textureOffsetU:surf.offsetU,textureOffsetV:surf.offsetV,
+   textureRoughness:surf.roughness,textureMetalness:surf.metalness,
+   textureRelief:surf.relief};
+  for(const [id,value] of Object.entries(controls))read(id,value);
+  $('textureApplyFrames').checked=surf.applyFrames;
+  for(const [id,value] of [['textureRoughnessValue',surf.roughness],
+   ['textureMetalnessValue',surf.metalness],['textureReliefValue',surf.relief]])
+   $(id).textContent=Number(value).toFixed(2);
+  $('btnSurfaceAllWalls').disabled=!(this.tool==='pick'&&obj?.category==='wall');
   this.gizmo.attach(this.tool==='pick'?this.selected:null);
   this.updateOpeningInfo();
   this.readSockets();
@@ -1702,6 +1744,9 @@ class CleanBuilder{
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
+  $('btnSurfaceAllWalls').onclick=()=>this.applySurfaceToAllWalls();
+  for(const id of ['textureRoughness','textureMetalness','textureRelief'])
+   $(id).oninput=e=>$(id+'Value').textContent=Number(e.target.value).toFixed(2);
   $('btnOpeningTool').onclick=()=>this.startOpeningTool();
   $('btnQuickOpening').onclick=()=>this.startOpeningTool();
   $('btnFocusCamera').onclick=()=>this.startCameraFocus();
