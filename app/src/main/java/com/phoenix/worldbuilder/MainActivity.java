@@ -272,7 +272,8 @@ public class MainActivity extends Activity {
             .setPositiveButton("Сохранить и выйти", (d, which) -> {
                 if (webView == null) { finish(); return; }
                 webView.evaluateJavascript(
-                    "(window.PhoenixPersistence&&window.PhoenixPersistence.flushNow?window.PhoenixPersistence.flushNow():false)",
+                    "(window.PhoenixClean&&typeof window.PhoenixClean.save==='function'?window.PhoenixClean.save():" +
+                     "(window.PhoenixPersistence&&window.PhoenixPersistence.flushNow?window.PhoenixPersistence.flushNow():false))",
                     result -> {
                         if ("true".equals(result)) finish();
                         else Toast.makeText(this, "Не удалось сохранить. Редактор остался открытым.", Toast.LENGTH_LONG).show();
