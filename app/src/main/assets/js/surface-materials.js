@@ -6,13 +6,35 @@ const SurfaceMaterials=(()=>{
  'use strict';
  const styles=['none','paint','brick','stone','wood','tile','concrete','metal','custom'];
  const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+ const modes=['auto','repeat','tile','module','joined','source'];
+ const cache=new WeakMap();
+ const numeric=(v,def,min,max)=>{
+  const x=Number(v);
+  return v===undefined||v===null||v===''||!Number.isFinite(x)?def:clamp(x,min,max);
+ };
  const labels={none:'Исходный',paint:'🎨 Краска',brick:'🧱 Кирпич',stone:'🪨 Камень',
   wood:'🪵 Дерево',tile:'▦ Плитка',concrete:'◻ Бетон',metal:'⚙ Металл',custom:'🖼 Изображение'};
  function normalize(raw){
   const d=raw||{},style=styles.includes(d.style)?d.style:'none';
+  const defaults=style==='metal'?{roughness:.42,metalness:.7}:
+   {roughness:.92,metalness:0};
   return {style,color:/^#[0-9a-f]{6}$/i.test(d.color||'')?d.color:'#ffffff',
-   repeat:clamp(Number(d.repeat)||1,.2,12),
-   imageId:typeof d.imageId==='string'?d.imageId.slice(0,110):''};
+   repeat:numeric(d.repeat,1,.2,12),
+   imageId:typeof d.imageId==='string'?d.imageId.slice(0,110):'',
+   mapping:modes.includes(d.mapping)?d.mapping:'auto',
+   tileMeters:numeric(d.tileMeters,1,.05,100),
+   imageScale:numeric(d.imageScale,1,.1,10),
+   offsetU:numeric(d.offsetU,0,-1000,1000),
+   offsetV:numeric(d.offsetV,0,-1000,1000),
+   rotation:numeric(d.rotation,0,-360,360),
+   roughness:numeric(d.roughness,defaults.roughness,0,1),
+   metalness:numeric(d.metalness,defaults.metalness,0,1),
+   relief:numeric(d.relief,0,0,2),
+   applyFrames:d.applyFrames===true,
+   region:Array.isArray(d.region)&&d.region.length===4&&
+    d.region.every(v=>typeof v==='number'&&Number.isFinite(v))&&
+    d.region[2]>d.region[0]&&d.region[3]>d.region[1]?d.region.slice():null
+  };
  }
  function canvasPattern(style){
   const el=document.createElement('canvas');el.width=256;el.height=256;
@@ -58,36 +80,79 @@ const SurfaceMaterials=(()=>{
   t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;
   t.anisotropy=2;return t;
  }
- function apply(root,raw,customTexture=null){
-  const style=normalize(raw);
-  if(style.style==='none')return {ok:true,changed:false};
+ function apply(root,raw,customTexture=null,options={}){
+  const style=normalize(raw),kind=String(options.kind||root?.name||'');
+  if(!root)return {ok:false,reason:'Нет 3D-объекта'};
+  // GLB models have authored UVs. Procedural walls/arcs use physical world UVs.
+  const mapping=style.mapping==='auto'?
+   (kind.startsWith('glb:')?'source':'repeat'):style.mapping;
   if(style.style==='custom'&&!customTexture)
    return {ok:false,reason:'Сначала выбери загруженное изображение'};
   const template=style.style==='custom'?customTexture:
-   style.style==='paint'?null:canvasPattern(style.style);
-  if(style.style!=='paint'&&!template)return {ok:false,reason:'Не удалось создать текстуру'};
-  const image=template?template.clone():null;
-  if(image){
-   image.wrapS=image.wrapT=THREE.RepeatWrapping;
-   image.repeat.set(style.repeat,style.repeat);
-   image.encoding=THREE.sRGBEncoding;image.needsUpdate=true;
+   style.style==='paint'||style.style==='none'?null:canvasPattern(style.style);
+  if(!['paint','none'].includes(style.style)&&!template)
+   return {ok:false,reason:'Не удалось создать текстуру'};
+  root.updateWorldMatrix(true,true);
+  let count=0,changedGeometry=0;
+  const texture=template?template.clone():null;
+  if(texture){
+   texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+   texture.flipY=false;texture.repeat.set(1,1);
+   texture.offset.set(0,0);texture.rotation=0;
+   texture.encoding=THREE.sRGBEncoding;texture.needsUpdate=true;
   }
-  let count=0;
+  const workshop=typeof SurfaceWorkshop!=='undefined'?SurfaceWorkshop:null;
+  const normal=style.relief>0&&texture&&workshop?
+   workshop.normalFromTexture(texture):null;
   root.traverse(mesh=>{
-   if(!mesh.isMesh||mesh.userData.phoenixInsert)return;
-   const update=mat=>{
-    const copy=mat.clone();
-    if(image)copy.map=image;
+   if(!mesh.isMesh||mesh.userData.phoenixLODProxy)return;
+   const isFrame=mesh.name?.startsWith('frame:');
+   if(mesh.userData.phoenixInsert&&!(isFrame&&style.applyFrames))return;
+   if(mesh.name?.includes('glass')||mesh.name?.includes('door:leaf'))return;
+   let original=cache.get(mesh);
+   if(!original){
+    original={geometry:mesh.geometry,material:mesh.material,
+     ownedGeometry:null,ownedMaterials:null};
+    cache.set(mesh,original);
+   }
+   if(original.ownedGeometry){
+    mesh.geometry=original.geometry;
+    original.ownedGeometry.dispose();original.ownedGeometry=null;
+   }
+   if(original.ownedMaterials){
+    for(const mat of original.ownedMaterials)mat.dispose();
+    original.ownedMaterials=null;
+   }
+   if(style.style==='none'){
+    mesh.material=original.material;return;
+   }
+   if(texture&&workshop){
+    const g=workshop.project(root,mesh,original.geometry,
+     {...style,mapping,textureAspect:texture.image?.width/
+      Math.max(1,texture.image?.height)},kind);
+    if(g){mesh.geometry=g;original.ownedGeometry=g;changedGeometry++}
+   }
+   const update=source=>{
+    const copy=(source||new THREE.MeshStandardMaterial()).clone();
+    if(texture)copy.map=texture;
     else if(style.style==='paint')copy.map=null;
-    copy.color.set(style.color);
-    copy.needsUpdate=true;
-    return copy;
+    if(copy.color)copy.color.set(style.color);
+    if('roughness' in copy)copy.roughness=style.roughness;
+    if('metalness' in copy)copy.metalness=style.metalness;
+    if(normal&&'normalMap' in copy){
+     copy.normalMap=normal;
+     copy.normalScale=new THREE.Vector2(style.relief,style.relief);
+    }else if(style.relief===0&&'normalMap' in copy)copy.normalMap=null;
+    copy.needsUpdate=true;return copy;
    };
-   mesh.material=Array.isArray(mesh.material)?mesh.material.map(update):update(mesh.material);
+   const copies=(Array.isArray(original.material)?original.material:[original.material])
+    .map(update);
+   mesh.material=Array.isArray(original.material)?copies:copies[0];
+   original.ownedMaterials=copies;
    count++;
   });
-  return {ok:true,changed:count>0,meshes:count};
+  return {ok:true,changed:count>0,meshes:count,mapped:changedGeometry,mode:mapping};
  }
- return {styles,labels,normalize,apply,canvasPattern};
+ return {styles,modes,labels,normalize,apply,canvasPattern};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=SurfaceMaterials;
