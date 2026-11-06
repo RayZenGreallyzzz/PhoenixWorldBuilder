@@ -922,10 +922,15 @@ class CleanBuilder{
   }
   if(typeof CatalogPreview!=='undefined'&&typeof IntersectionObserver!=='undefined'){
    CatalogPreview.observeCards($('catalog'),async(kind,isBuiltin)=>{
-    if(isBuiltin)return this.cloneTemplate(kind);
+    if(isBuiltin){
+     const model=this.cloneTemplate(kind);
+     if(model)model.userData.catalogTemporary=true;
+     return model;
+    }
     if(this.assets.has(kind))return this.assets.get(kind).template;
     const buf=await getAsset(kind);if(!buf)return null;
-    const model=await GLB.load(buf);return model.root;
+    const model=await GLB.load(buf);
+    model.root.userData.catalogTemporary=true;return model.root;
    },getPreview,putPreview);
   }
  }
@@ -2045,7 +2050,7 @@ class CleanBuilder{
   const left=down('a','arrowleft','left'),right=down('d','arrowright','right'),
    up=down('w','arrowup','up'),back=down('s','arrowdown','down');
   const raw=V(Number(right)-Number(left),0,Number(back)-Number(up));
-  this.setAvatarAnimation(this.mode==='character'&&raw.lengthSq()>.1);
+  if(this.mode==='character'&&raw.lengthSq()<.1)this.setAvatarAnimation(false);
   if(this.mode==='drone'){
    const rise=(Number(down('e'))-Number(down('q')))*dt*7;
    if(rise){const v=V(0,rise,0);this.controls.target.add(v);this.camera.position.add(v)}
