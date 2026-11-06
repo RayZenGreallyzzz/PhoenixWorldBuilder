@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence, feature/free-camera-orbit-focus, feature/mesh-workshop-textures-materials]
+    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence, feature/free-camera-orbit-focus, feature/mesh-workshop-textures-materials, feature/zip-smart-catalog-character-collisions]
   pull_request:
     branches: [main, feature/planner5d-precision-tools, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement]
 
@@ -57,6 +57,12 @@ jobs:
           test -s app/src/main/assets/js/draco/draco_decoder.wasm
           test -s app/src/main/assets/js/basis/basis_transcoder.wasm
 
+      - name: Bundle verified offline ZIP DEFLATE decoder
+        run: |
+          npm install --prefix /tmp/phoenix-zip --no-save --no-package-lock --ignore-scripts --no-audit --no-fund pako@2.1.0
+          cp /tmp/phoenix-zip/node_modules/pako/dist/pako_inflate.min.js app/src/main/assets/js/pako_inflate.min.js
+          test -s app/src/main/assets/js/pako_inflate.min.js
+
       - name: Validate Phoenix Builder v2
         run: |
           for file in app/src/main/assets/js/*.js; do node --check "$file"; done
@@ -68,6 +74,7 @@ jobs:
           node tests/test-portable-projects.cjs
           node tests/test-studio-tools.cjs
           node tests/test-mesh-workshop-surfaces.cjs
+          node tests/test-smart-zip-collision.cjs
           node tests/test-architecture-kit.cjs
           node tests/test-mobile-glb-optimization.cjs
           node tests/test-android-performance.cjs

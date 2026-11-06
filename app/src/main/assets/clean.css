@@ -116,3 +116,55 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
  #textureInspector .cols2{grid-template-columns:1fr 1fr}
  #textureInspector label{font-size:11px}
 }
+
+/* ZIP Smart Library: 3D visual cards without stealing the editor viewport. */
+.smartLibrary{flex:0 0 auto;max-height:170px;overflow-y:auto;padding:8px 10px;
+ display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--line)}
+.smartLibrary label{font-size:11px;gap:3px}
+.smartLibrary select,.smartLibrary input[type=search]{min-height:30px;font-size:12px;
+ border-radius:7px;color:#eaf7fa;background:#0c2430;border:1px solid #497384;padding:6px}
+.smartLibrary .fileButton{padding:8px;font-size:11px;min-height:34px}
+#zipImportStatus{display:block;line-height:1.5;color:#8fe5c9;overflow-wrap:anywhere}
+#catalogQuick{grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:5px 8px}
+#catalogQuick button{min-height:31px;padding:4px 2px;font-size:10px;line-height:1.2}
+#catalogItems{flex:1 1 auto;min-height:145px;padding:7px}
+#catalogItems .smartGrid{display:grid;grid-template-columns:1fr;gap:7px}
+.moduleCard{border:1px solid #376279;background:#0d2835;border-radius:9px;padding:5px;
+ display:flex;flex-direction:column;gap:3px;min-width:0}
+#catalogItems .moduleCard .modulePick{display:flex;align-items:center;gap:7px;
+ width:100%;padding:4px;border:0;background:transparent;min-height:80px;text-align:left;
+ flex-wrap:wrap}
+.modulePick strong{display:block;flex:1 1 65px;overflow-wrap:anywhere;font-size:11px}
+.modulePick small{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;
+ white-space:nowrap;color:#9dbcc9;font-size:9px}
+.moduleImage{position:relative;width:88px;height:70px;flex:0 0 88px;border-radius:6px;
+ overflow:hidden;border:1px solid #376079;background:#354955;display:grid;place-items:center}
+.moduleIcon{font-size:32px;color:#a1cada}
+.catalogThumb{display:block;object-fit:contain;width:100%;height:100%;background:#354955}
+.moduleImage .catalogThumb{position:absolute;inset:0;width:100%;height:100%}
+.catalogThumb.unloaded:not([src]){visibility:hidden}
+.moduleCard .moduleFolderEdit{min-height:29px;font-size:10px;max-width:100%}
+#catalogItems .moduleCard .modulePick.active{outline:2px solid #55d7c8}
+.presetCard{display:flex;align-items:center;gap:5px;font-size:10px;padding:4px!important}
+.presetCard img{width:48px;height:47px;flex:0 0 48px;object-fit:contain}
+.presetCard strong{font-size:10px;overflow-wrap:anywhere}
+.presetCard span{font-size:9px}
+.textureVisualGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+ grid-column:1/-1}
+.textureVisualGrid .textureCard{display:flex;flex-direction:column;gap:4px;
+ padding:5px;align-items:center;min-width:0;border:1px solid #3b7084;
+ background:#133547}
+.textureCard img{width:100%;height:77px;object-fit:contain;border-radius:6px;
+ background:repeating-conic-gradient(#a1a8a9 0% 25%,#e7e7e7 0% 50%) 50% / 14px 14px}
+.textureCard strong{font-size:10px;overflow-wrap:anywhere}
+.textureCard small{font-size:9px;color:#aed4da}
+#textureSearch{width:100%;min-height:36px;border-radius:7px;background:#071722;
+ border:1px solid #466072;color:white;padding:6px}
+@media(max-width:1100px){
+ .smartLibrary{max-height:144px;padding:5px 7px}
+ #catalogQuick{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #catalogQuick button{font-size:9px;min-height:29px}
+ .moduleImage{width:70px;height:65px;flex-basis:70px}
+ .modulePick strong{font-size:10px}
+ .left .myCatalog{max-height:85px}
+}

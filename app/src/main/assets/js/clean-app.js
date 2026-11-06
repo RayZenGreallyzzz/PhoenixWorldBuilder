@@ -17,8 +17,12 @@ function notify(message,type='neutral'){
 }
 function openAssets(){
  return new Promise((resolve,reject)=>{
-  const r=indexedDB.open('phoenix-builder-clean-assets',1);
-  r.onupgradeneeded=()=>r.result.createObjectStore('glb');
+  const r=indexedDB.open('phoenix-builder-clean-assets',2);
+  r.onupgradeneeded=()=>{
+   if(!r.result.objectStoreNames.contains('glb'))r.result.createObjectStore('glb');
+   if(!r.result.objectStoreNames.contains('previews'))
+    r.result.createObjectStore('previews');
+  };
   r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
  });
 }
@@ -37,6 +41,23 @@ async function getAsset(id){
   const tx=db.transaction('glb','readonly'),request=tx.objectStore('glb').get(id);
   request.onsuccess=()=>{db.close();resolve(request.result)};
   request.onerror=()=>{db.close();reject(request.error)};
+ });
+}
+async function getPreview(_store,id){
+ const db=await openAssets();
+ return new Promise((resolve,reject)=>{
+  const request=db.transaction('previews','readonly').objectStore('previews').get(id);
+  request.onsuccess=()=>{db.close();resolve(request.result)};
+  request.onerror=()=>{db.close();reject(request.error)};
+ });
+}
+async function putPreview(_store,id,value){
+ const db=await openAssets();
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction('previews','readwrite');
+  tx.objectStore('previews').put(value,id);
+  tx.oncomplete=()=>{db.close();resolve(true)};
+  tx.onerror=()=>{db.close();reject(tx.error)};
  });
 }
 class CleanBuilder{
@@ -75,6 +96,7 @@ class CleanBuilder{
   this.gridStep=PrecisionPlacement.step(
    localStorage.getItem('phoenix-builder-grid-step'),.25);
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
+  this.catalogMeta=this.loadCatalogMeta();this.smartCatalogFolder='all';
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
   this.cameraFocusPick=false;
@@ -83,6 +105,8 @@ class CleanBuilder{
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
   this.showAvatarInBuild=localStorage.getItem('phoenix-builder-avatar-build')==='on';
+  this.collisionsEnabled=localStorage.getItem('phoenix-builder-collisions')!=='off';
+  this.collisionSolver=new CharacterCollision.Solver();
   this.optimizationQuality=AndroidAssetOpt.quality(
    localStorage.getItem('phoenix-builder-optimization-quality')||'balanced');
   this.lodEnabled=localStorage.getItem('phoenix-builder-optimization-lod')!=='off';
@@ -100,6 +124,7 @@ class CleanBuilder{
   $('optimizationLOD').checked=this.lodEnabled;
   $('optimizationAutoResolution').checked=this.autoResolution;
   $('avatarInBuild').checked=this.showAvatarInBuild;
+  $('enableCollisions').checked=this.collisionsEnabled;
   this.setMode('build');this.selectKind('wall');
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
@@ -224,7 +249,9 @@ class CleanBuilder{
   const wrapper=new THREE.Group();
   root.position.x-=centre.x;root.position.y-=b.min.y;root.position.z-=centre.z;
   wrapper.add(root);
-  this.assets.set(id,{template:wrapper,name:safeName(name),category,
+  const meta=this.catalogMeta?.get(id);
+  this.assets.set(id,{template:wrapper,name:meta?.name||safeName(name),
+   category:meta?.category||category,folder:meta?.folder,
    animations:parsed.animations||[],glbInfo:parsed.info||null,textureStats});
   const used=(parsed.info?.extensions||[]).filter(e=>
    ['EXT_meshopt_compression','KHR_draco_mesh_compression','KHR_texture_basisu'].includes(e));
@@ -302,17 +329,29 @@ class CleanBuilder{
   const id='glb:'+Date.now().toString(36)+'-'+file.name.replace(/[^a-zA-Zа-яА-Я0-9._-]/g,'_');
   try{
    const buf=await file.arrayBuffer();
-   await this.cacheModel(id,buf,$('importCategory').value,file.name);
+   const category=$('importCategory').value;
+   const guess=SmartCatalog.classify(file.name);
+   const folder=guess?.category===category?guess.folder:
+    category==='wall'?'walls':category==='floor'?'floors':
+    category==='roof'?'roofs':category==='decor'?'decor':'my-modules';
+   this.catalogMeta.set(id,{id,name:safeName(file.name),
+    folder,category,path:file.name,source:'GLB',bytes:buf.byteLength});
+   await this.cacheModel(id,buf,category,file.name);
+   this.saveCatalogMeta();
    this.selectKind(id);
    notify('GLB импортирован: '+safeName(file.name)+' · '+
     $('optimizationStats').textContent+'. Оригинальный файл сохранён.','success');
-  }catch(err){console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')}
+  }catch(err){
+   this.catalogMeta.delete(id);this.saveCatalogMeta();
+   console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')
+  }
  }
  async ensureTemplate(kind,category='wall'){
   if(CleanGeometry.isBuiltIn(kind)||this.assets.has(kind))return true;
   const buf=await getAsset(kind);
   if(!buf)return false;
-  await this.cacheModel(kind,buf,category,kind,false);
+  const meta=this.catalogMeta.get(kind);
+  await this.cacheModel(kind,buf,meta?.category||category,meta?.name||kind,false);
   return true;
  }
  cloneTemplate(kind,thickness=.22,scale=1,axes={x:1,y:1,z:1}){
@@ -323,11 +362,98 @@ class CleanBuilder{
   return THREE.SkeletonUtils?.clone?THREE.SkeletonUtils.clone(source):source.clone(true);
  }
  descriptor(kind){
-  return builtins.find(x=>x.kind===kind)||this.assets.get(kind);
+  return builtins.find(x=>x.kind===kind)||this.assets.get(kind)||
+   this.catalogMeta.get(kind);
+ }
+ loadCatalogMeta(){
+  try{
+   const list=JSON.parse(localStorage.getItem('phoenix-builder-smart-catalog-v1')||'[]');
+   return new Map(Array.isArray(list)?list.filter(row=>
+    row&&typeof row.id==='string'&&row.id.startsWith('glb:')&&
+    typeof row.name==='string'&&SmartCatalog.labels[row.folder]&&
+    typeof row.category==='string').slice(-2000).map(row=>[row.id,row]):[]);
+  }catch(err){console.warn('Catalog metadata damaged',err);return new Map()}
+ }
+ saveCatalogMeta(){
+  try{
+   localStorage.setItem('phoenix-builder-smart-catalog-v1',
+    JSON.stringify([...this.catalogMeta.values()].slice(-2000)));
+  }catch(err){notify('Не удалось сохранить папки: '+err.message,'error')}
+ }
+ async importZIP(file){
+  if(!file)return;
+  const status=$('zipImportStatus'),start=performance.now();
+  let models=0,textures=0,skipped=0,errors=[],index=0;
+  try{
+   status.textContent='📦 Распаковка '+safeName(file.name)+'...';
+   const list=await ZipUtils.extract(file,{maxEntries:1200,maxTotal:200000000,maxEntry:50000000});
+   const paths=Object.keys(list);
+   if(!paths.length)throw Error('В ZIP нет файлов GLB или PNG/JPG/WebP');
+   const override=$('zipFolderOverride').value;
+   for(const path of paths){
+    const bytes=list[path];
+    const guess=SmartCatalog.classify(path,override==='auto'?null:override);
+    if(!guess||!SmartCatalog.safeEntry(path)){skipped++;continue}
+    const filename=path.split('/').pop();
+    const idSuffix=Date.now().toString(36)+'-'+index.toString(36)+'-'+
+     Math.random().toString(36).slice(2,7);
+    index++;
+    try{
+     if(guess.type==='model'){
+      if(bytes.length<20||new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength)
+       .getUint32(0,true)!==0x46546c67){
+       errors.push(filename+': не GLB 2.0');skipped++;continue;
+      }
+      const id='glb:zip:'+idSuffix;
+      await putAsset(id,bytes.slice().buffer);
+      this.catalogMeta.set(id,{id,name:safeName(filename),
+       folder:guess.folder,category:guess.category,path,bytes:bytes.length,
+       source:'ZIP'});
+      models++;
+     }else{
+      const type=filename.toLowerCase().endsWith('.png')?'image/png':
+       /\.jpe?g$/i.test(filename)?'image/jpeg':'image/webp';
+      const fileImage=new File([bytes],filename,{type});
+      const edge=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
+      const processed=await PhoenixFiles.prepareTexture(fileImage,edge);
+      const id='texture:zip:'+idSuffix;
+      await putAsset(id,processed.bytes);
+      this.textureFiles.push({id,name:safeName(filename),folder:guess.folder,
+       type:processed.type,width:processed.width,height:processed.height,
+       bytes:processed.storedBytes,path});
+      textures++;
+     }
+    }catch(err){
+     skipped++;errors.push(filename+': '+(err?.message||err));
+    }
+    if(index%5===0){
+     status.textContent='📦 ZIP: '+index+'/'+paths.length+' — GLB: '+
+      models+', текстуры: '+textures+', пропущено: '+skipped;
+     // Release main thread so controls remain responsive on slow tablets.
+     await new Promise(resolve=>setTimeout(resolve,0));
+    }
+   }
+   this.textureFiles=this.textureFiles.slice(-1500);
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+   this.saveCatalogMeta();this.renderCatalog();this.renderTextureLibrary();
+   status.textContent='✅ '+safeName(file.name)+': '+models+' моделей, '+
+    textures+' текстур, '+skipped+' пропущено. '+Math.round((performance.now()-start)/1000)+
+    ' с. '+(errors.length?'Ошибки: '+errors.slice(0,2).join('; '):'Открой нужную папку для просмотра миниатюр.');
+   notify('📦 Импорт завершён: '+models+' GLB и '+textures+
+    ' текстур. Выбирай папку и смотри модели на карточках.','success');
+  }catch(err){
+   console.error('ZIP import',err);
+   this.saveCatalogMeta();
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+   this.renderCatalog();this.renderTextureLibrary();
+   status.textContent='Ошибка ZIP: '+(err?.message||err)+
+    '. Уже сохранённые модели остаются в библиотеке.';
+   notify(status.textContent,'error');
+  }
  }
  loadTextureFiles(){
   try{const list=JSON.parse(localStorage.getItem('phoenix-builder-v2-textures')||'[]');
-   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-200):[];
+   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-1500):[];
   }catch(e){return []}
  }
  setTextureTab(active='parts'){
@@ -339,26 +465,86 @@ class CleanBuilder{
   document.querySelector('.myCatalog').hidden=textures;
   $('catalogImport').hidden=textures;
   $('textureLibrary').hidden=!textures;
+  document.querySelector('.smartLibrary').hidden=textures;
   if(textures)this.renderTextureLibrary();
  }
  renderTextureLibrary(){
   const container=$('textureCards');container.textContent='';
+  this.textureObserver?.disconnect();this.textureObserver=null;
   const selected=this.target()?.surface||{style:'none'};
-  for(const [style,label] of Object.entries(SurfaceMaterials.labels)){
-   if(style==='custom')continue;
-   const btn=document.createElement('button');btn.textContent=label;
-   btn.classList.toggle('active',selected.style===style);
-   btn.onclick=()=>this.chooseTexture(style);
-   container.append(btn);
+  const folder=$('textureCategoryFilter').value;
+  const term=SmartCatalog.tokenize($('textureSearch').value);
+  if(folder==='all'&&!term){
+   for(const [style,label] of Object.entries(SurfaceMaterials.labels)){
+    if(style==='custom')continue;
+    const btn=document.createElement('button');btn.textContent=label;
+    btn.classList.toggle('active',selected.style===style);
+    btn.onclick=()=>this.chooseTexture(style);
+    container.append(btn);
+   }
   }
-  for(const item of this.textureFiles){
-   const btn=document.createElement('button');btn.textContent='🖼 '+item.name+
-    (item.width&&item.height?' · '+item.width+'×'+item.height:'');
-   btn.classList.toggle('active',selected.style==='custom'&&selected.imageId===item.id);
-   btn.onclick=()=>this.chooseTexture('custom',item.id);
-   container.append(btn);
+  const list=this.textureFiles.filter(item=>{
+   const group=item.folder==='textures'?'textures':'my-textures';
+   return (folder==='all'||folder===group)&&
+    (!term||SmartCatalog.tokenize(item.name+' '+(item.path||'')).includes(term));
+  });
+  const gallery=document.createElement('div');gallery.className='textureVisualGrid';
+  for(const item of list){
+   const card=document.createElement('button');card.className='textureCard';
+   card.classList.toggle('active',selected.style==='custom'&&selected.imageId===item.id);
+   const img=document.createElement('img');img.className='texturePreview';
+   img.dataset.texturePreview=item.id;img.alt='Образец текстуры '+item.name;
+   img.loading='lazy';
+   const title=document.createElement('strong');title.textContent=item.name;
+   const size=document.createElement('small');
+   size.textContent=(item.width&&item.height?item.width+'×'+item.height:'Изображение')+
+    ' · '+(item.folder==='textures'?'Текстуры':'Мои текстуры');
+   card.append(img,title,size);
+   card.onclick=()=>this.chooseTexture('custom',item.id);gallery.append(card);
+  }
+  container.append(gallery);
+  if(!list.length&&folder!=='all'){
+   const hint=document.createElement('small');hint.textContent='В этой папке пока нет текстур';
+   container.append(hint);
+  }
+  if(typeof IntersectionObserver!=='undefined'&&gallery.children.length){
+   this.textureObserver=new IntersectionObserver(items=>{
+    for(const entry of items){
+     if(!entry.isIntersecting)continue;
+     this.textureObserver.unobserve(entry.target);
+     this.loadTextureThumbnail(entry.target,entry.target.dataset.texturePreview);
+    }
+   },{rootMargin:'80px'});
+   gallery.querySelectorAll('img').forEach(img=>this.textureObserver.observe(img));
   }
  }
+ async loadTextureThumbnail(image,id){
+  try{
+   const key='tex:v1:'+id;
+   const saved=await getPreview('previews',key);
+   if(saved){image.src=saved;return}
+   const buffer=await getAsset(id);if(!buffer)return;
+   const meta=this.textureFiles.find(t=>t.id===id);
+   const url=URL.createObjectURL(new Blob([buffer],{type:meta?.type||'image/webp'}));
+   const source=new Image();
+   try{
+    await new Promise((resolve,reject)=>{
+     source.onload=resolve;source.onerror=()=>reject(Error('Texture preview failed'));
+     source.src=url;
+    });
+    const canvas=document.createElement('canvas');canvas.width=128;canvas.height=98;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#e8e4dd';ctx.fillRect(0,0,128,98);
+    const factor=Math.min(128/source.width,98/source.height);
+    const w=Math.round(source.width*factor),h=Math.round(source.height*factor);
+    ctx.drawImage(source,(128-w)/2,(98-h)/2,w,h);
+    const thumb=canvas.toDataURL('image/jpeg',.72);
+    await putPreview('previews',key,thumb);
+    if(image.isConnected)image.src=thumb;
+   }finally{URL.revokeObjectURL(url)}
+  }catch(err){console.warn('Texture thumbnail skipped',err)}
+ }
+
  chooseTexture(style,imageId=''){
   const obj=this.target();
   if(!obj){
@@ -393,7 +579,7 @@ class CleanBuilder{
    await putAsset(id,processed.bytes);
    const texture={id,name:safeName(file.name),type:processed.type,
     width:processed.width,height:processed.height,bytes:processed.storedBytes};
-   this.textureFiles=[...this.textureFiles,texture].slice(-200);
+   this.textureFiles=[...this.textureFiles,texture].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    this.setTextureTab('textures');this.renderTextureLibrary();
    $('textureLibraryStatus').textContent='Сохранено: '+texture.name+' — '+
@@ -608,62 +794,147 @@ class CleanBuilder{
  }
  renderCatalog(){
   const container=$('catalogItems');container.textContent='';
-  const allowed=['structure','doors','frames','roofs','imports'];
-  if(!allowed.includes(this.catalogGroup))this.catalogGroup='structure';
-  $('catalogImportsShortcut').hidden=this.assets.size===0;
-  if(this.catalogGroup==='imports'&&!this.assets.size)this.catalogGroup='structure';
+  const term=$('smartCatalogSearch')?.value||'';
+  const folder=this.smartCatalogFolder||'all';
+  $('smartCategoryFilter').value=folder;
+  $('catalogImportsShortcut').hidden=this.catalogMeta.size===0&&this.assets.size===0;
+  const shortcuts={structure:'walls',doors:'doors',frames:'frames',
+   roofs:'roofs',imports:'my-modules'};
   for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
-   button.classList.toggle('active',button.dataset.catalogGroup===this.catalogGroup);
-  const modules=[...builtins,...[...this.assets].map(([kind,value])=>({
-   kind,name:value.name,category:value.category,group:'imports'}))];
-  const sections=[
-   ['structure','🧱 Каркас и фундамент'],
-   ['doors','🚪 Двери — готовые модели'],
-   ['frames','▯ Рамы и порталы'],
-   ['roofs','🏠 Крыши: обычные и фэнтези'],
-   ['imports','📦 Загруженные GLB']
-  ];
-  const current=modules.find(m=>m.kind===this.preview?.kind);
-  for(const [group,label] of sections){
-   const matching=modules.filter(m=>{
-    const g=m.group||(m.category==='roof'?'roofs':'structure');
-    return g===group;
-   });
+   button.classList.toggle('active',shortcuts[button.dataset.catalogGroup]===folder);
+  // Merge builtins, imported models currently loaded, and raw ZIP models
+  // saved in IndexedDB but not yet decoded. No ZIP is lost after relaunch.
+  const models=new Map();
+  for(const base of builtins){
+   let smart=SmartCatalog.classify(base.kind+'.glb');
+   if(!smart)smart=SmartCatalog.classify(base.name+'.glb');
+   const builtinFolder=base.kind==='floor'?'floors':
+    base.kind==='wall'?'walls':
+    ['corner','arc90','arc180'].includes(base.kind)?'corners':
+    base.group==='doors'?'doors':base.group==='frames'?'frames':
+    base.group==='roofs'?'roofs':smart?.folder||'my-modules';
+   models.set(base.kind,{id:base.kind,kind:base.kind,name:base.name,
+    folder:builtinFolder,category:base.category,path:base.name,builtin:true});
+  }
+  for(const [id,asset] of this.assets){
+   const guessed=SmartCatalog.classify(asset.name+'.glb');
+   models.set(id,{id,kind:id,name:asset.name,category:asset.category,
+    folder:asset.folder||guessed?.folder||'my-modules',
+    path:asset.name,builtin:false});
+  }
+  for(const [id,meta] of this.catalogMeta)
+   models.set(id,{...meta,id,kind:id,builtin:false});
+  const entries=[...models.values()];
+  const folders=folder==='all'?SmartCatalog.order:[folder];
+  for(const category of folders){
+   const matching=SmartCatalog.filteredEntries(entries,category,term);
    if(!matching.length)continue;
    const section=document.createElement('details');section.className='catalogGroup';
-   section.open=group===this.catalogGroup;
-   section.hidden=group!==this.catalogGroup;
+   section.open=folder!=='all'||!!term||['walls','my-modules'].includes(category);
    const heading=document.createElement('summary');
-   heading.textContent=label+' ('+matching.length+')';section.append(heading);
-   const rows=document.createElement('div');rows.className='catalogRows';
+   heading.textContent=(SmartCatalog.labels[category]||category)+
+    ' · '+matching.length;
+   section.append(heading);
+   const rows=document.createElement('div');rows.className='catalogRows smartGrid';
    for(const module of matching){
-    const btn=document.createElement('button');
-    btn.textContent=module.name;
-    const second=document.createElement('span');
-    second.textContent=module.group==='doors'?'Дверь с петлями • масштабируй гизмо':
-     module.group==='frames'?'Отдельная рама для проёма':
-     module.category==='roof'?'Готовая кровля • высота по стенам':
-     module.category==='wall'?'Стена / магнитные торцы':
-     module.category==='decor'?'Настенный декор':'Модуль';
-    btn.append(second);
+    const card=document.createElement('div');card.className='moduleCard';
+    const btn=document.createElement('button');btn.type='button';
+    btn.className='modulePick';
+    const frame=document.createElement('div');frame.className='moduleImage';
+    const symbol=document.createElement('span');symbol.className='moduleIcon';
+    symbol.textContent=SmartCatalog.labels[category]?.split(' ')[0]||'◈';
+    const img=document.createElement('img');img.className='catalogThumb unloaded';
+    img.dataset.previewId=module.kind;
+    img.dataset.builtin=module.builtin?'1':'0';
+    img.alt='3D-просмотр: '+module.name;img.loading='lazy';
+    frame.append(symbol,img);
+    const name=document.createElement('strong');name.textContent=module.name;
+    const description=document.createElement('small');
+    description.textContent=module.builtin?'Встроенный модуль':
+     'GLB · '+Math.round((module.bytes||0)/1024)+' КБ'+
+     (module.path&&module.path!==module.name?' · '+module.path:'');
+    btn.append(frame,name,description);
     btn.classList.toggle('active',this.preview?.kind===module.kind);
-    btn.onclick=()=>this.selectKind(module.kind);
-    rows.append(btn);
+    btn.onclick=async()=>{
+     try{
+      if(!module.builtin){
+       notify('📦 Загружаю '+module.name+' для установки...','neutral');
+       if(!await this.ensureTemplate(module.kind,module.category))
+        throw Error('Исходный GLB недоступен в памяти устройства');
+      }
+      this.setTextureTab('parts');this.selectKind(module.kind);
+      notify('✅ Выбран модуль: '+module.name,'success');
+     }catch(err){notify('Не удалось открыть модель: '+err.message,'error')}
+    };
+    card.append(btn);
+    if(!module.builtin){
+     const select=document.createElement('select');
+     select.className='moduleFolderEdit';
+     select.setAttribute('aria-label','Папка модуля '+module.name);
+     for(const key of SmartCatalog.order){
+      const opt=document.createElement('option');opt.value=key;
+      opt.textContent=SmartCatalog.labels[key];select.append(opt);
+     }
+     select.value=module.folder;
+     select.onchange=()=>{
+      const record=this.catalogMeta.get(module.kind)||{
+       id:module.kind,name:module.name,path:module.path,source:'GLB'
+      };
+      record.folder=select.value;
+      record.category=SmartCatalog.category(select.value);
+      this.catalogMeta.set(module.kind,record);
+      if(this.assets.has(module.kind)){
+       const asset=this.assets.get(module.kind);
+       asset.folder=record.folder;asset.category=record.category;
+      }
+      this.saveCatalogMeta();this.renderCatalog();
+      notify('📂 «'+module.name+'» перемещён в '+SmartCatalog.labels[record.folder],
+       'success');
+     };
+     card.append(select);
+    }
+    rows.append(card);
    }
    section.append(rows);container.append(section);
   }
+  if(!container.children.length){
+   const hint=document.createElement('p');hint.className='tip';
+   hint.textContent='Здесь пока нет моделей. Загрузить ZIP или изменить поиск/папку.';
+   container.append(hint);
+  }
   const saved=$('myCatalogItems');saved.textContent='';
   for(const preset of this.presets){
-   const btn=document.createElement('button');btn.textContent=preset.name;
+   const card=document.createElement('button');card.className='presetCard';
+   const thumb=document.createElement('img');thumb.className='catalogThumb unloaded';
+   thumb.dataset.previewId=preset.kind;
+   thumb.dataset.builtin=CleanGeometry.isBuiltIn(preset.kind)?'1':'0';
+   thumb.alt='Моя деталь: '+preset.name;
+   const label=document.createElement('strong');label.textContent=preset.name;
    const size=document.createElement('span'),d=preset.sizeCm;
-   size.textContent=d?'Ш '+d.x+' × В '+d.y+' × Г '+d.z+' см':'Габариты уточнятся при выборе';
-   btn.append(size);btn.onclick=()=>this.usePreset(preset);saved.append(btn);
+   size.textContent=d?'Ш '+d.x+' × В '+d.y+' × Г '+d.z+' см':
+    'Размеры при выборе';
+   card.append(thumb,label,size);
+   card.onclick=()=>this.usePreset(preset);saved.append(card);
   }
   if(!this.presets.length){
    const hint=document.createElement('small');
    hint.textContent='Сохранённые детали появятся здесь';saved.append(hint);
   }
+  if(typeof CatalogPreview!=='undefined'&&typeof IntersectionObserver!=='undefined'){
+   CatalogPreview.observeCards($('catalog'),async(kind,isBuiltin)=>{
+    if(isBuiltin){
+     const model=this.cloneTemplate(kind);
+     if(model)model.userData.catalogTemporary=true;
+     return model;
+    }
+    if(this.assets.has(kind))return this.assets.get(kind).template;
+    const buf=await getAsset(kind);if(!buf)return null;
+    const model=await GLB.load(buf);
+    model.root.userData.catalogTemporary=true;return model.root;
+   },getPreview,putPreview);
+  }
  }
+
  createEntry(kind,config={}){
   const data={...defaultSettings(),...config};
   data.axes={...defaultSettings().axes,...(config.axes||{})};
@@ -1622,7 +1893,12 @@ class CleanBuilder{
     const item=this.encode(obj);item.rot=obj.root.rotation.y;return item;
    }),floor:this.floor,nextId:this.nextId,
     textureLibrary:this.textureFiles.map(t=>({
-     id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,bytes:t.bytes
+     id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,
+     bytes:t.bytes,folder:t.folder||'my-textures',path:t.path||''
+    })),
+    catalogLibrary:[...this.catalogMeta.values()].map(m=>({
+     id:m.id,name:m.name,category:m.category,folder:m.folder,
+     path:m.path||'',source:m.source||'ZIP',bytes:m.bytes||0
     })),created:new Date().toISOString()};
  }
  async exportGLB(){
@@ -1651,7 +1927,8 @@ class CleanBuilder{
   try{
    notify('📁 Собираю редактируемый проект вместе с изображениями и GLB...','neutral');
    const doc=await PhoenixFiles.packageProject(this.project(),this.textureFiles,
-    [...new Set([...this.entries.map(o=>o.kind),...this.assets.keys()])],
+    [...new Set([...this.entries.map(o=>o.kind),...this.assets.keys(),
+     ...this.catalogMeta.keys()])],
     id=>getAsset(id));
    const blob=new Blob([JSON.stringify(doc)],{type:'application/json'});
    await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_Project.phoenix.json','application/json');
@@ -1671,7 +1948,10 @@ class CleanBuilder{
     if(item.id.startsWith('texture:'))this.textureCache.delete(item.id);
    }
    this.textureFiles=[...this.textureFiles.filter(t=>!
-    result.textures.some(x=>x.id===t.id)),...result.textures].slice(-200);
+    result.textures.some(x=>x.id===t.id)),
+    ...result.textures.map(t=>({
+     ...t,...doc.project.textureLibrary?.find(meta=>meta.id===t.id)
+    }))].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    await this.restore(result.project);
    this.renderTextureLibrary();this.renderCatalog();
@@ -1723,8 +2003,22 @@ class CleanBuilder{
    const records=doc.textureLibrary.filter(t=>t&&typeof t.id==='string'&&
     t.id.startsWith('texture:')&&typeof t.name==='string');
    this.textureFiles=[...this.textureFiles.filter(t=>!
-    records.some(record=>record.id===t.id)),...records].slice(-200);
+    records.some(record=>record.id===t.id)),...records].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+  }
+  // Portable backups preserve folder names for unplaced imported GLB too.
+  if(Array.isArray(doc.catalogLibrary)){
+   for(const meta of doc.catalogLibrary){
+    if(!meta?.id?.startsWith('glb:')||!SmartCatalog.labels[meta.folder]||
+     typeof meta.name!=='string')continue;
+    this.catalogMeta.set(meta.id,{
+     id:meta.id,name:safeName(meta.name),folder:meta.folder,
+     category:SmartCatalog.category(meta.folder),
+     path:String(meta.path||'').slice(0,260),
+     source:'ZIP',bytes:Number(meta.bytes)||0
+    });
+   }
+   this.saveCatalogMeta();
   }
   // All-or-nothing restore: keep current scene if a GLB was lost.
   for(const obj of this.entries)obj.root.removeFromParent();
@@ -1756,7 +2050,7 @@ class CleanBuilder{
   const left=down('a','arrowleft','left'),right=down('d','arrowright','right'),
    up=down('w','arrowup','up'),back=down('s','arrowdown','down');
   const raw=V(Number(right)-Number(left),0,Number(back)-Number(up));
-  this.setAvatarAnimation(this.mode==='character'&&raw.lengthSq()>.1);
+  if(this.mode==='character'&&raw.lengthSq()<.1)this.setAvatarAnimation(false);
   if(this.mode==='drone'){
    const rise=(Number(down('e'))-Number(down('q')))*dt*7;
    if(rise){const v=V(0,rise,0);this.controls.target.add(v);this.camera.position.add(v)}
@@ -1769,9 +2063,14 @@ class CleanBuilder{
   if(this.mode==='drone'){
    this.controls.target.add(step);this.camera.position.add(step);
   }else{
-   this.player.position.add(step);
-   this.player.rotation.y=Math.atan2(step.x,step.z);
-   this.controls.target.add(step);this.camera.position.add(step);
+   const previous=this.player.position.clone();
+   const movement=this.collisionsEnabled?
+    this.collisionSolver.move(previous,step,this.entries).displacement:step;
+   this.player.position.add(movement);
+   if(movement.lengthSq()>.0000001)
+    this.player.rotation.y=Math.atan2(movement.x,movement.z);
+   this.controls.target.add(movement);this.camera.position.add(movement);
+   this.setAvatarAnimation(movement.lengthSq()>.0000001);
   }
   if(this.tool==='place')this.aimPlacement();
  }
@@ -1787,8 +2086,20 @@ class CleanBuilder{
   for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
    button.onclick=()=>{
     this.catalogGroup=button.dataset.catalogGroup;
+    this.smartCatalogFolder={structure:'walls',doors:'doors',frames:'frames',
+     roofs:'roofs',imports:'my-modules'}[this.catalogGroup]||'all';
     this.renderCatalog();
    };
+  $('smartCategoryFilter').onchange=e=>{
+   this.smartCatalogFolder=e.target.value;this.renderCatalog();
+  };
+  $('smartCatalogSearch').oninput=()=>this.renderCatalog();
+  $('textureCategoryFilter').onchange=()=>this.renderTextureLibrary();
+  $('textureSearch').oninput=()=>this.renderTextureLibrary();
+  $('importZip').onchange=e=>{
+   const file=e.target.files?.[0];e.target.value='';
+   this.importZIP(file);
+  };
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
   $('btnQuickImportGLB').onclick=()=>{
    this.setTextureTab('parts');
@@ -1806,6 +2117,12 @@ class CleanBuilder{
     'success');
   };
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
+  $('enableCollisions').onchange=e=>{
+   this.collisionsEnabled=e.target.checked;
+   localStorage.setItem('phoenix-builder-collisions',this.collisionsEnabled?'on':'off');
+   notify(this.collisionsEnabled?'🛡 Коллизии включены (проверяются реальные проёмы)':
+    'Коллизии персонажа выключены','success');
+  };
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
