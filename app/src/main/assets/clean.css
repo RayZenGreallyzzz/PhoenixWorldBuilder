@@ -103,3 +103,16 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
  #btnFocusCamera{font-size:0;min-width:37px;width:37px;padding:5px}
  #btnFocusCamera::before{content:'🎯';font-size:16px}
 }
+
+/* Mesh Workshop materials: usable on landscape Android without hiding catalog. */
+#textureInspector .materialSliders{display:flex;flex-direction:column;gap:9px;
+ margin:10px 0;border:1px solid #375b69;padding:8px;border-radius:9px;background:#102d3a}
+#textureInspector .materialSliders label{gap:5px;font-size:12px;color:#b8deda}
+#textureInspector input[type=range]{width:100%;height:27px;accent-color:#66dce7}
+#textureInspector output{display:inline;color:#86f2dc;font-weight:700}
+#textureInspector .cols2{gap:8px;margin:8px 0}
+#textureInspector #btnSurfaceAllWalls{width:100%;min-height:42px;white-space:normal}
+@media(max-width:700px){
+ #textureInspector .cols2{grid-template-columns:1fr 1fr}
+ #textureInspector label{font-size:11px}
+}

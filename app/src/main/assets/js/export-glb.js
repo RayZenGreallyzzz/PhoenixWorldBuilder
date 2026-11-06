@@ -31,6 +31,24 @@ const SceneExporter=(()=>{
    let color=m.color||new THREE.Color(1,1,1),a=m.opacity??1;
    let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:a<1?'BLEND':'OPAQUE'};
    if(m.map){let textureIndex=texIdx.get(m.map);if(textureIndex===undefined){const image=await encodeTexture(m.map);if(image){const imageIndex=gltf.images.length;gltf.images.push({bufferView:data(image),mimeType:'image/png'});textureIndex=gltf.textures.length;gltf.textures.push({source:imageIndex,sampler:0});texIdx.set(m.map,textureIndex)}}if(textureIndex!==undefined)md.pbrMetallicRoughness.baseColorTexture={index:textureIndex};}
+   // Workshop relief is a real tangent-space normal map and belongs in GLB.
+   // For imported source GLBs keep their existing normal map when available.
+   if(m.normalMap){
+    let normalIndex=texIdx.get(m.normalMap);
+    if(normalIndex===undefined){
+     const image=await encodeTexture(m.normalMap);
+     if(image){
+      const imageIndex=gltf.images.length;
+      gltf.images.push({bufferView:data(image),mimeType:'image/png'});
+      normalIndex=gltf.textures.length;
+      gltf.textures.push({source:imageIndex,sampler:0});
+      texIdx.set(m.normalMap,normalIndex);
+     }
+    }
+    if(normalIndex!==undefined)
+     md.normalTexture={index:normalIndex,scale:Math.max(0,
+      Math.min(2,Math.abs(m.normalScale?.x??1)))};
+   }
    let idx=gltf.materials.length;gltf.materials.push(md);matIdx.set(m,idx);return idx;}
   const entries=options.houseOnly?
    world.objects.map(item=>({root:item.mesh,entry:item})):
@@ -127,12 +145,30 @@ const SceneExporter=(()=>{
     if(col&&col.itemSize===3)attrs.COLOR_0=access(new Float32Array(col.array),0,'VEC3');
     let primitives=[];
     if(!hasPaint&&!hasEmblems){
-     const prim={attributes:attrs,mode:4,material:await material(mesh.material)};
-     if(geom.index){
-      const indices=geom.index.array;
-      prim.indices=access(indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),1,'SCALAR');
+     const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material],
+      groups=geom.groups||[],indices=geom.index?.array;
+     if(materials.length>1&&groups.length){
+      // Retain original material regions, rather than incorrectly painting
+      // all of an imported multi-material GLB with its first material.
+      const total=indices?.length||pos.count;
+      for(const group of groups){
+       const start=Math.max(0,group.start),
+        end=Math.min(total,start+group.count);
+       if(end-start<3)continue;
+       const subset=[];
+       for(let i=start;i<end;i++)subset.push(indices?indices[i]:i);
+       let largest=0;for(const v of subset)largest=Math.max(v,largest);
+       const arr=largest>65535?new Uint32Array(subset):new Uint16Array(subset);
+       primitives.push({attributes:attrs,mode:4,indices:access(arr,1,'SCALAR'),
+        material:await material(materials[group.materialIndex]||materials[0])});
+      }
+     }else{
+      const prim={attributes:attrs,mode:4,material:await material(mesh.material)};
+      if(indices)prim.indices=access(
+       indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),
+       1,'SCALAR');
+      primitives.push(prim);
      }
-     primitives.push(prim);
     }else{
      // Keep one glTF mesh and one vertex buffer. Painted sides use separate
      // *index primitives*, not duplicated ceiling/floor meshes or triangles.

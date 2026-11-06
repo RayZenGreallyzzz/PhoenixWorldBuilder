@@ -82,6 +82,7 @@ class CleanBuilder{
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
+  this.showAvatarInBuild=localStorage.getItem('phoenix-builder-avatar-build')==='on';
   this.optimizationQuality=AndroidAssetOpt.quality(
    localStorage.getItem('phoenix-builder-optimization-quality')||'balanced');
   this.lodEnabled=localStorage.getItem('phoenix-builder-optimization-lod')!=='off';
@@ -98,6 +99,7 @@ class CleanBuilder{
   $('optimizationQuality').value=this.optimizationQuality;
   $('optimizationLOD').checked=this.lodEnabled;
   $('optimizationAutoResolution').checked=this.autoResolution;
+  $('avatarInBuild').checked=this.showAvatarInBuild;
   this.setMode('build');this.selectKind('wall');
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
@@ -185,7 +187,7 @@ class CleanBuilder{
   this.mode=mode;
   for(const m of ['Build','Character','Drone'])$('mode'+m).classList.toggle('active',
    mode===m.toLowerCase());
-  this.player.visible=mode==='character';
+  this.player.visible=mode==='character'||mode==='build'&&this.showAvatarInBuild;
   $('charControls').hidden=mode!=='character';
   // Building can pan/orbit around any world point, not fixed map origin.
   // Keep character follow intact; drone retains 3D/free-height panning.
@@ -429,22 +431,96 @@ class CleanBuilder{
   const root=obj.root;
   if(settings.style==='custom'){
    if(this.textureCache.has(settings.imageId)){
-    SurfaceMaterials.apply(root,settings,this.textureCache.get(settings.imageId));
+    SurfaceMaterials.apply(root,settings,this.textureCache.get(settings.imageId),{kind:obj.kind});
    }else if(settings.imageId){
     this.textureAsset(settings.imageId).then(tex=>{
      if(obj.root===root&&obj.surface?.imageId===settings.imageId)
-      SurfaceMaterials.apply(root,settings,tex);
+      SurfaceMaterials.apply(root,settings,tex,{kind:obj.kind});
     }).catch(err=>notify('Текстура: '+err.message,'warn'));
    }
-  }else SurfaceMaterials.apply(root,settings);
+  }else SurfaceMaterials.apply(root,settings,null,{kind:obj.kind});
+ }
+ joinedFloorRegion(obj){
+  // Old SurfacePaint.joinedFloors idea, but as REAL mesh UV:
+  // one image across a connected floor group, retained in GLB.
+  if(!obj||obj.category!=='floor')return null;
+  const all=[...this.entries.filter(e=>e.category==='floor'&&
+   e.storey===obj.storey)];
+  if(!all.includes(obj))all.push(obj);
+  const boxed=all.map(entry=>({entry,box:new THREE.Box3().setFromObject(entry.root)}));
+  const start=boxed.find(x=>x.entry===obj);
+  if(!start)return null;
+  const selected=[start],seen=new Set([start.entry]);
+  const overlap=(a,b,c,d)=>Math.max(0,Math.min(b,d)-Math.max(a,c));
+  const gap=(a,b,c,d)=>Math.max(0,a-d,c-b);
+  for(let i=0;i<selected.length&&selected.length<128;i++){
+   const a=selected[i].box;
+   for(const candidate of boxed){
+    if(seen.has(candidate.entry))continue;
+    const b=candidate.box;
+    if(Math.abs(a.max.y-b.max.y)>.25)continue;
+    const dx=gap(a.min.x,a.max.x,b.min.x,b.max.x),
+     dz=gap(a.min.z,a.max.z,b.min.z,b.max.z);
+    const ox=overlap(a.min.x,a.max.x,b.min.x,b.max.x),
+     oz=overlap(a.min.z,a.max.z,b.min.z,b.max.z);
+    if((dx<=.15&&oz>.2)||(dz<=.15&&ox>.2)){
+     selected.push(candidate);seen.add(candidate.entry);
+     if(selected.length>=128)break;
+    }
+   }
+  }
+  const minX=Math.min(...selected.map(x=>x.box.min.x)),
+   minZ=Math.min(...selected.map(x=>x.box.min.z)),
+   maxX=Math.max(...selected.map(x=>x.box.max.x)),
+   maxZ=Math.max(...selected.map(x=>x.box.max.z));
+  return {region:[minX,minZ,maxX,maxZ],entries:selected.map(x=>x.entry)};
+ }
+ surfaceFromControls(obj){
+  const prev=SurfaceMaterials.normalize(obj?.surface);
+  const mode=$('textureMapping').value;
+  const joined=mode==='joined'?this.joinedFloorRegion(obj):null;
+  return SurfaceMaterials.normalize({...prev,
+   region:mode==='joined'?joined?.region||prev.region:null,
+   style:$('textureStyle').value,color:$('textureTint').value,
+   repeat:Number($('textureRepeat').value),
+   mapping:mode,
+   tileMeters:Number($('textureTileMeters').value),
+   imageScale:Number($('textureImageScale').value),
+   offsetU:Number($('textureOffsetU').value),
+   offsetV:Number($('textureOffsetV').value),
+   rotation:Number($('textureRotation').value),
+   roughness:Number($('textureRoughness').value),
+   metalness:Number($('textureMetalness').value),
+   relief:Number($('textureRelief').value),
+   applyFrames:$('textureApplyFrames').checked,
+   imageId:prev.imageId||this.activeTextureId||''});
+ }
+ applySurfaceToAllWalls(){
+  const source=this.selected;
+  if(this.tool!=='pick'||!source||!['wall','floor'].includes(source.category))
+   return notify('Выдели построенную стену или плиту пола','warn');
+  const surface=this.surfaceFromControls(source);
+  if(surface.style==='custom'&&!surface.imageId)
+   return notify('Сначала выбери своё изображение','warn');
+  let count=0;
+  const group=source.category==='floor'&&surface.mapping==='joined'?
+   this.joinedFloorRegion(source)?.entries||[source]:
+   this.entries.filter(entry=>entry.category===source.category&&
+    entry.storey===source.storey);
+  for(const target of group){
+   target.surface=SurfaceMaterials.normalize(surface);
+   this.applySurfaceTo(target);count++;
+  }
+  this.syncInspector();this.renderTextureLibrary();
+  notify('🎨 Единая настройка рисунка: '+count+
+   (source.category==='floor'?' соединённых плит пола':' стен(ы)')+
+   '. Материал сохраняется в проекте и GLB','success');
  }
  changeSurface(reset=false){
   const obj=this.target();
   if(!obj)return notify('Выбери деталь','warn');
-  const settings=reset?{style:'none'}:{
-   style:$('textureStyle').value,color:$('textureTint').value,
-   repeat:Number($('textureRepeat').value),imageId:this.activeTextureId||obj.surface?.imageId||''};
-  const next=SurfaceMaterials.normalize(settings);
+  const next=reset?SurfaceMaterials.normalize({style:'none'}):
+   this.surfaceFromControls(obj);
   if(next.style==='custom'&&!next.imageId)return notify('Выбери или загрузи картинку слева','warn');
   obj.surface=next;
   // Rebuild on reset to recover original imported GLB PBR maps.
@@ -762,9 +838,20 @@ class CleanBuilder{
    $('openingDoorStyle').value=chosen.doorStyle||'classic';
    $('openingFrameStyle').value=chosen.frameStyle||'classic';
   }
-  $('textureStyle').value=obj?.surface?.style||'none';
-  read('textureTint',obj?.surface?.color||'#ffffff');
-  read('textureRepeat',obj?.surface?.repeat||1);
+  const surf=SurfaceMaterials.normalize(obj?.surface);
+  read('textureStyle',surf.style);read('textureTint',surf.color);
+  read('textureRepeat',surf.repeat);
+  const controls={textureMapping:surf.mapping,textureTileMeters:surf.tileMeters,
+   textureImageScale:surf.imageScale,textureRotation:surf.rotation,
+   textureOffsetU:surf.offsetU,textureOffsetV:surf.offsetV,
+   textureRoughness:surf.roughness,textureMetalness:surf.metalness,
+   textureRelief:surf.relief};
+  for(const [id,value] of Object.entries(controls))read(id,value);
+  $('textureApplyFrames').checked=surf.applyFrames;
+  for(const [id,value] of [['textureRoughnessValue',surf.roughness],
+   ['textureMetalnessValue',surf.metalness],['textureReliefValue',surf.relief]])
+   $(id).textContent=Number(value).toFixed(2);
+  $('btnSurfaceAllWalls').disabled=!(this.tool==='pick'&&['wall','floor'].includes(obj?.category));
   this.gizmo.attach(this.tool==='pick'?this.selected:null);
   this.updateOpeningInfo();
   this.readSockets();
@@ -1079,6 +1166,7 @@ class CleanBuilder{
   // millimetre position with a cursor position (or 25 cm grid rounding).
   if(obj===this.preview&&!['posX','posY','posZ'].includes(id))
    this.updatePreview(this.cursor,false);
+  if(obj.surface?.style!=='none'&&obj===this.selected)this.applySurfaceTo(obj);
   if(this.outline){this.outline.setFromObject(obj.root)}
   this.syncInspector();
  }
@@ -1296,6 +1384,7 @@ class CleanBuilder{
   obj.root.position.y=PrecisionPlacement.nudge(obj.root.position.y,dy,step);
   obj.root.position.z=PrecisionPlacement.nudge(obj.root.position.z,dz,step);
   obj.root.updateMatrixWorld(true);
+  if(obj.surface?.style!=='none')this.applySurfaceTo(obj);
   if(this.outline)this.outline.setFromObject(obj.root);
   this.syncInspector();
   this.gizmo.update();
@@ -1341,7 +1430,10 @@ class CleanBuilder{
   if(!drag||drag.pointerId!==e.pointerId)return;
   this.dragMove=null;this.controls.enabled=true;
   if(this.canvas.hasPointerCapture?.(e.pointerId))this.canvas.releasePointerCapture(e.pointerId);
-  if(drag.moved)notify('Деталь перемещена по X/Z: '+this.sizeText(this.selected),'success');
+  if(drag.moved){
+   if(this.selected?.surface?.style!=='none')this.applySurfaceTo(this.selected);
+   notify('Деталь перемещена по X/Z: '+this.sizeText(this.selected),'success');
+  }
   e.preventDefault();e.stopImmediatePropagation();
  }
  // Mounted decorations live on real wall faces, never imaginary wall sockets.
@@ -1698,10 +1790,28 @@ class CleanBuilder{
     this.renderCatalog();
    };
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
+  $('btnQuickImportGLB').onclick=()=>{
+   this.setTextureTab('parts');
+   $('catalogImport').open=true;
+   $('catalogImport').scrollIntoView({block:'nearest',behavior:'auto'});
+   notify('📥 Выбери тип модуля и нажми «Загрузить GLB»','neutral');
+  };
+  $('avatarInBuild').onchange=e=>{
+   this.showAvatarInBuild=e.target.checked;
+   localStorage.setItem('phoenix-builder-avatar-build',this.showAvatarInBuild?'on':'off');
+   this.player.visible=this.mode==='character'||
+    this.mode==='build'&&this.showAvatarInBuild;
+   notify(this.showAvatarInBuild?
+    '🧍 Персонаж виден в режиме строительства':'Персонаж скрыт во время строительства',
+    'success');
+  };
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
+  $('btnSurfaceAllWalls').onclick=()=>this.applySurfaceToAllWalls();
+  for(const id of ['textureRoughness','textureMetalness','textureRelief'])
+   $(id).oninput=e=>$(id+'Value').textContent=Number(e.target.value).toFixed(2);
   $('btnOpeningTool').onclick=()=>this.startOpeningTool();
   $('btnQuickOpening').onclick=()=>this.startOpeningTool();
   $('btnFocusCamera').onclick=()=>this.startCameraFocus();
@@ -1840,7 +1950,10 @@ class CleanBuilder{
     else if(this.selected.thicknessEditable)this.rebuildImported(this.selected);
    }
    if(drag?.changed){
-    if(this.selected)this.selected.root.updateMatrixWorld(true);
+    if(this.selected){
+     this.selected.root.updateMatrixWorld(true);
+     if(this.selected.surface?.style!=='none')this.applySurfaceTo(this.selected);
+    }
     this.syncInspector();
     notify('Гизмо: изменение выполнено, параметры сохраняются в проекте','success');
    }
