@@ -315,7 +315,7 @@ class CleanBuilder{
  }
  loadTextureFiles(){
   try{const list=JSON.parse(localStorage.getItem('phoenix-builder-v2-textures')||'[]');
-   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-60):[];
+   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-200):[];
   }catch(e){return []}
  }
  setTextureTab(active='parts'){
