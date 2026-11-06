@@ -31,6 +31,24 @@ const SceneExporter=(()=>{
    let color=m.color||new THREE.Color(1,1,1),a=m.opacity??1;
    let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:a<1?'BLEND':'OPAQUE'};
    if(m.map){let textureIndex=texIdx.get(m.map);if(textureIndex===undefined){const image=await encodeTexture(m.map);if(image){const imageIndex=gltf.images.length;gltf.images.push({bufferView:data(image),mimeType:'image/png'});textureIndex=gltf.textures.length;gltf.textures.push({source:imageIndex,sampler:0});texIdx.set(m.map,textureIndex)}}if(textureIndex!==undefined)md.pbrMetallicRoughness.baseColorTexture={index:textureIndex};}
+   // Workshop relief is a real tangent-space normal map and belongs in GLB.
+   // For imported source GLBs keep their existing normal map when available.
+   if(m.normalMap){
+    let normalIndex=texIdx.get(m.normalMap);
+    if(normalIndex===undefined){
+     const image=await encodeTexture(m.normalMap);
+     if(image){
+      const imageIndex=gltf.images.length;
+      gltf.images.push({bufferView:data(image),mimeType:'image/png'});
+      normalIndex=gltf.textures.length;
+      gltf.textures.push({source:imageIndex,sampler:0});
+      texIdx.set(m.normalMap,normalIndex);
+     }
+    }
+    if(normalIndex!==undefined)
+     md.normalTexture={index:normalIndex,scale:Math.max(0,
+      Math.min(2,Math.abs(m.normalScale?.x??1)))};
+   }
    let idx=gltf.materials.length;gltf.materials.push(md);matIdx.set(m,idx);return idx;}
   const entries=options.houseOnly?
    world.objects.map(item=>({root:item.mesh,entry:item})):
