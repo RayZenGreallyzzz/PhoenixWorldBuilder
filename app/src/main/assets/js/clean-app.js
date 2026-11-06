@@ -470,22 +470,81 @@ class CleanBuilder{
  }
  renderTextureLibrary(){
   const container=$('textureCards');container.textContent='';
+  this.textureObserver?.disconnect();this.textureObserver=null;
   const selected=this.target()?.surface||{style:'none'};
-  for(const [style,label] of Object.entries(SurfaceMaterials.labels)){
-   if(style==='custom')continue;
-   const btn=document.createElement('button');btn.textContent=label;
-   btn.classList.toggle('active',selected.style===style);
-   btn.onclick=()=>this.chooseTexture(style);
-   container.append(btn);
+  const folder=$('textureCategoryFilter').value;
+  const term=SmartCatalog.tokenize($('textureSearch').value);
+  if(folder==='all'&&!term){
+   for(const [style,label] of Object.entries(SurfaceMaterials.labels)){
+    if(style==='custom')continue;
+    const btn=document.createElement('button');btn.textContent=label;
+    btn.classList.toggle('active',selected.style===style);
+    btn.onclick=()=>this.chooseTexture(style);
+    container.append(btn);
+   }
   }
-  for(const item of this.textureFiles){
-   const btn=document.createElement('button');btn.textContent='🖼 '+item.name+
-    (item.width&&item.height?' · '+item.width+'×'+item.height:'');
-   btn.classList.toggle('active',selected.style==='custom'&&selected.imageId===item.id);
-   btn.onclick=()=>this.chooseTexture('custom',item.id);
-   container.append(btn);
+  const list=this.textureFiles.filter(item=>{
+   const group=item.folder==='textures'?'textures':'my-textures';
+   return (folder==='all'||folder===group)&&
+    (!term||SmartCatalog.tokenize(item.name+' '+(item.path||'')).includes(term));
+  });
+  const gallery=document.createElement('div');gallery.className='textureVisualGrid';
+  for(const item of list){
+   const card=document.createElement('button');card.className='textureCard';
+   card.classList.toggle('active',selected.style==='custom'&&selected.imageId===item.id);
+   const img=document.createElement('img');img.className='texturePreview';
+   img.dataset.texturePreview=item.id;img.alt='Образец текстуры '+item.name;
+   img.loading='lazy';
+   const title=document.createElement('strong');title.textContent=item.name;
+   const size=document.createElement('small');
+   size.textContent=(item.width&&item.height?item.width+'×'+item.height:'Изображение')+
+    ' · '+(item.folder==='textures'?'Текстуры':'Мои текстуры');
+   card.append(img,title,size);
+   card.onclick=()=>this.chooseTexture('custom',item.id);gallery.append(card);
+  }
+  container.append(gallery);
+  if(!list.length&&folder!=='all'){
+   const hint=document.createElement('small');hint.textContent='В этой папке пока нет текстур';
+   container.append(hint);
+  }
+  if(typeof IntersectionObserver!=='undefined'&&gallery.children.length){
+   this.textureObserver=new IntersectionObserver(items=>{
+    for(const entry of items){
+     if(!entry.isIntersecting)continue;
+     this.textureObserver.unobserve(entry.target);
+     this.loadTextureThumbnail(entry.target,entry.target.dataset.texturePreview);
+    }
+   },{rootMargin:'80px'});
+   gallery.querySelectorAll('img').forEach(img=>this.textureObserver.observe(img));
   }
  }
+ async loadTextureThumbnail(image,id){
+  try{
+   const key='tex:v1:'+id;
+   const saved=await getPreview('previews',key);
+   if(saved){image.src=saved;return}
+   const buffer=await getAsset(id);if(!buffer)return;
+   const meta=this.textureFiles.find(t=>t.id===id);
+   const url=URL.createObjectURL(new Blob([buffer],{type:meta?.type||'image/webp'}));
+   const source=new Image();
+   try{
+    await new Promise((resolve,reject)=>{
+     source.onload=resolve;source.onerror=()=>reject(Error('Texture preview failed'));
+     source.src=url;
+    });
+    const canvas=document.createElement('canvas');canvas.width=128;canvas.height=98;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#e8e4dd';ctx.fillRect(0,0,128,98);
+    const factor=Math.min(128/source.width,98/source.height);
+    const w=Math.round(source.width*factor),h=Math.round(source.height*factor);
+    ctx.drawImage(source,(128-w)/2,(98-h)/2,w,h);
+    const thumb=canvas.toDataURL('image/jpeg',.72);
+    await putPreview('previews',key,thumb);
+    if(image.isConnected)image.src=thumb;
+   }finally{URL.revokeObjectURL(url)}
+  }catch(err){console.warn('Texture thumbnail skipped',err)}
+ }
+
  chooseTexture(style,imageId=''){
   const obj=this.target();
   if(!obj){
