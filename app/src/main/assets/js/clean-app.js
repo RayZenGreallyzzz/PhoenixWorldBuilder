@@ -1549,11 +1549,16 @@ class CleanBuilder{
   try{
    if(window.NativeBridge?.saveCleanProject){
     const done=window.NativeBridge.saveCleanProject(json);
-    if(done){notify('💾 Проект сохранён отдельно от старой версии редактора','success');return}
+    if(done){
+     localStorage.setItem('phoenix-builder-clean-v2',json);
+     notify('💾 Проект сохранён внутри приложения. Для переносимой копии: 📁 Файлы проекта','success');
+     return true;
+    }
    }
    localStorage.setItem('phoenix-builder-clean-v2',json);
-   notify('💾 Проект сохранён локально. Для резервной копии экспортируй JSON.','success');
-  }catch(err){notify('Ошибка сохранения: '+err.message,'error')}
+   notify('💾 Проект сохранён на устройстве. Для переноса с текстурами: 📁 Файлы проекта','success');
+   return true;
+  }catch(err){notify('Ошибка сохранения: '+err.message,'error');return false}
  }
  async load(){
   try{
