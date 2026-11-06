@@ -82,6 +82,7 @@ class CleanBuilder{
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
+  this.showAvatarInBuild=localStorage.getItem('phoenix-builder-avatar-build')==='on';
   this.optimizationQuality=AndroidAssetOpt.quality(
    localStorage.getItem('phoenix-builder-optimization-quality')||'balanced');
   this.lodEnabled=localStorage.getItem('phoenix-builder-optimization-lod')!=='off';
@@ -98,6 +99,7 @@ class CleanBuilder{
   $('optimizationQuality').value=this.optimizationQuality;
   $('optimizationLOD').checked=this.lodEnabled;
   $('optimizationAutoResolution').checked=this.autoResolution;
+  $('avatarInBuild').checked=this.showAvatarInBuild;
   this.setMode('build');this.selectKind('wall');
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
@@ -185,7 +187,7 @@ class CleanBuilder{
   this.mode=mode;
   for(const m of ['Build','Character','Drone'])$('mode'+m).classList.toggle('active',
    mode===m.toLowerCase());
-  this.player.visible=mode==='character';
+  this.player.visible=mode==='character'||mode==='build'&&this.showAvatarInBuild;
   $('charControls').hidden=mode!=='character';
   // Building can pan/orbit around any world point, not fixed map origin.
   // Keep character follow intact; drone retains 3D/free-height panning.
@@ -1745,6 +1747,21 @@ class CleanBuilder{
     this.renderCatalog();
    };
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
+  $('btnQuickImportGLB').onclick=()=>{
+   this.setTextureTab('parts');
+   $('catalogImport').open=true;
+   $('catalogImport').scrollIntoView({block:'nearest',behavior:'auto'});
+   notify('📥 Выбери тип модуля и нажми «Загрузить GLB»','neutral');
+  };
+  $('avatarInBuild').onchange=e=>{
+   this.showAvatarInBuild=e.target.checked;
+   localStorage.setItem('phoenix-builder-avatar-build',this.showAvatarInBuild?'on':'off');
+   this.player.visible=this.mode==='character'||
+    this.mode==='build'&&this.showAvatarInBuild;
+   notify(this.showAvatarInBuild?
+    '🧍 Персонаж виден в режиме строительства':'Персонаж скрыт во время строительства',
+    'success');
+  };
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
   $('btnApplyTexture').onclick=()=>this.changeSurface();
