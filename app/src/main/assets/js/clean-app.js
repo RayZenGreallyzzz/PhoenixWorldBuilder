@@ -77,6 +77,7 @@ class CleanBuilder{
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;
+  this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
@@ -101,7 +102,9 @@ class CleanBuilder{
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
-   this.updatePlayer(dt);this.controls.update();this.gizmo.update();this.renderer.render(this.scene,this.camera);
+   this.updatePlayer(dt);this.controls.update();this.gizmo.update();
+   if(this.previewOutline&&this.previewOutline.visible)this.previewOutline.update();
+   this.renderer.render(this.scene,this.camera);
    // Read renderer counters AFTER drawing the visible frame.
    const stats=this.performanceMonitor.frame(now,this.renderer,
     typeof performance!=='undefined'?performance.memory?.usedJSHeapSize:null);
@@ -320,6 +323,7 @@ class CleanBuilder{
   $('tabParts').classList.toggle('active',!textures);
   $('tabTextures').classList.toggle('active',textures);
   $('catalogItems').hidden=textures;
+  $('catalogQuick').hidden=textures;
   document.querySelector('.myCatalog').hidden=textures;
   $('catalogImport').hidden=textures;
   $('textureLibrary').hidden=!textures;
@@ -493,6 +497,12 @@ class CleanBuilder{
  }
  renderCatalog(){
   const container=$('catalogItems');container.textContent='';
+  const allowed=['structure','doors','frames','roofs','imports'];
+  if(!allowed.includes(this.catalogGroup))this.catalogGroup='structure';
+  $('catalogImportsShortcut').hidden=this.assets.size===0;
+  if(this.catalogGroup==='imports'&&!this.assets.size)this.catalogGroup='structure';
+  for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
+   button.classList.toggle('active',button.dataset.catalogGroup===this.catalogGroup);
   const modules=[...builtins,...[...this.assets].map(([kind,value])=>({
    kind,name:value.name,category:value.category,group:'imports'}))];
   const sections=[
@@ -510,8 +520,8 @@ class CleanBuilder{
    });
    if(!matching.length)continue;
    const section=document.createElement('details');section.className='catalogGroup';
-   section.open=group==='structure'||group===(current?.group||(
-    current?.category==='roof'?'roofs':'structure'));
+   section.open=group===this.catalogGroup;
+   section.hidden=group!==this.catalogGroup;
    const heading=document.createElement('summary');
    heading.textContent=label+' ('+matching.length+')';section.append(heading);
    const rows=document.createElement('div');rows.className='catalogRows';
@@ -596,14 +606,28 @@ class CleanBuilder{
   obj.root.updateMatrixWorld(true);
  }
  disposePreview(){
+  if(this.previewOutline){
+   this.previewOutline.removeFromParent();
+   this.previewOutline.geometry?.dispose();
+   this.previewOutline.material?.dispose();
+   this.previewOutline=null;
+  }
   if(this.preview){this.preview.root.removeFromParent();this.preview=null}
  }
  selectKind(kind){
   this.disposePreview();this.selected=null;this.tool='place';this.gizmo.attach(null);
+  const type=this.descriptor(kind);
+  this.catalogGroup=type?.group||(this.assets.has(kind)?'imports':
+   type?.category==='roof'?'roofs':'structure');
   this.settings=defaultSettings();
   this.preview=this.createEntry(kind,{category:this.descriptor(kind)?.category||categoryOf(kind)});
   if(!this.preview){notify('Не удалось открыть модель','error');return}
   this.scene.add(this.preview.root);
+  // Always show a high-contrast cyan outline over the pale floor grid.
+  this.previewOutline=new THREE.BoxHelper(this.preview.root,0x4efcff);
+  this.previewOutline.material.depthTest=false;
+  this.previewOutline.renderOrder=900;
+  this.scene.add(this.previewOutline);
   this.preview.root.traverse(m=>{if(!m.isMesh)return;
    m.material=Array.isArray(m.material)?m.material.map(v=>v.clone()):m.material.clone();
    for(const mat of(Array.isArray(m.material)?m.material:[m.material])){
@@ -618,6 +642,7 @@ class CleanBuilder{
   $('btnPick').classList.toggle('active',tool==='pick');
   $('btnPlace').classList.toggle('active',tool==='place');
   if(this.preview)this.preview.root.visible=tool==='place';
+  if(this.previewOutline)this.previewOutline.visible=tool==='place';
   this.gizmo.attach(tool==='pick'?this.selected:null);
   notify(tool==='pick'?'Коснись готовой детали, чтобы изменить её':
    'Коснись места на земле для установки детали','neutral');
@@ -1023,7 +1048,7 @@ class CleanBuilder{
    template.traverse(mesh=>{if(!mesh.isMesh)return;
     mesh.material=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
     for(const mat of(Array.isArray(mesh.material)?mesh.material:[mesh.material])){
-     mat.transparent=true;mat.opacity=.55;mat.depthWrite=false;
+     mat.transparent=true;mat.opacity=.78;mat.depthWrite=false;
     }
    });
   }
@@ -1417,6 +1442,11 @@ class CleanBuilder{
   $('optimizationAutoResolution').onchange=()=>this.updateAutoResolution();
   $('btnPerfReport').onclick=()=>this.exportPerformanceReport();
   $('tabParts').onclick=()=>this.setTextureTab('parts');
+  for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
+   button.onclick=()=>{
+    this.catalogGroup=button.dataset.catalogGroup;
+    this.renderCatalog();
+   };
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
