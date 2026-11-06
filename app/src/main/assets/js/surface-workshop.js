@@ -79,6 +79,16 @@ const SurfaceWorkshop=(()=>{
   const p0=V(),p1=V(),p2=V(),n=V(),e=V(),f=V(),local=V();
   const mapScale=spec.tileMeters/Math.max(.01,Number(raw?.repeat)||1);
   const curve=curveLengths(root,kind);
+  // Real continuous walk-distance across the two perpendicular arms of an L
+  // wall. This removes the old quarter/half-tile jump at its inner corner.
+  const corner=kind==='corner'?(()=>{
+   const a=new THREE.Vector3(-1.9,0,0).applyMatrix4(root.matrixWorld);
+   const b=new THREE.Vector3(0,0,0).applyMatrix4(root.matrixWorld);
+   const c=new THREE.Vector3(0,0,-1.9).applyMatrix4(root.matrixWorld);
+   const first=b.clone().sub(a),second=c.clone().sub(b);
+   const firstLength=first.length();
+   return {start:a,turn:b,firstLength,first:first.normalize(),second:second.normalize()};
+  })():null;
   const angle=spec.rotation*Math.PI/180;
   const co=Math.cos(angle),si=Math.sin(angle);
   const inset=x=>clamp(x,.0001,.9999);
@@ -89,7 +99,11 @@ const SurfaceWorkshop=(()=>{
    n.copy(e.subVectors(p1,p0)).cross(f.subVectors(p2,p0)).normalize();
    const top=Math.abs(n.y)>.55;
    const axis=top?'xz':Math.abs(n.x)>=Math.abs(n.z)?'zy':'xy';
-   const plane=(p)=>axis==='xz'?[p.x,p.z]:axis==='zy'?[p.z,p.y]:[p.x,p.y];
+   // For angled walls, project onto a unit physical tangent, not world X/Z
+   // coordinates (which shrink texture scale by cos(rotation)).
+   const tangent=new THREE.Vector3(n.z,0,-n.x).normalize();
+   const plane=p=>axis==='xz'?[p.x,p.z]:
+    [p.x*tangent.x+p.z*tangent.z,p.y];
    const dimensions=axis==='xz'?[worldExt.x,worldExt.z]:
     axis==='zy'?[worldExt.z,worldExt.y]:[worldExt.x,worldExt.y];
    for(let j=0;j<3;j++){
@@ -103,11 +117,14 @@ const SurfaceWorkshop=(()=>{
      u=srcUV.getX(i+j);v=srcUV.getY(i+j);
     }else if(mode==='repeat'||mode==='joined'){
      [u,v]=plane(world);
-     if(curve&&!top&&axis!=='xz'){
+     if(curve&&!top){
       const theta=Math.atan2(local.z,local.x);
       u=curve.at(theta);
-      // Apply world translation along path only as an integer tile phase.
-      // This produces continuous real metre scale, not tiny UVs per segment.
+     }else if(corner&&!top){
+      const firstArm=Math.abs(n.z)>=Math.abs(n.x);
+      const dir=firstArm?corner.first:corner.second,
+       origin=firstArm?corner.start:corner.turn;
+      u=(firstArm?0:corner.firstLength)+world.clone().sub(origin).dot(dir);
      }
      if(mode==='joined'&&spec.region){
       u=(u-spec.region[0])/(spec.region[2]-spec.region[0]);
