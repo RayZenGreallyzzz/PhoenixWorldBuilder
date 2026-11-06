@@ -74,6 +74,7 @@ jobs:
           node tests/test-portable-projects.cjs
           node tests/test-studio-tools.cjs
           node tests/test-mesh-workshop-surfaces.cjs
+          node tests/test-smart-zip-collision.cjs
           node tests/test-architecture-kit.cjs
           node tests/test-mobile-glb-optimization.cjs
           node tests/test-android-performance.cjs
