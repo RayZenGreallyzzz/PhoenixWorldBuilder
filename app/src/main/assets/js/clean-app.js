@@ -1483,7 +1483,66 @@ class CleanBuilder{
   return {version:2,app:'Phoenix Builder Clean',
    heights:[],objects:this.entries.map(obj=>{
     const item=this.encode(obj);item.rot=obj.root.rotation.y;return item;
-   }),floor:this.floor,nextId:this.nextId,created:new Date().toISOString()};
+   }),floor:this.floor,nextId:this.nextId,
+    textureLibrary:this.textureFiles.map(t=>({
+     id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,bytes:t.bytes
+    })),created:new Date().toISOString()};
+ }
+ async exportGLB(){
+  if(!this.entries.length)return notify('Сначала установи хотя бы один модуль','warn');
+  try{
+   notify('📦 Подготавливаю GLB со стенами, проёмами, крышами и текстурами...','neutral');
+   // Ensure IndexedDB images are loaded and actually assigned to meshes
+   // before generating the GLB's embedded baseColorTexture images.
+   for(const obj of this.entries){
+    if(obj.surface?.style==='custom'&&obj.surface.imageId){
+     const texture=await this.textureAsset(obj.surface.imageId);
+     SurfaceMaterials.apply(obj.root,obj.surface,texture);
+    }
+   }
+   const scene={objects:this.entries.map(obj=>({mesh:obj.root}))};
+   const blob=await SceneExporter.build(scene,{houseOnly:true,
+    keepWorldCoordinates:true});
+   await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_Scene.glb','model/gltf-binary');
+   notify('📦 GLB подготовлен: выбери место сохранения. Модели и текстуры включены','success');
+  }catch(err){console.error('GLB export',err);
+   notify('Ошибка GLB: '+(err?.message||err),'error')}
+ }
+ async exportBackup(){
+  if(!this.entries.length&&!this.textureFiles.length)
+   return notify('В проекте ещё нет модулей или текстур','warn');
+  try{
+   notify('📁 Собираю редактируемый проект вместе с изображениями и GLB...','neutral');
+   const doc=await PhoenixFiles.packageProject(this.project(),this.textureFiles,
+    [...new Set([...this.entries.map(o=>o.kind),...this.assets.keys()])],
+    id=>getAsset(id));
+   const blob=new Blob([JSON.stringify(doc)],{type:'application/json'});
+   await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_Project.phoenix.json','application/json');
+   notify('📁 Резервная копия готова: выбери папку. Внутри текстуры и импортированные модели','success');
+  }catch(err){console.error('Project backup',err);
+   notify('Ошибка резервной копии: '+(err?.message||err),'error')}
+ }
+ async importBackup(file){
+  if(!file)return;
+  try{
+   notify('📁 Читаю резервную копию и восстанавливаю изображения...','neutral');
+   const doc=JSON.parse(await file.text());
+   const result=await PhoenixFiles.unpackProject(doc,(id,data)=>putAsset(id,data));
+   // Assets are now on disk; invalidate stale in-memory maps before restore.
+   for(const item of doc.assets){
+    if(item.id.startsWith('glb:'))this.assets.delete(item.id);
+    if(item.id.startsWith('texture:'))this.textureCache.delete(item.id);
+   }
+   this.textureFiles=[...this.textureFiles.filter(t=>!
+    result.textures.some(x=>x.id===t.id)),...result.textures].slice(-200);
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+   await this.restore(result.project);
+   this.renderTextureLibrary();this.renderCatalog();
+   this.save();
+   notify('✅ Восстановлен проект: '+this.entries.length+
+    ' деталей, '+this.textureFiles.length+' текстур. Можно продолжить редактирование','success');
+  }catch(err){console.error('Import backup',err);
+   notify('Ошибка открытия копии: '+(err?.message||err),'error')}
  }
  save(){
   const json=JSON.stringify(this.project());
@@ -1515,6 +1574,15 @@ class CleanBuilder{
    if(!e)throw Error('Невозможно загрузить модуль: '+item.kind);
    e.rot=Number(item.rot)||0;
    e.root.rotation.y=e.rot;staged.push(e);
+  }
+  // Preserve texture library metadata alongside each internal save. Image
+  // bytes remain in IndexedDB; portable backup embeds them for transfer.
+  if(Array.isArray(doc.textureLibrary)){
+   const records=doc.textureLibrary.filter(t=>t&&typeof t.id==='string'&&
+    t.id.startsWith('texture:')&&typeof t.name==='string');
+   this.textureFiles=[...this.textureFiles.filter(t=>!
+    records.some(record=>record.id===t.id)),...records].slice(-200);
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
   }
   // All-or-nothing restore: keep current scene if a GLB was lost.
   for(const obj of this.entries)obj.root.removeFromParent();
@@ -1637,6 +1705,13 @@ class CleanBuilder{
   $('btnHideUi').onclick=()=>document.body.classList.toggle('uiHidden');
   $('btnSave').onclick=()=>this.save();
   $('btnLoad').onclick=()=>this.load();
+  $('btnExportGLB').onclick=()=>this.exportGLB();
+  $('btnBackupProject').onclick=()=>this.exportBackup();
+  $('btnImportBackup').onclick=()=>$('importProjectBackup').click();
+  $('importProjectBackup').onchange=e=>{
+   this.importBackup(e.target.files?.[0]);
+   e.target.value='';
+  };
   $('btnPick').onclick=()=>{this.setTool('pick');this.syncInspector()};
   $('btnPlace').onclick=()=>{this.selected=null;this.setTool('place');this.syncInspector()};
   $('btnConfirm').onclick=()=>{if(this.mode!=='build')this.aimPlacement();this.place()};
