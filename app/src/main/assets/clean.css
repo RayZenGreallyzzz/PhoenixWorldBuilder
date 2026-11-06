@@ -63,3 +63,33 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
 .perfDiagnostic>b{font-size:12px;color:#a0e9e7}
 .perfDiagnostic #performanceStats{font-size:11px;font-variant-numeric:tabular-nums;color:#cbe9f2;line-height:1.6;word-break:normal}
 .perfDiagnostic #btnPerfReport{font-size:11px;min-height:42px;white-space:normal}
+
+/* 2026-11-06: Library must stay accessible on a tablet (1280x800).
+ * Former flex distribution let a long GLB importer consume almost all
+ * available panel height, crushing the model library to a ~20px strip. */
+.left{overflow:hidden}
+.left>.panelTitle{flex:0 0 auto}
+#catalogQuick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;
+ padding:9px 10px 7px;flex:0 0 auto;border-bottom:1px solid var(--line)}
+#catalogQuick button{padding:6px 4px;font-size:12px;min-height:40px;font-weight:700;
+ white-space:normal}
+#catalogQuick button.active{background:#09667d;border-color:#48d6e8}
+#catalogItems{flex:1 1 auto;min-height:145px;max-height:none;overflow-y:auto;
+ overflow-x:hidden;overscroll-behavior:contain;padding:8px 10px}
+#catalogItems .catalogGroup{flex:0 0 auto;min-height:0}
+#catalogItems .catalogRows{padding:7px 5px;gap:6px}
+#catalogItems .catalogRows button{min-height:50px;text-align:left;width:100%}
+.left .myCatalog{flex:0 0 auto;max-height:110px;padding:7px 10px}
+.left .importZone{display:block;flex:0 0 auto;min-height:0;padding:0;overflow:auto;
+ max-height:52%;border-top:1px solid var(--line);background:#132b38}
+.left .importZone>summary{padding:12px 13px;min-height:44px;color:#8fe5ed;
+ cursor:pointer;font-size:12px;font-weight:700}
+.left .importZone[open]>summary{border-bottom:1px solid var(--line)}
+.left .importZoneBody{display:flex;flex-direction:column;gap:10px;padding:11px}
+@media(max-height:650px){
+ #catalogQuick{gap:4px;padding:5px 8px}
+ #catalogQuick button{min-height:32px;padding:4px;font-size:11px}
+ #catalogItems{min-height:105px}
+ .left .myCatalog{max-height:73px}
+ .left .importZone>summary{min-height:35px;padding:8px}
+}

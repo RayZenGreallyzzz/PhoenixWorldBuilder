@@ -11,12 +11,30 @@ const source=[
 "try{",
 "const app=window.PhoenixClean;",
 "if(!app||document.body.dataset.cleanReady!=='true')throw Error('Editor init failed');",
+"const library=document.getElementById('catalogItems');",
+"if(library.getBoundingClientRect().height<145)throw Error('Catalogue squashed and modules hidden on Android-sized screen');",
+"if(document.getElementById('catalogImport').open)throw Error('GLB import must be collapsed by default');",
+"const categories={structure:5,doors:5,frames:4,roofs:9};",
+"for(const [group,expected] of Object.entries(categories)){const btn=document.querySelector('#catalogQuick [data-catalog-group='+group+']');if(!btn)throw Error('No quick category '+group);btn.click();const visible=document.querySelectorAll('#catalogItems .catalogGroup:not([hidden]) .catalogRows button');if(visible.length<expected)throw Error('Missing visible '+group+' modules: '+visible.length);}",
+"document.querySelector('#catalogQuick [data-catalog-group=structure]').click();",
+"if(!app.previewOutline||!app.previewOutline.visible)throw Error('3D preview lacks contrast outline');",
 "const count=app.entries.length;",
 "app.setMode('drone');if(!app.preview.root.visible)throw Error('Drone missing preview');",
 "app.place();if(app.entries.length!==count+1)throw Error('Drone cannot place');",
 "app.setMode('character');if(!app.preview.root.visible)throw Error('Avatar missing preview');",
 "app.place();if(app.entries.length!==count+2)throw Error('Avatar cannot place');",
 "app.setMode('build');",
+"app.selectKind('wall');app.magnet=false;app.gridSnap=false;app.cursor.set(1.234,0,2.567);app.updatePreview(app.cursor);",
+"if(Math.abs(app.preview.root.position.x-1.234)>.00001||Math.abs(app.preview.root.position.z-2.567)>.00001)throw Error('Magnet off still forces old 25 cm grid');",
+"app.gridSnap=true;app.gridStep=.25;app.updatePreview(app.cursor);if(Math.abs(app.preview.root.position.x-1.25)>.00001)throw Error('Explicit grid does not snap');",
+"app.gridSnap=false;app.updatePreview(app.cursor);",
+"document.getElementById('posX').value='1.237';app.editField('posX');",
+"if(Math.abs(app.preview.root.position.x-1.237)>.00001)throw Error('Manual 1mm coordinate was overwritten by preview cursor');",
+"app.place();const fine=app.entries[app.entries.length-1];app.setTool('pick');app.selected=fine;",
+"document.getElementById('moveStep').value='.001';const before=fine.root.position.clone();app.nudgeSelected(1,0);app.nudgeSelected(0,0,1);",
+"if(Math.abs(fine.root.position.x-before.x-.001)>.000001||Math.abs(fine.root.position.y-before.y-.001)>.000001)throw Error('1mm X/Y nudges failed');",
+"app.setTool('place');app.selected=null;",
+
 "for(const kind of ['doorRound','frameGothic','roofHip4','roofFantasySpire']){app.selectKind(kind);if(!app.preview?.root)throw Error('Missing architecture prefab '+kind);app.place()}",
 "const wall=app.createEntry('wall',{position:[8,0,0]});app.entries.push(wall);app.scene.add(wall.root);",
 "const neighbor=app.createEntry('wall',{position:[10,0,0]});app.entries.push(neighbor);app.scene.add(neighbor.root);",
@@ -61,7 +79,7 @@ try{
     '--headless','--no-sandbox','--disable-dev-shm-usage',
     '--enable-webgl','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader',
     '--disable-features=Vulkan','--virtual-time-budget=4500','--dump-dom',
-    '--window-size=1440,900','file://'+temp
+    '--window-size=1280,800','file://'+temp
    ],{encoding:'utf8',timeout:45000,maxBuffer:25*1024*1024});
   }finally{fs.rmSync(profile,{recursive:true,force:true})}
   if((r.stdout||'').includes('data-interaction-smoke="ok"'))break;

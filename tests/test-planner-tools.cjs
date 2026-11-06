@@ -39,7 +39,7 @@ const app=fs.readFileSync(path.join(assets,'js/clean-app.js'),'utf8');
 for(const id of ['physicalDimensions','btnSaveModule','myCatalogItems','moveStep','moveLeft',
  'moveRight','moveForward','moveBack','floorCutPanel','btnApplyFloorCut','btnResetFloorCut'])
  assert(html.includes('id="'+id+'"'),'Missing new UI control: '+id);
-for(const method of ['beginObjectDrag(e)','continueObjectDrag(e)','nudgeSelected(dx,dz)',
+for(const method of ['beginObjectDrag(e)','continueObjectDrag(e)','nudgeSelected(dx,dz,dy=0)',
  'physicalSize(obj)','saveModulePreset()','rebuildFloor(obj,rawEdit)','floorTrim:FloorClip.normalize'])
  assert(app.includes(method),'New feature is not wired in editor: '+method);
 assert(html.indexOf('js/floor-clip.js')<html.indexOf('js/clean-app.js'),
