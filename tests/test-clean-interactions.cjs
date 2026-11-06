@@ -14,7 +14,7 @@ const source=[
 "const library=document.getElementById('catalogItems');",
 "if(library.getBoundingClientRect().height<145)throw Error('Catalogue squashed and modules hidden on Android-sized screen');",
 "if(document.getElementById('catalogImport').open)throw Error('GLB import must be collapsed by default');",
-"const categories={structure:6,doors:5,frames:4,roofs:8};",
+"const categories={structure:5,doors:5,frames:4,roofs:9};",
 "for(const [group,expected] of Object.entries(categories)){const btn=document.querySelector('#catalogQuick [data-catalog-group='+group+']');if(!btn)throw Error('No quick category '+group);btn.click();const visible=document.querySelectorAll('#catalogItems .catalogGroup:not([hidden]) .catalogRows button');if(visible.length<expected)throw Error('Missing visible '+group+' modules: '+visible.length);}",
 "document.querySelector('#catalogQuick [data-catalog-group=structure]').click();",
 "if(!app.previewOutline||!app.previewOutline.visible)throw Error('3D preview lacks contrast outline');",
@@ -79,7 +79,7 @@ try{
     '--headless','--no-sandbox','--disable-dev-shm-usage',
     '--enable-webgl','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader',
     '--disable-features=Vulkan','--virtual-time-budget=4500','--dump-dom',
-    '--window-size=1440,900','file://'+temp
+    '--window-size=1280,800','file://'+temp
    ],{encoding:'utf8',timeout:45000,maxBuffer:25*1024*1024});
   }finally{fs.rmSync(profile,{recursive:true,force:true})}
   if((r.stdout||'').includes('data-interaction-smoke="ok"'))break;
