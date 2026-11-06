@@ -1998,8 +1998,22 @@ class CleanBuilder{
    const records=doc.textureLibrary.filter(t=>t&&typeof t.id==='string'&&
     t.id.startsWith('texture:')&&typeof t.name==='string');
    this.textureFiles=[...this.textureFiles.filter(t=>!
-    records.some(record=>record.id===t.id)),...records].slice(-200);
+    records.some(record=>record.id===t.id)),...records].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+  }
+  // Portable backups preserve folder names for unplaced imported GLB too.
+  if(Array.isArray(doc.catalogLibrary)){
+   for(const meta of doc.catalogLibrary){
+    if(!meta?.id?.startsWith('glb:')||!SmartCatalog.labels[meta.folder]||
+     typeof meta.name!=='string')continue;
+    this.catalogMeta.set(meta.id,{
+     id:meta.id,name:safeName(meta.name),folder:meta.folder,
+     category:SmartCatalog.category(meta.folder),
+     path:String(meta.path||'').slice(0,260),
+     source:'ZIP',bytes:Number(meta.bytes)||0
+    });
+   }
+   this.saveCatalogMeta();
   }
   // All-or-nothing restore: keep current scene if a GLB was lost.
   for(const obj of this.entries)obj.root.removeFromParent();
