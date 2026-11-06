@@ -89,6 +89,12 @@ const source=[
 "const glass=wall.root.getObjectByName('window:glass'),frame=wall.root.getObjectByName('frame:left');",
 "if(!glass||!frame||Math.abs(frame.material.roughness-.98)>.001||Math.abs(glass.material.roughness-.98)<.001)throw Error('Frame paint should not alter window glass');",
 "const painted=app.project();if(!painted.objects.find(o=>o.id===arcWall.id)?.surface?.mapping)throw Error('Mesh Workshop material not serialized');",
+"const slabA=app.createEntry('floor',{position:[4,0,9]});const slabB=app.createEntry('floor',{position:[6,0,9]});for(const slab of [slabA,slabB]){app.entries.push(slab);app.scene.add(slab.root)}",
+"app.selected=slabA;app.setTool('pick');app.syncInspector();document.getElementById('textureStyle').value='stone';document.getElementById('textureMapping').value='joined';app.applySurfaceToAllWalls();",
+"if(!slabA.surface.region||!slabB.surface.region||JSON.stringify(slabA.surface.region)!==JSON.stringify(slabB.surface.region))throw Error('Legacy joined panorama region not shared across connected floors');",
+"const [minX,minZ,maxX,maxZ]=slabA.surface.region;if(Math.abs(minX-3)>.01||Math.abs(maxX-7)>.01||Math.abs(minZ-8)>.01||Math.abs(maxZ-10)>.01)throw Error('Panorama region does not span connected floor bounds');",
+"const aMesh=slabA.root.children.find(x=>x.isMesh),bMesh=slabB.root.children.find(x=>x.isMesh),aUV=aMesh.geometry.getAttribute('uv'),bUV=bMesh.geometry.getAttribute('uv');",
+"if(!aUV||!bUV||aUV.getX(12)>bUV.getX(12))throw Error('Joined panorama UV is not physically continuous across tiles');",
 
 "const decor=new THREE.Group();decor.add(new THREE.Mesh(new THREE.BoxGeometry(.8,.6,.08),new THREE.MeshStandardMaterial()));",
 "app.assets.set('glb:decor',{template:decor,name:'Picture',category:'decor'});",
