@@ -64,10 +64,13 @@ const SurfaceWorkshop=(()=>{
   const localBox=new THREE.Box3(),rootToWorld=mesh.matrixWorld;
   const relative=rootInverse.clone().multiply(rootToWorld);
   const tmp=V();
-  const positions=source.attributes.position;
-  for(let i=0;i<positions.count;i++){
-   tmp.fromBufferAttribute(positions,i).applyMatrix4(relative);localBox.expandByPoint(tmp);
-  }
+  root.traverse(part=>{
+   if(!part.isMesh||part.userData?.phoenixLODProxy||!part.geometry?.attributes?.position)return;
+   const position=part.geometry.getAttribute('position');
+   const transform=rootInverse.clone().multiply(part.matrixWorld);
+   for(let i=0;i<position.count;i++)
+    localBox.expandByPoint(tmp.fromBufferAttribute(position,i).applyMatrix4(transform));
+  });
   const worldExt=box.getSize(V()),localExt=localBox.getSize(V());
   const geometry=source.index?source.toNonIndexed():source.clone();
   const pos=geometry.getAttribute('position');
@@ -129,8 +132,8 @@ const SurfaceWorkshop=(()=>{
      u=.5+(u-.5)/spec.imageScale;v=.5+(v-.5)/spec.imageScale;
     }
     // Transform UV directly so GLB exporter and real-time renderer agree.
-    const x=u-(mode==='repeat'||mode==='joined'?.0:.5),
-     y=v-(mode==='repeat'||mode==='joined'?.0:.5);
+    const center=mode==='repeat'||mode==='joined'?0:.5;
+    const x=u-center,y=v-center;
     u=co*x-si*y+(mode==='repeat'||mode==='joined'?0:.5)+spec.offsetU;
     v=si*x+co*y+(mode==='repeat'||mode==='joined'?0:.5)+spec.offsetV;
     if(mode==='module'||mode==='tile'){u=inset(u);v=inset(v)}
