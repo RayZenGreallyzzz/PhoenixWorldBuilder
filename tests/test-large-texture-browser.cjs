@@ -67,7 +67,9 @@ if(!(r.stdout||'').includes('data-texture-save-smoke="ok"')){
  const error=(r.stdout||'').match(/data-texture-save-smoke="([^"]*)"/)?.[1]||'missing';
  const stage=(r.stdout||'').match(/data-texture-stage="([^"]*)"/)?.[1]||'none';
  const ready=(r.stdout||'').match(/data-clean-ready="([^"]*)"/)?.[1]||'none';
- console.error('Texture save/export smoke error: '+error,'stage='+stage,'editor='+ready,(r.stderr||'').slice(-1000));
+ const status=(r.stdout||'').match(/<small id="textureLibraryStatus"[^>]*>([^<]*)/)?.[1]||'not-found';
+ console.error('Texture save/export smoke error: '+error,'stage='+stage,'editor='+ready,
+  'library='+status,(r.stderr||'').slice(-1000));
  process.exit(1);
 }
 console.log('Chrome: >3MB texture imported, persisted, applied after drone, GLB embeds image, portable backup restores image OK');
