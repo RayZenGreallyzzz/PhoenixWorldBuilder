@@ -127,7 +127,7 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
 #zipImportStatus{display:block;line-height:1.5;color:#8fe5c9;overflow-wrap:anywhere}
 #catalogQuick{grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:5px 8px}
 #catalogQuick button{min-height:31px;padding:4px 2px;font-size:10px;line-height:1.2}
-#catalogItems{flex:1 1 auto;min-height:130px;padding:7px}
+#catalogItems{flex:1 1 auto;min-height:145px;padding:7px}
 #catalogItems .smartGrid{display:grid;grid-template-columns:1fr;gap:7px}
 .moduleCard{border:1px solid #376279;background:#0d2835;border-radius:9px;padding:5px;
  display:flex;flex-direction:column;gap:3px;min-width:0}
