@@ -46,7 +46,46 @@
 <section id="inspector" class="panel right">
  <div class="panelTitle"><b id="currentLabel">Выбери деталь</b><small id="currentHint">Установка или точная подгонка</small></div>
  <div class="scrollArea">
-  <div class="modeTools"><button id="btnPick" class="alt">☝ Выделить</button><button id="btnPlace" class="active">＋ Поставить</button></div>
+  <div class="modeTools"><button id="btnPick" class="alt">☝ Выделить</button><button id="btnPlace" class="active">＋ Поставить</button>
+   <button id="btnOpeningTool" class="primary">✂ Вырезать проём в стене</button></div>
+   <details class="rowSection" id="openingPanel"><summary>✂ Проём в стене: размер и место</summary>
+    <p class="tip">Выбери готовую стену: прямую, угол, четверть круга или полукруг. Задай точный размер отверстия. Можно вырезать пустой проход без двери, вставить створку или окно.</p>
+    <label>Что вырезать<select id="openingType">
+     <option value="passage">🚶 Пустой проём — без двери и рамы</option>
+     <option value="door" selected>🚪 Проём + дверь на петлях</option>
+     <option value="window">🪟 Проём + окно со стеклом</option>
+    </select></label>
+   <label>Размер по готовой двери<select id="openingSizePreset">
+     <option value="">Свои размеры (см)</option>
+     <option value="85:205">Обычная — 85 × 205 см</option>
+     <option value="90:212">Классическая / арочная — 90 × 212 см</option>
+     <option value="100:220">Широкая арочная — 100 × 220 см</option>
+     <option value="155:212">Двустворчатая — 155 × 212 см</option>
+     <option value="120:110:window">Окно — 120 × 110 см</option>
+    </select></label>
+   <label>Расположение центра проёма<select id="openingPositionPreset">
+     <option value="manual">Точное смещение ниже (см)</option>
+     <option value="center">Центр стены / дуги</option>
+     <option value="start">Начальный стык двух стен</option>
+     <option value="end">Конечный стык двух стен</option>
+     <option value="corner">Внутренний угол Г-образной стены</option>
+    </select></label>
+   <button id="btnPickOpeningPoint" class="alt">🎯 Указать место пальцем на стене</button>
+   <small id="openingPositionInfo" class="tip">Отступ считается вдоль стены или дуги, а не по прямой между краями.</small>
+    <div class="cols2"><label>Смещение центра вдоль стены / дуги, см<input id="openingX" type="number" step=".1" value="0" inputmode="decimal"></label><label>Низ от пола, см<input id="openingBottom" type="number" min="0" max="245" step=".1" value="0" inputmode="decimal"></label></div>
+    <div class="cols2"><label>Ширина отверстия, см<input id="openingWidth" type="number" min="10" max="400" step=".1" value="85" inputmode="decimal"></label><label>Высота отверстия, см<input id="openingHeight" type="number" min="30" max="250" step=".1" value="205" inputmode="decimal"></label></div>
+    <label>Соседняя стена на стыке<select id="openingNeighbor"><option value="">Авто (ближайшая)</option></select></label>
+    <small class="tip">Ширина в настоящих сантиметрах даже при изменённом масштабе стены. На дуге измеряется вдоль изгиба. Если проём пересекает стык, вырезается в обеих соединённых стенах.</small>
+    <label>Вид двери<select id="openingDoorStyle"><option value="classic">Обычная филёнчатая</option><option value="round">С округлым верхом</option><option value="gothic">Стрельчатая / готика</option><option value="rune">Фэнтези с рунами</option><option value="double">Двустворчатая</option></select></label>
+    <label>Вид рамы<select id="openingFrameStyle"><option value="classic">Обычная прямая</option><option value="round">Круглая арка</option><option value="gothic">Готическая арка</option><option value="portal">Фэнтези-портал</option></select></label>
+    <label>Петли<select id="openingHinge"><option value="left">Слева</option><option value="right">Справа</option></select></label>
+    <button id="btnAddOpening" class="primary">✂ Вырезать отверстие по размеру</button>
+    <button id="btnChangeOpeningStyle" class="alt">🎨 Поменять стиль готовой двери или рамы</button>
+    <label>Готовые проёмы<select id="openingSelect"></select></label>
+    <label>Открыть дверь, °<input id="doorSwing" type="range" min="-110" max="110" value="0"></label>
+    <button id="btnRemoveOpening" class="alt">Удалить выбранный проём</button>
+   </details>
+
   <div class="rowSection"><label class="check"><input type="checkbox" id="magnet" checked><span>🧲 Магнит по настоящим торцам</span></label>
     <label class="check"><input type="checkbox" id="gridSnap"><span>▦ Привязка к сетке (независимо от магнита)</span></label>
     <label>Шаг сетки<select id="gridStep"><option value="0.001">1 мм</option><option value="0.005">5 мм</option><option value="0.01">1 см</option><option value="0.05">5 см</option><option value="0.25" selected>25 см</option><option value="1">1 м</option></select></label>
@@ -88,22 +127,7 @@
    <details class="rowSection" id="prefabDoorPanel"><summary>🚪 Петли готовой двери</summary>
     <label>Угол открытия дверной створки, °<input type="range" id="prefabDoorSwing" min="-110" max="110" value="0" step="5"></label>
     <small class="tip">Двери из библиотеки имеют собственные петли; у двустворчатых створки открываются в противоположные стороны. Угол сохраняется в проекте.</small>
-   </details>
-   <details class="rowSection" id="openingPanel"><summary>🚪 Двери, петли и окна</summary>
-    <p class="tip">Выдели уже построенную прямую стену. Отверстие будет настоящим: геометрия стены удаляется, а дверь на петлях или оконная рама со стеклом вставляется в проём.</p>
-    <label>Тип проёма<select id="openingType"><option value="door">Дверь с петлями</option><option value="window">Окно со стеклом</option></select></label>
-    <div class="cols2"><label>Смещение по длине / дуге от середины стены, см<input id="openingX" type="number" step="5" value="0"></label><label>Низ от пола, см<input id="openingBottom" type="number" step="5" value="0"></label></div>
-    <div class="cols2"><label>Ширина, см<input id="openingWidth" type="number" min="35" max="180" step="5" value="85"></label><label>Высота, см<input id="openingHeight" type="number" min="35" max="235" step="5" value="205"></label></div>
-    <label>Соседняя стена на стыке<select id="openingNeighbor"><option value="">Авто (ближайшая)</option></select></label>
-    <small class="tip">На полукруглой стене ширина измеряется вдоль дуги. Если проём пересекает стык стен, выбери соседний модуль — отверстие вырежется в обоих.</small>
-    <label>Вид двери<select id="openingDoorStyle"><option value="classic">Обычная филёнчатая</option><option value="round">С округлым верхом</option><option value="gothic">Стрельчатая / готика</option><option value="rune">Фэнтези с рунами</option><option value="double">Двустворчатая</option></select></label>
-    <label>Вид рамы<select id="openingFrameStyle"><option value="classic">Обычная прямая</option><option value="round">Круглая арка</option><option value="gothic">Готическая арка</option><option value="portal">Фэнтези-портал</option></select></label>
-    <label>Петли<select id="openingHinge"><option value="left">Слева</option><option value="right">Справа</option></select></label>
-    <button id="btnAddOpening" class="primary">✂ Вырезать проём и вставить</button>
-    <button id="btnChangeOpeningStyle" class="alt">🎨 Поменять стиль готовой двери или рамы</button>
-    <label>Готовые проёмы<select id="openingSelect"></select></label>
-    <label>Открыть дверь, °<input id="doorSwing" type="range" min="-110" max="110" value="0"></label>
-    <button id="btnRemoveOpening" class="alt">Удалить выбранный проём</button>
+     <button id="btnCutForPrefabDoor" class="primary">✂ Подготовить отверстие под размер этой двери</button>
    </details>
    <details class="rowSection" id="autoCutPanel"><summary>🏠 Автоподрезка по границе стен</summary>
     <p class="tip">Выбери плиту пола или импортированный GLB типа «Пол». Подрезка учитывает прямые стены и углы на текущем этаже, срезая часть плитки за внутренней гранью стены. Встроенные дуги учитываются с приближением по коротким участкам; сложные импортированные кривые пока пропускаются.</p>

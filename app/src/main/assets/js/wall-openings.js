@@ -37,12 +37,12 @@ const WallOpenings=(()=>{
  }
  function normalize(raw){
   if(!Array.isArray(raw))return [];
-  return raw.slice(0,MAX).filter(o=>o&&['door','window'].includes(o.type))
+  return raw.slice(0,MAX).filter(o=>o&&['door','window','passage'].includes(o.type))
    .map((o,i)=>({id:String(o.id||'cut-'+i).replace(/[^a-z\d:_-]/gi,'').slice(0,64),
     group:String(o.group||o.id||'cut-'+i).replace(/[^a-z\d:_-]/gi,'').slice(0,64),
-    type:o.type,x:clamp(finite(o.x,0),-10,10),y:clamp(finite(o.y,o.type==='door'?0:.85),0,2.45),
+    type:o.type,x:clamp(finite(o.x,0),-10,10),y:clamp(finite(o.y,o.type==='door'?0:.85),0,8),
     w:clamp(finite(o.w,o.type==='door'?.9:1),.05,8),
-    h:clamp(finite(o.h,o.type==='door'?2.05:1.05),.1,2.45),
+    h:clamp(finite(o.h,o.type==='door'?2.05:1.05),.1,8),
     hinge:o.hinge==='right'?'right':'left',
     doorStyle:kit?kit.openingStyle(o.doorStyle):'classic',
     frameStyle:kit?kit.frameStyle(o.frameStyle):'classic',
@@ -215,6 +215,8 @@ const WallOpenings=(()=>{
  function infill(root,prof,o){
   const s0=prof.length/2+o.x-o.w/2,s1=s0+o.w,
    fw=Math.min(.045,o.w/6),depth=prof.thickness+.035,mode=archMode(o);
+  // An empty opening should remain an actual walk-through void.
+  if(o.type==='passage')return;
   const frame=new THREE.Group();frame.name='phoenixOpening:'+o.id;root.add(frame);
   const frameMat=new THREE.MeshStandardMaterial({
    color:o.frameStyle==='portal'?0x4f4e66:o.frameStyle==='gothic'?0x85838b:0xb1a99a,
@@ -296,6 +298,33 @@ const WallOpenings=(()=>{
   return {ok:true,changed:true,triangles:shape.attributes.position.count/3,
    openings:check.openings.length};
  }
+ // Nearest arc-length position for a tap on an actual wall surface.
+ // Input point is in the wall's local space (worldToLocal before call).
+ function pathAtPoint(kind,point,thickness=.22,axes={x:1,y:1,z:1}){
+  const prof=profile(kind,thickness,axes);
+  if(!prof||!point||!Number.isFinite(point.x)||!Number.isFinite(point.z))
+   return null;
+  let s=0;
+  if(kind==='wall')s=point.x+1;
+  else if(kind==='corner'){
+   const a=clamp(point.x+1.9,0,1.9),b=clamp(-point.z,0,1.9);
+   const da=(point.x-(-1.9+a))**2+point.z**2;
+   const db=point.x**2+(point.z+b)**2;
+   s=da<=db?a:1.9+b;
+  }else{
+   let angle=Math.atan2(point.z,point.x);
+   if(angle<0)angle+=Math.PI*2;
+   s=clamp(angle,0,kind==='arc90'?Math.PI/2:Math.PI)*R;
+   const q0=prof.pos(0),q1=prof.pos(prof.length),q=prof.pos(s);
+   const ds=(point.x-q.x)**2+(point.z-q.z)**2;
+   const d0=(point.x-q0.x)**2+(point.z-q0.z)**2;
+   const d1=(point.x-q1.x)**2+(point.z-q1.z)**2;
+   if(d0<ds||d1<ds)s=d0<d1?0:prof.length;
+  }
+  s=clamp(s,0,prof.length);
+  return {s,offset:s-prof.length/2,metersFromStart:s,
+   length:prof.length,position:prof.pos(s)};
+ }
  function setDoorAngle(root,id,angle){
   const pivots=[],prefix='phoenixDoorPivot:'+id;
   root.traverse(o=>{
@@ -307,23 +336,66 @@ const WallOpenings=(()=>{
    pivot.rotation.y=radians*(pivot.userData.hingeSide==='right'?-1:1);
   return true;
  }
+ // Convert metres along a scaled/rotated wall path into local profile arc length.
+ // GLB/UI door dimensions are WORLD metres; persisted openings remain local metres.
+ function pathMetric(entry){
+  const p=profile(entry?.kind,entry?.thickness,entry?.axes);
+  if(!p||!entry?.root)return null;
+  entry.root.updateWorldMatrix(true,true);
+  const count=p.kind==='wall'?1:p.kind==='corner'?38:Math.max(48,Math.ceil(p.length/.02));
+  const distances=[0],positions=[];
+  for(let i=0;i<=count;i++){
+   const q=p.pos(p.length*i/count);
+   positions.push(new THREE.Vector3(q.x,0,q.z).applyMatrix4(entry.root.matrixWorld));
+   if(i)distances.push(distances[i-1]+positions[i].distanceTo(positions[i-1]));
+  }
+  const length=distances[count],at=physical=>{
+   const target=clamp(physical,0,length);
+   if(target<=0)return 0;
+   if(target>=length)return p.length;
+   let lo=0,hi=count;
+   while(hi-lo>1){
+    const mid=(lo+hi)>>1;
+    if(distances[mid]<=target)lo=mid;else hi=mid;
+   }
+   const span=distances[hi]-distances[lo];
+   return p.length*(lo+(span>1e-9?(target-distances[lo])/span:0))/count;
+  };
+  const distanceAt=local=>{
+   const n=clamp(local,0,p.length)/p.length*count;
+   const i=Math.min(count-1,Math.floor(n));
+   return distances[i]+(distances[i+1]-distances[i])*(n-i);
+  };
+  return {p,length,at,distanceAt};
+ }
  function splitAtJunction(owner,neighbors,raw,preferredNeighborId=null){
-  const prof=profile(owner.kind,owner.thickness,owner.axes);
-  if(!prof)return {ok:false,reason:'Выбери стандартную стену, угол или дугу'};
+  const metric=pathMetric(owner);
+  if(!metric)return {ok:false,reason:'Выбери стандартную стену, угол или дугу'};
   const o=normalize([raw])[0];
-  if(!o)return {ok:false,reason:'Нужен проём двери или окна'};
-  const s=prof.length/2+o.x,left=s-o.w/2,right=s+o.w/2;
-  if(left>=0&&right<=prof.length)return {ok:true,parts:[{entry:owner,opening:o}]};
-  if(left<0&&right>prof.length)return {ok:false,reason:'Ширина проёма превышает два соединённых участка'};
-  const atStart=left<0,overflow=atStart?-left:right-prof.length;
-  const mainStart=Math.max(0,left),mainEnd=Math.min(prof.length,right);
+  if(!o)return {ok:false,reason:'Нужен проём двери, прохода или окна'};
+  const center=metric.length/2+o.x,left=center-o.w/2,right=center+o.w/2;
+  const heightOn=entry=>{
+   const sy=Math.abs(entry.root.scale.y)||1;
+   return {y:o.y/sy,h:o.h/sy};
+  };
+  if(left>=-.001&&right<=metric.length+.001){
+   const a=metric.at(left),b=metric.at(right);
+   return {ok:true,parts:[{entry:owner,opening:
+    {...o,...heightOn(owner),x:(a+b)/2-metric.p.length/2,w:b-a}
+   }]};
+  }
+  if(left<0&&right>metric.length)return {ok:false,
+   reason:'Проём пересекает оба конца стены: выбери два отдельных соединения'};
+  const atStart=left<0,overflow=atStart?-left:right-metric.length;
+  const mainStart=Math.max(0,left),mainEnd=Math.min(metric.length,right);
   if(mainEnd-mainStart<.06||overflow<.06)return {ok:false,
-   reason:'Положение у стыка слишком близко к краю; сдвинь центр проёма на несколько сантиметров'};
+   reason:'Сдвинь центр проёма хотя бы на 6 см внутрь стыка'};
   const ownSocket=CleanGeometry.worldSockets(owner)[atStart?0:1];
+  if(!ownSocket)return {ok:false,reason:'У стены не найден торец'};
   const matches=[];
   for(const entry of neighbors||[]){
    if(entry===owner||entry.id===owner.id||entry.category!=='wall'||entry.storey!==owner.storey||
-       !supported(entry.kind))continue;
+      !supported(entry.kind))continue;
    const sockets=CleanGeometry.worldSockets(entry);
    for(let i=0;i<sockets.length;i++){
     const dst=sockets[i].point.distanceTo(ownSocket.point);
@@ -333,23 +405,23 @@ const WallOpenings=(()=>{
   matches.sort((a,b)=>a.distance-b.distance);
   if(preferredNeighborId!==null&&preferredNeighborId!==undefined&&preferredNeighborId!==''){
    const found=matches.find(m=>String(m.entry.id)===String(preferredNeighborId));
-   if(!found)return {ok:false,reason:'Выбранная вторая стена не подключена к этому краю'};
+   if(!found)return {ok:false,reason:'Выбранная соседняя стена не соединена с этим краем'};
    matches.length=0;matches.push(found);
   }
   if(!matches.length)return {ok:false,
-   reason:'Проём пересекает край стены, но рядом нет соединённой стены'};
+   reason:'Проём выходит за торец, но рядом нет соединённой стены'};
   if(matches.length>1&&matches[1].distance-matches[0].distance<.02)
-   return {ok:false,reason:'На стыке несколько стен — укажи конкретную соседнюю стену'};
-  const next=matches[0],nextProf=profile(next.entry.kind,next.entry.thickness,next.entry.axes);
-  if(overflow>nextProf.length-.05)return {ok:false,
-   reason:'Проём слишком широк для двух соединённых стен'};
-  const group=o.group||o.id,mainWidth=mainEnd-mainStart,
-   main={...o,id:group+'-a',group,x:(mainStart+mainEnd)/2-prof.length/2,w:mainWidth},
-   adjacentStart=next.index===0?0:nextProf.length-overflow,
-   adjacent={...o,id:group+'-b',group,
-    x:adjacentStart+overflow/2-nextProf.length/2,w:overflow};
-  // Two connected parts form a continuous void, without a false doorjamb
-  // standing in the middle of the physical seam. Doors form a double leaf.
+   return {ok:false,reason:'На стыке несколько стен — выбери вторую в списке'};
+  const next=matches[0],nextMetric=pathMetric(next.entry);
+  if(!nextMetric||overflow>nextMetric.length-.05)return {ok:false,
+   reason:'Ширина проёма больше свободной длины соседней стены'};
+  const group=o.group||o.id,a=metric.at(mainStart),b=metric.at(mainEnd);
+  const main={...o,...heightOn(owner),id:group+'-a',group,
+   x:(a+b)/2-metric.p.length/2,w:b-a};
+  const adjStart=next.index===0?0:nextMetric.length-overflow;
+  const c=nextMetric.at(adjStart),d=nextMetric.at(adjStart+overflow);
+  const adjacent={...o,...heightOn(next.entry),id:group+'-b',group,
+   x:(c+d)/2-nextMetric.p.length/2,w:d-c};
   if(atStart)main.omitStartFrame=true;
   else main.omitEndFrame=true;
   if(next.index===0)adjacent.omitStartFrame=true;
@@ -361,7 +433,8 @@ const WallOpenings=(()=>{
   return {ok:true,parts:[{entry:owner,opening:main},{entry:next.entry,opening:adjacent}],
    joint:true};
  }
+
  return {supported,profile,normalize,validate,geometry,render,setDoorAngle,
-  splitAtJunction,HEIGHT,MAX};
+  splitAtJunction,pathAtPoint,pathMetric,HEIGHT,MAX};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=WallOpenings;

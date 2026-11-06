@@ -76,7 +76,7 @@ class CleanBuilder{
    localStorage.getItem('phoenix-builder-grid-step'),.25);
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
   this.selected=null;this.previewStatus=null;this.outline=null;
-  this.presets=this.loadPresets();this.dragMove=null;
+  this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.avatarFitGroup=null;this.avatarMetrics=null;
@@ -693,7 +693,8 @@ class CleanBuilder{
    $(id).disabled=!editable;
   $('socketPanel').style.display=obj&&!builtin&&obj.category==='wall'?'block':'none';
   for(const id of ['moveLeft','moveRight','moveForward','moveBack'])$(id).disabled=!(obj&&this.selected===obj);
-  $('openingPanel').style.display=obj&&WallOpenings.supported(obj.kind)?'block':'none';
+  $('openingPanel').style.display=this.openingPickMode||
+   obj&&WallOpenings.supported(obj.kind)?'block':'none';
   $('prefabDoorPanel').style.display=obj?.kind?.startsWith('door')&&
    ArchitectureKit.has(obj.kind)?'block':'none';
   read('prefabDoorSwing',obj?.doorAngle||0);
@@ -716,7 +717,7 @@ class CleanBuilder{
   const openList=$('openingSelect'),prior=openList.value;openList.textContent='';
   for(const o of obj?.openings||[]){
    const opt=document.createElement('option');opt.value=o.id;
-   opt.textContent=(o.type==='door'?'🚪 Дверь ':'🪟 Окно ')+o.id.slice(-10);
+   opt.textContent=(o.type==='door'?'🚪 Дверь ':o.type==='passage'?'🚶 Проход ':'🪟 Окно ')+o.id.slice(-10);
    openList.append(opt);
   }
   if([...openList.options].some(opt=>opt.value===prior))openList.value=prior;
@@ -730,7 +731,109 @@ class CleanBuilder{
   read('textureTint',obj?.surface?.color||'#ffffff');
   read('textureRepeat',obj?.surface?.repeat||1);
   this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.updateOpeningInfo();
   this.readSockets();
+ }
+ startOpeningTool(){
+  this.setTextureTab('parts');
+  const ready=!!this.selected&&WallOpenings.supported(this.selected.kind);
+  this.openingPickMode=!ready;
+  this.setTool('pick');this.syncInspector();
+  $('openingPanel').open=true;
+  $('openingPanel').scrollIntoView({block:'nearest',behavior:'auto'});
+  if(ready){
+   this.updateOpeningInfo();
+   notify('✂ Стена выбрана. Задай размер и место, затем вырежи проём','success');
+  }else notify('✂ Коснись стены, где должен быть центр проёма','warn');
+ }
+ updateOpeningInfo(){
+  const info=$('openingPositionInfo'),wall=this.selected;
+  if(!wall||!WallOpenings.supported(wall.kind)){
+   info.textContent='Коснись готовой стены, угла или дуги, чтобы выбрать точку.';
+   return;
+  }
+  if(!$('openingPanel').open)return;
+  const m=WallOpenings.pathMetric(wall);
+  if(!m)return;
+  const shift=Number($('openingX').value)||0;
+  const w=Number($('openingWidth').value)||0;
+  const from=m.length*50+shift,total=m.length*100;
+  info.textContent='Центр '+(Math.round(from*10)/10)+
+   ' см от начала; длина стены/дуги '+(Math.round(total*10)/10)+
+   ' см, ширина '+w+' см.'+
+   (from-w/2<-.1||from+w/2>total+.1?
+    ' Проём пересекает край — нужна соединённая соседняя стена.':
+    ' Отверстие внутри выбранного модуля.');
+ }
+ chooseOpeningPosition(value){
+  const wall=this.selected;
+  if(!wall||!WallOpenings.supported(wall.kind)){
+   $('openingPositionPreset').value='manual';
+   return notify('Сначала выбери стандартную стену или коснись её пальцем','warn');
+  }
+  const m=WallOpenings.pathMetric(wall);
+  let shift=0;
+  if(value==='start')shift=-m.length/2;
+  if(value==='end')shift=m.length/2;
+  if(value==='corner'){
+   if(wall.kind!=='corner'){
+    $('openingPositionPreset').value='manual';
+    return notify('Внутренний угол есть в Г-образной стене','warn');
+   }
+   shift=m.distanceAt(1.9)-m.length/2;
+  }
+  $('openingX').value=String(Math.round(shift*1000)/10);
+  this.updateOpeningInfo();
+ }
+ pickOpeningCentre(event){
+  const r=this.canvas.getBoundingClientRect();
+  this.pointer.set((event.clientX-r.left)/r.width*2-1,
+   -(event.clientY-r.top)/r.height*2+1);
+  this.ray.setFromCamera(this.pointer,this.camera);
+  const walls=this.entries.filter(e=>e.category==='wall'&&WallOpenings.supported(e.kind));
+  const hits=this.ray.intersectObjects(walls.map(e=>e.root),true);
+  if(!hits.length)return notify('Коснись самой поверхности стены, угла или дуги','warn');
+  const hit=hits[0],wall=walls.find(w=>{
+   let node=hit.object;
+   while(node){if(node===w.root)return true;node=node.parent}
+   return false;
+  });
+  if(!wall)return notify('Не удалось выбрать стену для проёма','warn');
+  this.selected=wall;this.openingPickMode=false;
+  if(this.outline){
+   this.outline.removeFromParent();this.outline.geometry?.dispose();this.outline=null;
+  }
+  this.outline=new THREE.BoxHelper(wall.root,0x44ffb8);this.scene.add(this.outline);
+  const local=wall.root.worldToLocal(hit.point.clone());
+  const at=WallOpenings.pathAtPoint(wall.kind,local,wall.thickness,wall.axes);
+  const metric=WallOpenings.pathMetric(wall);
+  if(!at||!metric)return notify('Не получилось измерить длину стены','warn');
+  $('openingX').value=String(Math.round((metric.distanceAt(at.s)-
+   metric.length/2)*1000)/10);
+  $('openingPositionPreset').value='manual';
+  $('openingPanel').open=true;
+  this.syncInspector();this.updateOpeningInfo();
+  $('openingPanel').scrollIntoView({block:'nearest',behavior:'auto'});
+  notify('🎯 Точка центра выбрана. Введи размер в см и нажми «Вырезать»','success');
+ }
+ cutForPrefabDoor(){
+  const door=this.selected;
+  if(this.tool!=='pick'||!door||!ArchitectureKit.has(door.kind)||
+   !door.kind.startsWith('door'))
+   return notify('Сначала выдели готовую дверь из библиотеки','warn');
+  const dimensions=this.physicalSize(door);
+  if(!dimensions)return notify('Не удалось измерить размер двери','warn');
+  $('openingType').value='passage';
+  $('openingSizePreset').value='';
+  $('openingWidth').value=String(Math.round((dimensions.x+1)*10)/10);
+  $('openingHeight').value=String(Math.round((dimensions.y+1)*10)/10);
+  $('openingBottom').value='0';
+  this.openingPickMode=true;
+  this.setTool('pick');this.syncInspector();
+  $('openingPanel').open=true;
+  $('openingPanel').scrollIntoView({block:'nearest',behavior:'auto'});
+  notify('Подготовлен пустой проём '+(dimensions.x+1)+' × '+
+   (dimensions.y+1)+' см под дверь с зазором 1 см. Коснись стены','success');
  }
  openingParts(plan){
   const staged=[];
@@ -786,9 +889,10 @@ class CleanBuilder{
   if(!staged.ok)return notify(staged.reason,'warn');
   this.commitOpenings(staged);
   $('openingSelect').value=split.parts[0].opening.id;
-  notify('✂ Вырезан '+(typ==='door'?'дверной':'оконный')+' проём'+
+  notify('✂ Вырезан '+(typ==='door'?'дверной':typ==='passage'?'пустой дверной':'оконный')+' проём'+
    (split.joint?' через стык двух стен':' вдоль формы стены')+
-   ', вставлены '+(typ==='door'?'петли и дверные створки':'рама и стекло'),'success');
+   (typ==='passage'?', без рамы и створки':', вставлены '+
+    (typ==='door'?'петли и дверные створки':'рама и стекло')),'success');
  }
  restyleOpening(){
   const selected=this.selected;
@@ -1132,7 +1236,7 @@ class CleanBuilder{
  }
  // Two-stage touch drag: first tap selects, second gesture moves in any X/Z direction.
  beginObjectDrag(e){
-  if(this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
+  if(this.openingPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
   const rect=this.canvas.getBoundingClientRect();
   this.pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
   this.ray.setFromCamera(this.pointer,this.camera);
@@ -1452,6 +1556,28 @@ class CleanBuilder{
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
+  $('btnOpeningTool').onclick=()=>this.startOpeningTool();
+  $('btnCutForPrefabDoor').onclick=()=>this.cutForPrefabDoor();
+  $('btnPickOpeningPoint').onclick=()=>{
+   this.openingPickMode=true;this.setTool('pick');this.syncInspector();
+   $('openingPanel').open=true;
+   notify('🎯 Коснись пальцем точки, где должен быть центр отверстия','warn');
+  };
+  $('openingSizePreset').onchange=e=>{
+   if(!e.target.value)return;
+   const [w,h,type]=e.target.value.split(':');
+   $('openingWidth').value=w;$('openingHeight').value=h;
+   if(type==='window'){$('openingType').value='window';$('openingBottom').value='90'}
+   this.updateOpeningInfo();
+  };
+  $('openingPositionPreset').onchange=e=>this.chooseOpeningPosition(e.target.value);
+  $('openingX').oninput=()=>{
+   $('openingPositionPreset').value='manual';this.updateOpeningInfo();
+  };
+  $('openingWidth').oninput=()=>{
+   $('openingSizePreset').value='';this.updateOpeningInfo();
+  };
+  $('openingPanel').addEventListener('toggle',()=>this.updateOpeningInfo());
   $('btnAddOpening').onclick=()=>this.addOpening();
   $('btnChangeOpeningStyle').onclick=()=>this.restyleOpening();
   $('btnRemoveOpening').onclick=()=>this.removeOpening();
@@ -1535,7 +1661,7 @@ class CleanBuilder{
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();
   this.canvas.addEventListener('pointerdown',e=>{
-   if(this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
+   if(this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
    this.gizmoPointer=e.pointerId;this.controls.enabled=false;
    if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
    e.preventDefault();e.stopImmediatePropagation();
@@ -1574,7 +1700,11 @@ class CleanBuilder{
   this.canvas.addEventListener('pointerup',e=>{
    const start=this.pointerStart;this.pointerStart=null;
    if(!start||Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)return;
-   if(this.tool==='pick'){this.pick(e);return}
+   if(this.tool==='pick'){
+    if(this.openingPickMode)this.pickOpeningCentre(e);
+    else this.pick(e);
+    return;
+   }
    const point=this.locatePointer(e);if(!point){this.updatePreview(this.cursor);return}
    this.cursor.copy(point);this.updatePreview(point);
   });
