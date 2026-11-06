@@ -37,7 +37,7 @@ const CharacterCollision=(()=>{
     if(!this.broad(entry,point,reach))continue;
     entry.root.traverse(m=>{
      if(m.isMesh&&m.visible&&m.geometry?.attributes?.position&&
-      !m.userData?.phoenixLODProxy&&!m.userData?.phoenixLODInstalled)
+      !m.userData?.phoenixLODProxy)
       list.push(m);
     });
    }
