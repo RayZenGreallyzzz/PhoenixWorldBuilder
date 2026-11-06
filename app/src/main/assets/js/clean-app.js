@@ -17,8 +17,12 @@ function notify(message,type='neutral'){
 }
 function openAssets(){
  return new Promise((resolve,reject)=>{
-  const r=indexedDB.open('phoenix-builder-clean-assets',1);
-  r.onupgradeneeded=()=>r.result.createObjectStore('glb');
+  const r=indexedDB.open('phoenix-builder-clean-assets',2);
+  r.onupgradeneeded=()=>{
+   if(!r.result.objectStoreNames.contains('glb'))r.result.createObjectStore('glb');
+   if(!r.result.objectStoreNames.contains('previews'))
+    r.result.createObjectStore('previews');
+  };
   r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
  });
 }
@@ -37,6 +41,23 @@ async function getAsset(id){
   const tx=db.transaction('glb','readonly'),request=tx.objectStore('glb').get(id);
   request.onsuccess=()=>{db.close();resolve(request.result)};
   request.onerror=()=>{db.close();reject(request.error)};
+ });
+}
+async function getPreview(_store,id){
+ const db=await openAssets();
+ return new Promise((resolve,reject)=>{
+  const request=db.transaction('previews','readonly').objectStore('previews').get(id);
+  request.onsuccess=()=>{db.close();resolve(request.result)};
+  request.onerror=()=>{db.close();reject(request.error)};
+ });
+}
+async function putPreview(_store,id,value){
+ const db=await openAssets();
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction('previews','readwrite');
+  tx.objectStore('previews').put(value,id);
+  tx.oncomplete=()=>{db.close();resolve(true)};
+  tx.onerror=()=>{db.close();reject(tx.error)};
  });
 }
 class CleanBuilder{
@@ -75,6 +96,7 @@ class CleanBuilder{
   this.gridStep=PrecisionPlacement.step(
    localStorage.getItem('phoenix-builder-grid-step'),.25);
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
+  this.catalogMeta=this.loadCatalogMeta();this.smartCatalogFolder='all';
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
   this.cameraFocusPick=false;
@@ -83,6 +105,8 @@ class CleanBuilder{
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
   this.showAvatarInBuild=localStorage.getItem('phoenix-builder-avatar-build')==='on';
+  this.collisionsEnabled=localStorage.getItem('phoenix-builder-collisions')!=='off';
+  this.collisionSolver=new CharacterCollision.Solver();
   this.optimizationQuality=AndroidAssetOpt.quality(
    localStorage.getItem('phoenix-builder-optimization-quality')||'balanced');
   this.lodEnabled=localStorage.getItem('phoenix-builder-optimization-lod')!=='off';
@@ -100,6 +124,7 @@ class CleanBuilder{
   $('optimizationLOD').checked=this.lodEnabled;
   $('optimizationAutoResolution').checked=this.autoResolution;
   $('avatarInBuild').checked=this.showAvatarInBuild;
+  $('enableCollisions').checked=this.collisionsEnabled;
   this.setMode('build');this.selectKind('wall');
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
@@ -1769,9 +1794,14 @@ class CleanBuilder{
   if(this.mode==='drone'){
    this.controls.target.add(step);this.camera.position.add(step);
   }else{
-   this.player.position.add(step);
-   this.player.rotation.y=Math.atan2(step.x,step.z);
-   this.controls.target.add(step);this.camera.position.add(step);
+   const previous=this.player.position.clone();
+   const movement=this.collisionsEnabled?
+    this.collisionSolver.move(previous,step,this.entries).displacement:step;
+   this.player.position.add(movement);
+   if(movement.lengthSq()>.0000001)
+    this.player.rotation.y=Math.atan2(movement.x,movement.z);
+   this.controls.target.add(movement);this.camera.position.add(movement);
+   this.setAvatarAnimation(movement.lengthSq()>.0000001);
   }
   if(this.tool==='place')this.aimPlacement();
  }
@@ -1806,6 +1836,12 @@ class CleanBuilder{
     'success');
   };
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
+  $('enableCollisions').onchange=e=>{
+   this.collisionsEnabled=e.target.checked;
+   localStorage.setItem('phoenix-builder-collisions',this.collisionsEnabled?'on':'off');
+   notify(this.collisionsEnabled?'🛡 Коллизии включены (проверяются реальные проёмы)':
+    'Коллизии персонажа выключены','success');
+  };
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
