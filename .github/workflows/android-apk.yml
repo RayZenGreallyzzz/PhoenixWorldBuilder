@@ -2,9 +2,9 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement]
+    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs]
   pull_request:
-    branches: [main, feature/planner5d-precision-tools, feature/android-offline-glb-meshopt-ktx2-lod]
+    branches: [main, feature/planner5d-precision-tools, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement]
 
 concurrency:
   group: phoenix-apk-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -64,6 +64,7 @@ jobs:
           node tests/test-clean-mesh-edit.cjs
           node tests/test-mesh-caps.cjs
           node tests/test-curved-openings.cjs
+          node tests/test-flexible-doorways.cjs
           node tests/test-studio-tools.cjs
           node tests/test-architecture-kit.cjs
           node tests/test-mobile-glb-optimization.cjs
