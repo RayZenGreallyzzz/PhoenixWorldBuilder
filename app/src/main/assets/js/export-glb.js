@@ -38,7 +38,7 @@ const SceneExporter=(()=>{
   const models=entries.map(item=>item.root);
   const assembledBounds=new THREE.Box3();
   for(const obj of models){obj.updateMatrixWorld(true);assembledBounds.expandByObject(obj)}
-  const shift=options.houseOnly&&!assembledBounds.isEmpty()
+  const shift=options.houseOnly&&!options.keepWorldCoordinates&&!assembledBounds.isEmpty()
     ?new THREE.Vector3(-((assembledBounds.min.x+assembledBounds.max.x)/2),-assembledBounds.min.y,-((assembledBounds.min.z+assembledBounds.max.z)/2))
     :new THREE.Vector3();
   if(options.houseOnly&&!models.length)throw Error('Сначала построй дом');
