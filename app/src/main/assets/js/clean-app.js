@@ -365,6 +365,92 @@ class CleanBuilder{
   return builtins.find(x=>x.kind===kind)||this.assets.get(kind)||
    this.catalogMeta.get(kind);
  }
+ loadCatalogMeta(){
+  try{
+   const list=JSON.parse(localStorage.getItem('phoenix-builder-smart-catalog-v1')||'[]');
+   return new Map(Array.isArray(list)?list.filter(row=>
+    row&&typeof row.id==='string'&&row.id.startsWith('glb:')&&
+    typeof row.name==='string'&&SmartCatalog.labels[row.folder]&&
+    typeof row.category==='string').slice(-2000).map(row=>[row.id,row]):[]);
+  }catch(err){console.warn('Catalog metadata damaged',err);return new Map()}
+ }
+ saveCatalogMeta(){
+  try{
+   localStorage.setItem('phoenix-builder-smart-catalog-v1',
+    JSON.stringify([...this.catalogMeta.values()].slice(-2000)));
+  }catch(err){notify('Не удалось сохранить папки: '+err.message,'error')}
+ }
+ async importZIP(file){
+  if(!file)return;
+  const status=$('zipImportStatus'),start=performance.now();
+  let models=0,textures=0,skipped=0,errors=[],index=0;
+  try{
+   status.textContent='📦 Распаковка '+safeName(file.name)+'...';
+   const list=await ZipUtils.extract(file,{maxEntries:1200,maxTotal:200000000,maxEntry:50000000});
+   const paths=Object.keys(list);
+   if(!paths.length)throw Error('В ZIP нет файлов GLB или PNG/JPG/WebP');
+   const override=$('zipFolderOverride').value;
+   for(const path of paths){
+    const bytes=list[path];
+    const guess=SmartCatalog.classify(path,override==='auto'?null:override);
+    if(!guess||!SmartCatalog.safeEntry(path)){skipped++;continue}
+    const filename=path.split('/').pop();
+    const idSuffix=Date.now().toString(36)+'-'+index.toString(36)+'-'+
+     Math.random().toString(36).slice(2,7);
+    index++;
+    try{
+     if(guess.type==='model'){
+      if(bytes.length<20||new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength)
+       .getUint32(0,true)!==0x46546c67){
+       errors.push(filename+': не GLB 2.0');skipped++;continue;
+      }
+      const id='glb:zip:'+idSuffix;
+      await putAsset(id,bytes.slice().buffer);
+      this.catalogMeta.set(id,{id,name:safeName(filename),
+       folder:guess.folder,category:guess.category,path,bytes:bytes.length,
+       source:'ZIP'});
+      models++;
+     }else{
+      const type=filename.toLowerCase().endsWith('.png')?'image/png':
+       /\.jpe?g$/i.test(filename)?'image/jpeg':'image/webp';
+      const fileImage=new File([bytes],filename,{type});
+      const edge=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
+      const processed=await PhoenixFiles.prepareTexture(fileImage,edge);
+      const id='texture:zip:'+idSuffix;
+      await putAsset(id,processed.bytes);
+      this.textureFiles.push({id,name:safeName(filename),folder:guess.folder,
+       type:processed.type,width:processed.width,height:processed.height,
+       bytes:processed.storedBytes,path});
+      textures++;
+     }
+    }catch(err){
+     skipped++;errors.push(filename+': '+(err?.message||err));
+    }
+    if(index%5===0){
+     status.textContent='📦 ZIP: '+index+'/'+paths.length+' — GLB: '+
+      models+', текстуры: '+textures+', пропущено: '+skipped;
+     // Release main thread so controls remain responsive on slow tablets.
+     await new Promise(resolve=>setTimeout(resolve,0));
+    }
+   }
+   this.textureFiles=this.textureFiles.slice(-1500);
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+   this.saveCatalogMeta();this.renderCatalog();this.renderTextureLibrary();
+   status.textContent='✅ '+safeName(file.name)+': '+models+' моделей, '+
+    textures+' текстур, '+skipped+' пропущено. '+Math.round((performance.now()-start)/1000)+
+    ' с. '+(errors.length?'Ошибки: '+errors.slice(0,2).join('; '):'Открой нужную папку для просмотра миниатюр.');
+   notify('📦 Импорт завершён: '+models+' GLB и '+textures+
+    ' текстур. Выбирай папку и смотри модели на карточках.','success');
+  }catch(err){
+   console.error('ZIP import',err);
+   this.saveCatalogMeta();
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+   this.renderCatalog();this.renderTextureLibrary();
+   status.textContent='Ошибка ZIP: '+(err?.message||err)+
+    '. Уже сохранённые модели остаются в библиотеке.';
+   notify(status.textContent,'error');
+  }
+ }
  loadTextureFiles(){
   try{const list=JSON.parse(localStorage.getItem('phoenix-builder-v2-textures')||'[]');
    return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-1500):[];
