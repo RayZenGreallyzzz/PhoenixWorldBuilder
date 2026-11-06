@@ -453,7 +453,7 @@ class CleanBuilder{
    metalness:Number($('textureMetalness').value),
    relief:Number($('textureRelief').value),
    applyFrames:$('textureApplyFrames').checked,
-   imageId:this.activeTextureId||prev.imageId||''});
+   imageId:prev.imageId||this.activeTextureId||''});
  }
  applySurfaceToAllWalls(){
   const source=this.selected;
@@ -1121,6 +1121,7 @@ class CleanBuilder{
   // millimetre position with a cursor position (or 25 cm grid rounding).
   if(obj===this.preview&&!['posX','posY','posZ'].includes(id))
    this.updatePreview(this.cursor,false);
+  if(obj.surface?.style!=='none'&&obj===this.selected)this.applySurfaceTo(obj);
   if(this.outline){this.outline.setFromObject(obj.root)}
   this.syncInspector();
  }
@@ -1338,6 +1339,7 @@ class CleanBuilder{
   obj.root.position.y=PrecisionPlacement.nudge(obj.root.position.y,dy,step);
   obj.root.position.z=PrecisionPlacement.nudge(obj.root.position.z,dz,step);
   obj.root.updateMatrixWorld(true);
+  if(obj.surface?.style!=='none')this.applySurfaceTo(obj);
   if(this.outline)this.outline.setFromObject(obj.root);
   this.syncInspector();
   this.gizmo.update();
@@ -1383,7 +1385,10 @@ class CleanBuilder{
   if(!drag||drag.pointerId!==e.pointerId)return;
   this.dragMove=null;this.controls.enabled=true;
   if(this.canvas.hasPointerCapture?.(e.pointerId))this.canvas.releasePointerCapture(e.pointerId);
-  if(drag.moved)notify('Деталь перемещена по X/Z: '+this.sizeText(this.selected),'success');
+  if(drag.moved){
+   if(this.selected?.surface?.style!=='none')this.applySurfaceTo(this.selected);
+   notify('Деталь перемещена по X/Z: '+this.sizeText(this.selected),'success');
+  }
   e.preventDefault();e.stopImmediatePropagation();
  }
  // Mounted decorations live on real wall faces, never imaginary wall sockets.
@@ -1885,7 +1890,10 @@ class CleanBuilder{
     else if(this.selected.thicknessEditable)this.rebuildImported(this.selected);
    }
    if(drag?.changed){
-    if(this.selected)this.selected.root.updateMatrixWorld(true);
+    if(this.selected){
+     this.selected.root.updateMatrixWorld(true);
+     if(this.selected.surface?.style!=='none')this.applySurfaceTo(this.selected);
+    }
     this.syncInspector();
     notify('Гизмо: изменение выполнено, параметры сохраняются в проекте','success');
    }
