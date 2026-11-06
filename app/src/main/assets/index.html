@@ -17,8 +17,38 @@
    <button type="button" data-catalog-group="roofs">🏠 Крыши</button>
    <button type="button" id="btnQuickImportGLB" class="alt">📥 Импорт GLB</button>
    <button type="button" data-catalog-group="imports" id="catalogImportsShortcut" hidden>📦 Мои GLB</button>
-  </div><div id="catalogItems" class="parts" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
- <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b><div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Можно загружать изображения больше 3 МБ: они автоматически подгоняются под графические возможности планшета и сохраняются в памяти приложения. Для переноса на другое устройство используй резервную копию проекта с текстурами.</small>
+  </div><div class="smartLibrary">
+ <label>📂 Папка библиотеки<select id="smartCategoryFilter">
+  <option value="all">Все модули по папкам</option>
+  <option value="walls">🧱 Стены</option><option value="corners">📐 Углы и дуги</option>
+  <option value="floors">▦ Пол</option><option value="ceilings">▤ Потолок</option>
+  <option value="stairs">🪜 Лестницы</option><option value="roofs">🏠 Крыши</option>
+  <option value="doors">🚪 Двери</option><option value="windows">🪟 Окна</option>
+  <option value="frames">▯ Рамы</option><option value="decor">🌿 Декор</option>
+  <option value="my-modules">📦 Мои модули</option>
+ </select></label>
+ <input id="smartCatalogSearch" type="search" autocomplete="off"
+  placeholder="🔍 Поиск по имени и папке">
+ <label class="fileButton">📦 Импорт ZIP: модели + текстуры
+  <input id="importZip" type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden></label>
+ <label>Сортировка ZIP<select id="zipFolderOverride">
+  <option value="auto">🤖 Авто: учитывать имеющиеся папки и названия</option>
+  <option value="walls">Стены</option><option value="corners">Углы</option>
+  <option value="floors">Пол</option><option value="ceilings">Потолок</option>
+  <option value="stairs">Лестницы</option><option value="roofs">Крыши</option>
+  <option value="doors">Двери</option><option value="windows">Окна</option>
+  <option value="frames">Рамы</option><option value="decor">Декор</option>
+  <option value="my-modules">Мои модули</option>
+ </select></label>
+ <small id="zipImportStatus" class="tip" aria-live="polite">ZIP: GLB и PNG/JPG/WebP; папки сохраняются. Неизвестные модели — в «Мои модули».</small>
+</div>
+<div id="catalogItems" class="parts smartGallery" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
+ <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b>
+ <div class="cols2"><label>Папка<select id="textureCategoryFilter">
+ <option value="all">Все текстуры</option><option value="textures">🎨 Текстуры</option>
+ <option value="my-textures">🖼 Мои текстуры</option></select></label>
+ <label>Поиск<input id="textureSearch" type="search" placeholder="Имя текстуры"></label></div>
+ <div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Можно загружать изображения больше 3 МБ: они автоматически подгоняются под графические возможности планшета и сохраняются в памяти приложения. Для переноса на другое устройство используй резервную копию проекта с текстурами.</small>
  <small id="textureLibraryStatus" class="tip">Выбери установленную деталь, затем текстуру.</small></div><details id="catalogImport" class="importZone"><summary>📦 Импорт GLB и персонажей</summary><div class="importZoneBody">
  <label for="importCategory">Импорт GLB как</label>
  <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
@@ -44,6 +74,8 @@
  <label class="fileButton ghostButton">🧍 Загрузить персонажа GLB<input id="importAvatar" type="file" accept=".glb,model/gltf-binary" hidden></label>
    <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
    <label class="check"><input id="avatarInBuild" type="checkbox"><span>Показывать персонажа в режиме строительства</span></label>
+ <label class="check"><input id="enableCollisions" type="checkbox" checked><span>🛡 Коллизии персонажа: стены, двери, окна, пол и модули</span></label>
+ <small class="tip">Персонаж не проходит сквозь настоящую стену или закрытую дверь, но проходит через вырезанный проём. Пол и лестницы поддерживают высоту; при необходимости коллизии можно выключить.</small>
    <small class="tip">Модель автоматически подгоняется под рост и ширину. Анимация не изменяет внешний масштаб.</small>
  <p class="tip">Выбери правильный тип: декор свободно ставится на пол, а настенный декор закрепляется на поверхности стены.</p><p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
  </div></details>
@@ -223,6 +255,11 @@
 <script src="js/glb-loader.js"></script>
 <script src="js/export-glb.js"></script>
 <script src="js/phoenix-files.js"></script>
+<script src="js/pako_inflate.min.js"></script>
+<script src="js/zip-helper.js"></script>
+<script src="js/smart-catalog.js"></script>
+<script src="js/catalog-preview.js"></script>
+<script src="js/character-collision.js"></script>
  <script src="js/android-asset-opt.js"></script>
  <script src="js/android-lod.js"></script>
  <script src="js/android-performance.js"></script>
