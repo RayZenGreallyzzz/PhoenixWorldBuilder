@@ -440,12 +440,50 @@ class CleanBuilder{
    }
   }else SurfaceMaterials.apply(root,settings,null,{kind:obj.kind});
  }
+ joinedFloorRegion(obj){
+  // Old SurfacePaint.joinedFloors idea, but as REAL mesh UV:
+  // one image across a connected floor group, retained in GLB.
+  if(!obj||obj.category!=='floor')return null;
+  const all=[...this.entries.filter(e=>e.category==='floor'&&
+   e.storey===obj.storey)];
+  if(!all.includes(obj))all.push(obj);
+  const boxed=all.map(entry=>({entry,box:new THREE.Box3().setFromObject(entry.root)}));
+  const start=boxed.find(x=>x.entry===obj);
+  if(!start)return null;
+  const selected=[start],seen=new Set([start.entry]);
+  const overlap=(a,b,c,d)=>Math.max(0,Math.min(b,d)-Math.max(a,c));
+  const gap=(a,b,c,d)=>Math.max(0,a-d,c-b);
+  for(let i=0;i<selected.length&&selected.length<128;i++){
+   const a=selected[i].box;
+   for(const candidate of boxed){
+    if(seen.has(candidate.entry))continue;
+    const b=candidate.box;
+    if(Math.abs(a.max.y-b.max.y)>.25)continue;
+    const dx=gap(a.min.x,a.max.x,b.min.x,b.max.x),
+     dz=gap(a.min.z,a.max.z,b.min.z,b.max.z);
+    const ox=overlap(a.min.x,a.max.x,b.min.x,b.max.x),
+     oz=overlap(a.min.z,a.max.z,b.min.z,b.max.z);
+    if((dx<=.15&&oz>.2)||(dz<=.15&&ox>.2)){
+     selected.push(candidate);seen.add(candidate.entry);
+     if(selected.length>=128)break;
+    }
+   }
+  }
+  const minX=Math.min(...selected.map(x=>x.box.min.x)),
+   minZ=Math.min(...selected.map(x=>x.box.min.z)),
+   maxX=Math.max(...selected.map(x=>x.box.max.x)),
+   maxZ=Math.max(...selected.map(x=>x.box.max.z));
+  return {region:[minX,minZ,maxX,maxZ],entries:selected.map(x=>x.entry)};
+ }
  surfaceFromControls(obj){
   const prev=SurfaceMaterials.normalize(obj?.surface);
+  const mode=$('textureMapping').value;
+  const joined=mode==='joined'?this.joinedFloorRegion(obj):null;
   return SurfaceMaterials.normalize({...prev,
+   region:mode==='joined'?joined?.region||prev.region:null,
    style:$('textureStyle').value,color:$('textureTint').value,
    repeat:Number($('textureRepeat').value),
-   mapping:$('textureMapping').value,
+   mapping:mode,
    tileMeters:Number($('textureTileMeters').value),
    imageScale:Number($('textureImageScale').value),
    offsetU:Number($('textureOffsetU').value),
@@ -459,19 +497,24 @@ class CleanBuilder{
  }
  applySurfaceToAllWalls(){
   const source=this.selected;
-  if(this.tool!=='pick'||!source||source.category!=='wall')
-   return notify('Выдели построенную стену для копирования материала','warn');
+  if(this.tool!=='pick'||!source||!['wall','floor'].includes(source.category))
+   return notify('Выдели построенную стену или плиту пола','warn');
   const surface=this.surfaceFromControls(source);
   if(surface.style==='custom'&&!surface.imageId)
    return notify('Сначала выбери своё изображение','warn');
   let count=0;
-  for(const target of this.entries){
-   if(target.category!=='wall'||target.storey!==source.storey)continue;
+  const group=source.category==='floor'&&surface.mapping==='joined'?
+   this.joinedFloorRegion(source)?.entries||[source]:
+   this.entries.filter(entry=>entry.category===source.category&&
+    entry.storey===source.storey);
+  for(const target of group){
    target.surface=SurfaceMaterials.normalize(surface);
    this.applySurfaceTo(target);count++;
   }
   this.syncInspector();this.renderTextureLibrary();
-  notify('🎨 Единая настройка рисунка: '+count+' стен(ы) на этаже','success');
+  notify('🎨 Единая настройка рисунка: '+count+
+   (source.category==='floor'?' соединённых плит пола':' стен(ы)')+
+   '. Материал сохраняется в проекте и GLB','success');
  }
  changeSurface(reset=false){
   const obj=this.target();
@@ -808,7 +851,7 @@ class CleanBuilder{
   for(const [id,value] of [['textureRoughnessValue',surf.roughness],
    ['textureMetalnessValue',surf.metalness],['textureReliefValue',surf.relief]])
    $(id).textContent=Number(value).toFixed(2);
-  $('btnSurfaceAllWalls').disabled=!(this.tool==='pick'&&obj?.category==='wall');
+  $('btnSurfaceAllWalls').disabled=!(this.tool==='pick'&&['wall','floor'].includes(obj?.category));
   this.gizmo.attach(this.tool==='pick'?this.selected:null);
   this.updateOpeningInfo();
   this.readSockets();
