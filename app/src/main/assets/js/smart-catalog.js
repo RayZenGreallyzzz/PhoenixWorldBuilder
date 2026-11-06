@@ -25,7 +25,7 @@ const SmartCatalog=(()=>{
   ['windows',/(?:окн|окош|window|glaz|glass\s*window)/iu],
   ['frames',/(?:рам[аы]?|косяк|наличник|frame|jamb|trim\s*door)/iu],
   ['walls',/(?:стен|кирпичн\s*стен|wall|partition|facade|фасад|панель\s*стен)/iu],
-  ['decor',/(?:декор|украшени|скульп|колон|pillar|column|ornament|statue|plant|furniture|мебел|фонар|lamp|prop|decor|asset)/iu],
+  ['decor',/(?:декор|украшени|скульп|колон|pillar|column|ornament|statue|plant|furniture|мебел|фонар|lamp|prop|decor)/iu],
   ['textures',/(?:текстур|texture|material|узор|pattern|albedo|diffuse|roughness|normal|basecolor)/iu]
  ];
  function tokenize(raw){
