@@ -76,6 +76,7 @@ jobs:
           node tests/test-auto-wall-trim.cjs
           node tests/test-clean-browser-smoke.cjs
           node tests/test-clean-interactions.cjs
+          node tests/test-large-texture-browser.cjs
           node tests/test-android-branding.cjs
 
       - name: Configure Java 17
