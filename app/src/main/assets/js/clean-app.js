@@ -735,62 +735,142 @@ class CleanBuilder{
  }
  renderCatalog(){
   const container=$('catalogItems');container.textContent='';
-  const allowed=['structure','doors','frames','roofs','imports'];
-  if(!allowed.includes(this.catalogGroup))this.catalogGroup='structure';
-  $('catalogImportsShortcut').hidden=this.assets.size===0;
-  if(this.catalogGroup==='imports'&&!this.assets.size)this.catalogGroup='structure';
+  const term=$('smartCatalogSearch')?.value||'';
+  const folder=this.smartCatalogFolder||'all';
+  $('smartCategoryFilter').value=folder;
+  $('catalogImportsShortcut').hidden=this.catalogMeta.size===0&&this.assets.size===0;
+  const shortcuts={structure:'walls',doors:'doors',frames:'frames',
+   roofs:'roofs',imports:'my-modules'};
   for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
-   button.classList.toggle('active',button.dataset.catalogGroup===this.catalogGroup);
-  const modules=[...builtins,...[...this.assets].map(([kind,value])=>({
-   kind,name:value.name,category:value.category,group:'imports'}))];
-  const sections=[
-   ['structure','🧱 Каркас и фундамент'],
-   ['doors','🚪 Двери — готовые модели'],
-   ['frames','▯ Рамы и порталы'],
-   ['roofs','🏠 Крыши: обычные и фэнтези'],
-   ['imports','📦 Загруженные GLB']
-  ];
-  const current=modules.find(m=>m.kind===this.preview?.kind);
-  for(const [group,label] of sections){
-   const matching=modules.filter(m=>{
-    const g=m.group||(m.category==='roof'?'roofs':'structure');
-    return g===group;
-   });
+   button.classList.toggle('active',shortcuts[button.dataset.catalogGroup]===folder);
+  // Merge builtins, imported models currently loaded, and raw ZIP models
+  // saved in IndexedDB but not yet decoded. No ZIP is lost after relaunch.
+  const models=new Map();
+  for(const base of builtins){
+   let smart=SmartCatalog.classify(base.kind+'.glb');
+   if(!smart)smart=SmartCatalog.classify(base.name+'.glb');
+   const builtinFolder=base.kind==='floor'?'floors':
+    base.kind==='wall'?'walls':
+    ['corner','arc90','arc180'].includes(base.kind)?'corners':
+    base.group==='doors'?'doors':base.group==='frames'?'frames':
+    base.group==='roofs'?'roofs':smart?.folder||'my-modules';
+   models.set(base.kind,{id:base.kind,kind:base.kind,name:base.name,
+    folder:builtinFolder,category:base.category,path:base.name,builtin:true});
+  }
+  for(const [id,asset] of this.assets){
+   const guessed=SmartCatalog.classify(asset.name+'.glb');
+   models.set(id,{id,kind:id,name:asset.name,category:asset.category,
+    folder:asset.folder||guessed?.folder||'my-modules',
+    path:asset.name,builtin:false});
+  }
+  for(const [id,meta] of this.catalogMeta)
+   models.set(id,{...meta,id,kind:id,builtin:false});
+  const entries=[...models.values()];
+  const folders=folder==='all'?SmartCatalog.order:[folder];
+  for(const category of folders){
+   const matching=SmartCatalog.filteredEntries(entries,category,term);
    if(!matching.length)continue;
    const section=document.createElement('details');section.className='catalogGroup';
-   section.open=group===this.catalogGroup;
-   section.hidden=group!==this.catalogGroup;
+   section.open=folder!=='all'||!!term||['walls','my-modules'].includes(category);
    const heading=document.createElement('summary');
-   heading.textContent=label+' ('+matching.length+')';section.append(heading);
-   const rows=document.createElement('div');rows.className='catalogRows';
+   heading.textContent=(SmartCatalog.labels[category]||category)+
+    ' · '+matching.length;
+   section.append(heading);
+   const rows=document.createElement('div');rows.className='catalogRows smartGrid';
    for(const module of matching){
-    const btn=document.createElement('button');
-    btn.textContent=module.name;
-    const second=document.createElement('span');
-    second.textContent=module.group==='doors'?'Дверь с петлями • масштабируй гизмо':
-     module.group==='frames'?'Отдельная рама для проёма':
-     module.category==='roof'?'Готовая кровля • высота по стенам':
-     module.category==='wall'?'Стена / магнитные торцы':
-     module.category==='decor'?'Настенный декор':'Модуль';
-    btn.append(second);
+    const card=document.createElement('div');card.className='moduleCard';
+    const btn=document.createElement('button');btn.type='button';
+    btn.className='modulePick';
+    const frame=document.createElement('div');frame.className='moduleImage';
+    const symbol=document.createElement('span');symbol.className='moduleIcon';
+    symbol.textContent=SmartCatalog.labels[category]?.split(' ')[0]||'◈';
+    const img=document.createElement('img');img.className='catalogThumb unloaded';
+    img.dataset.previewId=module.kind;
+    img.dataset.builtin=module.builtin?'1':'0';
+    img.alt='3D-просмотр: '+module.name;img.loading='lazy';
+    frame.append(symbol,img);
+    const name=document.createElement('strong');name.textContent=module.name;
+    const description=document.createElement('small');
+    description.textContent=module.builtin?'Встроенный модуль':
+     'GLB · '+Math.round((module.bytes||0)/1024)+' КБ'+
+     (module.path&&module.path!==module.name?' · '+module.path:'');
+    btn.append(frame,name,description);
     btn.classList.toggle('active',this.preview?.kind===module.kind);
-    btn.onclick=()=>this.selectKind(module.kind);
-    rows.append(btn);
+    btn.onclick=async()=>{
+     try{
+      if(!module.builtin){
+       notify('📦 Загружаю '+module.name+' для установки...','neutral');
+       if(!await this.ensureTemplate(module.kind,module.category))
+        throw Error('Исходный GLB недоступен в памяти устройства');
+      }
+      this.setTextureTab('parts');this.selectKind(module.kind);
+      notify('✅ Выбран модуль: '+module.name,'success');
+     }catch(err){notify('Не удалось открыть модель: '+err.message,'error')}
+    };
+    card.append(btn);
+    if(!module.builtin){
+     const select=document.createElement('select');
+     select.className='moduleFolderEdit';
+     select.setAttribute('aria-label','Папка модуля '+module.name);
+     for(const key of SmartCatalog.order){
+      const opt=document.createElement('option');opt.value=key;
+      opt.textContent=SmartCatalog.labels[key];select.append(opt);
+     }
+     select.value=module.folder;
+     select.onchange=()=>{
+      const record=this.catalogMeta.get(module.kind)||{
+       id:module.kind,name:module.name,path:module.path,source:'GLB'
+      };
+      record.folder=select.value;
+      record.category=SmartCatalog.category(select.value);
+      this.catalogMeta.set(module.kind,record);
+      if(this.assets.has(module.kind)){
+       const asset=this.assets.get(module.kind);
+       asset.folder=record.folder;asset.category=record.category;
+      }
+      this.saveCatalogMeta();this.renderCatalog();
+      notify('📂 «'+module.name+'» перемещён в '+SmartCatalog.labels[record.folder],
+       'success');
+     };
+     card.append(select);
+    }
+    rows.append(card);
    }
    section.append(rows);container.append(section);
   }
+  if(!container.children.length){
+   const hint=document.createElement('p');hint.className='tip';
+   hint.textContent='Здесь пока нет моделей. Загрузить ZIP или изменить поиск/папку.';
+   container.append(hint);
+  }
   const saved=$('myCatalogItems');saved.textContent='';
   for(const preset of this.presets){
-   const btn=document.createElement('button');btn.textContent=preset.name;
+   const card=document.createElement('button');card.className='presetCard';
+   const thumb=document.createElement('img');thumb.className='catalogThumb unloaded';
+   thumb.dataset.previewId=preset.kind;
+   thumb.dataset.builtin=CleanGeometry.isBuiltIn(preset.kind)?'1':'0';
+   thumb.alt='Моя деталь: '+preset.name;
+   const label=document.createElement('strong');label.textContent=preset.name;
    const size=document.createElement('span'),d=preset.sizeCm;
-   size.textContent=d?'Ш '+d.x+' × В '+d.y+' × Г '+d.z+' см':'Габариты уточнятся при выборе';
-   btn.append(size);btn.onclick=()=>this.usePreset(preset);saved.append(btn);
+   size.textContent=d?'Ш '+d.x+' × В '+d.y+' × Г '+d.z+' см':
+    'Размеры при выборе';
+   card.append(thumb,label,size);
+   card.onclick=()=>this.usePreset(preset);saved.append(card);
   }
   if(!this.presets.length){
    const hint=document.createElement('small');
    hint.textContent='Сохранённые детали появятся здесь';saved.append(hint);
   }
+  if(typeof CatalogPreview!=='undefined'&&typeof IntersectionObserver!=='undefined'){
+   CatalogPreview.observeCards($('catalog'),async(kind,isBuiltin)=>{
+    if(isBuiltin)return this.cloneTemplate(kind);
+    if(this.assets.has(kind))return this.assets.get(kind).template;
+    const buf=await getAsset(kind);if(!buf)return null;
+    const model=await GLB.load(buf);return model.root;
+   },getPreview,putPreview);
+  }
  }
+
  createEntry(kind,config={}){
   const data={...defaultSettings(),...config};
   data.axes={...defaultSettings().axes,...(config.axes||{})};
