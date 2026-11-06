@@ -734,6 +734,57 @@ class CleanBuilder{
   this.updateOpeningInfo();
   this.readSockets();
  }
+ startOpeningTool(){
+  this.setTextureTab('parts');
+  const ready=!!this.selected&&WallOpenings.supported(this.selected.kind);
+  this.openingPickMode=!ready;
+  this.setTool('pick');this.syncInspector();
+  $('openingPanel').open=true;
+  $('openingPanel').scrollIntoView({block:'nearest',behavior:'auto'});
+  if(ready){
+   this.updateOpeningInfo();
+   notify('✂ Стена выбрана. Задай размер и место, затем вырежи проём','success');
+  }else notify('✂ Коснись стены, где должен быть центр проёма','warn');
+ }
+ updateOpeningInfo(){
+  const info=$('openingPositionInfo'),wall=this.selected;
+  if(!wall||!WallOpenings.supported(wall.kind)){
+   info.textContent='Коснись готовой стены, угла или дуги, чтобы выбрать точку.';
+   return;
+  }
+  if(!$('openingPanel').open)return;
+  const m=WallOpenings.pathMetric(wall);
+  if(!m)return;
+  const shift=Number($('openingX').value)||0;
+  const w=Number($('openingWidth').value)||0;
+  const from=m.length*50+shift,total=m.length*100;
+  info.textContent='Центр '+(Math.round(from*10)/10)+
+   ' см от начала; длина стены/дуги '+(Math.round(total*10)/10)+
+   ' см, ширина '+w+' см.'+
+   (from-w/2<-.1||from+w/2>total+.1?
+    ' Проём пересекает край — нужна соединённая соседняя стена.':
+    ' Отверстие внутри выбранного модуля.');
+ }
+ chooseOpeningPosition(value){
+  const wall=this.selected;
+  if(!wall||!WallOpenings.supported(wall.kind)){
+   $('openingPositionPreset').value='manual';
+   return notify('Сначала выбери стандартную стену или коснись её пальцем','warn');
+  }
+  const m=WallOpenings.pathMetric(wall);
+  let shift=0;
+  if(value==='start')shift=-m.length/2;
+  if(value==='end')shift=m.length/2;
+  if(value==='corner'){
+   if(wall.kind!=='corner'){
+    $('openingPositionPreset').value='manual';
+    return notify('Внутренний угол есть в Г-образной стене','warn');
+   }
+   shift=m.distanceAt(1.9)-m.length/2;
+  }
+  $('openingX').value=String(Math.round(shift*1000)/10);
+  this.updateOpeningInfo();
+ }
  openingParts(plan){
   const staged=[];
   for(const [obj,newOpenings] of plan){
