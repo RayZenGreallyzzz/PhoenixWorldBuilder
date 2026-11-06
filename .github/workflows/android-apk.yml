@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence]
+    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence, feature/free-camera-orbit-focus]
   pull_request:
     branches: [main, feature/planner5d-precision-tools, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement]
 
@@ -70,6 +70,7 @@ jobs:
           node tests/test-architecture-kit.cjs
           node tests/test-mobile-glb-optimization.cjs
           node tests/test-android-performance.cjs
+          node tests/test-free-camera.cjs
           node tests/test-bulk-floor-trim.cjs
           node tests/test-planner-tools.cjs
           node tests/test-millimeter-placement.cjs
