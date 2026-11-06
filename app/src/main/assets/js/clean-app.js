@@ -249,7 +249,9 @@ class CleanBuilder{
   const wrapper=new THREE.Group();
   root.position.x-=centre.x;root.position.y-=b.min.y;root.position.z-=centre.z;
   wrapper.add(root);
-  this.assets.set(id,{template:wrapper,name:safeName(name),category,
+  const meta=this.catalogMeta?.get(id);
+  this.assets.set(id,{template:wrapper,name:meta?.name||safeName(name),
+   category:meta?.category||category,folder:meta?.folder,
    animations:parsed.animations||[],glbInfo:parsed.info||null,textureStats});
   const used=(parsed.info?.extensions||[]).filter(e=>
    ['EXT_meshopt_compression','KHR_draco_mesh_compression','KHR_texture_basisu'].includes(e));
@@ -327,17 +329,29 @@ class CleanBuilder{
   const id='glb:'+Date.now().toString(36)+'-'+file.name.replace(/[^a-zA-Zа-яА-Я0-9._-]/g,'_');
   try{
    const buf=await file.arrayBuffer();
-   await this.cacheModel(id,buf,$('importCategory').value,file.name);
+   const category=$('importCategory').value;
+   const guess=SmartCatalog.classify(file.name);
+   const folder=guess?.category===category?guess.folder:
+    category==='wall'?'walls':category==='floor'?'floors':
+    category==='roof'?'roofs':category==='decor'?'decor':'my-modules';
+   this.catalogMeta.set(id,{id,name:safeName(file.name),
+    folder,category,path:file.name,source:'GLB',bytes:buf.byteLength});
+   await this.cacheModel(id,buf,category,file.name);
+   this.saveCatalogMeta();
    this.selectKind(id);
    notify('GLB импортирован: '+safeName(file.name)+' · '+
     $('optimizationStats').textContent+'. Оригинальный файл сохранён.','success');
-  }catch(err){console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')}
+  }catch(err){
+   this.catalogMeta.delete(id);this.saveCatalogMeta();
+   console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')
+  }
  }
  async ensureTemplate(kind,category='wall'){
   if(CleanGeometry.isBuiltIn(kind)||this.assets.has(kind))return true;
   const buf=await getAsset(kind);
   if(!buf)return false;
-  await this.cacheModel(kind,buf,category,kind,false);
+  const meta=this.catalogMeta.get(kind);
+  await this.cacheModel(kind,buf,meta?.category||category,meta?.name||kind,false);
   return true;
  }
  cloneTemplate(kind,thickness=.22,scale=1,axes={x:1,y:1,z:1}){
@@ -348,11 +362,12 @@ class CleanBuilder{
   return THREE.SkeletonUtils?.clone?THREE.SkeletonUtils.clone(source):source.clone(true);
  }
  descriptor(kind){
-  return builtins.find(x=>x.kind===kind)||this.assets.get(kind);
+  return builtins.find(x=>x.kind===kind)||this.assets.get(kind)||
+   this.catalogMeta.get(kind);
  }
  loadTextureFiles(){
   try{const list=JSON.parse(localStorage.getItem('phoenix-builder-v2-textures')||'[]');
-   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-200):[];
+   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-1500):[];
   }catch(e){return []}
  }
  setTextureTab(active='parts'){
@@ -364,6 +379,7 @@ class CleanBuilder{
   document.querySelector('.myCatalog').hidden=textures;
   $('catalogImport').hidden=textures;
   $('textureLibrary').hidden=!textures;
+  document.querySelector('.smartLibrary').hidden=textures;
   if(textures)this.renderTextureLibrary();
  }
  renderTextureLibrary(){
@@ -418,7 +434,7 @@ class CleanBuilder{
    await putAsset(id,processed.bytes);
    const texture={id,name:safeName(file.name),type:processed.type,
     width:processed.width,height:processed.height,bytes:processed.storedBytes};
-   this.textureFiles=[...this.textureFiles,texture].slice(-200);
+   this.textureFiles=[...this.textureFiles,texture].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    this.setTextureTab('textures');this.renderTextureLibrary();
    $('textureLibraryStatus').textContent='Сохранено: '+texture.name+' — '+
