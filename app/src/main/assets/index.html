@@ -15,6 +15,7 @@
    <button type="button" data-catalog-group="doors">🚪 Двери</button>
    <button type="button" data-catalog-group="frames">▯ Рамы</button>
    <button type="button" data-catalog-group="roofs">🏠 Крыши</button>
+   <button type="button" id="btnQuickImportGLB" class="alt">📥 Импорт GLB</button>
    <button type="button" data-catalog-group="imports" id="catalogImportsShortcut" hidden>📦 Мои GLB</button>
   </div><div id="catalogItems" class="parts" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
  <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b><div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Можно загружать изображения больше 3 МБ: они автоматически подгоняются под графические возможности планшета и сохраняются в памяти приложения. Для переноса на другое устройство используй резервную копию проекта с текстурами.</small>
@@ -42,6 +43,7 @@
   </details>
  <label class="fileButton ghostButton">🧍 Загрузить персонажа GLB<input id="importAvatar" type="file" accept=".glb,model/gltf-binary" hidden></label>
    <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
+   <label class="check"><input id="avatarInBuild" type="checkbox"><span>Показывать персонажа в режиме строительства</span></label>
    <small class="tip">Модель автоматически подгоняется под рост и ширину. Анимация не изменяет внешний масштаб.</small>
  <p class="tip">Выбери правильный тип: декор свободно ставится на пол, а настенный декор закрепляется на поверхности стены.</p><p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
  </div></details>
