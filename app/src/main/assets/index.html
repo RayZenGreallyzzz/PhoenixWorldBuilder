@@ -8,8 +8,14 @@
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
  <div class="topRight"><button id="btnSave">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
-<section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active">🧱 Детали</button><button id="tabTextures">🎨 Текстуры</button></div><small>Выбери модуль или материал</small></div><div id="catalogItems" class="parts"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
- <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b><div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Текстуры хранятся на этом устройстве. При выборе применяется к выделенной или новой детали.</small></div><div id="catalogImport" class="importZone">
+<section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active">🧱 Детали</button><button id="tabTextures">🎨 Текстуры</button></div><small>Выбери модуль или материал</small></div><div id="catalogQuick" class="catalogQuick" role="group" aria-label="Разделы библиотеки">
+   <button type="button" data-catalog-group="structure" class="active">🧱 Каркас</button>
+   <button type="button" data-catalog-group="doors">🚪 Двери</button>
+   <button type="button" data-catalog-group="frames">▯ Рамы</button>
+   <button type="button" data-catalog-group="roofs">🏠 Крыши</button>
+   <button type="button" data-catalog-group="imports" id="catalogImportsShortcut" hidden>📦 Мои GLB</button>
+  </div><div id="catalogItems" class="parts" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
+ <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b><div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Текстуры хранятся на этом устройстве. При выборе применяется к выделенной или новой детали.</small></div><details id="catalogImport" class="importZone"><summary>📦 Импорт GLB и персонажей</summary><div class="importZoneBody">
  <label for="importCategory">Импорт GLB как</label>
  <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
  <label class="fileButton">＋ Загрузить GLB / GLB Meshopt / Draco / KTX2<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
@@ -35,7 +41,7 @@
    <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
    <small class="tip">Модель автоматически подгоняется под рост и ширину. Анимация не изменяет внешний масштаб.</small>
  <p class="tip">Выбери правильный тип: декор свободно ставится на пол, а настенный декор закрепляется на поверхности стены.</p><p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
- </div>
+ </div></details>
 </section>
 <section id="inspector" class="panel right">
  <div class="panelTitle"><b id="currentLabel">Выбери деталь</b><small id="currentHint">Установка или точная подгонка</small></div>
