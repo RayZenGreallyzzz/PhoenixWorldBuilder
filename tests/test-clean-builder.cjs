@@ -157,8 +157,10 @@ assert(!ui.includes('js/world.js'),'Legacy editor engine is not executed in clea
 assert(ui.includes('js/clean-app.js'),'New runtime is the only editor implementation');
 const app=fs.readFileSync(path.join(dir,'js/clean-app.js'),'utf8');
 assert(app.includes('setDefaultAvatar()')&&app.includes('importAvatar(file)'),'Character mode supported');
-assert(app.includes('this.controls.enablePan=mode===')&&app.includes('setMode(mode)'),
- 'Drone camera and orbit mode supported');
+assert(app.includes("this.controls.enablePan=mode!=='character'")&&
+ app.includes('setMode(mode)')&&
+ app.includes("this.controls.screenSpacePanning=mode==='drone'"),
+ 'Build camera pans freely while drone pans in 3D and character still follows player');
 assert(app.includes("saveCleanProject(json)"),'Clean save must be separate from legacy files');
 assert(!/autoSave|setInterval\(.*save/i.test(app),'Clean builder never autosaves');
 const java=fs.readFileSync(path.join(dir,'../java/com/phoenix/worldbuilder/MainActivity.java'),'utf8');

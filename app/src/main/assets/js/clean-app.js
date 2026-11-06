@@ -77,6 +77,7 @@ class CleanBuilder{
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
+  this.cameraFocusPick=false;
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
@@ -186,7 +187,16 @@ class CleanBuilder{
    mode===m.toLowerCase());
   this.player.visible=mode==='character';
   $('charControls').hidden=mode!=='character';
-  this.controls.enablePan=mode==='drone';this.controls.enableRotate=true;
+  // Building can pan/orbit around any world point, not fixed map origin.
+  // Keep character follow intact; drone retains 3D/free-height panning.
+  this.controls.enablePan=mode!=='character';
+  this.controls.screenSpacePanning=mode==='drone';
+  this.controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;
+  this.controls.enableRotate=true;
+  if(mode==='character'&&this.cameraFocusPick){
+   this.cameraFocusPick=false;
+   $('btnFocusCamera').classList.remove('active');
+  }
   if(mode==='character'){
    this.controls.target.copy(this.player.position).add(V(0,1.15,0));
    this.camera.position.copy(this.player.position).add(V(0,3.6,6));
@@ -759,7 +769,39 @@ class CleanBuilder{
   this.updateOpeningInfo();
   this.readSockets();
  }
+ // Navigation only: this must never mutate the building or its coordinates.
+ startCameraFocus(){
+  if(this.mode==='character')this.setMode('build');
+  const center=this.mode==='build'&&this.tool==='pick'&&this.selected?
+   FreeCamera.selectedCenter(THREE,this.selected.root):null;
+  if(center){
+   FreeCamera.focus(this.camera,this.controls,center);
+   this.cameraFocusPick=false;
+   $('btnFocusCamera').classList.remove('active');
+   return notify('🎯 Камера вращается вокруг выбранной детали, дом не перемещён','success');
+  }
+  this.cameraFocusPick=!this.cameraFocusPick;
+  if(this.cameraFocusPick)this.openingPickMode=false;
+  $('btnFocusCamera').classList.toggle('active',this.cameraFocusPick);
+  notify(this.cameraFocusPick?
+   '🎯 Коснись стены, крыши или земли, чтобы перенести точку вращения камеры':
+   '🎯 Выбор точки камеры отменён','neutral');
+ }
+ setCameraFocusAt(event){
+  if(event.isPrimary===false)return;
+  const point=FreeCamera.hitPosition(THREE,this.camera,this.ray,this.canvas,
+   this.entries,this.ground,event);
+  if(!point)return notify('🎯 Коснись дома или земли для нового центра обзора','warn');
+  if(!FreeCamera.focus(this.camera,this.controls,point))
+   return notify('Не удалось переместить точку обзора','warn');
+  this.cameraFocusPick=false;
+  $('btnFocusCamera').classList.remove('active');
+  notify('🎯 Центр вращения перенесён. Два пальца перемещают обзор','success');
+ }
  startOpeningTool(){
+  // Never leave conflicting pick-only camera/opening tools active together.
+  this.cameraFocusPick=false;
+  $('btnFocusCamera').classList.remove('active');
   // A wall cannot be selected in drone camera mode; switch automatically.
   this.setMode('build');
   this.setTextureTab('parts');
@@ -1263,7 +1305,7 @@ class CleanBuilder{
  }
  // Two-stage touch drag: first tap selects, second gesture moves in any X/Z direction.
  beginObjectDrag(e){
-  if(this.openingPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
+  if(this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
   const rect=this.canvas.getBoundingClientRect();
   this.pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
   this.ray.setFromCamera(this.pointer,this.camera);
@@ -1662,6 +1704,7 @@ class CleanBuilder{
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
   $('btnOpeningTool').onclick=()=>this.startOpeningTool();
   $('btnQuickOpening').onclick=()=>this.startOpeningTool();
+  $('btnFocusCamera').onclick=()=>this.startCameraFocus();
   $('btnCutForPrefabDoor').onclick=()=>this.cutForPrefabDoor();
   $('btnPickOpeningPoint').onclick=()=>{
    this.setMode('build');
@@ -1774,7 +1817,7 @@ class CleanBuilder{
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();
   this.canvas.addEventListener('pointerdown',e=>{
-   if(this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
+   if(this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
    this.gizmoPointer=e.pointerId;this.controls.enabled=false;
    if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
    e.preventDefault();e.stopImmediatePropagation();
@@ -1809,10 +1852,17 @@ class CleanBuilder{
   this.canvas.addEventListener('pointermove',e=>this.continueObjectDrag(e),true);
   for(const type of ['pointerup','pointercancel'])
    this.canvas.addEventListener(type,e=>this.finishObjectDrag(e),true);
-  this.canvas.addEventListener('pointerdown',e=>{this.pointerStart={x:e.clientX,y:e.clientY,time:performance.now()}});
+  this.canvas.addEventListener('pointerdown',e=>{
+   // A second finger must not generate a click/placement at the end of pan.
+   if(e.isPrimary===false){this.pointerStart=null;return}
+   this.pointerStart={pointerId:e.pointerId,x:e.clientX,y:e.clientY,time:performance.now()};
+  });
   this.canvas.addEventListener('pointerup',e=>{
-   const start=this.pointerStart;this.pointerStart=null;
-   if(!start||Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)return;
+   const start=this.pointerStart;
+   if(!start||e.pointerId!==start.pointerId||e.isPrimary===false)return;
+   this.pointerStart=null;
+   if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)return;
+   if(this.cameraFocusPick){this.setCameraFocusAt(e);return}
    if(this.tool==='pick'){
     if(this.openingPickMode)this.pickOpeningCentre(e);
     else this.pick(e);
@@ -1821,8 +1871,9 @@ class CleanBuilder{
    const point=this.locatePointer(e);if(!point){this.updatePreview(this.cursor);return}
    this.cursor.copy(point);this.updatePreview(point);
   });
+  this.canvas.addEventListener('pointercancel',()=>{this.pointerStart=null});
   this.canvas.addEventListener('pointermove',e=>{
-   if(e.buttons||this.tool!=='place')return;
+   if(e.buttons||this.cameraFocusPick||this.tool!=='place')return;
    const point=this.rayPoint(e);if(!point)return;
    this.cursor.copy(point);this.updatePreview(point);
   });
