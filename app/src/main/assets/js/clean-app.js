@@ -1888,7 +1888,12 @@ class CleanBuilder{
     const item=this.encode(obj);item.rot=obj.root.rotation.y;return item;
    }),floor:this.floor,nextId:this.nextId,
     textureLibrary:this.textureFiles.map(t=>({
-     id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,bytes:t.bytes
+     id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,
+     bytes:t.bytes,folder:t.folder||'my-textures',path:t.path||''
+    })),
+    catalogLibrary:[...this.catalogMeta.values()].map(m=>({
+     id:m.id,name:m.name,category:m.category,folder:m.folder,
+     path:m.path||'',source:m.source||'ZIP',bytes:m.bytes||0
     })),created:new Date().toISOString()};
  }
  async exportGLB(){
@@ -1917,7 +1922,8 @@ class CleanBuilder{
   try{
    notify('📁 Собираю редактируемый проект вместе с изображениями и GLB...','neutral');
    const doc=await PhoenixFiles.packageProject(this.project(),this.textureFiles,
-    [...new Set([...this.entries.map(o=>o.kind),...this.assets.keys()])],
+    [...new Set([...this.entries.map(o=>o.kind),...this.assets.keys(),
+     ...this.catalogMeta.keys()])],
     id=>getAsset(id));
    const blob=new Blob([JSON.stringify(doc)],{type:'application/json'});
    await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_Project.phoenix.json','application/json');
@@ -1937,7 +1943,10 @@ class CleanBuilder{
     if(item.id.startsWith('texture:'))this.textureCache.delete(item.id);
    }
    this.textureFiles=[...this.textureFiles.filter(t=>!
-    result.textures.some(x=>x.id===t.id)),...result.textures].slice(-200);
+    result.textures.some(x=>x.id===t.id)),
+    ...result.textures.map(t=>({
+     ...t,...doc.project.textureLibrary?.find(meta=>meta.id===t.id)
+    }))].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    await this.restore(result.project);
    this.renderTextureLibrary();this.renderCatalog();
@@ -2058,8 +2067,20 @@ class CleanBuilder{
   for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
    button.onclick=()=>{
     this.catalogGroup=button.dataset.catalogGroup;
+    this.smartCatalogFolder={structure:'walls',doors:'doors',frames:'frames',
+     roofs:'roofs',imports:'my-modules'}[this.catalogGroup]||'all';
     this.renderCatalog();
    };
+  $('smartCategoryFilter').onchange=e=>{
+   this.smartCatalogFolder=e.target.value;this.renderCatalog();
+  };
+  $('smartCatalogSearch').oninput=()=>this.renderCatalog();
+  $('textureCategoryFilter').onchange=()=>this.renderTextureLibrary();
+  $('textureSearch').oninput=()=>this.renderTextureLibrary();
+  $('importZip').onchange=e=>{
+   const file=e.target.files?.[0];e.target.value='';
+   this.importZIP(file);
+  };
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
   $('btnQuickImportGLB').onclick=()=>{
    this.setTextureTab('parts');
