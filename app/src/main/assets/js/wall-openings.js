@@ -361,7 +361,12 @@ const WallOpenings=(()=>{
    const span=distances[hi]-distances[lo];
    return p.length*(lo+(span>1e-9?(target-distances[lo])/span:0))/count;
   };
-  return {p,length,at};
+  const distanceAt=local=>{
+   const n=clamp(local,0,p.length)/p.length*count;
+   const i=Math.min(count-1,Math.floor(n));
+   return distances[i]+(distances[i+1]-distances[i])*(n-i);
+  };
+  return {p,length,at,distanceAt};
  }
  function splitAtJunction(owner,neighbors,raw,preferredNeighborId=null){
   const metric=pathMetric(owner);
