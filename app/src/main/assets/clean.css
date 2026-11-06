@@ -93,3 +93,13 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
  .left .myCatalog{max-height:73px}
  .left .importZone>summary{min-height:35px;padding:8px}
 }
+
+/* Camera focus is a navigation control, not a world-origin lock. Keep its
+   touch target visible without hiding Save/GLB on smaller Android screens. */
+#btnFocusCamera{white-space:nowrap;flex:0 0 auto}
+#btnFocusCamera.active{background:#085c70;border-color:#53dded}
+@media(max-width:1100px){#btnFocusCamera{font-size:11px;padding:7px 6px}.topbar{gap:6px}}
+@media(max-width:700px){
+ #btnFocusCamera{font-size:0;min-width:37px;width:37px;padding:5px}
+ #btnFocusCamera::before{content:'🎯';font-size:16px}
+}
