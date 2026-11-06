@@ -112,7 +112,11 @@ const SceneExporter=(()=>{
    const toRoot=hasEmblems?root.matrixWorld.clone().invert():null;
    const surfaceLocalBounds=hasPaint?SurfacePaint.localBounds(root):null;
    const surfaceToRoot=hasPaint?root.matrixWorld.clone().invert():null;
-   const meshes=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)meshes.push(o)});
+   const meshes=[];root.traverse(o=>{
+    // Exclude temporary runtime low-poly LOD copies from the GLB snapshot.
+    if(o.isMesh&&o.geometry?.attributes?.position&&!o.userData?.phoenixLODProxy)
+     meshes.push(o);
+   });
    for(const mesh of meshes){
     const geom=mesh.geometry;if(geom.index&&geom.index.count>700000)continue;
     const pos=geom.getAttribute('position');if(!pos||pos.count<3)continue;
