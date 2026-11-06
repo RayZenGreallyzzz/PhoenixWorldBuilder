@@ -372,8 +372,11 @@ class CleanBuilder{
   if(!file)return;
   try{
    notify('🖼 Подготавливаю большую текстуру для Android...','neutral');
+   $('textureLibraryStatus').textContent='Обработка изображения '+safeName(file.name)+'...';
    const maxEdge=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
    const processed=await PhoenixFiles.prepareTexture(file,maxEdge);
+   $('textureLibraryStatus').textContent='Оптимизировано: '+processed.width+'×'+
+    processed.height+' px. Сохраняю в библиотеку...';
    const id='texture:'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);
    await putAsset(id,processed.bytes);
    const texture={id,name:safeName(file.name),type:processed.type,
