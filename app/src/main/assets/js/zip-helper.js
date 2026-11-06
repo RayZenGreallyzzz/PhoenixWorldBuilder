@@ -15,7 +15,9 @@ const ZipUtils=(()=>{
   }
   const cb=join(central),end=new Uint8Array(22),dv=new DataView(end.buffer);u32(dv,0,0x06054b50);u16(dv,8,count);u16(dv,10,count);u32(dv,12,cb.length);u32(dv,16,pos);return new Blob([...local,cb,end],{type:'application/zip'});
  }
- async function extract(file,{maxEntries=5000,maxTotal=170000000}={}){
+ async function extract(file,{maxEntries=1200,maxTotal=200000000,maxEntry=50000000}={}){
+  // Standard ZIP v2, central-directory sizes. Explicitly reject ZIP64 and
+  // unsupported files to avoid silently importing partial model libraries.
   const ab=await file.arrayBuffer(),v=new DataView(ab),bytes=new Uint8Array(ab),out=Object.create(null);
   // Read the central directory, not just local file headers: common Android,
   // Windows and 7-Zip archives put sizes after each compressed stream
@@ -25,6 +27,8 @@ const ZipUtils=(()=>{
    if(v.getUint32(p,true)===0x06054b50){eocd=p;break}
   if(eocd<0)throw Error('Не найден каталог ZIP');
   const totalEntries=v.getUint16(eocd+10,true),centralOffset=v.getUint32(eocd+16,true);
+  if(totalEntries===0xffff||centralOffset===0xffffffff)
+   throw Error('ZIP64 пока не поддерживается — раздели архив на несколько ZIP');
   if(totalEntries>maxEntries)throw Error('Слишком много файлов в ZIP');
   if(centralOffset>=bytes.length)throw Error('Повреждён каталог ZIP');
   let pos=centralOffset,total=0;
@@ -37,7 +41,12 @@ const ZipUtils=(()=>{
    if(pos+46+nameLen+extraLen+commentLen>bytes.length)throw Error('Повреждено имя файла ZIP');
    const name=dec.decode(bytes.subarray(pos+46,pos+46+nameLen));
    pos+=46+nameLen+extraLen+commentLen;
-   if(name.endsWith('/')||!/\.(glb|png|jpg|jpeg|webp|json)$/i.test(name))continue;
+   if(name.endsWith('/')||!/\.(glb|png|jpg|jpeg|webp)$/i.test(name))continue;
+   if(!name||name.includes('\\0')||name.startsWith('/')||
+     name.replace(/\\\\/g,'/').split('/').some(v=>v==='..'||v==='.')||
+     name.startsWith('__MACOSX/')||name.split('/').some(v=>v.startsWith('._')))
+    continue;
+   if(uncompressed>maxEntry)throw Error('Файл внутри ZIP слишком большой: '+name);
    if(flags&1)throw Error('ZIP защищён паролем');
    if(name.split(/[\\/]/).includes('..'))throw Error('Небезопасный путь внутри ZIP');
    if(local+30>bytes.length||v.getUint32(local,true)!==0x04034b50)throw Error('Повреждён заголовок ZIP');
@@ -47,11 +56,16 @@ const ZipUtils=(()=>{
    let contents;
    if(method===0)contents=data.slice();
    else if(method===8){
-    if(typeof DecompressionStream==='undefined')throw Error('Android WebView не поддерживает распаковку DEFLATE');
-    const stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-    contents=new Uint8Array(await new Response(stream).arrayBuffer());
+    if(typeof pako!=='undefined'&&pako.inflateRaw)
+     contents=pako.inflateRaw(data);
+    else if(typeof DecompressionStream!=='undefined'){
+     const stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+     contents=new Uint8Array(await new Response(stream).arrayBuffer());
+    }else throw Error('Сжатый ZIP требует офлайн-декодер DEFLATE');
    }else continue;
    if(contents.length!==uncompressed)throw Error('Повреждены данные ZIP: '+name);
+   if(crc(contents)!==v.getUint32(pos-46-nameLen-extraLen-commentLen+16,true))
+    throw Error('Ошибка CRC в ZIP: '+name);
    total+=contents.length;if(total>maxTotal)throw Error('Архив слишком большой для памяти устройства');
    out[name.replace(/\\/g,'/')]=contents;
   }
