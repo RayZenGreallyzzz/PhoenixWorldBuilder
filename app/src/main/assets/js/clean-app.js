@@ -785,6 +785,56 @@ class CleanBuilder{
   $('openingX').value=String(Math.round(shift*1000)/10);
   this.updateOpeningInfo();
  }
+ pickOpeningCentre(event){
+  const r=this.canvas.getBoundingClientRect();
+  this.pointer.set((event.clientX-r.left)/r.width*2-1,
+   -(event.clientY-r.top)/r.height*2+1);
+  this.ray.setFromCamera(this.pointer,this.camera);
+  const walls=this.entries.filter(e=>e.category==='wall'&&WallOpenings.supported(e.kind));
+  const hits=this.ray.intersectObjects(walls.map(e=>e.root),true);
+  if(!hits.length)return notify('Коснись самой поверхности стены, угла или дуги','warn');
+  const hit=hits[0],wall=walls.find(w=>{
+   let node=hit.object;
+   while(node){if(node===w.root)return true;node=node.parent}
+   return false;
+  });
+  if(!wall)return notify('Не удалось выбрать стену для проёма','warn');
+  this.selected=wall;this.openingPickMode=false;
+  if(this.outline){
+   this.outline.removeFromParent();this.outline.geometry?.dispose();this.outline=null;
+  }
+  this.outline=new THREE.BoxHelper(wall.root,0x44ffb8);this.scene.add(this.outline);
+  const local=wall.root.worldToLocal(hit.point.clone());
+  const at=WallOpenings.pathAtPoint(wall.kind,local,wall.thickness,wall.axes);
+  const metric=WallOpenings.pathMetric(wall);
+  if(!at||!metric)return notify('Не получилось измерить длину стены','warn');
+  $('openingX').value=String(Math.round((metric.distanceAt(at.s)-
+   metric.length/2)*1000)/10);
+  $('openingPositionPreset').value='manual';
+  $('openingPanel').open=true;
+  this.syncInspector();this.updateOpeningInfo();
+  $('openingPanel').scrollIntoView({block:'nearest',behavior:'auto'});
+  notify('🎯 Точка центра выбрана. Введи размер в см и нажми «Вырезать»','success');
+ }
+ cutForPrefabDoor(){
+  const door=this.selected;
+  if(this.tool!=='pick'||!door||!ArchitectureKit.has(door.kind)||
+   !door.kind.startsWith('door'))
+   return notify('Сначала выдели готовую дверь из библиотеки','warn');
+  const dimensions=this.physicalSize(door);
+  if(!dimensions)return notify('Не удалось измерить размер двери','warn');
+  $('openingType').value='passage';
+  $('openingSizePreset').value='';
+  $('openingWidth').value=String(Math.round((dimensions.x+1)*10)/10);
+  $('openingHeight').value=String(Math.round((dimensions.y+1)*10)/10);
+  $('openingBottom').value='0';
+  this.openingPickMode=true;
+  this.setTool('pick');this.syncInspector();
+  $('openingPanel').open=true;
+  $('openingPanel').scrollIntoView({block:'nearest',behavior:'auto'});
+  notify('Подготовлен пустой проём '+(dimensions.x+1)+' × '+
+   (dimensions.y+1)+' см под дверь с зазором 1 см. Коснись стены','success');
+ }
  openingParts(plan){
   const staged=[];
   for(const [obj,newOpenings] of plan){
