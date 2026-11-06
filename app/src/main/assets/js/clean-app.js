@@ -781,6 +781,7 @@ class CleanBuilder{
    return notify('🎯 Камера вращается вокруг выбранной детали, дом не перемещён','success');
   }
   this.cameraFocusPick=!this.cameraFocusPick;
+  if(this.cameraFocusPick)this.openingPickMode=false;
   $('btnFocusCamera').classList.toggle('active',this.cameraFocusPick);
   notify(this.cameraFocusPick?
    '🎯 Коснись стены, крыши или земли, чтобы перенести точку вращения камеры':
@@ -798,6 +799,9 @@ class CleanBuilder{
   notify('🎯 Центр вращения перенесён. Два пальца перемещают обзор','success');
  }
  startOpeningTool(){
+  // Never leave conflicting pick-only camera/opening tools active together.
+  this.cameraFocusPick=false;
+  $('btnFocusCamera').classList.remove('active');
   // A wall cannot be selected in drone camera mode; switch automatically.
   this.setMode('build');
   this.setTextureTab('parts');
