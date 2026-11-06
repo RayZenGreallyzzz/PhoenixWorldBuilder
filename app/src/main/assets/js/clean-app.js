@@ -79,7 +79,7 @@ class CleanBuilder{
   this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
-  this.activeTextureId='';this.avatarFitGroup=null;this.avatarMetrics=null;
+  this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
   this.optimizationQuality=AndroidAssetOpt.quality(
    localStorage.getItem('phoenix-builder-optimization-quality')||'balanced');
@@ -340,7 +340,8 @@ class CleanBuilder{
    container.append(btn);
   }
   for(const item of this.textureFiles){
-   const btn=document.createElement('button');btn.textContent='🖼 '+item.name;
+   const btn=document.createElement('button');btn.textContent='🖼 '+item.name+
+    (item.width&&item.height?' · '+item.width+'×'+item.height:'');
    btn.classList.toggle('active',selected.style==='custom'&&selected.imageId===item.id);
    btn.onclick=()=>this.chooseTexture('custom',item.id);
    container.append(btn);
@@ -348,7 +349,14 @@ class CleanBuilder{
  }
  chooseTexture(style,imageId=''){
   const obj=this.target();
-  if(!obj)return notify('Выбери модуль для материала','warn');
+  if(!obj){
+   this.pendingTexture={style,imageId};
+   this.activeTextureId=imageId||this.activeTextureId;
+   this.setMode('build');this.setTool('pick');
+   $('textureLibraryStatus').textContent='Материал выбран. Коснись нужной детали.';
+   return notify('🎨 Материал готов — коснись детали, чтобы применить','warn');
+  }
+  this.pendingTexture=null;
   this.activeTextureId=imageId||this.activeTextureId;
   obj.surface=SurfaceMaterials.normalize({...obj.surface,style,imageId:style==='custom'?this.activeTextureId:''});
   if(style==='none'){this.changeSurface(true);return}
@@ -356,22 +364,36 @@ class CleanBuilder{
    return notify('Загрузи свою текстуру кнопкой PNG / JPG / WebP','warn');
   this.applySurfaceTo(obj);
   this.syncInspector();this.renderTextureLibrary();
+  $('textureLibraryStatus').textContent='Материал назначен детали '+(this.descriptor(obj.kind)?.name||obj.kind)+
+   '. Резервная копия сохраняет изображения для другого устройства.';
   notify('Материал «'+(SurfaceMaterials.labels[style]||style)+'» выбран. Размер рисунка можно настроить справа.','success');
  }
  async importTextureFile(file){
   if(!file)return;
-  if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>3*1024*1024)
-   return notify('Нужна картинка PNG / JPG / WebP размером до 3 МБ','warn');
   try{
-   const id='texture:'+Date.now().toString(36);
-   const bytes=await file.arrayBuffer();
-   await putAsset(id,bytes);
-   this.textureFiles=[...this.textureFiles,{id,name:safeName(file.name),type:file.type}].slice(-60);
+   notify('🖼 Подготавливаю большую текстуру для Android...','neutral');
+   const maxEdge=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
+   const processed=await PhoenixFiles.prepareTexture(file,maxEdge);
+   const id='texture:'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);
+   await putAsset(id,processed.bytes);
+   const texture={id,name:safeName(file.name),type:processed.type,
+    width:processed.width,height:processed.height,bytes:processed.storedBytes};
+   this.textureFiles=[...this.textureFiles,texture].slice(-200);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
-   this.setTextureTab('textures');
+   this.setTextureTab('textures');this.renderTextureLibrary();
+   $('textureLibraryStatus').textContent='Сохранено: '+texture.name+' — '+
+    texture.width+'×'+texture.height+' px, '+Math.round(texture.bytes/1024)+' КБ.'+
+    ' Для переноса между устройствами используй резервную копию.';
    if(this.target())this.chooseTexture('custom',id);
-   else notify('Текстура добавлена в библиотеку: '+file.name,'success');
-  }catch(err){console.error(err);notify('Не удалось загрузить изображение: '+err.message,'error')}
+   else{
+    this.pendingTexture={style:'custom',imageId:id};
+    this.activeTextureId=id;
+    this.setMode('build');this.setTool('pick');
+    notify('🖼 Текстура сохранена. Коснись стены или детали для применения','success');
+   }
+  }catch(err){
+   console.error(err);notify('Ошибка текстуры: '+(err?.message||err),'error');
+  }
  }
  async textureAsset(id){
   if(this.textureCache.has(id))return this.textureCache.get(id);
