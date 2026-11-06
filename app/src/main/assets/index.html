@@ -6,7 +6,8 @@
 <header class="topbar">
  <div class="brand">🔥 PHOENIX <b>BUILDER</b><small>СТУДИЯ 2.0</small></div>
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
- <div class="topRight"><button id="btnSave">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
+ <button id="btnQuickOpening" class="quickOpening" title="Выбрать стену и вырезать дверь или проход">✂ Проём</button>
+ <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
 <section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active">🧱 Детали</button><button id="tabTextures">🎨 Текстуры</button></div><small>Выбери модуль или материал</small></div><div id="catalogQuick" class="catalogQuick" role="group" aria-label="Разделы библиотеки">
    <button type="button" data-catalog-group="structure" class="active">🧱 Каркас</button>
@@ -15,7 +16,8 @@
    <button type="button" data-catalog-group="roofs">🏠 Крыши</button>
    <button type="button" data-catalog-group="imports" id="catalogImportsShortcut" hidden>📦 Мои GLB</button>
   </div><div id="catalogItems" class="parts" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
- <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b><div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Текстуры хранятся на этом устройстве. При выборе применяется к выделенной или новой детали.</small></div><details id="catalogImport" class="importZone"><summary>📦 Импорт GLB и персонажей</summary><div class="importZoneBody">
+ <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b><div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Можно загружать изображения больше 3 МБ: они автоматически подгоняются под графические возможности планшета и сохраняются в памяти приложения. Для переноса на другое устройство используй резервную копию проекта с текстурами.</small>
+ <small id="textureLibraryStatus" class="tip">Выбери установленную деталь, затем текстуру.</small></div><details id="catalogImport" class="importZone"><summary>📦 Импорт GLB и персонажей</summary><div class="importZoneBody">
  <label for="importCategory">Импорт GLB как</label>
  <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
  <label class="fileButton">＋ Загрузить GLB / GLB Meshopt / Draco / KTX2<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
@@ -48,6 +50,11 @@
  <div class="scrollArea">
   <div class="modeTools"><button id="btnPick" class="alt">☝ Выделить</button><button id="btnPlace" class="active">＋ Поставить</button>
    <button id="btnOpeningTool" class="primary">✂ Вырезать проём в стене</button></div>
+  <details id="backupPanel" class="rowSection"><summary>📁 Файлы проекта и текстуры</summary>
+   <button id="btnBackupProject" class="primary">📥 Резервная копия с текстурами (.phoenix.json)</button>
+   <button id="btnImportBackup" class="alt">📤 Открыть резервную копию проекта</button>
+   <small class="tip">«💾 Сохранить» — редактируемый проект на этом устройстве. «📦 GLB» наверху — готовая 3D-сцена для игр. Резервная копия хранит редактируемые детали, текстуры и импортированные GLB вместе, чтобы перенести на другое устройство.</small>
+  </details>
    <details class="rowSection" id="openingPanel"><summary>✂ Проём в стене: размер и место</summary>
     <p class="tip">Выбери готовую стену: прямую, угол, четверть круга или полукруг. Задай точный размер отверстия. Можно вырезать пустой проход без двери, вставить створку или окно.</p>
     <label>Что вырезать<select id="openingType">
@@ -173,6 +180,7 @@
 <div id="charControls" hidden><button id="charUp">▲</button><div><button id="charLeft">◀</button><button id="charDown">▼</button><button id="charRight">▶</button></div></div>
 <footer class="bottombar"><button id="btnLevelDown">−</button><span>Этаж <strong id="levelLabel">1</strong></span><button id="btnLevelUp">＋</button><button id="btnConfirm" class="primary">✓ Установить</button><button id="btnCancel">Отмена</button><span class="hint">Пальцем — камера · Колёсико / два пальца — приближение</span></footer>
 <input id="openProject" type="file" accept=".json" hidden>
+<input id="importProjectBackup" type="file" accept=".json,.phoenix.json,application/json" hidden>
 <script src="js/three.min.js"></script>
 <script src="js/OrbitControls.js"></script>
 <script src="js/WorkerPool.js"></script>
@@ -183,6 +191,8 @@
  <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
+<script src="js/export-glb.js"></script>
+<script src="js/phoenix-files.js"></script>
  <script src="js/android-asset-opt.js"></script>
  <script src="js/android-lod.js"></script>
  <script src="js/android-performance.js"></script>

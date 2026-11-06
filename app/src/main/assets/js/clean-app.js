@@ -79,7 +79,7 @@ class CleanBuilder{
   this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
-  this.activeTextureId='';this.avatarFitGroup=null;this.avatarMetrics=null;
+  this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarHeightCm=175;
   this.optimizationQuality=AndroidAssetOpt.quality(
    localStorage.getItem('phoenix-builder-optimization-quality')||'balanced');
@@ -315,7 +315,7 @@ class CleanBuilder{
  }
  loadTextureFiles(){
   try{const list=JSON.parse(localStorage.getItem('phoenix-builder-v2-textures')||'[]');
-   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-60):[];
+   return Array.isArray(list)?list.filter(o=>o&&typeof o.id==='string'&&typeof o.name==='string').slice(-200):[];
   }catch(e){return []}
  }
  setTextureTab(active='parts'){
@@ -340,7 +340,8 @@ class CleanBuilder{
    container.append(btn);
   }
   for(const item of this.textureFiles){
-   const btn=document.createElement('button');btn.textContent='🖼 '+item.name;
+   const btn=document.createElement('button');btn.textContent='🖼 '+item.name+
+    (item.width&&item.height?' · '+item.width+'×'+item.height:'');
    btn.classList.toggle('active',selected.style==='custom'&&selected.imageId===item.id);
    btn.onclick=()=>this.chooseTexture('custom',item.id);
    container.append(btn);
@@ -348,7 +349,14 @@ class CleanBuilder{
  }
  chooseTexture(style,imageId=''){
   const obj=this.target();
-  if(!obj)return notify('Выбери модуль для материала','warn');
+  if(!obj){
+   this.pendingTexture={style,imageId};
+   this.activeTextureId=imageId||this.activeTextureId;
+   this.setMode('build');this.setTool('pick');
+   $('textureLibraryStatus').textContent='Материал выбран. Коснись нужной детали.';
+   return notify('🎨 Материал готов — коснись детали, чтобы применить','warn');
+  }
+  this.pendingTexture=null;
   this.activeTextureId=imageId||this.activeTextureId;
   obj.surface=SurfaceMaterials.normalize({...obj.surface,style,imageId:style==='custom'?this.activeTextureId:''});
   if(style==='none'){this.changeSurface(true);return}
@@ -356,22 +364,39 @@ class CleanBuilder{
    return notify('Загрузи свою текстуру кнопкой PNG / JPG / WebP','warn');
   this.applySurfaceTo(obj);
   this.syncInspector();this.renderTextureLibrary();
+  $('textureLibraryStatus').textContent='Материал назначен детали '+(this.descriptor(obj.kind)?.name||obj.kind)+
+   '. Резервная копия сохраняет изображения для другого устройства.';
   notify('Материал «'+(SurfaceMaterials.labels[style]||style)+'» выбран. Размер рисунка можно настроить справа.','success');
  }
  async importTextureFile(file){
   if(!file)return;
-  if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>3*1024*1024)
-   return notify('Нужна картинка PNG / JPG / WebP размером до 3 МБ','warn');
   try{
-   const id='texture:'+Date.now().toString(36);
-   const bytes=await file.arrayBuffer();
-   await putAsset(id,bytes);
-   this.textureFiles=[...this.textureFiles,{id,name:safeName(file.name),type:file.type}].slice(-60);
+   notify('🖼 Подготавливаю большую текстуру для Android...','neutral');
+   $('textureLibraryStatus').textContent='Обработка изображения '+safeName(file.name)+'...';
+   const maxEdge=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
+   const processed=await PhoenixFiles.prepareTexture(file,maxEdge);
+   $('textureLibraryStatus').textContent='Оптимизировано: '+processed.width+'×'+
+    processed.height+' px. Сохраняю в библиотеку...';
+   const id='texture:'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);
+   await putAsset(id,processed.bytes);
+   const texture={id,name:safeName(file.name),type:processed.type,
+    width:processed.width,height:processed.height,bytes:processed.storedBytes};
+   this.textureFiles=[...this.textureFiles,texture].slice(-200);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
-   this.setTextureTab('textures');
+   this.setTextureTab('textures');this.renderTextureLibrary();
+   $('textureLibraryStatus').textContent='Сохранено: '+texture.name+' — '+
+    texture.width+'×'+texture.height+' px, '+Math.round(texture.bytes/1024)+' КБ.'+
+    ' Для переноса между устройствами используй резервную копию.';
    if(this.target())this.chooseTexture('custom',id);
-   else notify('Текстура добавлена в библиотеку: '+file.name,'success');
-  }catch(err){console.error(err);notify('Не удалось загрузить изображение: '+err.message,'error')}
+   else{
+    this.pendingTexture={style:'custom',imageId:id};
+    this.activeTextureId=id;
+    this.setMode('build');this.setTool('pick');
+    notify('🖼 Текстура сохранена. Коснись стены или детали для применения','success');
+   }
+  }catch(err){
+   console.error(err);notify('Ошибка текстуры: '+(err?.message||err),'error');
+  }
  }
  async textureAsset(id){
   if(this.textureCache.has(id))return this.textureCache.get(id);
@@ -735,6 +760,8 @@ class CleanBuilder{
   this.readSockets();
  }
  startOpeningTool(){
+  // A wall cannot be selected in drone camera mode; switch automatically.
+  this.setMode('build');
   this.setTextureTab('parts');
   const ready=!!this.selected&&WallOpenings.supported(this.selected.kind);
   this.openingPickMode=!ready;
@@ -1418,6 +1445,10 @@ class CleanBuilder{
   }else notify('Коснись строительной детали, чтобы выделить её');
   this.gizmo.attach(this.selected);
   this.syncInspector();
+  if(this.selected&&this.pendingTexture){
+   const pending=this.pendingTexture;this.pendingTexture=null;
+   this.chooseTexture(pending.style,pending.imageId);
+  }
  }
  duplicate(){
   const obj=this.selected;if(!obj)return notify('Сначала выдели деталь','warn');
@@ -1455,18 +1486,82 @@ class CleanBuilder{
   return {version:2,app:'Phoenix Builder Clean',
    heights:[],objects:this.entries.map(obj=>{
     const item=this.encode(obj);item.rot=obj.root.rotation.y;return item;
-   }),floor:this.floor,nextId:this.nextId,created:new Date().toISOString()};
+   }),floor:this.floor,nextId:this.nextId,
+    textureLibrary:this.textureFiles.map(t=>({
+     id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,bytes:t.bytes
+    })),created:new Date().toISOString()};
+ }
+ async exportGLB(){
+  if(!this.entries.length)return notify('Сначала установи хотя бы один модуль','warn');
+  try{
+   notify('📦 Подготавливаю GLB со стенами, проёмами, крышами и текстурами...','neutral');
+   // Ensure IndexedDB images are loaded and actually assigned to meshes
+   // before generating the GLB's embedded baseColorTexture images.
+   for(const obj of this.entries){
+    if(obj.surface?.style==='custom'&&obj.surface.imageId){
+     const texture=await this.textureAsset(obj.surface.imageId);
+     SurfaceMaterials.apply(obj.root,obj.surface,texture);
+    }
+   }
+   const scene={objects:this.entries.map(obj=>({mesh:obj.root}))};
+   const blob=await SceneExporter.build(scene,{houseOnly:true,
+    keepWorldCoordinates:true});
+   await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_Scene.glb','model/gltf-binary');
+   notify('📦 GLB подготовлен: выбери место сохранения. Модели и текстуры включены','success');
+  }catch(err){console.error('GLB export',err);
+   notify('Ошибка GLB: '+(err?.message||err),'error')}
+ }
+ async exportBackup(){
+  if(!this.entries.length&&!this.textureFiles.length)
+   return notify('В проекте ещё нет модулей или текстур','warn');
+  try{
+   notify('📁 Собираю редактируемый проект вместе с изображениями и GLB...','neutral');
+   const doc=await PhoenixFiles.packageProject(this.project(),this.textureFiles,
+    [...new Set([...this.entries.map(o=>o.kind),...this.assets.keys()])],
+    id=>getAsset(id));
+   const blob=new Blob([JSON.stringify(doc)],{type:'application/json'});
+   await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_Project.phoenix.json','application/json');
+   notify('📁 Резервная копия готова: выбери папку. Внутри текстуры и импортированные модели','success');
+  }catch(err){console.error('Project backup',err);
+   notify('Ошибка резервной копии: '+(err?.message||err),'error')}
+ }
+ async importBackup(file){
+  if(!file)return;
+  try{
+   notify('📁 Читаю резервную копию и восстанавливаю изображения...','neutral');
+   const doc=JSON.parse(await file.text());
+   const result=await PhoenixFiles.unpackProject(doc,(id,data)=>putAsset(id,data));
+   // Assets are now on disk; invalidate stale in-memory maps before restore.
+   for(const item of doc.assets){
+    if(item.id.startsWith('glb:'))this.assets.delete(item.id);
+    if(item.id.startsWith('texture:'))this.textureCache.delete(item.id);
+   }
+   this.textureFiles=[...this.textureFiles.filter(t=>!
+    result.textures.some(x=>x.id===t.id)),...result.textures].slice(-200);
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+   await this.restore(result.project);
+   this.renderTextureLibrary();this.renderCatalog();
+   this.save();
+   notify('✅ Восстановлен проект: '+this.entries.length+
+    ' деталей, '+this.textureFiles.length+' текстур. Можно продолжить редактирование','success');
+  }catch(err){console.error('Import backup',err);
+   notify('Ошибка открытия копии: '+(err?.message||err),'error')}
  }
  save(){
   const json=JSON.stringify(this.project());
   try{
    if(window.NativeBridge?.saveCleanProject){
     const done=window.NativeBridge.saveCleanProject(json);
-    if(done){notify('💾 Проект сохранён отдельно от старой версии редактора','success');return}
+    if(done){
+     localStorage.setItem('phoenix-builder-clean-v2',json);
+     notify('💾 Проект сохранён внутри приложения. Для переносимой копии: 📁 Файлы проекта','success');
+     return true;
+    }
    }
    localStorage.setItem('phoenix-builder-clean-v2',json);
-   notify('💾 Проект сохранён локально. Для резервной копии экспортируй JSON.','success');
-  }catch(err){notify('Ошибка сохранения: '+err.message,'error')}
+   notify('💾 Проект сохранён на устройстве. Для переноса с текстурами: 📁 Файлы проекта','success');
+   return true;
+  }catch(err){notify('Ошибка сохранения: '+err.message,'error');return false}
  }
  async load(){
   try{
@@ -1487,6 +1582,15 @@ class CleanBuilder{
    if(!e)throw Error('Невозможно загрузить модуль: '+item.kind);
    e.rot=Number(item.rot)||0;
    e.root.rotation.y=e.rot;staged.push(e);
+  }
+  // Preserve texture library metadata alongside each internal save. Image
+  // bytes remain in IndexedDB; portable backup embeds them for transfer.
+  if(Array.isArray(doc.textureLibrary)){
+   const records=doc.textureLibrary.filter(t=>t&&typeof t.id==='string'&&
+    t.id.startsWith('texture:')&&typeof t.name==='string');
+   this.textureFiles=[...this.textureFiles.filter(t=>!
+    records.some(record=>record.id===t.id)),...records].slice(-200);
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
   }
   // All-or-nothing restore: keep current scene if a GLB was lost.
   for(const obj of this.entries)obj.root.removeFromParent();
@@ -1557,8 +1661,10 @@ class CleanBuilder{
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
   $('btnOpeningTool').onclick=()=>this.startOpeningTool();
+  $('btnQuickOpening').onclick=()=>this.startOpeningTool();
   $('btnCutForPrefabDoor').onclick=()=>this.cutForPrefabDoor();
   $('btnPickOpeningPoint').onclick=()=>{
+   this.setMode('build');
    this.openingPickMode=true;this.setTool('pick');this.syncInspector();
    $('openingPanel').open=true;
    notify('🎯 Коснись пальцем точки, где должен быть центр отверстия','warn');
@@ -1607,6 +1713,13 @@ class CleanBuilder{
   $('btnHideUi').onclick=()=>document.body.classList.toggle('uiHidden');
   $('btnSave').onclick=()=>this.save();
   $('btnLoad').onclick=()=>this.load();
+  $('btnExportGLB').onclick=()=>this.exportGLB();
+  $('btnBackupProject').onclick=()=>this.exportBackup();
+  $('btnImportBackup').onclick=()=>$('importProjectBackup').click();
+  $('importProjectBackup').onchange=e=>{
+   this.importBackup(e.target.files?.[0]);
+   e.target.value='';
+  };
   $('btnPick').onclick=()=>{this.setTool('pick');this.syncInspector()};
   $('btnPlace').onclick=()=>{this.selected=null;this.setTool('place');this.syncInspector()};
   $('btnConfirm').onclick=()=>{if(this.mode!=='build')this.aimPlacement();this.place()};

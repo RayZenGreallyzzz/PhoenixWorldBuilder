@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs]
+    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence]
   pull_request:
     branches: [main, feature/planner5d-precision-tools, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement]
 
@@ -65,6 +65,7 @@ jobs:
           node tests/test-mesh-caps.cjs
           node tests/test-curved-openings.cjs
           node tests/test-flexible-doorways.cjs
+          node tests/test-portable-projects.cjs
           node tests/test-studio-tools.cjs
           node tests/test-architecture-kit.cjs
           node tests/test-mobile-glb-optimization.cjs
@@ -75,6 +76,7 @@ jobs:
           node tests/test-auto-wall-trim.cjs
           node tests/test-clean-browser-smoke.cjs
           node tests/test-clean-interactions.cjs
+          node tests/test-large-texture-browser.cjs
           node tests/test-android-branding.cjs
 
       - name: Configure Java 17
