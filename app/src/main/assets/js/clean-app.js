@@ -757,6 +757,8 @@ class CleanBuilder{
   this.readSockets();
  }
  startOpeningTool(){
+  // A wall cannot be selected in drone camera mode; switch automatically.
+  this.setMode('build');
   this.setTextureTab('parts');
   const ready=!!this.selected&&WallOpenings.supported(this.selected.kind);
   this.openingPickMode=!ready;
@@ -1440,6 +1442,10 @@ class CleanBuilder{
   }else notify('Коснись строительной детали, чтобы выделить её');
   this.gizmo.attach(this.selected);
   this.syncInspector();
+  if(this.selected&&this.pendingTexture){
+   const pending=this.pendingTexture;this.pendingTexture=null;
+   this.chooseTexture(pending.style,pending.imageId);
+  }
  }
  duplicate(){
   const obj=this.selected;if(!obj)return notify('Сначала выдели деталь','warn');
@@ -1579,8 +1585,10 @@ class CleanBuilder{
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
   $('btnOpeningTool').onclick=()=>this.startOpeningTool();
+  $('btnQuickOpening').onclick=()=>this.startOpeningTool();
   $('btnCutForPrefabDoor').onclick=()=>this.cutForPrefabDoor();
   $('btnPickOpeningPoint').onclick=()=>{
+   this.setMode('build');
    this.openingPickMode=true;this.setTool('pick');this.syncInspector();
    $('openingPanel').open=true;
    notify('🎯 Коснись пальцем точки, где должен быть центр отверстия','warn');
