@@ -145,12 +145,30 @@ const SceneExporter=(()=>{
     if(col&&col.itemSize===3)attrs.COLOR_0=access(new Float32Array(col.array),0,'VEC3');
     let primitives=[];
     if(!hasPaint&&!hasEmblems){
-     const prim={attributes:attrs,mode:4,material:await material(mesh.material)};
-     if(geom.index){
-      const indices=geom.index.array;
-      prim.indices=access(indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),1,'SCALAR');
+     const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material],
+      groups=geom.groups||[],indices=geom.index?.array;
+     if(materials.length>1&&groups.length){
+      // Retain original material regions, rather than incorrectly painting
+      // all of an imported multi-material GLB with its first material.
+      const total=indices?.length||pos.count;
+      for(const group of groups){
+       const start=Math.max(0,group.start),
+        end=Math.min(total,start+group.count);
+       if(end-start<3)continue;
+       const subset=[];
+       for(let i=start;i<end;i++)subset.push(indices?indices[i]:i);
+       let largest=0;for(const v of subset)largest=Math.max(v,largest);
+       const arr=largest>65535?new Uint32Array(subset):new Uint16Array(subset);
+       primitives.push({attributes:attrs,mode:4,indices:access(arr,1,'SCALAR'),
+        material:await material(materials[group.materialIndex]||materials[0])});
+      }
+     }else{
+      const prim={attributes:attrs,mode:4,material:await material(mesh.material)};
+      if(indices)prim.indices=access(
+       indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),
+       1,'SCALAR');
+      primitives.push(prim);
      }
-     primitives.push(prim);
     }else{
      // Keep one glTF mesh and one vertex buffer. Painted sides use separate
      // *index primitives*, not duplicated ceiling/floor meshes or triangles.
