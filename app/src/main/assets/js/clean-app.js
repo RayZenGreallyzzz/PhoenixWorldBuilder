@@ -9,7 +9,7 @@ const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 const cloneJSON=x=>JSON.parse(JSON.stringify(x));
 const rounded=x=>Math.round(x*1000)/1000;
 const builtins=CleanGeometry.catalog;
-const defaultSettings=()=>({scale:1,axes:{x:1,y:1,z:1},thickness:.22,rot:0});
+const defaultSettings=()=>({scale:1,axes:{x:1,y:1,z:1},thickness:.22,rot:0,rotation:{x:0,y:0,z:0}});
 const categoryOf=kind=>builtins.find(x=>x.kind===kind)?.category||'prop';
 const safeName=name=>String(name).replace(/[<>]/g,'').slice(0,60);
 function notify(message,type='neutral'){
@@ -114,8 +114,10 @@ class CleanBuilder{
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;
   this.setDefaultAvatar();
-  this.keys=new Set();this.pointerStart=null;this.lastFrame=0;
+  this.keys=new Set();this.joy={x:0,y:0};this.pointerStart=null;this.lastFrame=0;
   this.bind();
+  this.joystick=new TouchJoystick($('joystickPad'),value=>{this.joy=value;},
+   {deadzone:.12});
   $('gridSnap').checked=this.gridSnap;
   $('gridStep').value=String(this.gridStep);
   $('moveStep').value=String(PrecisionPlacement.step(
@@ -214,6 +216,7 @@ class CleanBuilder{
    mode===m.toLowerCase());
   this.player.visible=mode==='character'||mode==='build'&&this.showAvatarInBuild;
   $('charControls').hidden=mode!=='character';
+  if(mode!=='character')this.joystick?.reset();
   // Building can pan/orbit around any world point, not fixed map origin.
   // Keep character follow intact; drone retains 3D/free-height panning.
   this.controls.enablePan=mode!=='character';
@@ -231,7 +234,7 @@ class CleanBuilder{
   if(mode==='drone'){
    this.controls.enablePan=true;
    notify('Дрон: вращай камеру, передвигайся двумя пальцами и приближай зумом');
-  }else if(mode==='character')notify('Персонаж: WASD или стрелки на экране');
+  }else if(mode==='character')notify('Персонаж: плавный джойстик слева, второй палец вращает камеру');
   else notify('Строительство: выбери деталь, затем коснись места установки');
   $('inspector').classList.remove('unavailable');
   this.preview?.root&&(this.preview.root.visible=this.tool==='place');
@@ -938,12 +941,16 @@ class CleanBuilder{
  createEntry(kind,config={}){
   const data={...defaultSettings(),...config};
   data.axes={...defaultSettings().axes,...(config.axes||{})};
+  // Backwards compatible: old projects have rot (yaw) only; new ones
+  // additionally store all three Euler angles in radians.
+  const rotation={x:Number(data.rotation?.x)||0,
+   y:Number(data.rotation?.y??data.rot)||0,z:Number(data.rotation?.z)||0};
   const root=this.cloneTemplate(kind,data.thickness,data.scale,data.axes);if(!root)return null;
   const meta=this.descriptor(kind);
   const obj={id:config.id||this.nextId++,kind,category:config.category||meta?.category||
     categoryOf(kind),root,sockets:config.sockets||null,
     storey:Number.isInteger(config.storey)?config.storey:this.floor,
-    scale:data.scale,axes:data.axes,thickness:data.thickness,rot:data.rot,
+    scale:data.scale,axes:data.axes,thickness:data.thickness,rot:rotation.y,rotation,
     doorAngle:clamp(Number(config.doorAngle)||0,-110,110),
     meshEdit:CleanMeshEdit.normalize(config.meshEdit),
     floorTrim:FloorClip.normalize(config.floorTrim),
@@ -982,7 +989,10 @@ class CleanBuilder{
  applyTransform(obj){
   const a=obj.axes||defaultSettings().axes;
   obj.root.scale.set(obj.scale*a.x,obj.scale*a.y,obj.scale*a.z);
-  obj.root.rotation.y=obj.rot||0;
+  obj.rotation=obj.rotation||{x:0,y:obj.rot||0,z:0};
+  obj.rotation.y=Number(obj.rot)||0;
+  obj.root.rotation.set(Number(obj.rotation.x)||0,obj.rotation.y,
+   Number(obj.rotation.z)||0,'XYZ');
   if(obj.kind.startsWith('door')&&ArchitectureKit.has(obj.kind))
    ArchitectureKit.setDoorAngle(obj.root,obj.doorAngle||0);
   obj.root.updateMatrixWorld(true);
@@ -1062,7 +1072,10 @@ class CleanBuilder{
   if(document.activeElement!==$('floorCutSide'))$('floorCutSide').value=floorCut.side;
   const pos=obj?.root.position||V();
   for(const [key,axis] of [['posX','x'],['posY','y'],['posZ','z']])read(key,rounded(pos[axis]));
-  read('rotY',Math.round((obj?.rot||0)*180/Math.PI*10)/10);
+  for(const axis of ['x','y','z']){
+   const rad=axis==='y'?(obj?.rot||0):(obj?.rotation?.[axis]||0);
+   read('rot'+axis.toUpperCase(),Math.round(rad*180/Math.PI*10)/10);
+  }
   const builtin=obj&&CleanGeometry.isBuiltIn(obj.kind);
   const wallBuiltin=builtin&&['wall','corner','arc90','arc180'].includes(obj.kind);
   const physical=wallBuiltin||!!obj?.thicknessEditable;
@@ -1071,7 +1084,7 @@ class CleanBuilder{
    'Точная толщина меняет только поперечное сечение, не радиус и не длину':
    'Для этой формы толщина не определена. Можно менять X/Y/Z без повреждения исходного GLB.';
   const editable=!!obj;
-  for(const id of ['scaleAll','sizeX','sizeY','sizeZ','posX','posY','posZ','rotY'])
+  for(const id of ['scaleAll','sizeX','sizeY','sizeZ','posX','posY','posZ','rotX','rotY','rotZ'])
    $(id).disabled=!editable;
   $('socketPanel').style.display=obj&&!builtin&&obj.category==='wall'?'block':'none';
   for(const id of ['moveLeft','moveRight','moveForward','moveBack'])$(id).disabled=!(obj&&this.selected===obj);
@@ -1426,7 +1439,12 @@ class CleanBuilder{
      else this.cursor[axis]=obj.root.position[axis];
     }
    }
-  if(id==='rotY')obj.rot=value*Math.PI/180;
+  if(['rotX','rotY','rotZ'].includes(id)){
+   const axis=id.slice(-1).toLowerCase();
+   obj.rotation=obj.rotation||{x:0,y:obj.rot||0,z:0};
+   obj.rotation[axis]=value*Math.PI/180;
+   if(axis==='y')obj.rot=obj.rotation.y;
+  }
   if(['scaleAll','sizeX','sizeY','sizeZ'].includes(id)&&
     CleanGeometry.isBuiltIn(obj.kind)&&['wall','corner','arc90','arc180'].includes(obj.kind))
    this.updateGeometry(obj);
@@ -1805,7 +1823,10 @@ class CleanBuilder{
   const source=this.preview;
   const data={category:source.category,storey:this.floor,scale:source.scale,
    axes:cloneJSON(source.axes),thickness:source.thickness,
-   rot:source._snapRotation??source.rot,sockets:source.sockets?cloneJSON(source.sockets):null,
+   rot:source._snapRotation??source.rot,
+   rotation:{x:source.root.rotation.x,y:source._snapRotation??source.root.rotation.y,
+    z:source.root.rotation.z},
+   sockets:source.sockets?cloneJSON(source.sockets):null,
    doorAngle:source.doorAngle||0,
    meshEdit:CleanMeshEdit.normalize(source.meshEdit),floorTrim:FloorClip.normalize(source.floorTrim),
    openings:WallOpenings.normalize(source.openings),surface:SurfaceMaterials.normalize(source.surface),
@@ -1879,6 +1900,7 @@ class CleanBuilder{
  encode(obj){
   return {id:obj.id,kind:obj.kind,category:obj.category,
    position:obj.root.position.toArray().map(rounded),rot:obj.rot,
+   rotation:{x:obj.root.rotation.x,y:obj.root.rotation.y,z:obj.root.rotation.z},
    displayRotation:obj.root.rotation.y,storey:obj.storey,
    scale:obj.scale,axes:obj.axes,thickness:obj.thickness,sockets:obj.sockets,
    doorAngle:obj.doorAngle||0,
@@ -1994,8 +2016,10 @@ class CleanBuilder{
     throw Error('Не найден импортированный GLB: '+item.kind);
    const e=this.createEntry(item.kind,item);
    if(!e)throw Error('Невозможно загрузить модуль: '+item.kind);
-   e.rot=Number(item.rot)||0;
-   e.root.rotation.y=e.rot;staged.push(e);
+   e.rot=Number(item.rotation?.y??item.rot)||0;
+   e.rotation={x:Number(item.rotation?.x)||0,y:e.rot,
+    z:Number(item.rotation?.z)||0};
+   this.applyTransform(e);staged.push(e);
   }
   // Preserve texture library metadata alongside each internal save. Image
   // bytes remain in IndexedDB; portable backup embeds them for transfer.
@@ -2049,14 +2073,15 @@ class CleanBuilder{
   const down=(...keys)=>keys.some(k=>this.keys.has(k));
   const left=down('a','arrowleft','left'),right=down('d','arrowright','right'),
    up=down('w','arrowup','up'),back=down('s','arrowdown','down');
-  const raw=V(Number(right)-Number(left),0,Number(back)-Number(up));
-  if(this.mode==='character'&&raw.lengthSq()<.1)this.setAvatarAnimation(false);
+  const raw=V(Number(right)-Number(left)+(this.joy?.x||0),
+   0,Number(back)-Number(up)+(this.joy?.y||0));
+  if(this.mode==='character'&&raw.lengthSq()<.0025)this.setAvatarAnimation(false);
   if(this.mode==='drone'){
    const rise=(Number(down('e'))-Number(down('q')))*dt*7;
    if(rise){const v=V(0,rise,0);this.controls.target.add(v);this.camera.position.add(v)}
   }
-  if(raw.lengthSq()<.1){if(this.tool==='place'&&this.mode==='drone')this.aimPlacement();return}
-  raw.normalize().multiplyScalar(dt*(this.mode==='drone'?10:3));
+  if(raw.lengthSq()<.0025){if(this.tool==='place'&&this.mode==='drone')this.aimPlacement();return}
+  raw.clampLength(0,1).multiplyScalar(dt*(this.mode==='drone'?10:3));
   const facing=V();this.camera.getWorldDirection(facing);facing.y=0;facing.normalize();
   const side=V(-facing.z,0,facing.x);
   const step=side.multiplyScalar(raw.x).addScaledVector(facing,-raw.z);
@@ -2232,7 +2257,7 @@ class CleanBuilder{
   $('btnResetMeshEdit').onclick=()=>this.applyMeshSettings(true);
   $('importModel').onchange=e=>{this.importGLB(e.target.files?.[0]);e.target.value=''};
   $('importAvatar').onchange=e=>{this.importAvatar(e.target.files?.[0]);e.target.value=''};
-  for(const id of ['scaleAll','sizeX','sizeY','sizeZ','thickness','posX','posY','posZ','rotY'])
+  for(const id of ['scaleAll','sizeX','sizeY','sizeZ','thickness','posX','posY','posZ','rotX','rotY','rotZ'])
    $(id).onchange=()=>this.editField(id);
   $('btnRotate').onclick=()=>{
    const obj=this.target();if(!obj)return;

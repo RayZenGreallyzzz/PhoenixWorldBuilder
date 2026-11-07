@@ -168,3 +168,29 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
  .modulePick strong{font-size:10px}
  .left .myCatalog{max-height:85px}
 }
+
+/* Analogue thumbstick: full-range, clear camera gestures, Android landscape. */
+#charControls{z-index:6;left:clamp(10px,3vw,30px);bottom:72px;text-align:center;
+ pointer-events:auto;touch-action:none}
+#charControls .joystickTitle{font-size:12px;font-weight:700;color:#eaffff;
+ text-shadow:0 2px 4px #000;background:#092331cc;padding:3px 8px;
+ margin:0 auto 6px;width:max-content;border-radius:9px}
+.joystickPad{width:152px;height:152px;border-radius:50%;position:relative;
+ touch-action:none;overscroll-behavior:contain;user-select:none;-webkit-user-select:none;
+ border:3px solid #79d6f0;background:radial-gradient(circle,#204b6599 0%,#112d47e8 80%);
+ box-shadow:inset 0 2px 15px #0009,0 4px 16px #0008}
+.joystickPad:before,.joystickPad:after{content:'';position:absolute;
+ background:#94e7f655;pointer-events:none}
+.joystickPad:before{left:50%;height:74%;top:13%;width:1px}
+.joystickPad:after{top:50%;width:74%;left:13%;height:1px}
+.joystickKnob{position:absolute;left:50%;top:50%;width:60px;height:60px;
+ transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;
+ border:3px solid #c3faff;background:radial-gradient(circle at 35% 30%,#69d1e9,#1f718f);
+ box-shadow:0 3px 14px #000b,inset 0 0 9px #d8ffff77}
+@media(max-width:700px),(max-height:520px){
+ .joystickPad{width:124px;height:124px}
+ .joystickKnob{width:50px;height:50px}
+ #charControls{left:8px;bottom:62px}
+ .joystickTitle{font-size:10px}
+}
+.rotationFields label{min-width:0}
