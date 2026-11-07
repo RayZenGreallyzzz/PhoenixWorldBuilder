@@ -164,6 +164,18 @@
     <small class="tip">Выдели деталь: стрелки двигают по X/Y/Z, красное/зелёное/синее кольца вращают на 360° вокруг X/Y/Z, кубики меняют масштаб. Вращение плавное; Shift на клавиатуре — шаг 15°. Угол каждой оси можно точно вписать выше.</small>
    </details>
    <details class="rowSection" id="textureInspector"><summary>🎨 Материалы и текстуры</summary>
+     <div class="textureFaceEditor">
+      <b>🧱 Покраска сторон отдельно</b>
+      <label>Какую сторону покрываем?
+       <select id="textureFaceScope">
+        <option value="all">Вся деталь (как раньше)</option>
+        <option value="front">Лицевая сторона стены / верх пола</option>
+        <option value="back">Обратная сторона стены / низ пола</option>
+       </select>
+      </label>
+      <button id="btnPickTextureFace" type="button" class="alt">👆 Выбрать сторону касанием в 3D</button>
+      <small class="tip" id="textureFaceStatus">Выдели готовую стену или плиту пола, затем выбери сторону. Например: лицевая — камень, обратная — штукатурка. Остальные грани не изменятся.</small>
+     </div>
     <label>Покрытие<select id="textureStyle"><option value="none">Исходный материал</option><option value="paint">Однотонная краска</option><option value="brick">Кирпич</option><option value="stone">Камень</option><option value="wood">Дерево</option><option value="tile">Плитка</option><option value="concrete">Бетон</option><option value="metal">Металл</option><option value="custom">Моё изображение</option></select></label>
     <label>Оттенок / цвет<input id="textureTint" type="color" value="#ffffff"></label>
     <label>Повтор рисунка<input id="textureRepeat" type="number" min=".2" max="12" step=".2" value="1"></label>
