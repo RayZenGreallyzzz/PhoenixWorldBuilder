@@ -684,6 +684,27 @@ class CleanBuilder{
    applyFrames:$('textureApplyFrames').checked,
    imageId:prev.imageId||this.activeTextureId||''});
  }
+ shiftTexture(direction){
+  const obj=this.target();
+  if(!obj||!['wall','floor'].includes(obj.category))
+   return notify('Выбери пол или стену, чтобы расположить текстуру','warn');
+  // Read any edits already entered into the inspector. Change the UV offsets
+  // only: neither 3D coordinates nor source imported GLB are modified.
+  const style=this.surfaceFromControls(obj);
+  if(style.style==='none'||style.style==='paint')
+   return notify('Сначала выбери рисунок/изображение и примени его к полу или стене','warn');
+  if(style.style==='custom'&&!style.imageId)
+   return notify('Сначала выбери своё изображение из библиотеки','warn');
+  const step=Number($('textureAlignStep').value);
+  obj.surface=SurfaceMaterials.normalize(TexturePlacement.move(style,direction,step));
+  this.applySurfaceTo(obj);
+  this.syncInspector();
+  const label={left:'влево',right:'вправо',up:'вверх',down:'вниз',
+   reset:'в центр'}[direction]||'изменена';
+  notify('🎨 Текстура '+(direction==='reset'?'возвращена ':'сдвинута ')+
+   label+' на '+(obj.category==='floor'?'полу':'стене')+
+   '. Положение рисунка сохраняется в проекте','success');
+ }
  applySurfaceToAllWalls(){
   const source=this.selected;
   if(this.tool!=='pick'||!source||!['wall','floor'].includes(source.category))
@@ -1136,6 +1157,14 @@ class CleanBuilder{
    ['textureMetalnessValue',surf.metalness],['textureReliefValue',surf.relief]])
    $(id).textContent=Number(value).toFixed(2);
   $('btnSurfaceAllWalls').disabled=!(this.tool==='pick'&&['wall','floor'].includes(obj?.category));
+  const mayShiftTexture=!!obj&&['floor','wall'].includes(obj.category);
+  $('texturePlacementTarget').textContent=mayShiftTexture?
+   (obj.category==='floor'?'Пол: рисунок двигается по поверхности X/Z.':
+    'Стена: рисунок двигается по горизонтали и вертикали.')+
+   ' Можно использовать шаг 1%, 5%, 10% или 25%.':
+   'Выдели пол или стену, чтобы перемещать их текстуру.';
+  for(const id of ['textureShiftUp','textureShiftDown','textureShiftLeft',
+   'textureShiftRight','textureShiftReset'])$(id).disabled=!mayShiftTexture;
   this.gizmo.attach(this.tool==='pick'?this.selected:null);
   this.updateOpeningInfo();
   this.readSockets();
@@ -2152,6 +2181,11 @@ class CleanBuilder{
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
   $('btnSurfaceAllWalls').onclick=()=>this.applySurfaceToAllWalls();
+  for(const [id,direction] of [
+   ['textureShiftUp','up'],['textureShiftDown','down'],
+   ['textureShiftLeft','left'],['textureShiftRight','right'],
+   ['textureShiftReset','reset']])
+   $(id).onclick=()=>this.shiftTexture(direction);
   for(const id of ['textureRoughness','textureMetalness','textureRelief'])
    $(id).oninput=e=>$(id+'Value').textContent=Number(e.target.value).toFixed(2);
   $('btnOpeningTool').onclick=()=>this.startOpeningTool();
