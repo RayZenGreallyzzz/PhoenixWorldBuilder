@@ -269,7 +269,11 @@ const SurfaceMaterials=(()=>{
    const ab=new THREE.Vector3(),ac=new THREE.Vector3(),normal=new THREE.Vector3();
    const groupAt=index=>{
     const entry=originalGroups.find(g=>index>=g.start&&index<g.start+g.count);
-    return entry?.materialIndex||0;
+    // BoxGeometry has six face groups even if the mesh has ONE material.
+    // Once this mesh is given a material array, indices 1..5 must not
+    // accidentally pick newly added stone/plaster finishes for the edges.
+    const materialIndex=entry?.materialIndex||0;
+    return materialIndex>=0&&materialIndex<baseMaterials.length?materialIndex:0;
    };
    renderGeometry.clearGroups();let selected=-1,start=0,last=0,changed=false;
    for(let i=0;i<pos.count;i+=3){
