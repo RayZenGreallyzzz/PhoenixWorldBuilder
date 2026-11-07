@@ -146,7 +146,11 @@
   <div class="rowSection"><b>Положение объекта в метрах</b>
    <div class="cols3"><label>X<input id="posX" type="number" step=".001" inputmode="decimal"></label><label>Y<input id="posY" type="number" step=".001" inputmode="decimal"></label><label>Z<input id="posZ" type="number" step=".001" inputmode="decimal"></label></div>
    <small class="tip">Можно ввести позицию до 0,001 м = 1 мм. Координаты сохраняются с точностью до миллиметра.</small>
-   <label>Поворот по Y, °<input id="rotY" type="number" step="5" value="0"></label>
+   <div class="cols3 rotationFields">
+    <label>Поворот X, °<input id="rotX" type="number" step="1" value="0"></label>
+    <label>Поворот Y, °<input id="rotY" type="number" step="1" value="0"></label>
+    <label>Поворот Z, °<input id="rotZ" type="number" step="1" value="0"></label>
+   </div>
    <div class="cols2"><button id="btnRotate">⟳ Повернуть 90°</button><button id="btnDuplicate">▣ Копия</button></div>
    <button id="btnDelete" class="danger">✕ Удалить выбранное</button>
   </div>
@@ -157,7 +161,7 @@
    </div>
    <details class="rowSection" id="gizmoPanel" open><summary>🎛 Гизмо — 3D управление</summary>
     <div class="gizmoModes"><button id="gizmoMove" class="active">↔ Двигать</button><button id="gizmoRotate">⟳ Крутить</button><button id="gizmoScale">◇ Масштаб</button></div>
-    <small class="tip">Нажми «Выделить», выбери деталь и потяни цветную стрелку X/Y/Z, кольцо поворота или кубик масштаба. Белый кубик меняет общий масштаб.</small>
+    <small class="tip">Выдели деталь: стрелки двигают по X/Y/Z, красное/зелёное/синее кольца вращают на 360° вокруг X/Y/Z, кубики меняют масштаб. Вращение плавное; Shift на клавиатуре — шаг 15°. Угол каждой оси можно точно вписать выше.</small>
    </details>
    <details class="rowSection" id="textureInspector"><summary>🎨 Материалы и текстуры</summary>
     <label>Покрытие<select id="textureStyle"><option value="none">Исходный материал</option><option value="paint">Однотонная краска</option><option value="brick">Кирпич</option><option value="stone">Камень</option><option value="wood">Дерево</option><option value="tile">Плитка</option><option value="concrete">Бетон</option><option value="metal">Металл</option><option value="custom">Моё изображение</option></select></label>
@@ -239,7 +243,16 @@
  </div>
 </section>
 <section id="hud" aria-live="polite"><span id="placementDot" class="dot neutral"></span><span id="status">Выбери деталь для строительства</span></section>
-<div id="charControls" hidden><button id="charUp">▲</button><div><button id="charLeft">◀</button><button id="charDown">▼</button><button id="charRight">▶</button></div></div>
+<div id="charControls" hidden>
+ <div class="joystickTitle">🕹 Движение</div>
+ <div id="joystickPad" class="joystickPad" role="group"
+  aria-label="Аналоговый джойстик персонажа: удерживайте и тяните в направлении движения">
+  <div class="joystickCrosshair"></div>
+  <div class="joystickKnob"></div>
+ </div>
+ <div hidden><button id="charUp">▲</button><button id="charLeft">◀</button>
+  <button id="charDown">▼</button><button id="charRight">▶</button></div>
+</div>
 <footer class="bottombar"><button id="btnLevelDown">−</button><span>Этаж <strong id="levelLabel">1</strong></span><button id="btnLevelUp">＋</button><button id="btnConfirm" class="primary">✓ Установить</button><button id="btnCancel">Отмена</button><span class="hint">Пальцем — камера · Колёсико / два пальца — приближение</span></footer>
 <input id="openProject" type="file" accept=".json" hidden>
 <input id="importProjectBackup" type="file" accept=".json,.phoenix.json,application/json" hidden>
@@ -272,5 +285,6 @@
  <script src="js/precision-placement.js"></script>
  <script src="js/free-camera.js"></script>
  <script src="js/builder-gizmo.js"></script>
+ <script src="js/touch-joystick.js"></script>
  <script src="js/clean-app.js"></script>
 </body></html>
