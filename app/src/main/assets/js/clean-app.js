@@ -1761,7 +1761,7 @@ class CleanBuilder{
  }
  // Two-stage touch drag: first tap selects, second gesture moves in any X/Z direction.
  beginObjectDrag(e){
-  if(this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
+  if(this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
   const rect=this.canvas.getBoundingClientRect();
   this.pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
   this.ray.setFromCamera(this.pointer,this.camera);
@@ -1908,6 +1908,7 @@ class CleanBuilder{
    doorAngle:source.doorAngle||0,
    meshEdit:CleanMeshEdit.normalize(source.meshEdit),floorTrim:FloorClip.normalize(source.floorTrim),
    openings:WallOpenings.normalize(source.openings),surface:SurfaceMaterials.normalize(source.surface),
+   surfaceSides:SurfaceMaterials.normalizeSides(source.surfaceSides),
     manualEdgeCut:source.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(source.autoEdgeCuts),
    position:source.root.position.toArray()};
   const entry=this.createEntry(source.kind,data);
@@ -1922,6 +1923,7 @@ class CleanBuilder{
   this.preview.doorAngle=data.doorAngle||0;
   this.preview.openings=WallOpenings.normalize(data.openings);
   this.preview.surface=SurfaceMaterials.normalize(data.surface);
+  this.preview.surfaceSides=SurfaceMaterials.normalizeSides(data.surfaceSides);
   this.preview.floorTrim=FloorClip.normalize(data.floorTrim);
   this.preview.manualEdgeCut=data.manualEdgeCut||null;
   this.preview.autoEdgeCuts=FloorClip.normalizeCuts(data.autoEdgeCuts);
@@ -1931,6 +1933,36 @@ class CleanBuilder{
   this.applyTransform(this.preview);
   this.updatePreview(V(data.position[0],0,data.position[2]));
   notify('Деталь установлена. Для редактирования нажми «Выделить».','success');
+ }
+ pickTextureFace(event){
+  const rect=this.canvas.getBoundingClientRect();
+  this.pointer.set((event.clientX-rect.left)/rect.width*2-1,
+   -(event.clientY-rect.top)/rect.height*2+1);
+  this.ray.setFromCamera(this.pointer,this.camera);
+  const options=this.entries.filter(obj=>['floor','wall'].includes(obj.category));
+  const hits=this.ray.intersectObjects(options.map(obj=>obj.root),true);
+  for(const hit of hits){
+   const obj=options.find(candidate=>{
+    let parent=hit.object;
+    while(parent){if(parent===candidate.root)return true;parent=parent.parent;}
+    return false;
+   });
+   if(!obj)continue;
+   const side=SurfaceMaterials.faceFromHit(hit,obj.root,obj.category);
+   if(!side)continue;
+   this.pick(event);
+   if(this.selected!==obj)return notify('Не удалось выделить нужную сторону','warn');
+   $('textureFaceScope').value=side;
+   this.surfaceSidePick=false;
+   $('textureInspector').open=true;
+   this.syncInspector();this.renderTextureLibrary();
+   notify('✅ Выбрана '+(obj.category==='floor'?
+    (side==='front'?'верхняя':'нижняя'):
+    (side==='front'?'лицевая':'обратная'))+
+    ' сторона. Теперь выбери материал (камень или штукатурка)','success');
+   return;
+  }
+  notify('Коснись широкой поверхности стены или плиты, не её торца','warn');
  }
  pick(event){
   const r=this.canvas.getBoundingClientRect();
@@ -1985,6 +2017,7 @@ class CleanBuilder{
    meshEdit:CleanMeshEdit.normalize(obj.meshEdit),floorTrim:FloorClip.normalize(obj.floorTrim),
    manualEdgeCut:obj.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(obj.autoEdgeCuts),
    openings:WallOpenings.normalize(obj.openings),surface:SurfaceMaterials.normalize(obj.surface),
+   surfaceSides:SurfaceMaterials.normalizeSides(obj.surfaceSides),
    sizeCm:this.physicalSize(obj)};
  }
  project(){
@@ -2008,10 +2041,8 @@ class CleanBuilder{
    // Ensure IndexedDB images are loaded and actually assigned to meshes
    // before generating the GLB's embedded baseColorTexture images.
    for(const obj of this.entries){
-    if(obj.surface?.style==='custom'&&obj.surface.imageId){
-     const texture=await this.textureAsset(obj.surface.imageId);
-     SurfaceMaterials.apply(obj.root,obj.surface,texture);
-    }
+    const updated=await this.applySurfaceTo(obj);
+    if(!updated)throw Error('Не удалось подготовить материалы для '+obj.kind);
    }
    const scene={objects:this.entries.map(obj=>({mesh:obj.root}))};
    const blob=await SceneExporter.build(scene,{houseOnly:true,
@@ -2227,6 +2258,19 @@ class CleanBuilder{
     'Коллизии персонажа выключены','success');
   };
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
+  $('textureFaceScope').onchange=()=>{
+   this.syncInspector();this.renderTextureLibrary();
+  };
+  $('btnPickTextureFace').onclick=()=>{
+   if(this.surfaceSidePick){
+    this.surfaceSidePick=false;this.syncInspector();
+    return notify('Выбор стороны отменён','neutral');
+   }
+   if(this.mode!=='build')this.setMode('build');
+   if(this.tool!=='pick')this.setTool('pick');
+   this.surfaceSidePick=true;this.syncInspector();
+   notify('👆 Коснись большой поверхности стены/плиты — я определю её сторону','warn');
+  };
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
   $('btnSurfaceAllWalls').onclick=()=>this.applySurfaceToAllWalls();
@@ -2352,7 +2396,7 @@ class CleanBuilder{
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();
   this.canvas.addEventListener('pointerdown',e=>{
-   if(this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
+   if(this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
    this.gizmoPointer=e.pointerId;this.controls.enabled=false;
    if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
    e.preventDefault();e.stopImmediatePropagation();
@@ -2400,6 +2444,7 @@ class CleanBuilder{
    if(!start||e.pointerId!==start.pointerId||e.isPrimary===false)return;
    this.pointerStart=null;
    if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)return;
+   if(this.surfaceSidePick){this.pickTextureFace(e);return}
    if(this.cameraFocusPick){this.setCameraFocusAt(e);return}
    if(this.tool==='pick'){
     if(this.openingPickMode)this.pickOpeningCentre(e);
