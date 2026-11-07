@@ -99,7 +99,7 @@ class CleanBuilder{
   this.catalogMeta=this.loadCatalogMeta();this.smartCatalogFolder='all';
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
-  this.cameraFocusPick=false;
+  this.cameraFocusPick=false;this.surfaceSidePick=false;
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
@@ -474,7 +474,9 @@ class CleanBuilder{
  renderTextureLibrary(){
   const container=$('textureCards');container.textContent='';
   this.textureObserver?.disconnect();this.textureObserver=null;
-  const selected=this.target()?.surface||{style:'none'};
+  const current=this.target(),face=$('textureFaceScope').value;
+  const selected=(face!=='all'&&current?.surfaceSides?.[face])||
+   current?.surface||{style:'none'};
   const folder=$('textureCategoryFilter').value;
   const term=SmartCatalog.tokenize($('textureSearch').value);
   if(folder==='all'&&!term){
@@ -559,10 +561,15 @@ class CleanBuilder{
   }
   this.pendingTexture=null;
   this.activeTextureId=imageId||this.activeTextureId;
-  obj.surface=SurfaceMaterials.normalize({...obj.surface,style,imageId:style==='custom'?this.activeTextureId:''});
+  const scope=this.textureScope(obj);
   if(style==='none'){this.changeSurface(true);return}
-  if(obj.surface.style==='custom'&&!obj.surface.imageId)
+  const current=scope==='all'?obj.surface:obj.surfaceSides?.[scope]||obj.surface;
+  const next=SurfaceMaterials.normalize({...current,style,
+   imageId:style==='custom'?this.activeTextureId:''});
+  if(next.style==='custom'&&!next.imageId)
    return notify('Загрузи свою текстуру кнопкой PNG / JPG / WebP','warn');
+  if(scope==='all'){obj.surface=next;obj.surfaceSides={};}
+  else{obj.surfaceSides=obj.surfaceSides||{};obj.surfaceSides[scope]=next;}
   this.applySurfaceTo(obj);
   this.syncInspector();this.renderTextureLibrary();
   $('textureLibraryStatus').textContent='Материал назначен детали '+(this.descriptor(obj.kind)?.name||obj.kind)+
@@ -613,21 +620,31 @@ class CleanBuilder{
    this.textureCache.set(id,tex);return tex;
   }finally{URL.revokeObjectURL(url)}
  }
+ textureScope(obj=this.target()){
+  const selected=$('textureFaceScope').value;
+  return obj&&['wall','floor'].includes(obj.category)&&
+   ['front','back'].includes(selected)?selected:'all';
+ }
  applySurfaceTo(obj){
-  if(!obj)return;
-  const settings=SurfaceMaterials.normalize(obj.surface);
-  if(settings.style==='none')return;
-  const root=obj.root;
-  if(settings.style==='custom'){
-   if(this.textureCache.has(settings.imageId)){
-    SurfaceMaterials.apply(root,settings,this.textureCache.get(settings.imageId),{kind:obj.kind});
-   }else if(settings.imageId){
-    this.textureAsset(settings.imageId).then(tex=>{
-     if(obj.root===root&&obj.surface?.imageId===settings.imageId)
-      SurfaceMaterials.apply(root,settings,tex,{kind:obj.kind});
-    }).catch(err=>notify('Текстура: '+err.message,'warn'));
-   }
-  }else SurfaceMaterials.apply(root,settings,null,{kind:obj.kind});
+  if(!obj)return Promise.resolve(false);
+  const root=obj.root,settings=SurfaceMaterials.normalize(obj.surface);
+  const sides=SurfaceMaterials.normalizeSides(obj.surfaceSides);
+  const requested=[settings,...Object.values(sides)];
+  const missing=[...new Set(requested.filter(s=>s.style==='custom'&&s.imageId&&
+   !this.textureCache.has(s.imageId)).map(s=>s.imageId))];
+  if(missing.length){
+   const fingerprint=JSON.stringify({settings,sides});
+   return Promise.all(missing.map(id=>this.textureAsset(id))).then(()=>{
+    if(obj.root!==root||fingerprint!==JSON.stringify({settings:
+     SurfaceMaterials.normalize(obj.surface),
+     sides:SurfaceMaterials.normalizeSides(obj.surfaceSides)}))return false;
+    return this.applySurfaceTo(obj);
+   }).catch(err=>{notify('Текстура: '+err.message,'warn');return false});
+  }
+  if(settings.style==='custom'&&!settings.imageId)return Promise.resolve(false);
+  const result=SurfaceMaterials.applyFaces(root,settings,sides,this.textureCache,
+   {kind:obj.kind,category:obj.category});
+  return Promise.resolve(result.ok);
  }
  joinedFloorRegion(obj){
   // Old SurfacePaint.joinedFloors idea, but as REAL mesh UV:
@@ -665,7 +682,9 @@ class CleanBuilder{
   return {region:[minX,minZ,maxX,maxZ],entries:selected.map(x=>x.entry)};
  }
  surfaceFromControls(obj){
-  const prev=SurfaceMaterials.normalize(obj?.surface);
+  const scope=this.textureScope(obj);
+  const prev=SurfaceMaterials.normalize(scope==='all'?obj?.surface:
+   obj?.surfaceSides?.[scope]||obj?.surface);
   const mode=$('textureMapping').value;
   const joined=mode==='joined'?this.joinedFloorRegion(obj):null;
   return SurfaceMaterials.normalize({...prev,
@@ -696,7 +715,10 @@ class CleanBuilder{
   if(style.style==='custom'&&!style.imageId)
    return notify('Сначала выбери своё изображение из библиотеки','warn');
   const step=Number($('textureAlignStep').value);
-  obj.surface=SurfaceMaterials.normalize(TexturePlacement.move(style,direction,step));
+  const next=SurfaceMaterials.normalize(TexturePlacement.move(style,direction,step));
+  const scope=this.textureScope(obj);
+  if(scope==='all')obj.surface=next;
+  else{obj.surfaceSides=obj.surfaceSides||{};obj.surfaceSides[scope]=next;}
   this.applySurfaceTo(obj);
   this.syncInspector();
   const label={left:'влево',right:'вправо',up:'вверх',down:'вниз',
@@ -729,10 +751,20 @@ class CleanBuilder{
  changeSurface(reset=false){
   const obj=this.target();
   if(!obj)return notify('Выбери деталь','warn');
+  const scope=this.textureScope(obj);
   const next=reset?SurfaceMaterials.normalize({style:'none'}):
    this.surfaceFromControls(obj);
   if(next.style==='custom'&&!next.imageId)return notify('Выбери или загрузи картинку слева','warn');
-  obj.surface=next;
+  if(scope!=='all'){
+   obj.surfaceSides=obj.surfaceSides||{};
+   if(reset)delete obj.surfaceSides[scope];
+   else obj.surfaceSides[scope]=next;
+   this.applySurfaceTo(obj);
+   this.syncInspector();this.renderTextureLibrary();
+   return notify(reset?'Покрытие этой стороны сброшено':
+    'Покрытие назначено только выбранной стороне','success');
+  }
+  obj.surface=next;obj.surfaceSides={};
   // Rebuild on reset to recover original imported GLB PBR maps.
   if(reset){
    if(obj.kind==='floor')this.rebuildFloor(obj,obj.floorTrim);
@@ -978,7 +1010,8 @@ class CleanBuilder{
     manualEdgeCut:config.manualEdgeCut||null,
     autoEdgeCuts:FloorClip.normalizeCuts(config.autoEdgeCuts),
     openings:WallOpenings.normalize(config.openings),
-    surface:SurfaceMaterials.normalize(config.surface)};
+    surface:SurfaceMaterials.normalize(config.surface),
+    surfaceSides:SurfaceMaterials.normalizeSides(config.surfaceSides)};
   if(WallOpenings.supported(kind)&&obj.openings.length){
    const result=WallOpenings.render(obj.root,kind,obj.openings,
     {thickness:obj.thickness,axes:obj.axes});
@@ -1143,7 +1176,23 @@ class CleanBuilder{
    $('openingDoorStyle').value=chosen.doorStyle||'classic';
    $('openingFrameStyle').value=chosen.frameStyle||'classic';
   }
-  const surf=SurfaceMaterials.normalize(obj?.surface);
+  const scope=this.textureScope(obj);
+  const surf=SurfaceMaterials.normalize(scope==='all'?obj?.surface:
+   obj?.surfaceSides?.[scope]||obj?.surface);
+  const category=obj?.category;
+  $('textureFaceScope').disabled=!['wall','floor'].includes(category);
+  $('textureFaceScope').options[1].textContent=category==='floor'?
+   'Верхняя сторона пола':'Лицевая сторона стены (+Z)';
+  $('textureFaceScope').options[2].textContent=category==='floor'?
+   'Нижняя сторона пола':'Обратная сторона стены (-Z)';
+  $('btnPickTextureFace').disabled=!(obj&&this.entries.includes(obj)&&
+   ['wall','floor'].includes(category));
+  $('btnPickTextureFace').classList.toggle('active',this.surfaceSidePick);
+  $('textureFaceStatus').textContent=scope==='all'?
+   'Вся деталь: материал для всех граней. Для камня снаружи и штукатурки внутри выбирай стороны по очереди.':
+   'Выбрана '+(scope==='front'?(category==='floor'?'верхняя':'лицевая'):
+    (category==='floor'?'нижняя':'обратная'))+
+   ' сторона. Материал противоположной стороны не изменится.';
   read('textureStyle',surf.style);read('textureTint',surf.color);
   read('textureRepeat',surf.repeat);
   const controls={textureMapping:surf.mapping,textureTileMeters:surf.tileMeters,
