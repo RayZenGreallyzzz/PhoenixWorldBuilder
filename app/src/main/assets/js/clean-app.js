@@ -2075,12 +2075,12 @@ class CleanBuilder{
    up=down('w','arrowup','up'),back=down('s','arrowdown','down');
   const raw=V(Number(right)-Number(left)+(this.joy?.x||0),
    0,Number(back)-Number(up)+(this.joy?.y||0));
-  if(this.mode==='character'&&raw.lengthSq()<.1)this.setAvatarAnimation(false);
+  if(this.mode==='character'&&raw.lengthSq()<.0025)this.setAvatarAnimation(false);
   if(this.mode==='drone'){
    const rise=(Number(down('e'))-Number(down('q')))*dt*7;
    if(rise){const v=V(0,rise,0);this.controls.target.add(v);this.camera.position.add(v)}
   }
-  if(raw.lengthSq()<.1){if(this.tool==='place'&&this.mode==='drone')this.aimPlacement();return}
+  if(raw.lengthSq()<.0025){if(this.tool==='place'&&this.mode==='drone')this.aimPlacement();return}
   raw.clampLength(0,1).multiplyScalar(dt*(this.mode==='drone'?10:3));
   const facing=V();this.camera.getWorldDirection(facing);facing.y=0;facing.normalize();
   const side=V(-facing.z,0,facing.x);
