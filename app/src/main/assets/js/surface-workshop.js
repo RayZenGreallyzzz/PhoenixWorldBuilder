@@ -72,6 +72,14 @@ const SurfaceWorkshop=(()=>{
     localBox.expandByPoint(tmp.fromBufferAttribute(position,i).applyMatrix4(transform));
   });
   const worldExt=box.getSize(V()),localExt=localBox.getSize(V());
+  // Anchor ordinary UVs in object space (in physical metres). World-space UV
+  // would visibly swim after every move/rotation and tile maps would stretch
+  // when a wall was rotated relative to the world axes.
+  const worldOrigin=root.getWorldPosition(V());
+  const rootInverseRotation=root.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const worldScale=root.getWorldScale(V());
+  const physicalExt=localExt.clone().multiply(V(
+   Math.abs(worldScale.x),Math.abs(worldScale.y),Math.abs(worldScale.z)));
   const geometry=source.index?source.toNonIndexed():source.clone();
   const pos=geometry.getAttribute('position');
   if(!pos?.count||pos.count%3!==0){geometry.dispose();return null}
@@ -97,15 +105,17 @@ const SurfaceWorkshop=(()=>{
    p1.fromBufferAttribute(pos,i+1).applyMatrix4(rootToWorld);
    p2.fromBufferAttribute(pos,i+2).applyMatrix4(rootToWorld);
    n.copy(e.subVectors(p1,p0)).cross(f.subVectors(p2,p0)).normalize();
-   const top=Math.abs(n.y)>.55;
-   const axis=top?'xz':Math.abs(n.x)>=Math.abs(n.z)?'zy':'xy';
+   const orientedNormal=mode==='joined'?n:n.clone().applyQuaternion(rootInverseRotation);
+   const top=Math.abs(orientedNormal.y)>.55;
+   const axis=top?'xz':Math.abs(orientedNormal.x)>=Math.abs(orientedNormal.z)?'zy':'xy';
    // For angled walls, project onto a unit physical tangent, not world X/Z
    // coordinates (which shrink texture scale by cos(rotation)).
-   const tangent=new THREE.Vector3(n.z,0,-n.x).normalize();
+   const tangent=new THREE.Vector3(orientedNormal.z,0,-orientedNormal.x).normalize();
    const plane=p=>axis==='xz'?[p.x,p.z]:
     [p.x*tangent.x+p.z*tangent.z,p.y];
-   const dimensions=axis==='xz'?[worldExt.x,worldExt.z]:
-    axis==='zy'?[worldExt.z,worldExt.y]:[worldExt.x,worldExt.y];
+   const ext=mode==='joined'?worldExt:physicalExt;
+   const dimensions=axis==='xz'?[ext.x,ext.z]:
+    axis==='zy'?[ext.z,ext.y]:[ext.x,ext.y];
    for(let j=0;j<3;j++){
     tmp.fromBufferAttribute(pos,i+j);
     const world=tmp.clone().applyMatrix4(rootToWorld);
@@ -116,7 +126,11 @@ const SurfaceWorkshop=(()=>{
      const srcUV=geometry.getAttribute('uv');
      u=srcUV.getX(i+j);v=srcUV.getY(i+j);
     }else if(mode==='repeat'||mode==='joined'){
-     [u,v]=plane(world);
+     // Joined floor artwork intentionally uses the shared world-space region.
+     // Repeat always follows the object, preserving its metre scale on move.
+     const point=mode==='joined'?world:
+      world.clone().sub(worldOrigin).applyQuaternion(rootInverseRotation);
+     [u,v]=plane(point);
      if(curve&&!top){
       const theta=Math.atan2(local.z,local.x);
       u=curve.at(theta);
