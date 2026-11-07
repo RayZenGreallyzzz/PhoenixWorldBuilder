@@ -4,7 +4,7 @@
  */
 const SurfaceMaterials=(()=>{
  'use strict';
- const styles=['none','paint','brick','stone','wood','tile','concrete','metal','custom'];
+ const styles=['none','paint','brick','stone','wood','tile','concrete','plaster','metal','custom'];
  const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
  const modes=['auto','repeat','tile','module','joined','source'];
  const cache=new WeakMap();
@@ -14,7 +14,7 @@ const SurfaceMaterials=(()=>{
   return v===undefined||v===null||v===''||!Number.isFinite(x)?def:clamp(x,min,max);
  };
  const labels={none:'Исходный',paint:'🎨 Краска',brick:'🧱 Кирпич',stone:'🪨 Камень',
-  wood:'🪵 Дерево',tile:'▦ Плитка',concrete:'◻ Бетон',metal:'⚙ Металл',custom:'🖼 Изображение'};
+  wood:'🪵 Дерево',tile:'▦ Плитка',concrete:'◻ Бетон',plaster:'🏠 Штукатурка',metal:'⚙ Металл',custom:'🖼 Изображение'};
  function normalize(raw){
   const d=raw||{},style=styles.includes(d.style)?d.style:'none';
   const defaults=style==='metal'?{roughness:.42,metalness:.7}:
@@ -67,6 +67,11 @@ const SurfaceMaterials=(()=>{
    fill('#999c98');for(let y=0;y<256;y+=64)for(let x=0;x<256;x+=96){
     fill(rand()>.5?'#b8b7b0':'#8c908e',x+3,y+3,90,58);
     fill('#d5d2c8',x+9,y+9,62,3);
+   }
+  }else if(style==='plaster'){
+   fill('#dfdcd2');for(let i=0;i<14000;i++){
+    const a=rand()>.5?'#d2cfc7':'#ebe7df';
+    fill(a,rand()*256,rand()*256,.5+rand()*1.7,.5+rand()*1.7);
    }
   }else if(style==='metal'){
    fill('#8b939e');for(let y=0;y<256;y+=32){
@@ -155,6 +160,167 @@ const SurfaceMaterials=(()=>{
   });
   return {ok:true,changed:count>0,meshes:count,mapped:changedGeometry,mode:mapping};
  }
- return {styles,modes,labels,normalize,apply,canvasPattern};
+ // Normalize user-visible surface overrides. A missing side inherits the base
+ // material rather than forcing an opaque invisible plane across openings.
+ function normalizeSides(raw){
+  const output={};
+  for(const side of ['front','back'])
+   if(raw?.[side]&&styles.includes(raw[side].style))
+    output[side]=normalize(raw[side]);
+  return output;
+ }
+ function sideFromNormal(normal,category='wall'){
+  if(category==='floor'){
+   if(Math.abs(normal.y)<.65)return null;
+   return normal.y>0?'front':'back'; // top / bottom
+  }
+  if(category!=='wall'||Math.abs(normal.z)<.65||
+   Math.abs(normal.z)<Math.abs(normal.x))return null;
+  return normal.z>0?'front':'back'; // broad wall faces, not the end caps
+ }
+ function faceFromHit(hit,root,category){
+  if(!hit?.face?.normal||!hit.object||!root)return null;
+  root.updateWorldMatrix(true,true);
+  hit.object.updateWorldMatrix(true,false);
+  const relative=root.matrixWorld.clone().invert().multiply(hit.object.matrixWorld);
+  const normal=hit.face.normal.clone().applyMatrix3(
+   new THREE.Matrix3().getNormalMatrix(relative)).normalize();
+  return sideFromNormal(normal,category);
+ }
+ function faceTexture(spec,textures){
+  const source=spec.style==='custom'?textures?.get(spec.imageId):
+   ['none','paint'].includes(spec.style)?null:canvasPattern(spec.style);
+  if(!source)return null;
+  const tex=source.clone();tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  tex.flipY=false;tex.repeat.set(1,1);tex.offset.set(0,0);tex.rotation=0;
+  tex.encoding=THREE.sRGBEncoding;tex.anisotropy=4;tex.needsUpdate=true;
+  return tex;
+ }
+ function faceMaterial(base,style,texture,workshop){
+  const result=(base||new THREE.MeshStandardMaterial()).clone();
+  result.name='Phoenix '+style.style+' (отдельная сторона)';
+  result.map=texture||null;
+  if(result.color)result.color.set(style.color);
+  if('roughness' in result)result.roughness=style.roughness;
+  if('metalness' in result)result.metalness=style.metalness;
+  if(style.relief>0&&texture&&workshop&&'normalMap' in result){
+   const normal=workshop.normalFromTexture(
+    style.style==='custom'?texture:proceduralCache.get(style.style)||texture);
+   result.normalMap=normal||null;
+   if(normal)result.normalScale=new THREE.Vector2(style.relief,style.relief);
+  }else if('normalMap' in result)result.normalMap=null;
+  result.needsUpdate=true;
+  return result;
+ }
+ // Give each large face its own material and UV coordinates, but preserve the
+ // original position, triangles, material groups and real wall openings.
+ // Uses ordinary glTF material primitives: independent faces survive GLB export.
+ function applyFaces(root,baseRaw,rawSides,textures=new Map(),options={}){
+  const category=options.category;
+  const sides=normalizeSides(rawSides);
+  const overrides=Object.keys(sides).filter(side=>sides[side].style!=='none');
+  const base=normalize(baseRaw);
+  const mainTexture=base.style==='custom'?textures.get(base.imageId):null;
+  const result=apply(root,base,mainTexture,options);
+  if(!result.ok||!overrides.length||!['wall','floor'].includes(category))return result;
+  const workshop=typeof SurfaceWorkshop!=='undefined'?SurfaceWorkshop:null;
+  root.updateWorldMatrix(true,true);
+  const inverseRoot=root.matrixWorld.clone().invert();
+  let modified=0;
+  root.traverse(mesh=>{
+   if(!mesh.isMesh||mesh.isSkinnedMesh||mesh.userData?.phoenixLODProxy||
+    mesh.userData?.phoenixInsert||mesh.name?.includes('glass')||
+    mesh.name?.includes('door:leaf')||!mesh.geometry?.getAttribute('position'))return;
+   const remembered=cache.get(mesh);
+   const baseline=mesh.geometry;
+   const renderGeometry=baseline.index?baseline.toNonIndexed():baseline.clone();
+   const pos=renderGeometry.getAttribute('position');
+   if(pos.count%3!==0){renderGeometry.dispose();return}
+   const originalGroups=baseline.groups||[];
+   const baseMaterials=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+   const sideMaterial=new Map(),sideUV=new Map(),materials=baseMaterials.slice();
+   const originals=remembered?.geometry||baseline;
+   for(const side of overrides){
+    const spec=sides[side],texture=faceTexture(spec,textures);
+    if(spec.style==='custom'&&!texture)continue;
+    const mat=faceMaterial(baseMaterials[0],spec,texture,workshop);
+    sideMaterial.set(side,materials.length);materials.push(mat);
+    if(texture&&workshop){
+     const mapping=spec.mapping==='auto'?
+      (String(options.kind).startsWith('glb:')?'source':'repeat'):spec.mapping;
+     const projected=workshop.project(root,mesh,originals,
+      {...spec,mapping,textureAspect:texture.image?.width/
+       Math.max(1,texture.image?.height)},options.kind||'');
+     if(projected){
+      if(projected.getAttribute('uv')?.count===pos.count)
+       sideUV.set(side,projected.getAttribute('uv'));
+      // Copy before disposing, below.
+      else projected.dispose();
+      if(sideUV.has(side))sideUV.get(side).userData={_temporaryGeometry:projected};
+     }
+    }
+   }
+   if(!sideMaterial.size){renderGeometry.dispose();return}
+   let uv=renderGeometry.getAttribute('uv');
+   if(!uv){uv=new THREE.Float32BufferAttribute(new Float32Array(pos.count*2),2);
+    renderGeometry.setAttribute('uv',uv);}
+   const transform=inverseRoot.clone().multiply(mesh.matrixWorld);
+   const a=new THREE.Vector3(),b=new THREE.Vector3(),d=new THREE.Vector3();
+   const ab=new THREE.Vector3(),ac=new THREE.Vector3(),normal=new THREE.Vector3();
+   const groupAt=index=>{
+    const entry=originalGroups.find(g=>index>=g.start&&index<g.start+g.count);
+    // BoxGeometry has six face groups even if the mesh has ONE material.
+    // Once this mesh is given a material array, indices 1..5 must not
+    // accidentally pick newly added stone/plaster finishes for the edges.
+    const materialIndex=entry?.materialIndex||0;
+    return materialIndex>=0&&materialIndex<baseMaterials.length?materialIndex:0;
+   };
+   renderGeometry.clearGroups();let selected=-1,start=0,last=0,changed=false;
+   for(let i=0;i<pos.count;i+=3){
+    a.fromBufferAttribute(pos,i).applyMatrix4(transform);
+    b.fromBufferAttribute(pos,i+1).applyMatrix4(transform);
+    d.fromBufferAttribute(pos,i+2).applyMatrix4(transform);
+    normal.copy(ab.subVectors(b,a)).cross(ac.subVectors(d,a)).normalize();
+    const side=sideFromNormal(normal,category);
+    const index=sideMaterial.get(side);
+    const matIndex=index===undefined?groupAt(i):index;
+    if(index!==undefined)changed=true;
+    if(selected!==matIndex){
+     if(i>start)renderGeometry.addGroup(start,i-start,selected);
+     selected=matIndex;start=i;
+    }
+    if(index!==undefined&&sideUV.has(side)){
+     const projected=sideUV.get(side);
+     for(let j=0;j<3;j++)uv.setXY(i+j,
+      projected.getX(i+j),projected.getY(i+j));
+    }
+    last=i+3;
+   }
+   if(last>start)renderGeometry.addGroup(start,last-start,selected);
+   for(const attr of sideUV.values()){
+    const temp=attr.userData?._temporaryGeometry;
+    if(temp)temp.dispose();
+   }
+   if(!changed){
+    renderGeometry.dispose();
+    for(const mat of materials.slice(baseMaterials.length))mat.dispose();
+    return;
+   }
+   if(remembered){
+    if(remembered.ownedGeometry&&remembered.ownedGeometry!==baseline)
+     remembered.ownedGeometry.dispose();
+    // Keep baseline-owned original material clones until the next apply().
+    remembered.ownedGeometry=renderGeometry;
+    remembered.ownedMaterials=[
+     ...(remembered.ownedMaterials||[]),...materials.slice(baseMaterials.length)];
+   }
+   if(baseline!==originals&&baseline!==renderGeometry)baseline.dispose();
+   mesh.geometry=renderGeometry;mesh.material=materials;
+   modified++;
+  });
+  return {...result,faces:modified};
+ }
+ return {styles,modes,labels,normalize,normalizeSides,apply,applyFaces,
+  faceFromHit,sideFromNormal,canvasPattern};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=SurfaceMaterials;
