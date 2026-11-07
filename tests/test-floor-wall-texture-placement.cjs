@@ -67,8 +67,10 @@ for(const id of ['textureShiftUp','textureShiftDown','textureShiftLeft',
 assert(html.indexOf('js/texture-placement.js')<html.indexOf('js/clean-app.js'));
 assert(app.includes('shiftTexture(direction){'),'The UI must move the selected texture');
 assert(app.includes('this.applySurfaceTo(obj);'),'Texture move needs immediate render');
-assert(app.includes('obj.surface=SurfaceMaterials.normalize(TexturePlacement.move(style,direction,step))'),
- 'Offsets must be written to the selected object for project/GLB export');
+assert(app.includes('TexturePlacement.move(style,direction,step)'),
+ 'Offsets must be written to the selected surface for project/GLB export');
+assert(app.includes('obj.surfaceSides[scope]=next'),
+ 'Per-face texture shifting must preserve the opposite side');
 assert(app.includes("['floor','wall'].includes(obj.category)"),
  'Texture placement should work on floor and wall, not move unrelated objects');
 console.log('Floor/wall texture arrows, UV sign, step, reset and persistence OK');
