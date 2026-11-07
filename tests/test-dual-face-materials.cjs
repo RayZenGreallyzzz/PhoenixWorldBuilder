@@ -100,6 +100,6 @@ for(const token of ['surfaceSides:SurfaceMaterials.normalizeSides(config.surface
  'this.pickTextureFace(e)','applyFaces(root,settings,sides,this.textureCache',
  "['front','back'].includes(selected)"])
  assert(app.includes(token),'Dual-face paint/persistence missing: '+token);
-assert(html.includes('Штукатурка'),'Plaster should be selectable in UI');
+assert(M.labels.plaster.includes('Штукатурка'),'Plaster should be selectable in UI');
 global.document=oldDocument;
 console.log('Independent stone/plaster for wall sides and slab faces, GLB groups, reset and save OK');
