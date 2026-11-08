@@ -96,6 +96,7 @@ class CleanBuilder{
   this.gridStep=PrecisionPlacement.step(
    localStorage.getItem('phoenix-builder-grid-step'),.25);
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
+  this.sceneRowsSignature='';
   this.history=new EditorHistory(20);
   this.catalogMeta=this.loadCatalogMeta();this.smartCatalogFolder='all';
   this.selected=null;this.previewStatus=null;this.outline=null;
@@ -240,7 +241,8 @@ class CleanBuilder{
   $('inspector').classList.remove('unavailable');
   this.preview?.root&&(this.preview.root.visible=this.tool==='place');
   this.controls.update();this.aimPlacement();
-  this.gizmo.attach(mode==='build'&&this.tool==='pick'?this.selected:null);
+  this.gizmo.attach(mode==='build'&&this.tool==='pick'&&
+   SceneManager.editingAllowed(this.selected)?this.selected:null);
   this.updateGizmoDock();
  }
  async cacheModel(id,buffer,category='wall',name='GLB',keep=true){
@@ -999,6 +1001,146 @@ class CleanBuilder{
   }
  }
 
+ sceneDisplayName(entry){
+  return SceneManager.displayName(entry,
+   this.descriptor(entry.kind)?.name||entry.kind||'Деталь');
+ }
+ // Rendering is capped at 140 visible rows to avoid costly Android layouts
+ // when a world contains hundreds of walls. All data remains searchable.
+ renderSceneManager(){
+  const root=$('sceneRows');
+  if(!root)return;
+  const search=$('sceneSearch')?.value||'';
+  const selectedId=this.selected?.id||0;
+  const filter=$('sceneFloorFilter')?.value||'all';
+  const stamp=[search,filter,this.floor,selectedId,
+   ...this.entries.map(e=>[e.id,e.storey,e.label,e.kind,e.hidden?1:0,
+    e.locked?1:0].join('/'))].join(';');
+  if(this.sceneRowsSignature===stamp)return;
+  this.sceneRowsSignature=stamp;
+  const result=SceneManager.results(this.entries,{query:search,
+   storey:filter,current:this.floor,
+   describe:entry=>this.descriptor(entry.kind)?.name||''});
+  const total=this.entries.length;
+  $('sceneManagerStatus').textContent=result.total+
+   ' из '+total+' деталей'+(result.truncated?
+    '; показаны первые '+result.limit+'. Уточни поиск.':'');
+  root.textContent='';
+  let previous=-1;
+  for(const entry of result.rows){
+   if(entry.storey!==previous){
+    previous=entry.storey;
+    const title=document.createElement('div');
+    title.className='sceneManagerStorey';
+    title.textContent='Этаж '+(previous+1);
+    root.append(title);
+   }
+   const row=document.createElement('div');
+   row.className='sceneManagerRow';
+   row.setAttribute('role','listitem');
+   row.classList.toggle('selected',this.selected===entry);
+   row.classList.toggle('locked',entry.locked===true);
+   row.classList.toggle('hiddenScene',entry.hidden===true);
+   const pick=document.createElement('button');
+   pick.type='button';pick.className='sceneManagerPick';
+   const name=document.createElement('strong');
+   name.textContent=this.sceneDisplayName(entry);
+   const caption=document.createElement('small');
+   caption.textContent='#'+entry.id+' · '+(entry.roomRole||entry.category)+
+    (entry.hidden?' · скрыто':'')+(entry.locked?' · замок':'');
+   pick.append(name,caption);
+   pick.onclick=()=>this.selectSceneObject(entry.id);
+   const eye=document.createElement('button');
+   eye.type='button';eye.className='sceneManagerToggle';
+   eye.textContent=entry.hidden?'◉':'👁';
+   eye.title=entry.hidden?'Показать в 3D':'Скрыть из 3D и игрового экспорта';
+   eye.setAttribute('aria-label',eye.title);
+   eye.onclick=()=>this.sceneFlag(entry.id,'hidden',!entry.hidden);
+   const lock=document.createElement('button');
+   lock.type='button';lock.className='sceneManagerToggle';
+   lock.textContent=entry.locked?'🔒':'🔓';
+   lock.title=entry.locked?'Разблокировать деталь':'Защитить от редактирования';
+   lock.setAttribute('aria-label',lock.title);
+   lock.onclick=()=>this.sceneFlag(entry.id,'locked',!entry.locked);
+   row.append(pick,eye,lock);root.append(row);
+  }
+  const selected=this.selected;
+  $('sceneName').disabled=!selected;
+  $('btnSceneRename').disabled=!selected;
+  if(document.activeElement!==$('sceneName'))
+   $('sceneName').value=selected?.label||'';
+ }
+ // Hidden objects remain in editable backups and undo history, but are
+ // excluded from raycast, physics and the game export.
+ sceneFlag(id,property,value){
+  const obj=this.entries.find(e=>e.id===id);
+  if(!obj||!['hidden','locked'].includes(property))return;
+  if(obj[property]===value)return;
+  this.recordEdit();
+  SceneManager.apply(obj,{[property]:value});
+  if(obj===this.selected&&obj.hidden){
+   this.selected=null;
+   if(this.outline){this.scene.remove(this.outline);
+    this.outline.geometry.dispose();this.outline=null}
+  }
+  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'&&
+   SceneManager.editingAllowed(this.selected)?this.selected:null);
+  this.sceneRowsSignature='';this.syncInspector();
+  notify((property==='locked'?(value?'🔒 Заблокирована: ':'🔓 Разблокирована: '):
+   (value?'👁 Скрыта: ':'👁 Показана: '))+this.sceneDisplayName(obj),'success');
+ }
+ selectSceneObject(id){
+  const obj=this.entries.find(e=>e.id===id);
+  if(!obj)return;
+  if(obj.hidden)return notify('Объект скрыт. Нажми ◉, чтобы его показать','warn');
+  this.setMode('build');
+  this.selected=obj;this.setTool('pick');
+  if(this.outline){this.scene.remove(this.outline);
+   this.outline.geometry.dispose();this.outline=null}
+  this.outline=new THREE.BoxHelper(obj.root,obj.locked?0xffc66a:0x44ffb8);
+  this.scene.add(this.outline);
+  this.gizmo.attach(SceneManager.editingAllowed(obj)?obj:null);
+  this.syncInspector();
+  notify((obj.locked?'🔒 Выделена защищённая деталь: ':'✅ Выделено: ')+
+   this.sceneDisplayName(obj),'success');
+ }
+ renameSceneObject(){
+  const obj=this.selected;
+  if(!obj)return notify('Выдели деталь в 3D или списке','warn');
+  const next=SceneManager.cleanName($('sceneName').value);
+  if(!next)return notify('Введи название детали','warn');
+  if(next===obj.label)return;
+  this.recordEdit();obj.label=next;
+  this.sceneRowsSignature='';this.syncInspector();
+  notify('✎ Название сохранено: '+next,'success');
+ }
+ canEditObject(obj=this.target()){
+  if(obj&&this.entries.includes(obj)&&!SceneManager.editingAllowed(obj)){
+   notify('🔒 Деталь защищена или скрыта. Разблокируй её в списке сцены','warn');
+   return false;
+  }
+  return true;
+ }
+ // Restore dynamic form-control disabled state after selecting another
+ // object. Leave project tools, search, save, history and mode buttons usable.
+ syncSceneLockedUI(){
+  const locked=this.tool==='pick'&&this.selected?.locked===true;
+  const controls=document.querySelectorAll('#inspector input, #inspector select, #inspector button');
+  for(const input of controls){
+   if(input.closest('#sceneManagerPanel,#roomBuilderPanel,#backupPanel,.editHistoryPanel,.modeTools'))continue;
+   if(locked){
+    if(input.dataset.sceneLocked!=='1'){
+     input.dataset.sceneWasDisabled=input.disabled?'1':'0';
+     input.dataset.sceneLocked='1';
+    }
+    input.disabled=true;
+   }else if(input.dataset.sceneLocked==='1'){
+    input.disabled=input.dataset.sceneWasDisabled==='1';
+    delete input.dataset.sceneLocked;
+    delete input.dataset.sceneWasDisabled;
+   }
+  }
+ }
  createEntry(kind,config={}){
   const data={...defaultSettings(),...config};
   data.axes={...defaultSettings().axes,...(config.axes||{})};
@@ -1021,7 +1163,9 @@ class CleanBuilder{
     surface:SurfaceMaterials.normalize(config.surface),
     surfaceSides:SurfaceMaterials.normalizeSides(config.surfaceSides),
     groupId:typeof config.groupId==='string'?config.groupId.slice(0,72):'',
-    roomRole:['wall','floor','ceiling'].includes(config.roomRole)?config.roomRole:''};
+    roomRole:['wall','floor','ceiling'].includes(config.roomRole)?config.roomRole:'',
+    label:SceneManager.cleanName(config.label),
+    locked:config.locked===true,hidden:config.hidden===true};
   if(WallOpenings.supported(kind)&&obj.openings.length){
    const result=WallOpenings.render(obj.root,kind,obj.openings,
     {thickness:obj.thickness,axes:obj.axes});
@@ -1049,6 +1193,7 @@ class CleanBuilder{
    obj.thicknessEditable=false;
   }
   if(config.position)obj.root.position.fromArray(config.position);
+  SceneManager.apply(obj,{hidden:obj.hidden});
   this.applySurfaceTo(obj);
   return obj;
  }
@@ -1101,7 +1246,8 @@ class CleanBuilder{
   $('btnPlace').classList.toggle('active',tool==='place');
   if(this.preview)this.preview.root.visible=tool==='place';
   if(this.previewOutline)this.previewOutline.visible=tool==='place';
-  this.gizmo.attach(this.mode==='build'&&tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&tool==='pick'&&
+   SceneManager.editingAllowed(this.selected)?this.selected:null);
   this.updateGizmoDock();
   notify(tool==='pick'?'Коснись готовой детали, чтобы изменить её':
    'Коснись места на земле для установки детали','neutral');
@@ -1109,7 +1255,8 @@ class CleanBuilder{
  target(){return this.tool==='pick'?this.selected:this.preview}
  syncInspector(){
   const obj=this.target();$('currentLabel').textContent=obj?
-   this.descriptor(obj.kind)?.name||obj.kind:'Выбери установленную деталь';
+   SceneManager.displayName(obj,this.descriptor(obj.kind)?.name||obj.kind):
+   'Выбери установленную деталь';
   $('currentHint').textContent=obj?.id&&this.entries.includes(obj)?
    'Настройки выбранной детали':'Параметры нового модуля';
   const read=(id,v)=>{if(document.activeElement!==$(id))$(id).value=String(v)};
@@ -1227,15 +1374,19 @@ class CleanBuilder{
    'Выдели пол или стену, чтобы перемещать их текстуру.';
   for(const id of ['textureShiftUp','textureShiftDown','textureShiftLeft',
    'textureShiftRight','textureShiftReset'])$(id).disabled=!mayShiftTexture;
-  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'&&
+   SceneManager.editingAllowed(this.selected)?this.selected:null);
   this.updateGizmoDock();
   this.updateOpeningInfo();
   this.readSockets();
+  this.syncSceneLockedUI();
+  this.renderSceneManager();
  }
  // The video-inspired transform dock is visible only for a placed selection.
  updateGizmoDock(){
   const dock=$('gizmoQuickbar');if(!dock)return;
-  dock.hidden=!(this.mode==='build'&&this.tool==='pick'&&this.selected);
+  dock.hidden=!(this.mode==='build'&&this.tool==='pick'&&this.selected&&
+   SceneManager.editingAllowed(this.selected));
   const cadPanel=$('gizmoCadSizePanel');
   cadPanel.hidden=dock.hidden||!this.cadPanelOpen;
   if(!cadPanel.hidden){
@@ -2216,6 +2367,8 @@ class CleanBuilder{
    openings:WallOpenings.normalize(obj.openings),surface:SurfaceMaterials.normalize(obj.surface),
    surfaceSides:SurfaceMaterials.normalizeSides(obj.surfaceSides),
    groupId:obj.groupId||'',roomRole:obj.roomRole||'',
+   label:SceneManager.cleanName(obj.label),locked:obj.locked===true,
+   hidden:obj.hidden===true,
    sizeCm:this.physicalSize(obj)};
  }
  project(){
