@@ -14,8 +14,14 @@
   <button id="quickGizmoRotate" type="button" class="active" title="Цветные оси и свободное вращение">⟳ Вращать</button>
   <button id="quickGizmoMove" type="button" title="Двигать объект по X/Y/Z">↔ Сдвигать</button>
   <button id="quickGizmoScale" type="button" title="Изменить размеры объекта">◇ Масштаб</button>
-  <button id="quickGizmoCad" type="button" class="active" title="Габариты в метрах">▣ Размеры CAD</button>
+  <button id="quickGizmoCad" type="button" class="active" title="Показать точные размеры в метрах и изменить их">▣ Размеры CAD</button>
   <button id="quickGizmoFocus" type="button" title="Приблизить камеру к детали">⌖ К объекту</button>
+ </div>
+ <div id="gizmoCadSizePanel" class="gizmoCadSizePanel" hidden>
+  <label>Ширина, м<input id="gizmoWidthMeters" type="number" min=".05" max="100" step=".01" inputmode="decimal" value="2"></label>
+  <label>Высота, м<input id="gizmoHeightMeters" type="number" min=".05" max="100" step=".01" inputmode="decimal" value="2.6"></label>
+  <label>Глубина, м<input id="gizmoDepthMeters" type="number" min=".05" max="100" step=".01" inputmode="decimal" value=".22"></label>
+  <button id="btnGizmoApplyDimensions" class="primary" type="button">✓ Размеры</button>
  </div>
  <div class="gizmoQuickViews" role="group" aria-label="Вид на объект">
   <button id="quickViewFront" type="button">Спереди</button>
