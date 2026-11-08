@@ -234,3 +234,32 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
 #roomBuilderPanel .tip{line-height:1.4}
 .editHistoryPanel button{min-height:45px}
 .editHistoryPanel button:disabled{opacity:.42;filter:grayscale(1)}
+
+/* Video-style professional CAD gizmo. Labels are visual only and don't steal
+   Android touches from the WebGL canvas or interfere with orbit gestures. */
+.gizmoCadOverlay{position:fixed;inset:0;pointer-events:none;z-index:5}
+.gizmoMeasure{position:absolute;transform:translate(-50%,-50%);padding:3px 7px;
+ background:rgba(19,29,34,.84);border:1px solid #9dd5d3;
+ border-radius:3px;color:#effffa;font:700 12px/1.3 system-ui,sans-serif;
+ white-space:nowrap;box-shadow:0 1px 4px #0008}
+#gizmoMeasureHeight{background:rgba(24,83,107,.89);border-color:#80edff}
+#gizmoMeasureDepth{border-color:#64c6fa}
+.gizmoQuickbar{position:fixed;z-index:7;left:50%;bottom:115px;
+ transform:translateX(-50%);width:max-content;max-width:94vw;
+ display:flex;flex-direction:column;align-items:center;gap:5px;
+ padding:6px;border:1px solid #6d7b83;border-radius:11px;
+ background:rgba(14,24,33,.92);box-shadow:0 5px 18px #000b;
+ backdrop-filter:blur(6px)}
+.gizmoQuickbar[hidden],.gizmoCadOverlay[hidden],.gizmoMeasure[hidden]{display:none!important}
+.gizmoQuickModes{display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
+.gizmoQuickViews{display:flex;gap:4px;justify-content:center}
+.gizmoQuickbar button{min-width:54px;min-height:43px;padding:5px 8px;
+ border:1px solid #4d626d;border-radius:5px;font-size:12px;
+ background:#243946;color:#eaf7f8;touch-action:manipulation}
+.gizmoQuickbar .active{background:#126a8f;border-color:#70ccfc;color:white}
+.gizmoQuickViews button{min-height:33px;font-size:11px}
+@media(max-width:700px){
+ .gizmoQuickbar{bottom:92px;max-width:96vw;padding:4px;gap:3px}
+ .gizmoQuickbar button{min-height:40px;padding:4px 5px;font-size:11px}
+ .gizmoMeasure{font-size:11px;padding:2px 4px}
+}
