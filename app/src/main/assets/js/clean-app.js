@@ -781,7 +781,7 @@ class CleanBuilder{
    else if(CleanGeometry.isBuiltIn(obj.kind)){
     const root=this.cloneTemplate(obj.kind,obj.thickness,obj.scale,obj.axes);
     const old=obj.root;root.position.copy(old.position);root.rotation.copy(old.rotation);
-    root.scale.copy(old.scale);this.scene.add(root);old.removeFromParent();obj.root=root;
+    root.scale.copy(old.scale);this.scene.add(root);old.removeFromParent();obj.root=root;obj.root.visible=!obj.hidden;
     if(this.outline&&obj===this.selected)this.outline.setFromObject(root);
    }else this.rebuildImported(obj);
   }else this.applySurfaceTo(obj);
@@ -1556,7 +1556,7 @@ class CleanBuilder{
   this.pointer.set((event.clientX-r.left)/r.width*2-1,
    -(event.clientY-r.top)/r.height*2+1);
   this.ray.setFromCamera(this.pointer,this.camera);
-  const walls=this.entries.filter(e=>e.category==='wall'&&WallOpenings.supported(e.kind));
+  const walls=this.entries.filter(e=>e.category==='wall'&&!e.hidden&&WallOpenings.supported(e.kind));
   const hits=this.ray.intersectObjects(walls.map(e=>e.root),true);
   if(!hits.length)return notify('Коснись самой поверхности стены, угла или дуги','warn');
   const hit=hits[0],wall=walls.find(w=>{
@@ -1624,7 +1624,8 @@ class CleanBuilder{
   for(const item of plan.staged){
    const old=item.obj.root;
    this.scene.add(item.root);old.removeFromParent();
-   item.obj.root=item.root;item.obj.openings=item.openings;
+   item.obj.root=item.root;item.obj.root.visible=!item.obj.hidden;
+   item.obj.openings=item.openings;
    this.applySurfaceTo(item.obj);
   }
   if(this.outline&&this.selected)this.outline.setFromObject(this.selected.root);
@@ -1732,7 +1733,7 @@ class CleanBuilder{
     m.material.opacity=.55;m.material.depthWrite=false;
    }});
   }
-  obj.root=newRoot;
+  obj.root=newRoot;obj.root.visible=!obj.hidden;
   if(obj.openings?.length){
    const result=WallOpenings.render(newRoot,obj.kind,obj.openings,
     {thickness:obj.thickness,axes:obj.axes});
@@ -1802,7 +1803,7 @@ class CleanBuilder{
    });
   }
   this.scene.add(fresh);old.removeFromParent();
-  obj.root=fresh;obj.floorTrim=edit;
+  obj.root=fresh;obj.floorTrim=edit;obj.root.visible=!obj.hidden;
   this.applySurfaceTo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(fresh);
   return true;
@@ -1863,6 +1864,7 @@ class CleanBuilder{
     'Нет плит с автоподрезкой для восстановления':
     'Плитки не пересекают стены — изменения не требуются','warn');
    BulkFloorTrim.commit(plan,this.scene,this.selected,this.outline);
+   for(const entry of this.entries)entry.root.visible=!entry.hidden;
    this.syncInspector();
    notify((reset?'Автоподрезка снята: ':'Массовая подрезка выполнена: ')+
     plan.count+' плит, границ: '+plan.cutCount+
@@ -1931,7 +1933,7 @@ class CleanBuilder{
    });
   }
   this.scene.add(template);old.removeFromParent();
-  obj.root=template;obj.meshEdit=requested;
+  obj.root=template;obj.meshEdit=requested;obj.root.visible=!obj.hidden;
   this.applySurfaceTo(obj);
   obj.capResult=editResult;
   if(obj!==this.preview)this.attachImportedLOD(obj);
@@ -2058,7 +2060,7 @@ class CleanBuilder{
  }
  // Mounted decorations live on real wall faces, never imaginary wall sockets.
  wallHit(ray){
-  const walls=this.entries.filter(e=>e.category==='wall');
+  const walls=this.entries.filter(e=>e.category==='wall'&&!e.hidden);
   if(!walls.length)return null;
   const hits=ray.intersectObjects(walls.map(e=>e.root),true);
   for(const hit of hits){
@@ -2231,7 +2233,7 @@ class CleanBuilder{
   }catch(err){notify('Копия этажа: '+err.message,'error')}
  }
  async exportGameManifest(){
-  if(!this.entries.length)return notify('Сначала построй здание','warn');
+  if(!this.entries.some(e=>!e.hidden))return notify('Все детали скрыты — нечего экспортировать','warn');
   try{
    const manifest=BuildingWorkflow.gameManifest(this.project());
    const blob=new Blob([JSON.stringify(manifest,null,2)],{type:'application/json'});
@@ -2313,28 +2315,32 @@ class CleanBuilder{
   const r=this.canvas.getBoundingClientRect();
   this.pointer.set((event.clientX-r.left)/r.width*2-1,-(event.clientY-r.top)/r.height*2+1);
   this.ray.setFromCamera(this.pointer,this.camera);
-  const hits=this.ray.intersectObjects(this.entries.map(e=>e.root),true);
+  const hits=this.ray.intersectObjects(this.entries.filter(e=>!e.hidden).map(e=>e.root),true);
   this.selected=null;
   for(const hit of hits){
-   this.selected=this.entries.find(e=>{let c=hit.object;while(c){if(c===e.root)return true;c=c.parent}return false});
+   this.selected=this.entries.find(e=>{if(e.hidden)return false;
+    let c=hit.object;while(c){if(c===e.root)return true;c=c.parent}return false});
    if(this.selected)break;
   }
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose();this.outline=null}
   if(this.selected){
-   this.outline=new THREE.BoxHelper(this.selected.root,0x44ffb8);this.scene.add(this.outline);
-   notify('Выбрана деталь: '+this.selected.kind,'success');
+   this.outline=new THREE.BoxHelper(this.selected.root,
+    this.selected.locked?0xffc66a:0x44ffb8);this.scene.add(this.outline);
+   notify('Выбрана деталь: '+this.sceneDisplayName(this.selected),'success');
   }else notify('Коснись строительной детали, чтобы выделить её');
-  this.gizmo.attach(this.selected);
+  this.gizmo.attach(SceneManager.editingAllowed(this.selected)?this.selected:null);
   this.syncInspector();
-  if(this.selected&&this.pendingTexture){
+  if(this.selected&&this.pendingTexture&&this.canEditObject(this.selected)){
    const pending=this.pendingTexture;this.pendingTexture=null;
    this.chooseTexture(pending.style,pending.imageId);
   }
  }
  duplicate(){
   const obj=this.selected;if(!obj)return notify('Сначала выдели деталь','warn');
+  if(!this.canEditObject(obj))return;
   const data=this.encode(obj);delete data.id;
-  delete data.groupId;delete data.roomRole;
+  delete data.groupId;delete data.roomRole;data.locked=false;data.hidden=false;
+  data.label=data.label?data.label+' — копия':'';
   data.position[0]+=1.5;
   const clone=this.createEntry(obj.kind,data);if(!clone)return;
   this.recordEdit();
@@ -2386,18 +2392,19 @@ class CleanBuilder{
     })),created:new Date().toISOString()};
  }
  async exportGLB(){
-  if(!this.entries.length)return notify('Сначала установи хотя бы один модуль','warn');
+  if(!this.entries.some(o=>!o.hidden))return notify('Все детали скрыты. Открой хотя бы одну для GLB','warn');
   try{
    notify('📦 Подготавливаю GLB со стенами, проёмами, крышами и текстурами...','neutral');
    // Ensure IndexedDB images are loaded and actually assigned to meshes
    // before generating the GLB's embedded baseColorTexture images.
-   for(const obj of this.entries){
+   for(const obj of this.entries.filter(e=>!e.hidden)){
     const updated=await this.applySurfaceTo(obj);
     if(!updated)throw Error('Не удалось подготовить материалы для '+obj.kind);
    }
-   const scene={objects:this.entries.map(obj=>({mesh:obj.root,data:{
+   const scene={objects:this.entries.filter(obj=>!obj.hidden).map(obj=>({mesh:obj.root,data:{
     id:obj.id,kind:obj.kind,category:obj.category,storey:obj.storey,
     groupId:obj.groupId||null,roomRole:obj.roomRole||null,
+    label:obj.label||null,
     suggestedCollider:['wall','floor','roof'].includes(obj.category)||
      obj.kind==='stairsStraight'?'static-mesh':'manual'
    }}))};
