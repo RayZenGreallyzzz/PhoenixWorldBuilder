@@ -1101,7 +1101,7 @@ class CleanBuilder{
   $('btnPlace').classList.toggle('active',tool==='place');
   if(this.preview)this.preview.root.visible=tool==='place';
   if(this.previewOutline)this.previewOutline.visible=tool==='place';
-  this.gizmo.attach(tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&tool==='pick'?this.selected:null);
   this.updateGizmoDock();
   notify(tool==='pick'?'Коснись готовой детали, чтобы изменить её':
    'Коснись места на земле для установки детали','neutral');
@@ -1227,7 +1227,7 @@ class CleanBuilder{
    'Выдели пол или стену, чтобы перемещать их текстуру.';
   for(const id of ['textureShiftUp','textureShiftDown','textureShiftLeft',
    'textureShiftRight','textureShiftReset'])$(id).disabled=!mayShiftTexture;
-  this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
   this.updateGizmoDock();
   this.updateOpeningInfo();
   this.readSockets();
@@ -1477,7 +1477,7 @@ class CleanBuilder{
    this.applySurfaceTo(item.obj);
   }
   if(this.outline&&this.selected)this.outline.setFromObject(this.selected.root);
-  this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
   this.syncInspector();return true;
  }
  addOpening(){
@@ -1589,7 +1589,7 @@ class CleanBuilder{
   }
   this.applySurfaceTo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(newRoot);
-  this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
  }
  editField(id){
   const obj=this.target();if(!obj)return;
