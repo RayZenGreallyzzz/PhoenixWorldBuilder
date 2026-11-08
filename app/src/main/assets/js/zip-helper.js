@@ -41,7 +41,7 @@ const ZipUtils=(()=>{
    if(pos+46+nameLen+extraLen+commentLen>bytes.length)throw Error('Повреждено имя файла ZIP');
    const name=dec.decode(bytes.subarray(pos+46,pos+46+nameLen));
    pos+=46+nameLen+extraLen+commentLen;
-   if(name.endsWith('/')||!/\.(glb|png|jpg|jpeg|webp)$/i.test(name))continue;
+   if(name.endsWith('/')||!/\.(glb|gltf|fbx|obj|vox|stl|ply|png|jpg|jpeg|webp|bmp|gif)$/i.test(name))continue;
    if(!name||name.includes('\\0')||name.startsWith('/')||
      name.replace(/\\\\/g,'/').split('/').some(v=>v==='..'||v==='.')||
      name.startsWith('__MACOSX/')||name.split('/').some(v=>v.startsWith('._')))

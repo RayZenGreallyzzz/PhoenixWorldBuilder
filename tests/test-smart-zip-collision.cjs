@@ -37,7 +37,8 @@ assert.equal(Catalog.classify('walls/brick-stair.glb').folder,'walls',
  'An organised parent folder must beat ambiguous filename words');
 assert.equal(Catalog.classify('myModel.glb','stairs').folder,'stairs',
  'User can manually override smart classification');
-assert.equal(Catalog.classify('файл.fbx'),null,'Never claim FBX is supported by GLB importer');
+assert.equal(Catalog.classify('файл.fbx')?.type,'model',
+ 'FBX is now imported through the pinned offline FBXLoader and converted to GLB');
 assert(!Catalog.safeEntry('../unsafe/door.glb'),'Reject zip traversal');
 assert(!Catalog.safeEntry('__MACOSX/._door.glb'),'Reject macOS resource forks');
 assert.equal(Catalog.filteredEntries([

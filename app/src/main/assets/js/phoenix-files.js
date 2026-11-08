@@ -55,13 +55,13 @@ const PhoenixFiles=(()=>{
  }
  const validImageType=file=>{
   const mime=String(file?.type||'').toLowerCase();
-  if(['image/png','image/jpeg','image/webp'].includes(mime))return mime;
+  if(['image/png','image/jpeg','image/webp','image/bmp','image/gif'].includes(mime))return mime;
   const ext=String(file?.name||'').split('.').pop()?.toLowerCase();
-  return {png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp'}[ext]||null;
+  return {png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',bmp:'image/bmp',gif:'image/gif'}[ext]||null;
  };
- async function prepareTexture(file,maxTexture=4096){
+ async function prepareTexture(file,maxTexture=4096,{lossless=false}={}){
   const mime=validImageType(file);
-  if(!mime)throw Error('Поддерживаются PNG, JPG и WebP');
+  if(!mime)throw Error('Поддерживаются PNG, JPG, JPEG, WebP, BMP и GIF');
   if(!file?.size)throw Error('Пустое изображение');
   // No arbitrary 3 MB file cap. Downscale by decoded GPU dimensions instead.
   const cap=Math.max(512,Math.min(4096,Number(maxTexture)||4096));
@@ -88,7 +88,8 @@ const PhoenixFiles=(()=>{
    if(!ctx)throw Error('Не поддерживается обработка изображения');
    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
    ctx.drawImage(image,0,0,w,h);
-   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.92));
+   const blob=await new Promise(resolve=>canvas.toBlob(resolve,
+    lossless?'image/png':'image/webp',.92));
    if(!blob||!blob.size)throw Error('Не удалось сохранить сжатую текстуру');
    const bytes=await blob.arrayBuffer();
    return {bytes,type:blob.type||'image/webp',

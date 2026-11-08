@@ -36,49 +36,15 @@
  <button id="btnFocusCamera" class="quickOpening" title="Переместить точку вращения: на выбранную деталь или касанием сцены">🎯 Камера</button>
  <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
-<section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active">🧱 Детали</button><button id="tabTextures">🎨 Текстуры</button></div><small>Выбери модуль или материал</small></div><div id="catalogQuick" class="catalogQuick" role="group" aria-label="Разделы библиотеки">
-   <button type="button" data-catalog-group="structure" class="active">🧱 Каркас</button>
-   <button type="button" data-catalog-group="doors">🚪 Двери</button>
-   <button type="button" data-catalog-group="frames">▯ Рамы</button>
-   <button type="button" data-catalog-group="roofs">🏠 Крыши</button>
-   <button type="button" id="btnQuickImportGLB" class="alt">📥 Импорт GLB</button>
-   <button type="button" data-catalog-group="imports" id="catalogImportsShortcut" hidden>📦 Мои GLB</button>
-  </div><div class="smartLibrary">
- <label>📂 Папка библиотеки<select id="smartCategoryFilter">
-  <option value="all">Все модули по папкам</option>
-  <option value="walls">🧱 Стены</option><option value="corners">📐 Углы и дуги</option>
-  <option value="floors">▦ Пол</option><option value="ceilings">▤ Потолок</option>
-  <option value="stairs">🪜 Лестницы</option><option value="roofs">🏠 Крыши</option>
-  <option value="doors">🚪 Двери</option><option value="windows">🪟 Окна</option>
-  <option value="frames">▯ Рамы</option><option value="decor">🌿 Декор</option>
-  <option value="my-modules">📦 Мои модули</option>
- </select></label>
- <input id="smartCatalogSearch" type="search" autocomplete="off"
-  placeholder="🔍 Поиск по имени и папке">
- <label class="fileButton">📦 Импорт ZIP: модели + текстуры
-  <input id="importZip" type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden></label>
- <label>Сортировка ZIP<select id="zipFolderOverride">
-  <option value="auto">🤖 Авто: учитывать имеющиеся папки и названия</option>
-  <option value="walls">Стены</option><option value="corners">Углы</option>
-  <option value="floors">Пол</option><option value="ceilings">Потолок</option>
-  <option value="stairs">Лестницы</option><option value="roofs">Крыши</option>
-  <option value="doors">Двери</option><option value="windows">Окна</option>
-  <option value="frames">Рамы</option><option value="decor">Декор</option>
-  <option value="my-modules">Мои модули</option>
- </select></label>
- <small id="zipImportStatus" class="tip" aria-live="polite">ZIP: GLB и PNG/JPG/WebP; папки сохраняются. Неизвестные модели — в «Мои модули».</small>
-</div>
-<div id="catalogItems" class="parts smartGallery" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
- <div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b>
- <div class="cols2"><label>Папка<select id="textureCategoryFilter">
- <option value="all">Все текстуры</option><option value="textures">🎨 Текстуры</option>
- <option value="my-textures">🖼 Мои текстуры</option></select></label>
- <label>Поиск<input id="textureSearch" type="search" placeholder="Имя текстуры"></label></div>
- <div id="textureCards" class="textureCards"></div><label class="fileButton">🖼 Загрузить PNG / JPG / WebP<input type="file" id="importTexture" accept="image/png,image/jpeg,image/webp" hidden></label><small class="tip">Можно загружать изображения больше 3 МБ: они автоматически подгоняются под графические возможности планшета и сохраняются в памяти приложения. Для переноса на другое устройство используй резервную копию проекта с текстурами.</small>
- <small id="textureLibraryStatus" class="tip">Выбери установленную деталь, затем текстуру.</small></div><details id="catalogImport" class="importZone"><summary>📦 Импорт GLB и персонажей</summary><div class="importZoneBody">
- <label for="importCategory">Импорт GLB как</label>
+<section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active" type="button">📦 Модули</button><button id="tabTextures" type="button">🎨 Текстуры</button><button id="tabCharacter" type="button">🧍 Персонаж</button></div><small>Нажми вкладку → раскрой нужную папку</small></div><div id="libraryModuleDrawer" class="libraryDrawer"><details id="catalogImport" class="importZone"><summary>📥 Файлы моделей и оптимизация</summary><div class="importZoneBody">
+ <label for="importCategory">Импортировать модель как</label>
  <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
  <label class="fileButton">＋ Загрузить GLB / GLB Meshopt / Draco / KTX2<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
+  <label class="fileButton">📐 FBX / OBJ / VOX / STL / PLY / glTF
+   <input id="importOtherModel" type="file" accept=".fbx,.obj,.vox,.stl,.ply,.gltf" hidden></label>
+  <small class="tip">Офлайн-импорт моделей: исходные GLB сохраняются без изменений. Другие форматы преобразуются в статические GLB для библиотеки. Для персонажей с анимацией используй отдельную вкладку «Персонаж».</small>
+  <label class="fileButton">📦 ZIP с моделями и текстурами
+   <input id="importZip" type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden></label>
   <details id="importOptimizer"><summary>⚡ Оптимизация для Android</summary>
    <label>Качество текстур при импорте<select id="optimizationQuality">
     <option value="balanced" selected>Баланс: максимум 2048 px</option>
@@ -97,7 +63,76 @@
     <small class="tip">FPS, вызовы рисования и счётчики Three.js — это не измерение GPU-памяти. Авторазрешение не меняет 3D-модели.</small>
    </div>
   </details>
- <label class="fileButton ghostButton">🧍 Загрузить персонажа GLB<input id="importAvatar" type="file" accept=".glb,model/gltf-binary" hidden></label>
+ <p class="tip">Выбери правильный тип: декор свободно ставится на пол, а настенный декор закрепляется на поверхности стены.</p><p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
+ </div></details>
+
+<div id="catalogQuick" class="catalogQuick" role="group" aria-label="Разделы библиотеки">
+   <button type="button" data-catalog-group="structure" class="active">🧱 Каркас</button>
+   <button type="button" data-catalog-group="doors">🚪 Двери</button>
+   <button type="button" data-catalog-group="frames">▯ Рамы</button>
+   <button type="button" data-catalog-group="roofs">🏠 Крыши</button>
+   <button type="button" id="btnQuickImportGLB" class="alt">📥 Импорт GLB</button>
+   <button type="button" data-catalog-group="imports" id="catalogImportsShortcut" hidden>📦 Мои GLB</button>
+  </div><div class="smartLibrary">
+ <label>📂 Папка библиотеки<select id="smartCategoryFilter">
+  <option value="all">Все модули по папкам</option>
+  <option value="walls">🧱 Стены</option><option value="corners">📐 Углы и дуги</option>
+  <option value="floors">▦ Пол</option><option value="ceilings">▤ Потолок</option>
+  <option value="stairs">🪜 Лестницы</option><option value="roofs">🏠 Крыши</option>
+  <option value="doors">🚪 Двери</option><option value="windows">🪟 Окна</option>
+  <option value="frames">▯ Рамы</option><option value="decor">🌿 Декор</option>
+  <option value="my-modules">📦 Мои модули</option>
+ </select></label>
+ <input id="smartCatalogSearch" type="search" autocomplete="off"
+  placeholder="🔍 Поиск по имени и папке">
+ 
+ <label>Сортировка ZIP<select id="zipFolderOverride">
+  <option value="auto">🤖 Авто: учитывать имеющиеся папки и названия</option>
+  <option value="walls">Стены</option><option value="corners">Углы</option>
+  <option value="floors">Пол</option><option value="ceilings">Потолок</option>
+  <option value="stairs">Лестницы</option><option value="roofs">Крыши</option>
+  <option value="doors">Двери</option><option value="windows">Окна</option>
+  <option value="frames">Рамы</option><option value="decor">Декор</option>
+  <option value="my-modules">Мои модули</option>
+ </select></label>
+ <small id="zipImportStatus" class="tip" aria-live="polite">ZIP: GLB и PNG/JPG/WebP; папки сохраняются. Неизвестные модели — в «Мои модули».</small>
+</div>
+<div id="catalogItems" class="parts smartGallery" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
+ </div>
+<div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b>
+ <div class="cols2"><label>Папка<select id="textureCategoryFilter">
+ <option value="all">Все текстуры</option><option value="textures">🎨 Текстуры</option>
+ <option value="my-textures">🖼 Мои текстуры</option></select></label>
+ <label>Поиск<input id="textureSearch" type="search" placeholder="Имя текстуры"></label></div>
+ <details id="textureUploadFold" class="drawerFold"><summary>📥 Загрузить изображение или ZIP</summary>
+ <div class="drawerFoldBody">
+  <label class="fileButton">🖼 PNG / JPG / JPEG / WebP / BMP / GIF
+   <input type="file" id="importTexture" accept=".png,.jpg,.jpeg,.webp,.bmp,.gif,image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden></label>
+  <label class="fileButton">📦 ZIP с текстурами
+   <input id="importTextureZIP" type="file" accept=".zip,application/zip" hidden></label>
+  <label>Качество при загрузке
+   <select id="textureImportQuality"><option value="lossless">Максимальное: PNG без нового сжатия с потерями</option>
+   <option value="balanced">Экономия памяти: WebP высокого качества</option></select>
+  </label>
+  <small class="tip">PNG, JPG, JPEG, WebP, BMP и первый кадр GIF. Очень большие изображения подгоняются под возможности Android, сохраняя пропорции.</small>
+ </div></details>
+ <div id="textureQuickFaces" class="textureQuickFaces">
+  <b>🧱 Разные покрытия одной детали</b>
+  <small id="faceQuickTarget" class="tip">Выдели готовую стену или плиту пола.</small>
+  <div class="faceQuickChoices" role="group" aria-label="Покрытие конкретной стороны стены или пола">
+   <button id="faceQuickAll" class="active" type="button">Вся</button>
+   <button id="faceQuickFront" type="button">Лицевая</button>
+   <button id="faceQuickBack" type="button">Обратная</button>
+  </div>
+  <button id="faceQuickPick" type="button">👆 Выбрать сторону касанием 3D</button>
+  <button id="faceQuickSettings" type="button" class="alt">⚙ Подробные настройки материала справа</button>
+  <small class="tip">Выбери сторону, затем материал ниже. Камень снаружи и штукатурка внутри останутся разными.</small>
+ </div>
+ <div id="textureCards" class="textureCards"></div><small class="tip">Большие изображения подгоняются под размеры GPU и сохраняются в библиотеке; максимальное качество можно выбрать выше. Для переноса на другое устройство используй резервную копию проекта с текстурами.</small>
+ <small id="textureLibraryStatus" class="tip">Выбери установленную деталь, затем текстуру.</small></div><div id="libraryCharacterDrawer" class="libraryDrawer" hidden>
+ <details id="characterImportFold" class="drawerFold" open>
+ <summary>🧍 Загрузить и настроить персонажа</summary>
+ <div class="drawerFoldBody"><label class="fileButton ghostButton">🧍 GLB или FBX (со скелетом)<input id="importAvatar" type="file" accept=".glb,.fbx,model/gltf-binary" hidden></label>
    <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
    <button id="btnResetCharacterView" type="button" class="alt">📷 Нормальный вид персонажа (сбросить приближение)</button>
    <button id="btnGroundAvatar" type="button" class="alt">🦶 Поставить ноги на пол</button>
@@ -106,8 +141,10 @@
  <label class="check"><input id="enableCollisions" type="checkbox" checked><span>🛡 Коллизии персонажа: стены, двери, окна, пол и модули</span></label>
  <small class="tip">Персонаж не проходит сквозь настоящую стену или закрытую дверь, но проходит через вырезанный проём. Пол и лестницы поддерживают высоту; при необходимости коллизии можно выключить.</small>
    <small class="tip">Модель автоматически подгоняется под рост и ширину. Анимация не изменяет внешний масштаб.</small>
- <p class="tip">Выбери правильный тип: декор свободно ставится на пол, а настенный декор закрепляется на поверхности стены.</p><p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
+ 
+ <small class="tip">Персонаж отдельно от строительных модулей. GLB и FBX со встроенными анимациями; внешние текстуры FBX могут потребовать подготовки в Blender.</small>
  </div></details>
+ </div>
 </section>
 <section id="inspector" class="panel right">
  <div class="panelTitle"><b id="currentLabel">Выбери деталь</b><small id="currentHint">Установка или точная подгонка</small></div>
@@ -373,6 +410,14 @@
 <input id="importProjectBackup" type="file" accept=".json,.phoenix.json,application/json" hidden>
 <script src="js/three.min.js"></script>
 <script src="js/OrbitControls.js"></script>
+<script src="js/fflate.min.js"></script>
+<script src="js/NURBSUtils.js"></script>
+<script src="js/NURBSCurve.js"></script>
+<script src="js/FBXLoader.js"></script>
+<script src="js/OBJLoader.js"></script>
+<script src="js/VOXLoader.js"></script>
+<script src="js/STLLoader.js"></script>
+<script src="js/PLYLoader.js"></script>
 <script src="js/WorkerPool.js"></script>
  <script src="js/DRACOLoader.js"></script>
  <script src="js/KTX2Loader.js"></script>
@@ -381,6 +426,7 @@
  <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
+<script src="js/model-formats.js"></script>
 <script src="js/export-glb.js"></script>
 <script src="js/phoenix-files.js"></script>
 <script src="js/pako_inflate.min.js"></script>

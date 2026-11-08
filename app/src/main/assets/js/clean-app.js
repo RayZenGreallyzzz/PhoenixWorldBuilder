@@ -194,7 +194,8 @@ class CleanBuilder{
  async importAvatar(file){
   if(!file)return;
   try{
-   const scene=await GLB.load(file);
+   const scene=ModelFormats.ext(file.name)==='glb'?
+    await GLB.load(file):await ModelFormats.parse(file);
    AndroidAssetOpt.optimize(scene.root,this.optimizationQuality);
    const root=THREE.SkeletonUtils?.clone?
     THREE.SkeletonUtils.clone(scene.root):scene.root.clone(true);
@@ -410,6 +411,25 @@ class CleanBuilder{
    console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')
   }
  }
+ async importOtherModel(file){
+  if(!file)return;
+  try{
+   if(!ModelFormats.accepts(file.name))
+    throw Error('Поддерживаются FBX, OBJ, VOX, STL, PLY и встроенный glTF');
+   notify('📐 Готовлю модель '+safeName(file.name)+' для библиотеки...','neutral');
+   const converted=await ModelFormats.convertModule(file);
+   const name=String(file.name).replace(/\.[^.]+$/i,'.glb');
+   const wrapped=new File([converted.buffer],name,{type:'model/gltf-binary'});
+   await this.importGLB(wrapped);
+   notify('📦 '+safeName(file.name)+' преобразован в GLB без изменения UV. '+
+    converted.triangles+' треугольников'+
+    (converted.animationCount?' (для сохранения анимации импортируй как персонажа)':''),
+    'success');
+  }catch(err){
+   console.error('Other model import',err);
+   notify('Ошибка импорта '+safeName(file?.name)+': '+(err?.message||err),'error');
+  }
+ }
  async ensureTemplate(kind,category='wall'){
   if(CleanGeometry.isBuiltIn(kind)||this.assets.has(kind))return true;
   const buf=await getAsset(kind);
@@ -444,7 +464,7 @@ class CleanBuilder{
     JSON.stringify([...this.catalogMeta.values()].slice(-2000)));
   }catch(err){notify('Не удалось сохранить папки: '+err.message,'error')}
  }
- async importZIP(file){
+ async importZIP(file,kind='mixed'){
   if(!file)return;
   const status=$('zipImportStatus'),start=performance.now();
   let models=0,textures=0,skipped=0,errors=[],index=0;
@@ -452,34 +472,39 @@ class CleanBuilder{
    status.textContent='📦 Распаковка '+safeName(file.name)+'...';
    const list=await ZipUtils.extract(file,{maxEntries:1200,maxTotal:200000000,maxEntry:50000000});
    const paths=Object.keys(list);
-   if(!paths.length)throw Error('В ZIP нет файлов GLB или PNG/JPG/WebP');
+   if(!paths.length)throw Error('В ZIP нет поддерживаемых моделей или изображений');
    const override=$('zipFolderOverride').value;
    for(const path of paths){
     const bytes=list[path];
     const guess=SmartCatalog.classify(path,override==='auto'?null:override);
-    if(!guess||!SmartCatalog.safeEntry(path)){skipped++;continue}
+    if(!guess||!SmartCatalog.safeEntry(path)||
+     (kind==='textures'&&guess.type!=='texture')){skipped++;continue}
     const filename=path.split('/').pop();
     const idSuffix=Date.now().toString(36)+'-'+index.toString(36)+'-'+
      Math.random().toString(36).slice(2,7);
     index++;
     try{
      if(guess.type==='model'){
-      if(bytes.length<20||new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength)
-       .getUint32(0,true)!==0x46546c67){
-       errors.push(filename+': не GLB 2.0');skipped++;continue;
-      }
+      const format=ModelFormats.ext(filename);
+      const glb=format==='glb'?bytes.slice().buffer:
+       (await ModelFormats.convertModule(new File([bytes],filename))).buffer;
+      if(glb.byteLength<20||
+       new DataView(glb).getUint32(0,true)!==0x46546c67)
+       throw Error('Не удалось подготовить GLB 2.0');
       const id='glb:zip:'+idSuffix;
-      await putAsset(id,bytes.slice().buffer);
+      await putAsset(id,glb);
       this.catalogMeta.set(id,{id,name:safeName(filename),
-       folder:guess.folder,category:guess.category,path,bytes:bytes.length,
-       source:'ZIP'});
+       folder:guess.folder,category:guess.category,path,bytes:glb.byteLength,
+       source:'ZIP'+(format==='glb'?'':' '+format.toUpperCase())});
       models++;
      }else{
-      const type=filename.toLowerCase().endsWith('.png')?'image/png':
-       /\.jpe?g$/i.test(filename)?'image/jpeg':'image/webp';
+      const extension=filename.split('.').pop().toLowerCase();
+      const type={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',
+       webp:'image/webp',bmp:'image/bmp',gif:'image/gif'}[extension]||'image/png';
       const fileImage=new File([bytes],filename,{type});
       const edge=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
-      const processed=await PhoenixFiles.prepareTexture(fileImage,edge);
+      const processed=await PhoenixFiles.prepareTexture(fileImage,edge,
+       {lossless:$('textureImportQuality').value==='lossless'});
       const id='texture:zip:'+idSuffix;
       await putAsset(id,processed.bytes);
       this.textureFiles.push({id,name:safeName(filename),folder:guess.folder,
@@ -503,7 +528,7 @@ class CleanBuilder{
    status.textContent='✅ '+safeName(file.name)+': '+models+' моделей, '+
     textures+' текстур, '+skipped+' пропущено. '+Math.round((performance.now()-start)/1000)+
     ' с. '+(errors.length?'Ошибки: '+errors.slice(0,2).join('; '):'Открой нужную папку для просмотра миниатюр.');
-   notify('📦 Импорт завершён: '+models+' GLB и '+textures+
+   notify('📦 Импорт завершён: '+models+' моделей и '+textures+
     ' текстур. Выбирай папку и смотри модели на карточках.','success');
   }catch(err){
    console.error('ZIP import',err);
@@ -521,16 +546,55 @@ class CleanBuilder{
   }catch(e){return []}
  }
  setTextureTab(active='parts'){
-  const textures=active==='textures';
-  $('tabParts').classList.toggle('active',!textures);
-  $('tabTextures').classList.toggle('active',textures);
-  $('catalogItems').hidden=textures;
-  $('catalogQuick').hidden=textures;
-  document.querySelector('.myCatalog').hidden=textures;
-  $('catalogImport').hidden=textures;
-  $('textureLibrary').hidden=!textures;
-  document.querySelector('.smartLibrary').hidden=textures;
-  if(textures)this.renderTextureLibrary();
+  // Do NOT move/reorder the top bar or the right inspector.
+  // Only the three fixed, compact panes inside the LEFT library switch.
+  const modes={parts:'tabParts',textures:'tabTextures',
+   character:'tabCharacter'};
+  const selected=modes[active]?active:'parts';
+  for(const [mode,id] of Object.entries(modes)){
+   $(id).classList.toggle('active',mode===selected);
+   $(id).setAttribute('aria-selected',String(mode===selected));
+  }
+  $('libraryModuleDrawer').hidden=selected!=='parts';
+  $('textureLibrary').hidden=selected!=='textures';
+  $('libraryCharacterDrawer').hidden=selected!=='character';
+  if(selected==='textures'){
+   this.renderTextureLibrary();this.syncQuickTextureFaces();
+  }
+ }
+ syncQuickTextureFaces(){
+  const selected=this.target(),scope=$('textureFaceScope').value;
+  const isWall=selected?.category==='wall',isFloor=selected?.category==='floor';
+  const valid=!!selected&&this.entries.includes(selected)&&
+   this.tool==='pick'&&(isWall||isFloor);
+  $('faceQuickFront').textContent=isFloor?'Верх':'Лицевая';
+  $('faceQuickBack').textContent=isFloor?'Низ':'Обратная';
+  for(const [side,id] of [['all','faceQuickAll'],
+   ['front','faceQuickFront'],['back','faceQuickBack']]){
+   $(id).classList.toggle('active',scope===side);
+   $(id).disabled=side!=='all'&&!valid;
+  }
+  $('faceQuickTarget').textContent=!valid?
+   'Выдели готовую стену или плиту пола, чтобы нанести разные материалы.':
+   ((isFloor?'Плита пола':'Стена')+': '+(
+    scope==='all'?'все грани':scope==='front'?
+    (isFloor?'верхняя поверхность':'лицевая сторона'):
+    (isFloor?'нижняя поверхность':'обратная сторона'))+
+    '. Текстура другой стороны не изменится.');
+ }
+ quickTextureFace(side){
+  if(!['all','front','back'].includes(side))return;
+  if(side!=='all'&&(!this.selected||this.tool!=='pick'||
+   !['wall','floor'].includes(this.selected.category))){
+   notify('Сначала выдели готовую стену или плиту пола','warn');return;
+  }
+  $('textureFaceScope').value=side;
+  this.syncInspector();this.renderTextureLibrary();this.syncQuickTextureFaces();
+ }
+ openTextureSettings(){
+  const panel=$('textureInspector');panel.open=true;
+  panel.scrollIntoView({block:'nearest',behavior:'smooth'});
+  notify('🎨 Настройки материала открыты справа; структура панели не изменена','neutral');
  }
  renderTextureLibrary(){
   const container=$('textureCards');container.textContent='';
@@ -645,7 +709,8 @@ class CleanBuilder{
    notify('🖼 Подготавливаю большую текстуру для Android...','neutral');
    $('textureLibraryStatus').textContent='Обработка изображения '+safeName(file.name)+'...';
    const maxEdge=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
-   const processed=await PhoenixFiles.prepareTexture(file,maxEdge);
+   const processed=await PhoenixFiles.prepareTexture(file,maxEdge,
+    {lossless:$('textureImportQuality').value==='lossless'});
    $('textureLibraryStatus').textContent='Оптимизировано: '+processed.width+'×'+
     processed.height+' px. Сохраняю в библиотеку...';
    const id='texture:'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);
@@ -1442,6 +1507,7 @@ class CleanBuilder{
   this.readSockets();
   this.syncSceneLockedUI();
   this.renderSceneManager();
+  this.syncQuickTextureFaces();
  }
  // The video-inspired transform dock is visible only for a placed selection.
  updateGizmoDock(){
@@ -2390,7 +2456,7 @@ class CleanBuilder{
    $('textureFaceScope').value=side;
    this.surfaceSidePick=false;
    $('textureInspector').open=true;
-   this.syncInspector();this.renderTextureLibrary();
+   this.syncInspector();this.renderTextureLibrary();this.syncQuickTextureFaces();
    notify('✅ Выбрана '+(obj.category==='floor'?
     (side==='front'?'верхняя':'нижняя'):
     (side==='front'?'лицевая':'обратная'))+
@@ -2686,6 +2752,7 @@ class CleanBuilder{
   $('optimizationAutoResolution').onchange=()=>this.updateAutoResolution();
   $('btnPerfReport').onclick=()=>this.exportPerformanceReport();
   $('tabParts').onclick=()=>this.setTextureTab('parts');
+  $('tabCharacter').onclick=()=>this.setTextureTab('character');
   for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
    button.onclick=()=>{
     this.catalogGroup=button.dataset.catalogGroup;
@@ -2704,11 +2771,23 @@ class CleanBuilder{
    this.importZIP(file);
   };
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
+  for(const [side,id] of [['all','faceQuickAll'],['front','faceQuickFront'],
+   ['back','faceQuickBack']])
+   $(id).onclick=()=>this.quickTextureFace(side);
+  $('faceQuickPick').onclick=()=>{
+   this.setTextureTab('textures');
+   $('btnPickTextureFace').click();
+  };
+  $('faceQuickSettings').onclick=()=>this.openTextureSettings();
+  $('importTextureZIP').onchange=e=>{
+   const file=e.target.files?.[0];e.target.value='';
+   this.importZIP(file,'textures');
+  };
   $('btnQuickImportGLB').onclick=()=>{
    this.setTextureTab('parts');
    $('catalogImport').open=true;
    $('catalogImport').scrollIntoView({block:'nearest',behavior:'auto'});
-   notify('📥 Выбери тип модуля и нажми «Загрузить GLB»','neutral');
+   notify('📥 Выбери папку и формат модели: GLB, FBX, OBJ, VOX, STL или PLY','neutral');
   };
   $('avatarInBuild').onchange=e=>{
    this.showAvatarInBuild=e.target.checked;
@@ -2728,7 +2807,7 @@ class CleanBuilder{
   };
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
   $('textureFaceScope').onchange=()=>{
-   this.syncInspector();this.renderTextureLibrary();
+   this.syncInspector();this.renderTextureLibrary();this.syncQuickTextureFaces();
   };
   $('btnPickTextureFace').onclick=()=>{
    if(this.surfaceSidePick){
@@ -2874,6 +2953,9 @@ class CleanBuilder{
   $('btnApplyMeshEdit').onclick=()=>this.applyMeshSettings();
   $('btnResetMeshEdit').onclick=()=>this.applyMeshSettings(true);
   $('importModel').onchange=e=>{this.importGLB(e.target.files?.[0]);e.target.value=''};
+  $('importOtherModel').onchange=e=>{
+   this.importOtherModel(e.target.files?.[0]);e.target.value='';
+  };
   $('importAvatar').onchange=e=>{this.importAvatar(e.target.files?.[0]);e.target.value=''};
   for(const id of ['scaleAll','sizeX','sizeY','sizeZ','thickness','posX','posY','posZ','rotX','rotY','rotZ'])
    $(id).onchange=()=>this.editField(id);
