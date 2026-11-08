@@ -359,3 +359,52 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
  #textureLibrary{padding:6px 4px}
  .faceQuickChoices button{font-size:9px}
 }
+
+/* Android import UI (Nov 2026): make the two critical import actions always
+ * visible. Keep left tab header and entire RIGHT inspector in original place.
+ * Use ONE scroll container per left tab to avoid nested overflow overlap. */
+#catalog{overflow:hidden}
+#catalog>.panelTitle{flex:0 0 auto;min-height:0}
+#catalog #libraryModuleDrawer{display:block;flex:1 1 auto;min-height:0;
+ overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+#catalog #libraryModuleDrawer[hidden]{display:none!important}
+#catalog #textureLibrary{display:block;flex:1 1 auto;min-height:0;
+ overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+#catalog #textureLibrary[hidden]{display:none!important}
+#catalog #libraryCharacterDrawer{display:block;flex:1 1 auto;min-height:0;
+ overflow-y:auto;overflow-x:hidden}
+#catalog #libraryCharacterDrawer[hidden]{display:none!important}
+#libraryModuleDrawer #catalogImport{display:block;position:static;overflow:hidden;
+ flex:none;max-height:none;min-height:0;contain:layout;
+ margin:5px 7px;border:1px solid #427585;border-radius:8px;background:#102e3b}
+#libraryModuleDrawer #catalogImport>summary{display:list-item;
+ padding:11px 8px;min-height:42px;cursor:pointer;color:#aeecf6}
+#libraryModuleDrawer #catalogImport>.importZoneBody{position:static;display:flex;
+ flex-direction:column;gap:8px;padding:8px;max-width:100%;overflow:visible}
+#libraryModuleDrawer #catalogQuick{position:static;clear:both;
+ padding:7px 5px;min-height:0}
+#libraryModuleDrawer .smartLibrary{position:static;clear:both;
+ max-height:none;overflow:visible;display:flex}
+#libraryModuleDrawer #catalogItems{flex:none;min-height:140px;max-height:280px;
+ overflow-y:auto;clear:both}
+#libraryModuleDrawer .myCatalog{max-height:160px}
+#catalog .stickyImportBar{position:sticky;top:0;z-index:3;
+ background:rgba(12,39,51,.98);border:1px solid #379fb2;
+ border-radius:8px;box-shadow:0 3px 9px #001a26b5;
+ padding:7px;margin:5px 6px 7px;display:flex;flex-direction:column;gap:5px}
+#catalog .stickyImportBar button{display:block;width:100%;min-width:0;
+ min-height:45px;padding:7px 5px;border-color:#67c4d9;
+ background:#12657b;color:#fff;font-weight:700;font-size:12px;
+ line-height:1.25;touch-action:manipulation;white-space:normal}
+#catalog .stickyImportBar button:active{background:#1289a6}
+#catalog .stickyImportBar .tip{color:#b8dcda;font-size:10px;
+ line-height:1.3;overflow-wrap:anywhere}
+#textureLibrary .cols2{margin:8px 0}
+#textureLibrary #textureUploadFold{margin:5px 0 9px}
+#textureLibrary .textureQuickFaces{margin:6px 0 10px}
+#textureQuickImport{margin:0 0 8px!important;top:0}
+@media(max-width:1100px){
+ #catalog .stickyImportBar{padding:5px;margin:4px 3px}
+ #catalog .stickyImportBar button{min-height:43px;font-size:11px}
+ #libraryModuleDrawer #catalogItems{max-height:240px}
+}

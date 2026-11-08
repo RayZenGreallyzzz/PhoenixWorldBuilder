@@ -101,10 +101,17 @@ public class MainActivity extends Activity {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = cb;
                 try {
-                    Intent intent = params.createIntent();
+                    // Android DocumentsUI providers frequently advertise ZIP/PNG
+                    // as application/octet-stream or nonstandard MIME types.
+                    // params.createIntent() may carry EXTRA_MIME_TYPES from the
+                    // HTML accept attribute; setType("*/*") does NOT clear
+                    // this filter, so valid files appear grey/unselectable.
+                    // Open ALL document types and validate the actual file in JS.
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                     intent.setType("*/*");
+                    // One file per button. Prevent an accidental 100+ file load.
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false);
                     startActivityForResult(intent, PICK_FILE);
                     return true;
                 } catch (Exception e) {

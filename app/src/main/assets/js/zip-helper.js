@@ -15,7 +15,8 @@ const ZipUtils=(()=>{
   }
   const cb=join(central),end=new Uint8Array(22),dv=new DataView(end.buffer);u32(dv,0,0x06054b50);u16(dv,8,count);u16(dv,10,count);u32(dv,12,cb.length);u32(dv,16,pos);return new Blob([...local,cb,end],{type:'application/zip'});
  }
- async function extract(file,{maxEntries=1200,maxTotal=200000000,maxEntry=50000000}={}){
+ async function extract(file,{maxEntries=1200,maxTotal=200000000,
+ maxEntry=50000000,onProgress=null}={}){
   // Standard ZIP v2, central-directory sizes. Explicitly reject ZIP64 and
   // unsupported files to avoid silently importing partial model libraries.
   const ab=await file.arrayBuffer(),v=new DataView(ab),bytes=new Uint8Array(ab),out=Object.create(null);
@@ -33,6 +34,10 @@ const ZipUtils=(()=>{
   if(centralOffset>=bytes.length)throw Error('Повреждён каталог ZIP');
   let pos=centralOffset,total=0;
   for(let n=0;n<totalEntries;n++){
+   // Unblock touches, rendering and Android back-button between entries.
+   if(n%3===0&&typeof setTimeout==='function')
+    await new Promise(resolve=>setTimeout(resolve,0));
+   if(typeof onProgress==='function')onProgress(n,totalEntries);
    if(pos+46>bytes.length||v.getUint32(pos,true)!==0x02014b50)throw Error('Повреждён каталог ZIP');
    const method=v.getUint16(pos+10,true),flags=v.getUint16(pos+8,true);
    const compressed=v.getUint32(pos+20,true),uncompressed=v.getUint32(pos+24,true);
@@ -56,12 +61,20 @@ const ZipUtils=(()=>{
    let contents;
    if(method===0)contents=data.slice();
    else if(method===8){
-    if(typeof pako!=='undefined'&&pako.inflateRaw)
+    // Browser's streaming decompressor runs off the main JS thread.
+    // The old pako-first path froze the UI on large model ZIPs.
+    if(typeof DecompressionStream!=='undefined'){
+     try{
+      const stream=new Blob([data]).stream()
+       .pipeThrough(new DecompressionStream('deflate-raw'));
+      contents=new Uint8Array(await new Response(stream).arrayBuffer());
+     }catch(error){
+      if(typeof pako==='undefined'||!pako.inflateRaw)throw error;
+      contents=pako.inflateRaw(data);
+     }
+    }else if(typeof pako!=='undefined'&&pako.inflateRaw)
      contents=pako.inflateRaw(data);
-    else if(typeof DecompressionStream!=='undefined'){
-     const stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-     contents=new Uint8Array(await new Response(stream).arrayBuffer());
-    }else throw Error('Сжатый ZIP требует офлайн-декодер DEFLATE');
+    else throw Error('Сжатый ZIP требует офлайн-декодер DEFLATE');
    }else continue;
    if(contents.length!==uncompressed)throw Error('Повреждены данные ZIP: '+name);
    if(crc(contents)!==v.getUint32(pos-46-nameLen-extraLen-commentLen+16,true))
@@ -69,6 +82,7 @@ const ZipUtils=(()=>{
    total+=contents.length;if(total>maxTotal)throw Error('Архив слишком большой для памяти устройства');
    out[name.replace(/\\/g,'/')]=contents;
   }
+  if(typeof onProgress==='function')onProgress(totalEntries,totalEntries);
   return out;
  }
  return {build,extract};

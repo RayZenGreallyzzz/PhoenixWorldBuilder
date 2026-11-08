@@ -466,11 +466,24 @@ class CleanBuilder{
  }
  async importZIP(file,kind='mixed'){
   if(!file)return;
-  const status=$('zipImportStatus'),start=performance.now();
+  const status=$('zipImportStatus'),quick=$('zipQuickStatus'),
+   textureStatus=$('textureImportStatus'),start=performance.now();
+  const progress=text=>{
+   status.textContent=text;
+   if(kind==='textures')textureStatus.textContent=text;
+   else quick.textContent=text;
+  };
   let models=0,textures=0,skipped=0,errors=[],index=0;
   try{
-   status.textContent='📦 Распаковка '+safeName(file.name)+'...';
-   const list=await ZipUtils.extract(file,{maxEntries:1200,maxTotal:200000000,maxEntry:50000000});
+   if(!/\.zip$/i.test(file.name))throw Error('Выбери настоящий архив с расширением .zip');
+   progress('📦 Открываю '+safeName(file.name)+'...');
+   // Give Android a frame before a large ZIP; keep the toolbar responsive.
+   await new Promise(resolve=>setTimeout(resolve,0));
+   const list=await ZipUtils.extract(file,{
+    maxEntries:1200,maxTotal:200000000,maxEntry:50000000,
+    onProgress:(done,total)=>{if(done%10===0)progress(
+     '📦 Распаковано '+done+' / '+total+' файлов. Не закрывай приложение.');}
+   });
    const paths=Object.keys(list);
    if(!paths.length)throw Error('В ZIP нет поддерживаемых моделей или изображений');
    const override=$('zipFolderOverride').value;
@@ -516,18 +529,18 @@ class CleanBuilder{
      skipped++;errors.push(filename+': '+(err?.message||err));
     }
     if(index%5===0){
-     status.textContent='📦 ZIP: '+index+'/'+paths.length+' — GLB: '+
-      models+', текстуры: '+textures+', пропущено: '+skipped;
-     // Release main thread so controls remain responsive on slow tablets.
+     progress('📦 ZIP: '+index+'/'+paths.length+' — модели: '+
+      models+', текстуры: '+textures+', пропущено: '+skipped);
+     // Release main thread: user can still switch tabs while importing.
      await new Promise(resolve=>setTimeout(resolve,0));
     }
    }
    this.textureFiles=this.textureFiles.slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    this.saveCatalogMeta();this.renderCatalog();this.renderTextureLibrary();
-   status.textContent='✅ '+safeName(file.name)+': '+models+' моделей, '+
+   progress('✅ '+safeName(file.name)+': '+models+' моделей, '+
     textures+' текстур, '+skipped+' пропущено. '+Math.round((performance.now()-start)/1000)+
-    ' с. '+(errors.length?'Ошибки: '+errors.slice(0,2).join('; '):'Открой нужную папку для просмотра миниатюр.');
+    ' с. '+(errors.length?'Ошибки: '+errors.slice(0,2).join('; '):'Открой нужную папку для просмотра миниатюр.'));
    notify('📦 Импорт завершён: '+models+' моделей и '+textures+
     ' текстур. Выбирай папку и смотри модели на карточках.','success');
   }catch(err){
@@ -535,8 +548,8 @@ class CleanBuilder{
    this.saveCatalogMeta();
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    this.renderCatalog();this.renderTextureLibrary();
-   status.textContent='Ошибка ZIP: '+(err?.message||err)+
-    '. Уже сохранённые модели остаются в библиотеке.';
+   progress('Ошибка ZIP: '+(err?.message||err)+
+    '. Уже сохранённые модели остаются в библиотеке.');
    notify(status.textContent,'error');
   }
  }
@@ -551,6 +564,11 @@ class CleanBuilder{
   const modes={parts:'tabParts',textures:'tabTextures',
    character:'tabCharacter'};
   const selected=modes[active]?active:'parts';
+  const previous=this.libraryTab||'parts';
+  this.libraryTab=selected;
+  // Collapse long advanced forms when leaving modules. Direct import
+  // actions are always visible; tab changes must remain instantaneous.
+  if(previous!==selected&&previous==='parts')$('catalogImport').open=false;
   for(const [mode,id] of Object.entries(modes)){
    $(id).classList.toggle('active',mode===selected);
    $(id).setAttribute('aria-selected',String(mode===selected));
@@ -558,8 +576,22 @@ class CleanBuilder{
   $('libraryModuleDrawer').hidden=selected!=='parts';
   $('textureLibrary').hidden=selected!=='textures';
   $('libraryCharacterDrawer').hidden=selected!=='character';
+  if(previous!==selected){
+   const pane=selected==='parts'?'libraryModuleDrawer':
+    selected==='textures'?'textureLibrary':'libraryCharacterDrawer';
+   $(pane).scrollTop=0;
+  }
   if(selected==='textures'){
-   this.renderTextureLibrary();this.syncQuickTextureFaces();
+   this.syncQuickTextureFaces();
+   // Do not synchronously build hundreds of thumbnail elements inside a
+   // tap handler: this is what feels like a frozen tab on Android.
+   if(!this.textureRenderQueued){
+    this.textureRenderQueued=true;
+    requestAnimationFrame(()=>{
+     this.textureRenderQueued=false;
+     if(this.libraryTab==='textures')this.renderTextureLibrary();
+    });
+   }
   }
  }
  syncQuickTextureFaces(){
@@ -619,7 +651,9 @@ class CleanBuilder{
     (!term||SmartCatalog.tokenize(item.name+' '+(item.path||'')).includes(term));
   });
   const gallery=document.createElement('div');gallery.className='textureVisualGrid';
-  for(const item of list){
+  // Huge ZIP libraries otherwise create hundreds of DOM nodes on every
+  // tab change. Filter/search still sees every item, cards render 90 at once.
+  for(const item of list.slice(0,90)){
    const card=document.createElement('button');card.className='textureCard';
    card.classList.toggle('active',selected.style==='custom'&&selected.imageId===item.id);
    const img=document.createElement('img');img.className='texturePreview';
@@ -633,6 +667,12 @@ class CleanBuilder{
    card.onclick=()=>this.chooseTexture('custom',item.id);gallery.append(card);
   }
   container.append(gallery);
+  if(list.length>90){
+   const notice=document.createElement('small');notice.className='tip';
+   notice.textContent='Показаны первые 90 из '+list.length+
+    ' текстур. Используй поиск или папки, чтобы найти остальные.';
+   container.append(notice);
+  }
   if(!list.length&&folder!=='all'){
    const hint=document.createElement('small');hint.textContent='В этой папке пока нет текстур';
    container.append(hint);
@@ -708,6 +748,7 @@ class CleanBuilder{
   try{
    notify('🖼 Подготавливаю большую текстуру для Android...','neutral');
    $('textureLibraryStatus').textContent='Обработка изображения '+safeName(file.name)+'...';
+   $('textureImportStatus').textContent='🖼 Обработка '+safeName(file.name)+'...';
    const maxEdge=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
    const processed=await PhoenixFiles.prepareTexture(file,maxEdge,
     {lossless:$('textureImportQuality').value==='lossless'});
@@ -720,6 +761,7 @@ class CleanBuilder{
    this.textureFiles=[...this.textureFiles,texture].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    this.setTextureTab('textures');this.renderTextureLibrary();
+   $('textureImportStatus').textContent='✅ Сохранено: '+texture.name;
    $('textureLibraryStatus').textContent='Сохранено: '+texture.name+' — '+
     texture.width+'×'+texture.height+' px, '+Math.round(texture.bytes/1024)+' КБ.'+
     ' Для переноса между устройствами используй резервную копию.';
@@ -2766,6 +2808,21 @@ class CleanBuilder{
   $('smartCatalogSearch').oninput=()=>this.renderCatalog();
   $('textureCategoryFilter').onchange=()=>this.renderTextureLibrary();
   $('textureSearch').oninput=()=>this.renderTextureLibrary();
+  // Always-on upload buttons. Native Android file chooser is deliberately
+  // unfiltered; check real format after selection rather than greying files.
+  $('btnDirectModuleZip').onclick=()=>$('importZip').click();
+  $('btnZipFromMore').onclick=()=>$('importZip').click();
+  $('btnDirectModuleFile').onclick=()=>$('importUniversalModel').click();
+  $('importUniversalModel').onchange=e=>{
+   const file=e.target.files?.[0];e.target.value='';
+   if(!file)return;
+   const ext=ModelFormats.ext(file.name);
+   if(ext==='glb')this.importGLB(file);
+   else if(ModelFormats.accepts(file.name))this.importOtherModel(file);
+   else notify('Нужна модель GLB, glTF, FBX, OBJ, VOX, STL или PLY','warn');
+  };
+  $('btnDirectImage').onclick=()=>$('importTexture').click();
+  $('btnDirectTextureZip').onclick=()=>$('importTextureZIP').click();
   $('importZip').onchange=e=>{
    const file=e.target.files?.[0];e.target.value='';
    this.importZIP(file);
