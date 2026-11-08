@@ -83,8 +83,17 @@ for(const [style,frameStyle] of [['round','round'],['gothic','gothic'],['rune','
  const saved=Wall.normalize([opening])[0];
  assert.equal(saved.doorStyle,style,'Door style survives project serialization');
  assert.equal(saved.frameStyle,frameStyle,'Frame style survives project serialization');
- assert(wall.getObjectByName('structure:arched-lintel'),
-  'Rounded/gothic opening has real masonry cap, not a painted fake');
+ const structure=wall.getObjectByName('structure:wall');
+ assert(structure&&!wall.getObjectByName('structure:arched-lintel'),
+  'Rounded/gothic arch must be carved into one structural wall mesh, without overlay');
+ const material=structure.material,oldSide=material.side;
+ material.side=THREE.DoubleSide;wall.updateMatrixWorld(true,true);
+ const rayAt=(x,y)=>new THREE.Raycaster(
+  new THREE.Vector3(x,y,1),new THREE.Vector3(0,0,-1),0,2)
+  .intersectObject(structure,false).length;
+ assert.equal(rayAt(0,2.02),0,'Arch remains open at its curved peak');
+ assert(rayAt(.42,2.02)>0,'Solid masonry actually fills arch shoulders');
+ material.side=oldSide;
  assert(wall.getObjectByName('frame:curved-arch'),'Arched frame follows door opening');
  assert(Wall.setDoorAngle(wall,opening.id,45),'Styled door stays hinged');
 }
