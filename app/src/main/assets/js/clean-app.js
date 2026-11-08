@@ -105,6 +105,7 @@ class CleanBuilder{
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
+  this.avatarRoot=null;this.avatarGroundY=0;this.avatarGroundTimer=0;
 
   this.avatarHeightCm=175;
   this.showAvatarInBuild=localStorage.getItem('phoenix-builder-avatar-build')==='on';
@@ -162,7 +163,7 @@ class CleanBuilder{
  }
  setDefaultAvatar(){
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
-
+  this.avatarRoot=null;this.avatarGroundY=0;this.avatarGroundTimer=0;
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';
   const cloth=new THREE.MeshStandardMaterial({color:0x355d82});
   const skin=new THREE.MeshStandardMaterial({color:0xe0b783});
@@ -184,6 +185,8 @@ class CleanBuilder{
   if(!$('avatarHeight').matches(':focus'))$('avatarHeight').value=String(value);
   if(!this.avatarFitGroup||!this.avatarMetrics)return;
   const fit=AvatarFit.apply(this.avatarFitGroup,this.avatarMetrics,value);
+  this.avatarGroundY=fit.position.y;this.avatarGroundTimer=0;
+  this.refreshAvatarFeet(true);
   // The imported animation stays on the source GLB root, not this fit wrapper.
   this.player.updateMatrixWorld(true);
   return fit;
@@ -212,9 +215,11 @@ class CleanBuilder{
    const metrics=AvatarFit.measure(root,fitted);
    const fit=AvatarFit.apply(fitted,metrics,this.avatarHeightCm);
    this.player.clear();this.player.add(fitted);
-   this.avatarFitGroup=fitted;this.avatarMetrics=metrics;
-   // The fit wrapper is intentionally fixed after import. In particular
-   // idle/walk bone motion MUST NOT rescale the entire character.
+   this.avatarRoot=root;this.avatarFitGroup=fitted;this.avatarMetrics=metrics;
+   this.avatarGroundY=fit.position.y;this.avatarGroundTimer=0;
+   // Fit SCALE stays fixed during walking. Only the wrapper's Y position
+   // may follow the current sole position to prevent floating.
+   this.refreshAvatarFeet(true);
    this.player.updateWorldMatrix(true,true);
    notify('Персонаж подогнан: '+safeName(file.name)+
     ' — высота '+Math.round(metrics.size.y*fit.uniform*100)+
@@ -222,6 +227,37 @@ class CleanBuilder{
   }catch(err){console.error(err);this.setDefaultAvatar();notify('Ошибка персонажа: '+err.message,'error')}
  }
 
+ // The physics solver keeps the PLAYER on actual floors/steps while
+ // moving. Also align after entering character mode or on explicit request,
+ // so a stationary character does not remain above a nearby floor.
+ snapPlayerToFloor(){
+  if(!this.collisionsEnabled||!this.collisionSolver)return false;
+  const at=this.player.position;
+  const near=this.collisionSolver.meshes(this.entries,at,1.3);
+  const ground=this.collisionSolver.support(at,near);
+  if(!Number.isFinite(ground)||Math.abs(ground-at.y)>this.collisionSolver.stepHeight+.18)
+   return false; // never teleport a player to an upper storey
+  this.player.position.y=ground;
+  return true;
+ }
+ refreshAvatarFeet(instant=false){
+  if(!this.avatarRoot||!this.avatarFitGroup)return false;
+  try{
+   this.avatarGroundY=AvatarFit.groundTarget(this.avatarRoot,this.avatarFitGroup);
+   AvatarFit.ground(this.avatarFitGroup,this.avatarGroundY,0,instant);
+   return true;
+  }catch(err){
+   console.warn('Опора персонажа GLB:',err);
+   return false;
+  }
+ }
+ placeAvatarOnGround(){
+  if(!this.avatarRoot||!this.avatarFitGroup)
+   return notify('Сначала загрузи персонажа GLB','warn');
+  this.snapPlayerToFloor();this.refreshAvatarFeet(true);
+  this.player.updateWorldMatrix(true,true);
+  notify('🦶 Ступни персонажа поставлены на уровень пола; рост не изменён','success');
+ }
  resetCharacterView(){
   // This only resets accidental camera zoom; do not change avatar scale.
   const centre=this.player.position.clone().add(V(0,1.15,0));
@@ -248,6 +284,8 @@ class CleanBuilder{
    $('btnFocusCamera').classList.remove('active');
   }
   if(mode==='character'){
+   this.snapPlayerToFloor();
+   this.refreshAvatarFeet(true);
    this.controls.target.copy(this.player.position).add(V(0,1.15,0));
    this.camera.position.copy(this.player.position).add(V(0,3.6,6));
   }
@@ -2597,6 +2635,16 @@ class CleanBuilder{
  }
  updatePlayer(dt){
   if(this.avatarMixer)this.avatarMixer.update(dt);
+  if(this.avatarMixer&&this.avatarFitGroup&&this.avatarRoot&&this.player.visible){
+   // Expensive skinned-vertex scan at 5Hz at most on Android; interpolate
+   // foot placement every frame. Never recompute AvatarFit.scale here.
+   this.avatarGroundTimer+=dt;
+   if(this.avatarGroundTimer>=.22){
+    this.avatarGroundTimer=0;
+    this.refreshAvatarFeet(false);
+   }
+   AvatarFit.ground(this.avatarFitGroup,this.avatarGroundY,dt);
+  }
   if(this.mode!=='character'&&this.mode!=='drone')return;
   const down=(...keys)=>keys.some(k=>this.keys.has(k));
   const left=down('a','arrowleft','left'),right=down('d','arrowright','right'),
@@ -2631,6 +2679,7 @@ class CleanBuilder{
   $('modeBuild').onclick=()=>this.setMode('build');
   $('modeCharacter').onclick=()=>this.setMode('character');
   $('btnResetCharacterView').onclick=()=>this.resetCharacterView();
+  $('btnGroundAvatar').onclick=()=>this.placeAvatarOnGround();
   $('modeDrone').onclick=()=>this.setMode('drone');
   $('optimizationQuality').onchange=()=>this.updateOptimizer();
   $('optimizationLOD').onchange=()=>this.updateOptimizer();
