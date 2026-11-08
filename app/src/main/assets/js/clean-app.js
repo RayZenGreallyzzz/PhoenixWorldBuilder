@@ -2156,7 +2156,7 @@ class CleanBuilder{
     if(!updated)throw Error('Не удалось подготовить материалы для '+obj.kind);
    }
    const scene={objects:this.entries.map(obj=>({mesh:obj.root,data:{
-    kind:obj.kind,category:obj.category,storey:obj.storey,
+    id:obj.id,kind:obj.kind,category:obj.category,storey:obj.storey,
     groupId:obj.groupId||null,roomRole:obj.roomRole||null,
     suggestedCollider:['wall','floor','roof'].includes(obj.category)||
      obj.kind==='stairsStraight'?'static-mesh':'manual'
