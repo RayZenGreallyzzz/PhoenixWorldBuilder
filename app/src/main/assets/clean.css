@@ -263,3 +263,16 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
  .gizmoQuickbar button{min-height:40px;padding:4px 5px;font-size:11px}
  .gizmoMeasure{font-size:11px;padding:2px 4px}
 }
+
+/* The CAD dimensions in the video are editable, not merely decorative. */
+.gizmoCadSizePanel{display:flex;align-items:end;justify-content:center;gap:5px;
+ flex-wrap:wrap;padding:7px 5px 4px;border-top:1px solid #526979;width:100%;
+ box-sizing:border-box}
+.gizmoCadSizePanel[hidden]{display:none!important}
+.gizmoCadSizePanel label{font-size:10px;color:#d9f9f8;display:flex;
+ flex-direction:column;gap:3px;min-width:70px;flex:1 1 65px}
+.gizmoCadSizePanel input[type=number]{font-size:13px;min-height:34px;
+ padding:3px 5px;width:100%;box-sizing:border-box;background:#122c38;
+ color:#d4f9fa;border:1px solid #5d9caa;border-radius:4px}
+.gizmoCadSizePanel button{min-height:35px!important;flex:1 1 78px}
+@media(max-width:650px){.gizmoCadSizePanel label{min-width:58px}}
