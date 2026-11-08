@@ -49,6 +49,15 @@ jobs:
           cp /tmp/phoenix-three/node_modules/three/build/three.min.js app/src/main/assets/js/three.min.js
           cp /tmp/phoenix-three/node_modules/three/examples/js/controls/OrbitControls.js app/src/main/assets/js/OrbitControls.js
           cp /tmp/phoenix-three/node_modules/three/LICENSE THREEJS_LICENSE.txt
+          for name in FBXLoader OBJLoader VOXLoader STLLoader PLYLoader; do
+            cp "/tmp/phoenix-three/node_modules/three/examples/js/loaders/$name.js" "app/src/main/assets/js/$name.js"
+          done
+          for name in NURBSUtils NURBSCurve; do
+            cp "/tmp/phoenix-three/node_modules/three/examples/js/curves/$name.js" "app/src/main/assets/js/$name.js"
+          done
+          cp /tmp/phoenix-three/node_modules/three/examples/js/libs/fflate.min.js app/src/main/assets/js/fflate.min.js
+          test -s app/src/main/assets/js/FBXLoader.js
+          test -s app/src/main/assets/js/VOXLoader.js
 
       - name: Bundle offline Draco and KTX2 decoders (Three.js r140)
         run: |
