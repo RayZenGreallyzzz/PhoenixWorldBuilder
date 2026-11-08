@@ -29,11 +29,11 @@ const expectedWalls=[
  [13,2.6,-9,Math.PI/2],[13,2.6,-7,Math.PI/2]
 ];
 const walls=plan.items.filter(x=>x.kind==='wall');
-for(let i=0;i<walls.length;i++){
- const item=walls[i],expected=expectedWalls[i];
- for(let j=0;j<3;j++)near(item.position[j],expected[j],'wall coordinate');
- near(item.rot,expected[3],'wall direction');
-}
+const asKey=(position,rotation)=>position.map(x=>x.toFixed(3)).join(',')+
+ '|'+rotation.toFixed(3);
+assert.deepEqual(walls.map(w=>asKey(w.position,w.rot)).sort(),
+ expectedWalls.map(w=>asKey(w.slice(0,3),w[3])).sort(),
+ 'All ten perimeter walls should cover the expected room boundaries');
 // Every floor must meet neighbouring tile edges without gaps.
 const tiles=plan.items.filter(x=>x.roomRole==='floor');
 assert.equal(new Set(tiles.map(t=>t.position[0]+'|'+t.position[2])).size,6);
