@@ -59,6 +59,20 @@ jobs:
           test -s app/src/main/assets/js/FBXLoader.js
           test -s app/src/main/assets/js/VOXLoader.js
 
+      - name: Always bundle offline FBX/OBJ/VOX/STL/PLY format readers
+        run: |
+          npm install --prefix /tmp/phoenix-import-formats --no-save --no-package-lock --ignore-scripts --no-audit --no-fund three@0.140.0
+          for name in FBXLoader OBJLoader VOXLoader STLLoader PLYLoader; do
+            cp "/tmp/phoenix-import-formats/node_modules/three/examples/js/loaders/$name.js" "app/src/main/assets/js/$name.js"
+          done
+          for name in NURBSUtils NURBSCurve; do
+            cp "/tmp/phoenix-import-formats/node_modules/three/examples/js/curves/$name.js" "app/src/main/assets/js/$name.js"
+          done
+          cp /tmp/phoenix-import-formats/node_modules/three/examples/js/libs/fflate.min.js app/src/main/assets/js/fflate.min.js
+          for name in FBXLoader OBJLoader VOXLoader STLLoader PLYLoader NURBSCurve NURBSUtils; do
+            test -s "app/src/main/assets/js/$name.js"
+          done
+
       - name: Bundle offline Draco and KTX2 decoders (Three.js r140)
         run: |
           npm install --prefix /tmp/phoenix-codecs --no-save --no-package-lock --ignore-scripts --no-audit --no-fund three@0.140.0
