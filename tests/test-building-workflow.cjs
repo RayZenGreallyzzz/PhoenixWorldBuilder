@@ -81,7 +81,7 @@ const vm=require('node:vm');
 const context=vm.createContext({THREE,Blob,TextEncoder,TextDecoder,Uint8Array,
  Uint16Array,Uint32Array,Float32Array,ArrayBuffer,DataView,Math,console});
 vm.runInContext(fs.readFileSync(path.join(base,'js/export-glb.js'),'utf8'),context);
-const SceneExporter=context.SceneExporter;
+const SceneExporter=vm.runInContext('SceneExporter',context);
 const root=G.create('wall');root.position.set(2,0,-1);
 (async()=>{
  const bin=await SceneExporter.build({objects:[{mesh:root,
