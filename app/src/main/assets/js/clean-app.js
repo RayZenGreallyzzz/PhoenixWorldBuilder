@@ -239,7 +239,7 @@ class CleanBuilder{
   else notify('Строительство: выбери деталь, затем коснись места установки');
   $('inspector').classList.remove('unavailable');
   this.preview?.root&&(this.preview.root.visible=this.tool==='place');
-  this.controls.update();this.aimPlacement();
+  this.controls.update();this.aimPlacement();this.updateGizmoDock();
  }
  async cacheModel(id,buffer,category='wall',name='GLB',keep=true){
   const started=typeof performance!=='undefined'?performance.now():Date.now();
@@ -1100,6 +1100,7 @@ class CleanBuilder{
   if(this.preview)this.preview.root.visible=tool==='place';
   if(this.previewOutline)this.previewOutline.visible=tool==='place';
   this.gizmo.attach(tool==='pick'?this.selected:null);
+  this.updateGizmoDock();
   notify(tool==='pick'?'Коснись готовой детали, чтобы изменить её':
    'Коснись места на земле для установки детали','neutral');
  }
@@ -1225,8 +1226,45 @@ class CleanBuilder{
   for(const id of ['textureShiftUp','textureShiftDown','textureShiftLeft',
    'textureShiftRight','textureShiftReset'])$(id).disabled=!mayShiftTexture;
   this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.updateGizmoDock();
   this.updateOpeningInfo();
   this.readSockets();
+ }
+ // The video-inspired transform dock is visible only for a placed selection.
+ updateGizmoDock(){
+  const dock=$('gizmoQuickbar');if(!dock)return;
+  dock.hidden=!(this.mode==='build'&&this.tool==='pick'&&this.selected);
+  for(const mode of ['move','rotate','scale']){
+   const cap=mode[0].toUpperCase()+mode.slice(1);
+   for(const id of ['gizmo'+cap,'quickGizmo'+cap])
+    $(id)?.classList.toggle('active',this.gizmo.mode===mode);
+  }
+  $('quickGizmoCad')?.classList.toggle('active',this.gizmo.showCad);
+ }
+ selectGizmoMode(mode){
+  this.gizmo.setMode(mode);this.updateGizmoDock();
+  if(this.tool!=='pick')notify('Сначала выдели готовую деталь','warn');
+ }
+ focusGizmoView(view='focus'){
+  if(!this.selected)return notify('Выдели деталь для выбора вида','warn');
+  this.setMode('build');
+  const root=this.selected.root;
+  root.updateMatrixWorld(true,true);
+  const box=new THREE.Box3().setFromObject(root),center=box.getCenter(V());
+  if(box.isEmpty())return;
+  const size=box.getSize(V()),distance=Math.max(5,size.length()*1.65);
+  if(view==='focus'){
+   const direction=this.camera.position.clone().sub(this.controls.target).normalize();
+   this.camera.position.copy(center).addScaledVector(direction,distance);
+  }else{
+   const direction=view==='front'?V(0,.10,1):
+    view==='side'?V(1,.10,0):V(.04,1,.12);
+   this.camera.position.copy(center).add(direction.normalize().multiplyScalar(distance));
+  }
+  this.controls.target.copy(center);
+  this.camera.lookAt(center);this.controls.update();this.gizmo.update();
+  notify('📐 Камера: '+({focus:'к объекту',front:'спереди',
+   side:'сбоку',top:'сверху'})[view]+'. Сам объект не перемещён','success');
  }
  // Navigation only: this must never mutate the building or its coordinates.
  startCameraFocus(){
@@ -2442,14 +2480,17 @@ class CleanBuilder{
    }
   };
   for(const mode of ['move','rotate','scale']){
-   const id='gizmo'+mode[0].toUpperCase()+mode.slice(1);
-   $(id).onclick=()=>{
-    this.gizmo.setMode(mode);
-    for(const name of ['move','rotate','scale'])
-     $('gizmo'+name[0].toUpperCase()+name.slice(1)).classList.toggle('active',mode===name);
-    if(this.tool!=='pick')notify('Для гизмо нажми «Выделить» и выбери деталь','warn');
-   };
+   const cap=mode[0].toUpperCase()+mode.slice(1);
+   $('gizmo'+cap).onclick=()=>this.selectGizmoMode(mode);
+   $('quickGizmo'+cap).onclick=()=>this.selectGizmoMode(mode);
   }
+  $('quickGizmoCad').onclick=()=>{
+   this.gizmo.toggleCad();this.updateGizmoDock();
+  };
+  $('quickGizmoFocus').onclick=()=>this.focusGizmoView();
+  $('quickViewFront').onclick=()=>this.focusGizmoView('front');
+  $('quickViewSide').onclick=()=>this.focusGizmoView('side');
+  $('quickViewTop').onclick=()=>this.focusGizmoView('top');
   $('btnHideUi').onclick=()=>document.body.classList.toggle('uiHidden');
   $('btnSave').onclick=()=>this.save();
   $('btnLoad').onclick=()=>this.load();
