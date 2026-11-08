@@ -18,7 +18,7 @@ const BuilderGizmo=(()=>{
   constructor(scene,camera,canvas,ray){
    this.scene=scene;this.camera=camera;this.canvas=canvas;this.ray=ray;
    this.group=new THREE.Group();scene.add(this.group);this.group.visible=false;
-   this.selected=null;this.mode='move';this.drag=null;
+   this.selected=null;this.mode='rotate';this.drag=null;
    // CAD badges are passive HUD elements: they never steal touch events
    // from the canvas, rings, camera or Android pinch-to-zoom.
    this.hud=typeof document!=='undefined'?
