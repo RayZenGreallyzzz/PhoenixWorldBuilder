@@ -1234,12 +1234,59 @@ class CleanBuilder{
  updateGizmoDock(){
   const dock=$('gizmoQuickbar');if(!dock)return;
   dock.hidden=!(this.mode==='build'&&this.tool==='pick'&&this.selected);
+  const cadPanel=$('gizmoCadSizePanel');
+  cadPanel.hidden=dock.hidden||!this.cadPanelOpen;
+  if(!cadPanel.hidden){
+   const dimensions=this.physicalSize(this.selected);
+   if(dimensions)for(const [id,axis] of [
+    ['gizmoWidthMeters','x'],['gizmoHeightMeters','y'],
+    ['gizmoDepthMeters','z']]){
+    const field=$(id);
+    if(document.activeElement!==field)
+     field.value=(dimensions[axis]/100).toFixed(2);
+   }
+  }
   for(const mode of ['move','rotate','scale']){
    const cap=mode[0].toUpperCase()+mode.slice(1);
    for(const id of ['gizmo'+cap,'quickGizmo'+cap])
     $(id)?.classList.toggle('active',this.gizmo.mode===mode);
   }
-  $('quickGizmoCad')?.classList.toggle('active',this.gizmo.showCad);
+  $('quickGizmoCad')?.classList.toggle('active',!!this.cadPanelOpen);
+ }
+ applyGizmoCadDimensions(){
+  const obj=this.selected;
+  if(!obj||this.tool!=='pick')return notify('Сначала выдели готовую деталь','warn');
+  const dims=this.physicalSize(obj);
+  if(!dims)return notify('Размеры детали не определены','warn');
+  const target={
+   x:Number($('gizmoWidthMeters').value),y:Number($('gizmoHeightMeters').value),
+   z:Number($('gizmoDepthMeters').value)
+  };
+  if(!Object.values(target).every(v=>Number.isFinite(v)&&v>=.05&&v<=100))
+   return notify('Укажи размеры в метрах от 0,05 до 100','warn');
+  const axes={...obj.axes};let newThickness=obj.thickness;
+  for(const axis of ['x','y','z']){
+   const old=Math.max(.00001,dims[axis]/100);
+   if(obj.kind==='wall'&&axis==='z'){
+    if(target.z<.025||target.z>.8)
+     return notify('Толщина обычной стены от 2,5 до 80 см','warn');
+    newThickness=target.z;continue;
+   }
+   const next=(axes[axis]||1)*(target[axis]/old);
+   if(!Number.isFinite(next)||next<.1||next>10)
+    return notify('Размер вне диапазона масштабирования 10–1000%','warn');
+   axes[axis]=next;
+  }
+  this.recordEdit();
+  obj.axes=axes;obj.thickness=newThickness;
+  this.applyTransform(obj);
+  if(WallOpenings.supported(obj.kind))this.updateGeometry(obj);
+  else if(obj.kind==='floor')this.rebuildFloor(obj,obj.floorTrim);
+  else if(obj.thicknessEditable)this.rebuildImported(obj);
+  else this.applySurfaceTo(obj);
+  if(this.outline)this.outline.setFromObject(obj.root);
+  this.syncInspector();this.gizmo.update();
+  notify('📐 CAD: размеры изменены. Положение детали осталось прежним','success');
  }
  selectGizmoMode(mode){
   this.gizmo.setMode(mode);this.updateGizmoDock();
@@ -2485,8 +2532,10 @@ class CleanBuilder{
    $('quickGizmo'+cap).onclick=()=>this.selectGizmoMode(mode);
   }
   $('quickGizmoCad').onclick=()=>{
-   this.gizmo.toggleCad();this.updateGizmoDock();
+   this.cadPanelOpen=!this.cadPanelOpen;
+   this.gizmo.toggleCad(true);this.updateGizmoDock();
   };
+  $('btnGizmoApplyDimensions').onclick=()=>this.applyGizmoCadDimensions();
   $('quickGizmoFocus').onclick=()=>this.focusGizmoView();
   $('quickViewFront').onclick=()=>this.focusGizmoView('front');
   $('quickViewSide').onclick=()=>this.focusGizmoView('side');
