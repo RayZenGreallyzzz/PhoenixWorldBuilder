@@ -169,23 +169,59 @@ const SurfaceMaterials=(()=>{
     output[side]=normalize(raw[side]);
   return output;
  }
- function sideFromNormal(normal,category='wall'){
+ // A wall side is a PHYSICAL surface, not the sign of a triangle's
+ // normal: the generator for cut-out walls has opposite winding to BoxGeometry,
+ // and circular walls turn through X/Z as they go around the building.
+ // point is a root-local position on the face (not a world position).
+ // "front" = local +Z on a straight wall, outer radius on a round wall,
+ // or the outside of the two arms of the built-in L corner.
+ function sideFromNormal(normal,category='wall',kind='',point=null){
   if(category==='floor'){
    if(Math.abs(normal.y)<.65)return null;
    return normal.y>0?'front':'back'; // top / bottom
   }
-  if(category!=='wall'||Math.abs(normal.z)<.65||
-   Math.abs(normal.z)<Math.abs(normal.x))return null;
-  return normal.z>0?'front':'back'; // broad wall faces, not the end caps
+  if(category!=='wall'||Math.abs(normal.y)>.45)return null;
+  const nx=normal.x,nz=normal.z;
+  if(point&&kind==='wall'){
+   // End caps and door/window reveals must keep their own material.
+   if(Math.abs(nz)<.72)return null;
+   if(Math.abs(point.z)<.0005)return null;
+   return point.z>0?'front':'back';
+  }
+  if(point&&(kind==='arc90'||kind==='arc180')){
+   const radius=Math.hypot(point.x,point.z);
+   if(radius<.01)return null;
+   // Reject tangential end caps at the start/end of the arc. Accept both
+   // normal windings, since pristine and cut-out curved walls differ.
+   const radial=(nx*point.x+nz*point.z)/radius;
+   if(Math.abs(radial)<.72)return null;
+   // Built-in arcs are centred at the local origin, radius 2 m.
+   return radius>=2?'front':'back';
+  }
+  if(point&&kind==='corner'){
+   // First arm runs along negative X with its broad faces at Z=+/-thick.
+   // Second arm runs along negative Z with its broad faces at X=+/-thick.
+   // Never treat either arm's perpendicular end cap as a broad face.
+   if(Math.abs(nz)>.72&&point.z>-.35&&point.z<.35)
+    return point.z>=0?'front':'back';
+   if(Math.abs(nx)>.72&&point.x>-.35&&point.x<.35)
+    return point.x>=0?'front':'back';
+   return null;
+  }
+  // Imported arbitrary GLB walls: retain the previous object-local mapping
+  // rather than assume a circular or rectangular profile.
+  if(Math.abs(nz)<.65||Math.abs(nz)<Math.abs(nx))return null;
+  return nz>0?'front':'back';
  }
- function faceFromHit(hit,root,category){
+ function faceFromHit(hit,root,category,kind=root?.name||''){
   if(!hit?.face?.normal||!hit.object||!root)return null;
   root.updateWorldMatrix(true,true);
   hit.object.updateWorldMatrix(true,false);
   const relative=root.matrixWorld.clone().invert().multiply(hit.object.matrixWorld);
   const normal=hit.face.normal.clone().applyMatrix3(
    new THREE.Matrix3().getNormalMatrix(relative)).normalize();
-  return sideFromNormal(normal,category);
+  const position=hit.point?root.worldToLocal(hit.point.clone()):null;
+  return sideFromNormal(normal,category,kind,position);
  }
  function faceTexture(spec,textures){
   const source=spec.style==='custom'?textures?.get(spec.imageId):
@@ -266,7 +302,8 @@ const SurfaceMaterials=(()=>{
     renderGeometry.setAttribute('uv',uv);}
    const transform=inverseRoot.clone().multiply(mesh.matrixWorld);
    const a=new THREE.Vector3(),b=new THREE.Vector3(),d=new THREE.Vector3();
-   const ab=new THREE.Vector3(),ac=new THREE.Vector3(),normal=new THREE.Vector3();
+   const ab=new THREE.Vector3(),ac=new THREE.Vector3(),normal=new THREE.Vector3(),
+    faceCenter=new THREE.Vector3();
    const groupAt=index=>{
     const entry=originalGroups.find(g=>index>=g.start&&index<g.start+g.count);
     // BoxGeometry has six face groups even if the mesh has ONE material.
@@ -281,7 +318,8 @@ const SurfaceMaterials=(()=>{
     b.fromBufferAttribute(pos,i+1).applyMatrix4(transform);
     d.fromBufferAttribute(pos,i+2).applyMatrix4(transform);
     normal.copy(ab.subVectors(b,a)).cross(ac.subVectors(d,a)).normalize();
-    const side=sideFromNormal(normal,category);
+    faceCenter.copy(a).add(b).add(d).multiplyScalar(1/3);
+    const side=sideFromNormal(normal,category,options.kind,faceCenter);
     const index=sideMaterial.get(side);
     const matIndex=index===undefined?groupAt(i):index;
     if(index!==undefined)changed=true;
