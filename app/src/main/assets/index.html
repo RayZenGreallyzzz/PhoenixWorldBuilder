@@ -3,6 +3,26 @@
 <title>Phoenix Builder — Чистая студия</title><link rel="stylesheet" href="clean.css"></head>
 <body>
 <canvas id="view" aria-label="Строительная 3D-сцена"></canvas>
+<div id="gizmoCadOverlay" class="gizmoCadOverlay" hidden aria-hidden="true">
+ <span id="gizmoMeasureWidth" class="gizmoMeasure" hidden>Ш: —</span>
+ <span id="gizmoMeasureHeight" class="gizmoMeasure" hidden>В: —</span>
+ <span id="gizmoMeasureDepth" class="gizmoMeasure" hidden>Г: —</span>
+</div>
+<div id="gizmoQuickbar" class="gizmoQuickbar" role="toolbar"
+ aria-label="Быстрое гизмо для выделенной детали" hidden>
+ <div class="gizmoQuickModes">
+  <button id="quickGizmoRotate" type="button" class="active" title="Цветные оси и свободное вращение">⟳ Вращать</button>
+  <button id="quickGizmoMove" type="button" title="Двигать объект по X/Y/Z">↔ Сдвигать</button>
+  <button id="quickGizmoScale" type="button" title="Изменить размеры объекта">◇ Масштаб</button>
+  <button id="quickGizmoCad" type="button" class="active" title="Габариты в метрах">▣ Размеры CAD</button>
+  <button id="quickGizmoFocus" type="button" title="Приблизить камеру к детали">⌖ К объекту</button>
+ </div>
+ <div class="gizmoQuickViews" role="group" aria-label="Вид на объект">
+  <button id="quickViewFront" type="button">Спереди</button>
+  <button id="quickViewSide" type="button">Сбоку</button>
+  <button id="quickViewTop" type="button">Сверху</button>
+ </div>
+</div>
 <header class="topbar">
  <div class="brand">🔥 PHOENIX <b>BUILDER</b><small>СТУДИЯ 2.0</small></div>
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
@@ -186,8 +206,8 @@
     <small class="tip">Без сетки перетаскивай деталь плавно; кнопки сдвигают точно на выбранное число миллиметров по X, Y или Z. Для идеального примыкания колонны к стене приблизь пальцем, затем доведи шагом 1 мм.</small>
    </div>
    <details class="rowSection" id="gizmoPanel" open><summary>🎛 Гизмо — 3D управление</summary>
-    <div class="gizmoModes"><button id="gizmoMove" class="active">↔ Двигать</button><button id="gizmoRotate">⟳ Крутить</button><button id="gizmoScale">◇ Масштаб</button></div>
-    <small class="tip">Выдели деталь: стрелки двигают по X/Y/Z, красное/зелёное/синее кольца вращают на 360° вокруг X/Y/Z, кубики меняют масштаб. Вращение плавное; Shift на клавиатуре — шаг 15°. Угол каждой оси можно точно вписать выше.</small>
+    <div class="gizmoModes"><button id="gizmoMove">↔ Двигать</button><button id="gizmoRotate" class="active">⟳ Крутить</button><button id="gizmoScale">◇ Масштаб</button></div>
+    <small class="tip">Как на видео: красное X, зелёное Y и синее Z — вращение по осям; большое золотое кольцо — свободный поворот вокруг взгляда камеры. Подсказки Ш/В/Г показывают реальные размеры объекта. Снизу сцены — быстрый выбор действий и видов. Shift — поворот по 15°.</small>
    </details>
    <details class="rowSection" id="textureInspector"><summary>🎨 Материалы и текстуры</summary>
      <div class="textureFaceEditor">
