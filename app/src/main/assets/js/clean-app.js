@@ -480,7 +480,7 @@ class CleanBuilder{
    // Give Android a frame before a large ZIP; keep the toolbar responsive.
    await new Promise(resolve=>setTimeout(resolve,0));
    const list=await ZipUtils.extract(file,{
-    maxEntries:1200,maxTotal:200000000,maxEntry:50000000,
+    maxEntries:2200,maxTotal:200000000,maxEntry:50000000,
     onProgress:(done,total)=>{if(done%10===0)progress(
      '📦 Распаковано '+done+' / '+total+' файлов. Не закрывай приложение.');}
    });
@@ -1069,7 +1069,10 @@ class CleanBuilder{
     ' · '+matching.length;
    section.append(heading);
    const rows=document.createElement('div');rows.className='catalogRows smartGrid';
-   for(const module of matching){
+   // Massive offline ZIP packs can contain 1300+ GLBs. Render only a small
+   // visible slice; all assets remain searchable and safely stored in IDB.
+   const visibleLimit=folder==='all'&&!term?32:100;
+   for(const module of matching.slice(0,visibleLimit)){
     const card=document.createElement('div');card.className='moduleCard';
     const btn=document.createElement('button');btn.type='button';
     btn.className='modulePick';
@@ -1128,7 +1131,14 @@ class CleanBuilder{
     }
     rows.append(card);
    }
-   section.append(rows);container.append(section);
+   section.append(rows);
+   if(matching.length>visibleLimit){
+    const more=document.createElement('small');more.className='tip';
+    more.textContent='Показаны '+visibleLimit+' из '+matching.length+
+     '. Чтобы увидеть остальные, выбери папку выше или воспользуйся поиском.';
+    section.append(more);
+   }
+   container.append(section);
   }
   if(!container.children.length){
    const hint=document.createElement('p');hint.className='tip';
@@ -1471,8 +1481,14 @@ class CleanBuilder{
   for(const id of ['moveLeft','moveRight','moveForward','moveBack'])$(id).disabled=!(obj&&this.selected===obj);
   $('openingPanel').style.display=this.openingPickMode||
    obj&&WallOpenings.supported(obj.kind)?'block':'none';
-  $('prefabDoorPanel').style.display=obj?.kind?.startsWith('door')&&
-   ArchitectureKit.has(obj.kind)?'block':'none';
+  const selectedName=obj?this.descriptor(obj.kind)?.name||'':'';
+  const importedArch=obj?.kind?.startsWith('glb:')&&
+   /арк|про[её]м|дверн.*рам|door.*frame/i.test(selectedName);
+  $('prefabDoorPanel').style.display=(obj?.kind?.startsWith('door')&&
+   ArchitectureKit.has(obj.kind))||importedArch?'block':'none';
+  $('btnCutForPrefabDoor').textContent=importedArch?
+   '✂ Подготовить настоящий проход под эту GLB-арку':
+   '✂ Подготовить отверстие под размер этой двери';
   read('prefabDoorSwing',obj?.doorAngle||0);
   const choices=$('openingNeighbor'),savedNeighbor=choices.value;choices.textContent='';
   const automatic=document.createElement('option');automatic.value='';
@@ -1755,24 +1771,38 @@ class CleanBuilder{
  cutForPrefabDoor(){
   if(!this.canEditObject())return;
   const door=this.selected;
-  if(this.tool!=='pick'||!door||!ArchitectureKit.has(door.kind)||
-   !door.kind.startsWith('door'))
-   return notify('Сначала выдели готовую дверь из библиотеки','warn');
+  const label=door?this.descriptor(door.kind)?.name||'':'';
+  const builtin=!!(door&&ArchitectureKit.has(door.kind)&&
+   door.kind.startsWith('door'));
+  const imported=!!(door?.kind?.startsWith('glb:')&&
+   /арк|про[её]м|дверн.*рам|door.*frame/i.test(label));
+  if(this.tool!=='pick'||!door||(!builtin&&!imported))
+   return notify('Выдели установленную дверь или GLB-арку','warn');
   const dimensions=this.physicalSize(door);
-  if(!dimensions)return notify('Не удалось измерить размер двери','warn');
+  if(!dimensions)return notify('Не удалось измерить размер двери или арки','warn');
+  // Imported arch is a decoration and does NOT cut a wall on its own.
+  // The fitted opening is a separate real cut in the BUILT-IN wall. Use
+  // a slightly narrower clear opening than its full decorative frame.
+  const width=imported?Math.max(55,dimensions.x*.80):dimensions.x+1;
+  const height=imported?Math.min(250,dimensions.y*.78):dimensions.y+1;
   $('openingType').value='passage';
-  $('openingShape').value=door.kind==='doorRound'?'round':
-   ['doorGothic','doorRune'].includes(door.kind)?'gothic':'rectangle';
+  $('openingShape').value=imported?
+   (/готич|стрельч|gothic/i.test(label)?'gothic':
+    /арк|кругл|скругл|round/i.test(label)?'round':'rectangle'):
+   door.kind==='doorRound'?'round':
+    ['doorGothic','doorRune'].includes(door.kind)?'gothic':'rectangle';
   $('openingSizePreset').value='';
-  $('openingWidth').value=String(Math.round((dimensions.x+1)*10)/10);
-  $('openingHeight').value=String(Math.round((dimensions.y+1)*10)/10);
+  $('openingWidth').value=String(Math.round(width*10)/10);
+  $('openingHeight').value=String(Math.round(height*10)/10);
   $('openingBottom').value='0';
   this.openingPickMode=true;
   this.setTool('pick');this.syncInspector();
   $('openingPanel').open=true;
   $('openingPanel').scrollIntoView({block:'nearest',behavior:'auto'});
-  notify('Подготовлен пустой проём '+(dimensions.x+1)+' × '+
-   (dimensions.y+1)+' см под дверь с зазором 1 см. Коснись стены','success');
+  notify('✂ Подготовлен проход '+Math.round(width)+' × '+
+   Math.round(height)+' см под '+(imported?'импортированную арку':'дверь')+
+   '. Теперь коснись СТЕНЫ за ней и нажми «Вырезать отверстие».'+
+   ' Без реального выреза стена продолжает блокировать персонажа.','success');
  }
  openingParts(plan){
   const staged=[];

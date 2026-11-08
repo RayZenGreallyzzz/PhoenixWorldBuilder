@@ -15,7 +15,7 @@ const ZipUtils=(()=>{
   }
   const cb=join(central),end=new Uint8Array(22),dv=new DataView(end.buffer);u32(dv,0,0x06054b50);u16(dv,8,count);u16(dv,10,count);u32(dv,12,cb.length);u32(dv,16,pos);return new Blob([...local,cb,end],{type:'application/zip'});
  }
- async function extract(file,{maxEntries=1200,maxTotal=200000000,
+ async function extract(file,{maxEntries=2200,maxTotal=200000000,
  maxEntry=50000000,onProgress=null}={}){
   // Standard ZIP v2, central-directory sizes. Explicitly reject ZIP64 and
   // unsupported files to avoid silently importing partial model libraries.
