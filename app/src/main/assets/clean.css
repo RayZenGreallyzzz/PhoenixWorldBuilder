@@ -223,3 +223,14 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
 .textureFaceEditor select,.textureFaceEditor button{min-height:43px;width:100%}
 .textureFaceEditor .tip{font-size:11px;line-height:1.45}
 #btnPickTextureFace.active{background:#117a79;border-color:#91f9c5}
+
+/* Building flow: touch sized controls for instant room generation. */
+#roomBuilderPanel{border:1px solid #45887d;border-radius:8px;
+ background:#102e39;padding:10px 7px}
+#roomBuilderPanel summary{font-weight:750;color:#b5fff1}
+#roomBuilderPanel input[type="number"]{max-width:100%;width:100%;box-sizing:border-box}
+#roomBuilderPanel .cols2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+#roomBuilderPanel button{min-height:43px;white-space:normal}
+#roomBuilderPanel .tip{line-height:1.4}
+.editHistoryPanel button{min-height:45px}
+.editHistoryPanel button:disabled{opacity:.42;filter:grayscale(1)}
