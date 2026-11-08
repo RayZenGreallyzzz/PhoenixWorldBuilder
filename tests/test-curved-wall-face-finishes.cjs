@@ -74,7 +74,12 @@ for(const kind of cases){
   root.updateMatrixWorld(true,true);
   const structural=cut?root.getObjectByName('structure:wall'):root.children[0];
   const originalMaterial=structural.material;
-  const snapshot=Array.from(structural.geometry.getAttribute('position').array);
+  const originalGeometry=structural.geometry;
+  // applyFaces expands indexed BoxGeometry into triangles for independent
+  // glTF material groups. Compare expanded vertices, not raw index layouts.
+  const flattened=originalGeometry.index?originalGeometry.toNonIndexed():originalGeometry;
+  const snapshot=Array.from(flattened.getAttribute('position').array);
+  if(flattened!==originalGeometry)flattened.dispose();
   const result=M.applyFaces(root,{style:'none'},sides,new Map(),{kind,category:'wall'});
   assert(result.ok&&result.faces>0,'Painting faces failed: '+kind+' cut='+cut);
   let outside=0,inside=0,notPainted=0,caps=0;
@@ -102,7 +107,9 @@ for(const kind of cases){
    ', cut='+cut+' outside='+outside+' inside='+inside);
   assert(caps>0,kind+' should retain its roof/base caps');
   assert.deepEqual(Array.from(structural.geometry.getAttribute('position').array),
-   snapshot,'Painting must preserve each vertex: '+kind);
+   snapshot,'Painting must preserve each triangle vertex: '+kind);
+  assert(originalGeometry.getAttribute('position').count>0,
+   'Original source geometry must remain intact');
   // Tap-to-select side must agree with the independently verified material.
   const geo=structural.geometry;
   for(let tri=0,checks=0;tri<geo.getAttribute('position').count/3&&checks<20;tri++){
