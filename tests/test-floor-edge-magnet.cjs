@@ -36,6 +36,17 @@ for(const [cursor,want] of [
 }
 assert.equal(G.solveSnap(source,[first],V(4,0,4),0,0),null,
  'No false magnet when cursor is distant from another slab');
+// User-uploaded "03_Полы_и_перекрытия" must not be misclassified as
+// ceiling: this pack includes sector 90-degree and curved floor slabs.
+const SmartCatalog=require(path.join(base,'js/smart-catalog.js'));
+for(const name of ['1002_Дуговой_пол.glb',
+ '1002_Секторный_пол.glb','1014_Колоритный_скруглённый_угол_пол.glb']){
+ const guess=SmartCatalog.classify('03_Полы_и_перекрытия/LifeAfter_666/'+name);
+ assert.equal(guess.folder,'floors','Real user curved floor must be under Floors');
+ assert.equal(guess.category,'floor','Curved floor placement needs the floor category');
+}
+assert.equal(SmartCatalog.classify('04_Потолки/test.glb').folder,'ceilings',
+ 'Real ceiling archives must remain under Ceilings');
 // The user chooses its texture layout: magnet must NEVER edit UVs or surface.
 assert.deepEqual(Array.from(source.root.children[0].geometry.getAttribute('uv').array),
  sourceUV,'Existing texture UVs must not move or stretch');
