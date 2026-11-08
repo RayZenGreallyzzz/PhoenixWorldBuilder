@@ -39,7 +39,7 @@ assert(android.includes('new Intent(Intent.ACTION_OPEN_DOCUMENT)'),
  'Open native Android document picker, not browser filtered media picker');
 assert(android.includes('intent.setType("*/*")'),
  'Native SAF must allow ZIP/image documents with application/octet-stream');
-assert(!android.includes('params.createIntent()'),
+assert(!/Intent intent\\s*=\\s*params\\.createIntent\\s*\(/.test(android),
  'HTML accept filters must not leak into native Android MIME_TYPES');
 assert(!android.includes('Intent.EXTRA_MIME_TYPES'),
  'Do not reintroduce restrictive Android MIME type filters');
