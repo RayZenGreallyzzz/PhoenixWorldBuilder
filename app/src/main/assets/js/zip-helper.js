@@ -35,7 +35,8 @@ const ZipUtils=(()=>{
   let pos=centralOffset,total=0;
   for(let n=0;n<totalEntries;n++){
    // Unblock touches, rendering and Android back-button between entries.
-   if(n%3===0)await new Promise(resolve=>setTimeout(resolve,0));
+   if(n%3===0&&typeof setTimeout==='function')
+    await new Promise(resolve=>setTimeout(resolve,0));
    if(typeof onProgress==='function')onProgress(n,totalEntries);
    if(pos+46>bytes.length||v.getUint32(pos,true)!==0x02014b50)throw Error('Повреждён каталог ZIP');
    const method=v.getUint16(pos+10,true),flags=v.getUint16(pos+8,true);
