@@ -9,7 +9,7 @@ const AvatarFit=(()=>{
  // imported humanoids the difference is huge (centimetres vs metres).
  // Measure real, skin-deformed vertices and express them in the fit wrapper's
  // LOCAL coordinates so camera orbit and the player's yaw cannot affect scale.
- function measure(root,relativeTo=null){
+ function measure(root,relativeTo=null,maxSkinnedVertices=150000){
   if(!root||typeof THREE==='undefined')throw Error('Модель персонажа отсутствует');
   // Important: SkinnedMesh overrides updateMatrixWorld() to refresh
   // bindMatrixInverse in attached skeleton mode. updateWorldMatrix() alone
@@ -37,7 +37,9 @@ const AvatarFit=(()=>{
       mesh.geometry.getAttribute('skinWeight')&&
       typeof mesh.boneTransform==='function'){
     // One-time operation on import, limited for pathological >150k vertex rigs.
-    const stride=Math.max(1,Math.ceil(positions.count/150000));
+    const cap=Number.isFinite(maxSkinnedVertices)?
+     Math.max(500,Math.min(150000,Math.floor(maxSkinnedVertices))):150000;
+    const stride=Math.max(1,Math.ceil(positions.count/cap));
     for(let i=0;i<positions.count;i+=stride){
      point.fromBufferAttribute(positions,i);
      mesh.boneTransform(i,point);
@@ -80,6 +82,36 @@ const AvatarFit=(()=>{
   fitGroup.position.copy(fit.position);
   return fit;
  }
- return {measure,compute,apply};
+ // Keep the soles at the character controller's ground (player.position.y).
+ // This adjusts ONLY the vertical placement of the fit wrapper, never its
+ // scale or imported model root. A walking animation may move the hips or
+ // GLB root up, and should not make the entire person hover over the floor.
+ // Sparse sampling caps CPU usage for large Android skinned GLB files.
+ function groundTarget(root,fitGroup){
+  if(!root||!fitGroup)throw Error('Сначала загрузи персонажа GLB');
+  const visible=measure(root,fitGroup,10000);
+  const scaled=fitGroup.scale.y;
+  if(!Number.isFinite(scaled)||scaled<=0)throw Error('Некорректный размер персонажа');
+  const target=-visible.min.y*scaled;
+  if(!Number.isFinite(target))throw Error('Не найдена опора персонажа');
+  return target;
+ }
+ function ground(fitGroup,target,dt=0,instant=false){
+  if(!fitGroup||!Number.isFinite(target))return false;
+  const before=fitGroup.position.y;
+  if(instant)fitGroup.position.y=target;
+  else {
+   // Run on EVERY frame with cached groundTarget, but sample the pose
+   // only a few times per second. Smooth corrections do not cause a
+   // noticeable "three-size jump" or shake while running.
+   const duration=Number.isFinite(dt)?Math.max(0,Math.min(dt,.1)):0;
+   const alpha=1-Math.exp(-11*duration);
+   fitGroup.position.y+=(target-before)*alpha;
+   if(Math.abs(target-fitGroup.position.y)<.001)
+    fitGroup.position.y=target;
+  }
+  return Math.abs(fitGroup.position.y-before)>.000001;
+ }
+ return {measure,compute,apply,groundTarget,ground};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=AvatarFit;
