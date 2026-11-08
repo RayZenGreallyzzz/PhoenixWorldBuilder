@@ -564,6 +564,7 @@ class CleanBuilder{
   this.activeTextureId=imageId||this.activeTextureId;
   const scope=this.textureScope(obj);
   if(style==='none'){this.changeSurface(true);return}
+  if(this.entries.includes(obj))this.recordEdit();
   const current=scope==='all'?obj.surface:obj.surfaceSides?.[scope]||obj.surface;
   const next=SurfaceMaterials.normalize({...current,style,
    imageId:style==='custom'?this.activeTextureId:''});
@@ -717,6 +718,7 @@ class CleanBuilder{
    return notify('Сначала выбери своё изображение из библиотеки','warn');
   const step=Number($('textureAlignStep').value);
   const next=SurfaceMaterials.normalize(TexturePlacement.move(style,direction,step));
+  if(this.entries.includes(obj))this.recordEdit();
   const scope=this.textureScope(obj);
   if(scope==='all')obj.surface=next;
   else{obj.surfaceSides=obj.surfaceSides||{};obj.surfaceSides[scope]=next;}
@@ -735,6 +737,7 @@ class CleanBuilder{
   const surface=this.surfaceFromControls(source);
   if(surface.style==='custom'&&!surface.imageId)
    return notify('Сначала выбери своё изображение','warn');
+  this.recordEdit();
   let count=0;
   const group=source.category==='floor'&&surface.mapping==='joined'?
    this.joinedFloorRegion(source)?.entries||[source]:
@@ -756,6 +759,7 @@ class CleanBuilder{
   const next=reset?SurfaceMaterials.normalize({style:'none'}):
    this.surfaceFromControls(obj);
   if(next.style==='custom'&&!next.imageId)return notify('Выбери или загрузи картинку слева','warn');
+  if(this.entries.includes(obj))this.recordEdit();
   if(scope!=='all'){
    obj.surfaceSides=obj.surfaceSides||{};
    if(reset)delete obj.surfaceSides[scope];
@@ -840,6 +844,7 @@ class CleanBuilder{
    obj.doorAngle=clamp(Number(preset.doorAngle)||0,-110,110);
    obj.openings=WallOpenings.normalize(preset.openings);
    obj.surface=SurfaceMaterials.normalize(preset.surface);
+   obj.surfaceSides=SurfaceMaterials.normalizeSides(preset.surfaceSides);
    obj.manualEdgeCut=preset.manualEdgeCut||null;
    obj.autoEdgeCuts=FloorClip.normalizeCuts(preset.autoEdgeCuts);
    if(obj.kind==='floor')this.rebuildFloor(obj,preset.floorTrim);
@@ -1377,6 +1382,7 @@ class CleanBuilder{
  }
  commitOpenings(plan){
   if(!plan.ok)return false;
+  this.recordEdit();
   for(const item of plan.staged){
    const old=item.obj.root;
    this.scene.add(item.root);old.removeFromParent();
@@ -1501,6 +1507,7 @@ class CleanBuilder{
  editField(id){
   const obj=this.target();if(!obj)return;
   const value=Number($(id).value);if(!Number.isFinite(value))return;
+  if(this.entries.includes(obj))this.recordEdit();
   if(id==='scaleAll')obj.scale=clamp(value/100,.1,10);
   if(id==='sizeX')obj.axes.x=clamp(value/100,.1,10);
   if(id==='sizeY')obj.axes.y=clamp(value/100,.1,10);
@@ -1751,6 +1758,7 @@ class CleanBuilder{
  nudgeSelected(dx,dz,dy=0){
   const obj=this.selected;
   if(!obj||this.tool!=='pick')return notify('Нажми «Выделить» и выбери готовую деталь','warn');
+  this.recordEdit();
   const step=PrecisionPlacement.step($('moveStep').value,.001);
   obj.root.position.x=PrecisionPlacement.nudge(obj.root.position.x,dx,step);
   obj.root.position.y=PrecisionPlacement.nudge(obj.root.position.y,dy,step);
@@ -1774,7 +1782,8 @@ class CleanBuilder{
   const hit=this.rayPoint(e,this.selected.root.position.y);
   if(!hit)return;
   this.dragMove={pointerId:e.pointerId,x:e.clientX,y:e.clientY,
-   hit,base:this.selected.root.position.clone(),moved:false};
+   hit,base:this.selected.root.position.clone(),moved:false,
+   historyBefore:this.project()};
   this.controls.enabled=false;
   if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
   e.preventDefault();e.stopImmediatePropagation();
@@ -1803,6 +1812,7 @@ class CleanBuilder{
   this.dragMove=null;this.controls.enabled=true;
   if(this.canvas.hasPointerCapture?.(e.pointerId))this.canvas.releasePointerCapture(e.pointerId);
   if(drag.moved){
+   this.recordEdit(drag.historyBefore);
    if(this.selected?.surface?.style!=='none')this.applySurfaceTo(this.selected);
    notify('Деталь перемещена по X/Z: '+this.sizeText(this.selected),'success');
   }
@@ -2086,6 +2096,7 @@ class CleanBuilder{
  duplicate(){
   const obj=this.selected;if(!obj)return notify('Сначала выдели деталь','warn');
   const data=this.encode(obj);delete data.id;
+  delete data.groupId;delete data.roomRole;
   data.position[0]+=1.5;
   const clone=this.createEntry(obj.kind,data);if(!clone)return;
   this.recordEdit();
@@ -2190,6 +2201,7 @@ class CleanBuilder{
     }))].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    await this.restore(result.project);
+   this.history.clear();this.updateHistoryButtons();
    this.renderTextureLibrary();this.renderCatalog();
    this.save();
    notify('✅ Восстановлен проект: '+this.entries.length+
@@ -2219,6 +2231,7 @@ class CleanBuilder{
     localStorage.getItem('phoenix-builder-clean-v2');
    if(!json){notify('Нет сохранённого проекта версии 2.0','warn');return}
    await this.restore(JSON.parse(json));
+   this.history.clear();this.updateHistoryButtons();
    notify('Проект загружен из сохранения','success');
   }catch(err){notify('Ошибка загрузки: '+err.message,'error')}
  }
@@ -2441,6 +2454,13 @@ class CleanBuilder{
   $('btnSave').onclick=()=>this.save();
   $('btnLoad').onclick=()=>this.load();
   $('btnExportGLB').onclick=()=>this.exportGLB();
+  $('btnExportGameManifest').onclick=()=>this.exportGameManifest();
+  $('btnBuildRoom').onclick=()=>this.createRoom();
+  $('btnCopyRoom').onclick=()=>this.copySelectedRoom();
+  $('btnCopyStorey').onclick=()=>this.copyCurrentStorey();
+  $('btnUndo').onclick=()=>this.historyAction('undo');
+  $('btnRedo').onclick=()=>this.historyAction('redo');
+  this.updateHistoryButtons();
   $('btnBackupProject').onclick=()=>this.exportBackup();
   $('btnImportBackup').onclick=()=>$('importProjectBackup').click();
   $('importProjectBackup').onchange=e=>{
@@ -2502,6 +2522,7 @@ class CleanBuilder{
   $('btnClearSockets').onclick=()=>this.clearSockets();
   this.canvas.addEventListener('pointerdown',e=>{
    if(this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
+   this.gizmoBefore=this.project();
    this.gizmoPointer=e.pointerId;this.controls.enabled=false;
    if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
    e.preventDefault();e.stopImmediatePropagation();
@@ -2524,6 +2545,7 @@ class CleanBuilder{
     else if(this.selected.thicknessEditable)this.rebuildImported(this.selected);
    }
    if(drag?.changed){
+    if(this.gizmoBefore)this.recordEdit(this.gizmoBefore);
     if(this.selected){
      this.selected.root.updateMatrixWorld(true);
      if(this.selected.surface?.style!=='none')this.applySurfaceTo(this.selected);
@@ -2531,6 +2553,7 @@ class CleanBuilder{
     this.syncInspector();
     notify('Гизмо: изменение выполнено, параметры сохраняются в проекте','success');
    }
+   this.gizmoBefore=null;
    e.preventDefault();e.stopImmediatePropagation();
   };
   for(const type of ['pointerup','pointercancel'])
@@ -2568,6 +2591,12 @@ class CleanBuilder{
   window.addEventListener('keydown',e=>{
    const tag=document.activeElement?.tagName;
    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
+   if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='z'){
+    e.preventDefault();this.historyAction(e.shiftKey?'redo':'undo');return;
+   }
+   if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='y'){
+    e.preventDefault();this.historyAction('redo');return;
+   }
    this.keys.add(e.key.toLowerCase());
    if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase()))e.preventDefault();
    if(e.key==='Delete'&&this.tool==='pick')this.delete();
