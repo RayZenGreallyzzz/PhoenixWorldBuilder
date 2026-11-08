@@ -83,8 +83,17 @@ for(const [style,frameStyle] of [['round','round'],['gothic','gothic'],['rune','
  const saved=Wall.normalize([opening])[0];
  assert.equal(saved.doorStyle,style,'Door style survives project serialization');
  assert.equal(saved.frameStyle,frameStyle,'Frame style survives project serialization');
- assert(wall.getObjectByName('structure:arched-lintel'),
-  'Rounded/gothic opening has real masonry cap, not a painted fake');
+ const structure=wall.getObjectByName('structure:wall');
+ assert(structure&&!wall.getObjectByName('structure:arched-lintel'),
+  'Rounded/gothic arch must be carved into one structural wall mesh, without overlay');
+ const material=structure.material,oldSide=material.side;
+ material.side=THREE.DoubleSide;wall.updateMatrixWorld(true,true);
+ const rayAt=(x,y)=>new THREE.Raycaster(
+  new THREE.Vector3(x,y,1),new THREE.Vector3(0,0,-1),0,2)
+  .intersectObject(structure,false).length;
+ assert.equal(rayAt(0,2.02),0,'Arch remains open at its curved peak');
+ assert(rayAt(.42,2.02)>0,'Solid masonry actually fills arch shoulders');
+ material.side=oldSide;
  assert(wall.getObjectByName('frame:curved-arch'),'Arched frame follows door opening');
  assert(Wall.setDoorAngle(wall,opening.id,45),'Styled door stays hinged');
 }
@@ -106,8 +115,21 @@ for(const [style,frameStyle] of [['round','round'],['gothic','gothic'],['rune','
   w:1.1,h:1.0,frameStyle:'round'};
  const wall=G.create('arc180');
  assert(Wall.render(wall,'arc180',[roundWindow]).ok,'Round window in semicircular wall');
- assert(wall.getObjectByName('structure:arched-lintel'),
-  'Curved wall has 3D arch masonry over window');
+ const structure=wall.getObjectByName('structure:wall');
+ assert(structure&&!wall.getObjectByName('structure:arched-lintel'),
+  'Curved window arch is carved into the curved masonry itself');
+ const prof=Wall.profile('arc180'),material=structure.material,
+  oldSide=material.side;
+ material.side=THREE.DoubleSide;wall.updateMatrixWorld(true,true);
+ const rayAt=s=>{
+  const p=prof.pos(s),n=new THREE.Vector3(p.nx,0,p.nz).normalize();
+  return new THREE.Raycaster(new THREE.Vector3(p.x,1.72,p.z)
+   .addScaledVector(n,.6),n.clone().negate(),0,1.2)
+   .intersectObject(structure,false).length;
+ };
+ assert.equal(rayAt(prof.length/2),0,'Round window is open at the arch centre');
+ assert(rayAt(prof.length/2+.49)>0,'Curved masonry fills window arch shoulder');
+ material.side=oldSide;
  assert(wall.getObjectByName('window:glass'),'Curved glazing inserted');
 }
 const html=fs.readFileSync(path.join(base,'index.html'),'utf8'),

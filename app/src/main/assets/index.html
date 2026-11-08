@@ -191,6 +191,13 @@
     <div class="cols2"><label>Ширина отверстия, см<input id="openingWidth" type="number" min="10" max="400" step=".1" value="85" inputmode="decimal"></label><label>Высота отверстия, см<input id="openingHeight" type="number" min="30" max="250" step=".1" value="205" inputmode="decimal"></label></div>
     <label>Соседняя стена на стыке<select id="openingNeighbor"><option value="">Авто (ближайшая)</option></select></label>
     <small class="tip">Ширина в настоящих сантиметрах даже при изменённом масштабе стены. На дуге измеряется вдоль изгиба. Если проём пересекает стык, вырезается в обеих соединённых стенах.</small>
+    <label>Форма выреза в стене<select id="openingShape">
+      <option value="auto" selected>Авто: как у выбранной двери / рамы</option>
+      <option value="rectangle">▭ Прямоугольное отверстие</option>
+      <option value="round">◠ Настоящая круглая арка</option>
+      <option value="gothic">⌂ Готическая / стрельчатая арка</option>
+    </select></label>
+    <small class="tip">Арочный проём вырезается прямо в геометрии стены. Работает и для пустого прохода без двери — над аркой остаётся настоящая стена.</small>
     <label>Вид двери<select id="openingDoorStyle"><option value="classic">Обычная филёнчатая</option><option value="round">С округлым верхом</option><option value="gothic">Стрельчатая / готика</option><option value="rune">Фэнтези с рунами</option><option value="double">Двустворчатая</option></select></label>
     <label>Вид рамы<select id="openingFrameStyle"><option value="classic">Обычная прямая</option><option value="round">Круглая арка</option><option value="gothic">Готическая арка</option><option value="portal">Фэнтези-портал</option></select></label>
     <label>Петли<select id="openingHinge"><option value="left">Слева</option><option value="right">Справа</option></select></label>
