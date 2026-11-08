@@ -20,6 +20,7 @@ const SurfaceDecals=(()=>{
      !Number.isInteger(raw.targetId))return null;
   return {id:String(raw.id||'').slice(0,60),
    imageId:raw.imageId.slice(0,110),targetId:raw.targetId,
+   space:raw.space==='local'?'local':'world',
    position:position.map(v=>clamp(v,-10000,10000)),
    normal:n.normalize().toArray(),
    width:clamp(Number(raw.width)||1,.1,100),
