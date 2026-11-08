@@ -45,7 +45,8 @@ for(const lift of [.42,.83,.55,.11,0,.62]){
  near(fitGroup.scale.z,scale,'Scale Z stays fixed',1e-10);
  near(fitGroup.position.x,initial.x,'No X drift',1e-10);
  near(fitGroup.position.z,initial.z,'No Z drift',1e-10);
- if(lift)assert(before>.001||lift===.11,'Animated pose lifts feet before correction');
+ assert(Math.abs(before)>.001,
+  'New animation pose should move feet relative to the previous planted pose');
 }
 const oldScale=fitGroup.scale.x;
 hip.position.y=.5;
