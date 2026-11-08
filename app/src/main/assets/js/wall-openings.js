@@ -44,6 +44,11 @@ const WallOpenings=(()=>{
     w:clamp(finite(o.w,o.type==='door'?.9:1),.05,8),
     h:clamp(finite(o.h,o.type==='door'?2.05:1.05),.1,8),
     hinge:o.hinge==='right'?'right':'left',
+    shape:['auto','rectangle','round','gothic'].includes(o.shape)?
+     o.shape:'auto',
+    archU0:Number.isFinite(o.archU0)?clamp(o.archU0,0,1):undefined,
+    archU1:Number.isFinite(o.archU1)?clamp(o.archU1,0,1):undefined,
+    archRise:Number.isFinite(o.archRise)?clamp(o.archRise,.02,2):undefined,
     doorStyle:kit?kit.openingStyle(o.doorStyle):'classic',
     frameStyle:kit?kit.frameStyle(o.frameStyle):'classic',
     angle:clamp(finite(o.angle,0),-160,160),
@@ -79,6 +84,7 @@ const WallOpenings=(()=>{
    .sort((a,b)=>a-b);
  }
  function geometry(prof,list){
+  if(list.some(o=>archMode(o)))return shapedGeometry(prof,list);
   const coords=[],uv=[];
   const pts=(s,y,side)=>{const p=prof.sides(s,side);return [p.x,y,p.z]};
   const vertex=(p,u,v)=>{coords.push(...p);uv.push(u,v)};
@@ -114,6 +120,103 @@ const WallOpenings=(()=>{
   g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
   g.computeVertexNormals();g.computeBoundingBox();g.computeBoundingSphere();
   return g;
+ }
+ // Unlike the former rectangular cut + separate decorative arch cap,
+ // this builds the whole wall around the REAL curved void. Every curved
+ // opening has matching front/back surfaces, curved through-thickness reveal,
+ // jambs and ceiling/floor caps. A bare passage stays fully empty.
+ function shapedGeometry(prof,list){
+  const coords=[],uv=[];
+  const p=(s,y,side)=>{const t=prof.sides(s,side);return [t.x,y,t.z]};
+  const v=(xyz,u,t)=>{coords.push(...xyz);uv.push(u,t)};
+  const tri=(a,b,c,u0,v0,u1,v1,u2,v2)=>{
+   v(a,u0,v0);v(b,u1,v1);v(c,u2,v2);
+  };
+  const quad=(a,b,c,d,u0,u1,va,vb)=>{
+   tri(a,b,c,u0,va,u1,va,u1,vb);
+   tri(a,c,d,u0,va,u1,vb,u0,vb);
+  };
+  const cuts=list.map(o=>({
+   o,left:prof.length/2+o.x-o.w/2,
+   right:prof.length/2+o.x+o.w/2,
+   mode:archMode(o)
+  }));
+  const keys=pathEdges(prof,list);
+  for(const cut of cuts){
+   if(!cut.mode)continue;
+   // Fine sections follow curved peaks without an angular, square lintel.
+   const pieces=Math.max(10,Math.ceil(cut.o.w/.035));
+   for(let i=1;i<pieces;i++)
+    keys.push(cut.left+(cut.right-cut.left)*i/pieces);
+  }
+  const xs=[...new Set(keys.map(x=>Math.round(x*100000)/100000))]
+   .sort((a,b)=>a-b);
+  const holesAt=s=>cuts.filter(c=>s>c.left-EPS&&s<c.right+EPS)
+   .sort((a,b)=>a.o.y-b.o.y);
+  const top=(cut,s)=>cut.mode?archTop(cut.o,s,prof,cut.mode):
+   cut.o.y+cut.o.h;
+  const cross=(s,lo,hi,flip=false)=>{
+   if(hi-lo<EPS)return;
+   const a=p(s,lo,-1),b=p(s,lo,1),d=p(s,hi,1),e=p(s,hi,-1);
+   if(flip)quad(b,a,e,d,0,prof.thickness,lo,hi);
+   else quad(a,b,d,e,0,prof.thickness,lo,hi);
+  };
+  for(let i=0;i<xs.length-1;i++){
+   const s0=xs[i],s1=xs[i+1],mid=(s0+s1)/2;
+   if(s1-s0<EPS)continue;
+   const holes=holesAt(mid),solid=[];
+   let lo0=0,lo1=0;
+   for(const cut of holes){
+    const hi0=cut.o.y,hi1=cut.o.y;
+    if(Math.max(hi0-lo0,hi1-lo1)>EPS)
+     solid.push({lo0,lo1,hi0,hi1});
+    lo0=top(cut,s0);lo1=top(cut,s1);
+   }
+   if(Math.min(HEIGHT-lo0,HEIGHT-lo1)>-EPS)
+    solid.push({lo0,lo1,hi0:HEIGHT,hi1:HEIGHT});
+   for(const band of solid){
+    if(Math.max(band.hi0-band.lo0,band.hi1-band.lo1)<EPS)continue;
+    for(const side of [-1,1]){
+     const a=p(s0,band.lo0,side),b=p(s1,band.lo1,side),
+      d=p(s1,band.hi1,side),e=p(s0,band.hi0,side);
+     if(side===-1)quad(a,b,d,e,s0,s1,band.lo0,band.hi1);
+     else quad(b,a,e,d,s0,s1,band.lo0,band.hi1);
+    }
+   }
+   // Solid masonry forms the real reveal of the hole, not a wall plug.
+   for(const cut of holes){
+    const low=cut.o.y,high0=top(cut,s0),high1=top(cut,s1);
+    if(low>EPS)
+     quad(p(s0,low,-1),p(s1,low,-1),p(s1,low,1),p(s0,low,1),
+      s0,s1,0,prof.thickness);
+    quad(p(s0,high0,1),p(s1,high1,1),p(s1,high1,-1),
+     p(s0,high0,-1),s0,s1,0,prof.thickness);
+   }
+   // Seal outer top and base of the wall only once per width section.
+   quad(p(s0,0,1),p(s1,0,1),p(s1,0,-1),p(s0,0,-1),
+    s0,s1,0,prof.thickness);
+   quad(p(s0,HEIGHT,-1),p(s1,HEIGHT,-1),
+    p(s1,HEIGHT,1),p(s0,HEIGHT,1),s0,s1,0,prof.thickness);
+   // Jambs only on actual opening boundaries, not interior subdivisions.
+   const prior=holesAt(s0-.0001),next=holesAt(s1+.0001);
+   for(const cut of holes){
+    if(!prior.some(x=>x.o===cut.o)&&s0>EPS)
+     cross(s0,cut.o.y,top(cut,s0),false);
+    if(!next.some(x=>x.o===cut.o)&&s1<prof.length-EPS)
+     cross(s1,cut.o.y,top(cut,s1),true);
+   }
+   // Outer left and right wall end caps must not close through passages
+   // crossing a physical module seam.
+   if(i===0)for(const band of solid)
+    cross(s0,band.lo0,band.hi0,false);
+   if(i===xs.length-2)for(const band of solid)
+    cross(s1,band.lo1,band.hi1,true);
+  }
+  const result=new THREE.BufferGeometry();
+  result.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
+  result.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  result.computeVertexNormals();result.computeBoundingBox();result.computeBoundingSphere();
+  return result;
  }
  function meshBand(prof,s0,s1,y0,y1,depth,mat,parent,name,offset=null){
   if(s1-s0<EPS||y1-y0<EPS)return null;
@@ -151,21 +254,27 @@ const WallOpenings=(()=>{
  }
  // Select a curved or pointed head; the interior masonry is built to match.
  function archMode(o){
-  if(o.omitStartFrame||o.omitEndFrame)return null;
-  if(o.type==='door'&&archStyles.includes(o.doorStyle))
+  // The cut shape is independent of whether a door/frame is inserted.
+  // Auto follows the selected door (or frame) even for EMPTY passages.
+  if(o.shape==='rectangle')return null;
+  if(o.shape==='round'||o.shape==='gothic')return o.shape;
+  if(archStyles.includes(o.doorStyle))
    return o.doorStyle==='round'?'round':'gothic';
   if(o.frameStyle==='round'||o.frameStyle==='gothic'||o.frameStyle==='portal')
    return o.frameStyle==='round'?'round':'gothic';
   return null;
  }
  function archTop(o,s,prof,mode){
-  const centre=prof.length/2+o.x,half=Math.max(.05,o.w/2),
-   ratio=clamp(Math.abs(s-centre)/half,0,1);
+  const start=prof.length/2+o.x-o.w/2;
+  const u=Number.isFinite(o.archU0)&&Number.isFinite(o.archU1)?
+   o.archU0+(o.archU1-o.archU0)*(s-start)/o.w:
+   (s-start)/o.w;
+  const ratio=clamp(Math.abs(2*u-1),0,1);
   if(mode==='round'){
-   const height=Math.min(half,.55);
-   return o.y+o.h-height+height*Math.sqrt(Math.max(0,1-ratio*ratio));
+   const rise=o.archRise??Math.min(o.w/2,.55);
+   return o.y+o.h-rise+rise*Math.sqrt(Math.max(0,1-ratio*ratio));
   }
-  return o.y+o.h-Math.min(.56,o.h*.35)*ratio;
+  return o.y+o.h-(o.archRise??Math.min(.56,o.h*.35))*ratio;
  }
  // A curved band with real thickness, per-point upper and lower elevations.
  // It is used for curved door leaves, ornamental arch trim and the wall arch-cap.
@@ -230,13 +339,9 @@ const WallOpenings=(()=>{
   if(!o.omitStartFrame)meshBand(prof,s0,s0+fw,o.y,o.y+o.h,depth,frameMat,frame,'frame:left');
   if(!o.omitEndFrame)meshBand(prof,s1-fw,s1,o.y,o.y+o.h,depth,frameMat,frame,'frame:right');
   if(mode){
-   const arch=s=>archTop(o,s,prof,mode),maxHeight=()=>o.y+o.h;
-   // Architectural wall is actually rebuilt up to the shaped arch profile.
-   const wall=root.children.find(mesh=>mesh.name==='structure:wall');
-   const cap=variableBand(prof,s0,s1,arch,maxHeight,prof.thickness,wall.material,
-    root,'structure:arched-lintel');
-   cap.userData.phoenixInsert=false;
-   cap.userData.phoenixWallSurface=true;
+   const arch=s=>archTop(o,s,prof,mode);
+   // The arch is now cut directly into structure:wall's real geometry.
+   // Only the ornamental frame is an inserted overlay.
    variableBand(prof,s0,s1,s=>arch(s)-fw/2,s=>arch(s)+fw/2,
     depth+.03,frameMat,frame,'frame:curved-arch');
   }else{
@@ -376,12 +481,16 @@ const WallOpenings=(()=>{
   const center=metric.length/2+o.x,left=center-o.w/2,right=center+o.w/2;
   const heightOn=entry=>{
    const sy=Math.abs(entry.root.scale.y)||1;
-   return {y:o.y/sy,h:o.h/sy};
+   const mode=archMode(o);
+   const rise=mode==='round'?Math.min(o.w/2,.55):
+    mode==='gothic'?Math.min(.56,o.h*.35):undefined;
+   return {y:o.y/sy,h:o.h/sy,...(rise===undefined?{}:{archRise:rise/sy})};
   };
   if(left>=-.001&&right<=metric.length+.001){
    const a=metric.at(left),b=metric.at(right);
    return {ok:true,parts:[{entry:owner,opening:
-    {...o,...heightOn(owner),x:(a+b)/2-metric.p.length/2,w:b-a}
+    {...o,...heightOn(owner),x:(a+b)/2-metric.p.length/2,w:b-a,
+     archU0:0,archU1:1}
    }]};
   }
   if(left<0&&right>metric.length)return {ok:false,
@@ -417,11 +526,17 @@ const WallOpenings=(()=>{
    reason:'Ширина проёма больше свободной длины соседней стены'};
   const group=o.group||o.id,a=metric.at(mainStart),b=metric.at(mainEnd);
   const main={...o,...heightOn(owner),id:group+'-a',group,
-   x:(a+b)/2-metric.p.length/2,w:b-a};
+   x:(a+b)/2-metric.p.length/2,w:b-a,
+   archU0:(mainStart-left)/o.w,archU1:(mainEnd-left)/o.w};
   const adjStart=next.index===0?0:nextMetric.length-overflow;
   const c=nextMetric.at(adjStart),d=nextMetric.at(adjStart+overflow);
+  const mainFraction=(mainEnd-mainStart)/o.w;
+  const leftFraction=atStart?0:mainFraction;
+  const rightFraction=atStart?1-mainFraction:1;
   const adjacent={...o,...heightOn(next.entry),id:group+'-b',group,
-   x:(c+d)/2-nextMetric.p.length/2,w:d-c};
+   x:(c+d)/2-nextMetric.p.length/2,w:d-c,
+   archU0:next.index===0?leftFraction:rightFraction,
+   archU1:next.index===0?rightFraction:leftFraction};
   if(atStart)main.omitStartFrame=true;
   else main.omitEndFrame=true;
   if(next.index===0)adjacent.omitStartFrame=true;
