@@ -89,7 +89,7 @@ for(const shape of ['round','gothic']){
  const source=define('round');
  const saved=W.normalize([source]),loaded=W.normalize(JSON.parse(JSON.stringify(saved)));
  assert.equal(loaded[0].shape,'round','Save and restore keeps real arched cut');
- assert.equal(hit(make('wall',loaded),.43,2.05)>0,'Restored wall stays round, not rectangular');
+ assert(hit(make('wall',loaded),.43,2.05)>0,'Restored wall stays round, not rectangular');
  const app=fs.readFileSync(path.join(base,'js/clean-app.js'),'utf8'),
   html=fs.readFileSync(path.join(base,'index.html'),'utf8');
  assert(html.includes('id="openingShape"'),'Shape selector must exist');
