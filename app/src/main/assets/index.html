@@ -85,9 +85,35 @@
  <div class="scrollArea">
   <div class="modeTools"><button id="btnPick" class="alt">☝ Выделить</button><button id="btnPlace" class="active">＋ Поставить</button>
    <button id="btnOpeningTool" class="primary">✂ Вырезать проём в стене</button></div>
+  <div class="rowSection editHistoryPanel">
+   <b>↶ История строительства</b>
+   <div class="cols2"><button id="btnUndo" type="button" disabled>↶ Отменить</button>
+    <button id="btnRedo" type="button" disabled>↷ Повторить</button></div>
+   <small class="tip">До 20 последних изменений в этой сессии. Ctrl+Z / Ctrl+Y с клавиатуры.</small>
+  </div>
+  <details id="roomBuilderPanel" class="rowSection" open>
+   <summary>🏗 Быстро построить комнату / этаж</summary>
+   <small class="tip">Комната из настоящих стен по 2 м, плит пола и отдельного потолка. Высота этажа — 2,6 м. Можно вырезать двери/окна в стенах и изменять каждый модуль.</small>
+   <div class="cols2">
+    <label>Ширина комнаты, м<input id="roomWidth" type="number" min="2" max="24" step="2" value="6"></label>
+    <label>Длина комнаты, м<input id="roomDepth" type="number" min="2" max="24" step="2" value="6"></label>
+    <label>Центр X, м<input id="roomX" type="number" step=".5" value="0"></label>
+    <label>Центр Z, м<input id="roomZ" type="number" step=".5" value="0"></label>
+   </div>
+   <label class="check"><input id="roomIncludeFloor" type="checkbox" checked><span>Создать пол</span></label>
+   <label class="check"><input id="roomIncludeCeiling" type="checkbox"><span>Создать отдельный потолок</span></label>
+   <button id="btnBuildRoom" class="primary" type="button">🏠 Создать комнату на текущем этаже</button>
+   <div class="cols2">
+    <button id="btnCopyRoom" type="button">▣ Копировать комнату</button>
+    <button id="btnCopyStorey" type="button">⬆ Копировать этаж выше</button>
+   </div>
+   <small class="tip">Чтобы скопировать комнату, выдели любую её стену или пол. Копия появится на 4 м правее. Для лестницы открой папку «🪜 Лестницы». Потолки нового этажа добавляются только по выбору, чтобы не удваивать перекрытия.</small>
+  </details>
   <details id="backupPanel" class="rowSection"><summary>📁 Файлы проекта и текстуры</summary>
    <button id="btnBackupProject" class="primary">📥 Резервная копия с текстурами (.phoenix.json)</button>
    <button id="btnImportBackup" class="alt">📤 Открыть резервную копию проекта</button>
+   <button id="btnExportGameManifest" class="alt" type="button">🎮 Экспорт данных для игрового движка (.json)</button>
+   <small class="tip">Экспортируй GLB отдельно. Этот JSON описывает стены, этажи, двери и рекомендуемые коллизии; игровые коллайдеры всё равно создаются в Unity/Godot/Unreal.</small>
    <small class="tip">«💾 Сохранить» — редактируемый проект на этом устройстве. «📦 GLB» наверху — готовая 3D-сцена для игр. Резервная копия хранит редактируемые детали, текстуры и импортированные GLB вместе, чтобы перенести на другое устройство.</small>
   </details>
    <details class="rowSection" id="openingPanel"><summary>✂ Проём в стене: размер и место</summary>
@@ -319,5 +345,7 @@
  <script src="js/builder-gizmo.js"></script>
  <script src="js/touch-joystick.js"></script>
  <script src="js/texture-placement.js"></script>
+ <script src="js/building-workflow.js"></script>
+ <script src="js/editor-history.js"></script>
  <script src="js/clean-app.js"></script>
 </body></html>
