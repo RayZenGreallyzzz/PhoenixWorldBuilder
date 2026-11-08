@@ -117,6 +117,27 @@
     <button id="btnRedo" type="button" disabled>↷ Повторить</button></div>
    <small class="tip">До 20 последних изменений в этой сессии. Ctrl+Z / Ctrl+Y с клавиатуры.</small>
   </div>
+  <details id="sceneManagerPanel" class="rowSection sceneManagerPanel" open>
+   <summary>🗂 Объекты сцены — поиск и защита</summary>
+   <label class="sceneSearchLabel">Поиск по названию, типу или номеру
+    <input id="sceneSearch" type="search" placeholder="Стена, дверь, #..." autocomplete="off">
+   </label>
+   <label>Показывать этаж
+    <select id="sceneFloorFilter"><option value="all">Все этажи</option>
+     <option value="current">Текущий этаж</option></select>
+   </label>
+   <small class="tip" id="sceneManagerStatus" aria-live="polite">Пока нет установленных деталей.</small>
+   <div id="sceneRows" class="sceneManagerList" role="list"
+    aria-label="Объекты здания по этажам"></div>
+   <div class="sceneManagerRename">
+    <label>Название выделенного объекта
+     <input id="sceneName" type="text" maxlength="64"
+      placeholder="Например: Кухня — наружная стена" autocomplete="off">
+    </label>
+    <button id="btnSceneRename" type="button">✎ Переименовать</button>
+   </div>
+   <small class="tip">Нажми название, чтобы выделить деталь в 3D. 👁 Скрыть/показать, 🔒 Заблокировать от случайного редактирования. Скрытые объекты не попадают в игровой GLB и JSON, но сохраняются в проекте.</small>
+  </details>
   <details id="roomBuilderPanel" class="rowSection" open>
    <summary>🏗 Быстро построить комнату / этаж</summary>
    <small class="tip">Комната из настоящих стен по 2 м, плит пола и отдельного потолка. Высота этажа — 2,6 м. Можно вырезать двери/окна в стенах и изменять каждый модуль.</small>
@@ -373,5 +394,6 @@
  <script src="js/texture-placement.js"></script>
  <script src="js/building-workflow.js"></script>
  <script src="js/editor-history.js"></script>
+ <script src="js/scene-manager.js"></script>
  <script src="js/clean-app.js"></script>
 </body></html>
