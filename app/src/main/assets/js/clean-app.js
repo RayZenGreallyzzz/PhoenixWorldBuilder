@@ -222,6 +222,14 @@ class CleanBuilder{
   }catch(err){console.error(err);this.setDefaultAvatar();notify('Ошибка персонажа: '+err.message,'error')}
  }
 
+ resetCharacterView(){
+  // This only resets accidental camera zoom; do not change avatar scale.
+  const centre=this.player.position.clone().add(V(0,1.15,0));
+  this.controls.target.copy(centre);
+  this.camera.position.copy(centre).add(V(0,2.45,6));
+  this.camera.lookAt(centre);this.controls.update();
+  notify('📷 Камера отдалена для просмотра персонажа в реальном масштабе','success');
+ }
  setMode(mode){
   this.mode=mode;
   for(const m of ['Build','Character','Drone'])$('mode'+m).classList.toggle('active',
@@ -2641,6 +2649,7 @@ class CleanBuilder{
  bind(){
   $('modeBuild').onclick=()=>this.setMode('build');
   $('modeCharacter').onclick=()=>this.setMode('character');
+  $('btnResetCharacterView').onclick=()=>this.resetCharacterView();
   $('modeDrone').onclick=()=>this.setMode('drone');
   $('optimizationQuality').onchange=()=>this.updateOptimizer();
   $('optimizationLOD').onchange=()=>this.updateOptimizer();
