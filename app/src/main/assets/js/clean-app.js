@@ -105,7 +105,7 @@ class CleanBuilder{
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
-  this.avatarModelRoot=null;this.avatarFitChecksLeft=0;this.avatarFitCheckTimer=0;
+
   this.avatarHeightCm=175;
   this.showAvatarInBuild=localStorage.getItem('phoenix-builder-avatar-build')==='on';
   this.collisionsEnabled=localStorage.getItem('phoenix-builder-collisions')!=='off';
@@ -162,7 +162,7 @@ class CleanBuilder{
  }
  setDefaultAvatar(){
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
-  this.avatarModelRoot=null;this.avatarFitChecksLeft=0;this.avatarFitCheckTimer=0;
+
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';
   const cloth=new THREE.MeshStandardMaterial({color:0x355d82});
   const skin=new THREE.MeshStandardMaterial({color:0xe0b783});
@@ -212,9 +212,9 @@ class CleanBuilder{
    const metrics=AvatarFit.measure(root,fitted);
    const fit=AvatarFit.apply(fitted,metrics,this.avatarHeightCm);
    this.player.clear();this.player.add(fitted);
-   this.avatarModelRoot=root;this.avatarFitGroup=fitted;this.avatarMetrics=metrics;
-   this.avatarFitChecksLeft=this.avatarMixer?3:0;
-   this.avatarFitCheckTimer=0;
+   this.avatarFitGroup=fitted;this.avatarMetrics=metrics;
+   // The fit wrapper is intentionally fixed after import. In particular
+   // idle/walk bone motion MUST NOT rescale the entire character.
    this.player.updateWorldMatrix(true,true);
    notify('Персонаж подогнан: '+safeName(file.name)+
     ' — высота '+Math.round(metrics.size.y*fit.uniform*100)+
@@ -2591,31 +2591,12 @@ class CleanBuilder{
    if(name!==selected.name&&other.isRunning())other.fadeOut(.18);
   if(!action.isRunning())action.reset().fadeIn(.18).play();
   this.avatarState=mode;
-  // A walking clip may stretch bones or animate the imported GLB root.
-  // Check only during the first few poses after switching animation,
-  // avoiding expensive per-frame skinned vertex scans on Android.
-  this.avatarFitChecksLeft=3;this.avatarFitCheckTimer=0;
+  // Do not remeasure or refit when animation changes. Bone poses are allowed
+  // to move naturally; only importing a GLB or the height slider can change
+  // avatar:stable-fit's scale.
  }
  updatePlayer(dt){
-  if(this.avatarMixer){
-   this.avatarMixer.update(dt);
-   if(this.avatarFitChecksLeft>0&&this.avatarFitGroup&&this.avatarModelRoot){
-    this.avatarFitCheckTimer+=dt;
-    if(this.avatarFitCheckTimer>=.38){
-     this.avatarFitCheckTimer=0;this.avatarFitChecksLeft--;
-     try{
-      const actual=AvatarFit.measure(this.avatarModelRoot,this.avatarFitGroup);
-      const wanted=AvatarFit.compute(actual,this.avatarHeightCm);
-      const scale=this.avatarFitGroup.scale.x;
-      if(Number.isFinite(scale)&&Math.abs(wanted.uniform/scale-1)>.06){
-       this.avatarMetrics=actual;
-       AvatarFit.apply(this.avatarFitGroup,actual,this.avatarHeightCm);
-       this.player.updateWorldMatrix(true,true);
-      }
-     }catch(e){console.warn('Измерение персонажа во время анимации:',e)}
-    }
-   }
-  }
+  if(this.avatarMixer)this.avatarMixer.update(dt);
   if(this.mode!=='character'&&this.mode!=='drone')return;
   const down=(...keys)=>keys.some(k=>this.keys.has(k));
   const left=down('a','arrowleft','left'),right=down('d','arrowright','right'),
