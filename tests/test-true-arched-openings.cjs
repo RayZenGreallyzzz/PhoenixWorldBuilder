@@ -22,7 +22,10 @@ const hit=(root,x,y,z=0)=>{
  const wall=root.getObjectByName('structure:wall');
  assert(wall,'No structural geometry');
  const mat=wall.material,old=mat.side;mat.side=T.DoubleSide;
- const ray=new T.Raycaster(new T.Vector3(x,y,z+1.5),new T.Vector3(0,0,-1),0,3);
+ root.updateWorldMatrix(true,true);
+ const origin=root.localToWorld(new T.Vector3(x,y,z+1.5));
+ const direction=new T.Vector3(0,0,-1).transformDirection(root.matrixWorld);
+ const ray=new T.Raycaster(origin,direction,0,3);
  const count=ray.intersectObject(wall,false).length;mat.side=old;
  return count;
 };
