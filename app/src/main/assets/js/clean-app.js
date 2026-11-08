@@ -1338,6 +1338,7 @@ class CleanBuilder{
    const chosen=obj.openings.find(o=>o.id===openList.value)||obj.openings[0];
    read('doorSwing',chosen.angle||0);
    $('openingDoorStyle').value=chosen.doorStyle||'classic';
+   $('openingShape').value=chosen.shape||'auto';
    $('openingFrameStyle').value=chosen.frameStyle||'classic';
   }
   const scope=this.textureScope(obj);
@@ -1596,6 +1597,8 @@ class CleanBuilder{
   const dimensions=this.physicalSize(door);
   if(!dimensions)return notify('Не удалось измерить размер двери','warn');
   $('openingType').value='passage';
+  $('openingShape').value=door.kind==='doorRound'?'round':
+   ['doorGothic','doorRune'].includes(door.kind)?'gothic':'rectangle';
   $('openingSizePreset').value='';
   $('openingWidth').value=String(Math.round((dimensions.x+1)*10)/10);
   $('openingHeight').value=String(Math.round((dimensions.y+1)*10)/10);
@@ -1652,6 +1655,7 @@ class CleanBuilder{
    return notify('Укажи размеры и положение проёма','warn');
   const id='doorcut:'+Date.now().toString(36);
   const definition={id,group:id,type:typ,x,y,w,h,
+   shape:$('openingShape').value,
    doorStyle:$('openingDoorStyle').value,
    frameStyle:$('openingFrameStyle').value,
    hinge:$('openingHinge').value,angle:0};
@@ -1682,7 +1686,8 @@ class CleanBuilder{
    if(!WallOpenings.supported(wall.kind))continue;
    if(!wall.openings?.some(o=>(o.group||o.id)===group))continue;
    changes.set(wall,wall.openings.map(o=>(o.group||o.id)===group?
-    {...o,doorStyle:$('openingDoorStyle').value,
+    {...o,shape:$('openingShape').value,
+     doorStyle:$('openingDoorStyle').value,
      frameStyle:$('openingFrameStyle').value}:o));
   }
   const staged=this.openingParts(changes);
