@@ -240,6 +240,8 @@ class CleanBuilder{
   $('inspector').classList.remove('unavailable');
   this.preview?.root&&(this.preview.root.visible=this.tool==='place');
   this.controls.update();this.aimPlacement();
+  this.gizmo.attach(mode==='build'&&this.tool==='pick'?this.selected:null);
+  this.updateGizmoDock();
  }
  async cacheModel(id,buffer,category='wall',name='GLB',keep=true){
   const started=typeof performance!=='undefined'?performance.now():Date.now();
@@ -1099,7 +1101,8 @@ class CleanBuilder{
   $('btnPlace').classList.toggle('active',tool==='place');
   if(this.preview)this.preview.root.visible=tool==='place';
   if(this.previewOutline)this.previewOutline.visible=tool==='place';
-  this.gizmo.attach(tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&tool==='pick'?this.selected:null);
+  this.updateGizmoDock();
   notify(tool==='pick'?'Коснись готовой детали, чтобы изменить её':
    'Коснись места на земле для установки детали','neutral');
  }
@@ -1224,9 +1227,93 @@ class CleanBuilder{
    'Выдели пол или стену, чтобы перемещать их текстуру.';
   for(const id of ['textureShiftUp','textureShiftDown','textureShiftLeft',
    'textureShiftRight','textureShiftReset'])$(id).disabled=!mayShiftTexture;
-  this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
+  this.updateGizmoDock();
   this.updateOpeningInfo();
   this.readSockets();
+ }
+ // The video-inspired transform dock is visible only for a placed selection.
+ updateGizmoDock(){
+  const dock=$('gizmoQuickbar');if(!dock)return;
+  dock.hidden=!(this.mode==='build'&&this.tool==='pick'&&this.selected);
+  const cadPanel=$('gizmoCadSizePanel');
+  cadPanel.hidden=dock.hidden||!this.cadPanelOpen;
+  if(!cadPanel.hidden){
+   const dimensions=this.physicalSize(this.selected);
+   if(dimensions)for(const [id,axis] of [
+    ['gizmoWidthMeters','x'],['gizmoHeightMeters','y'],
+    ['gizmoDepthMeters','z']]){
+    const field=$(id);
+    if(document.activeElement!==field)
+     field.value=(dimensions[axis]/100).toFixed(2);
+   }
+  }
+  for(const mode of ['move','rotate','scale']){
+   const cap=mode[0].toUpperCase()+mode.slice(1);
+   for(const id of ['gizmo'+cap,'quickGizmo'+cap])
+    $(id)?.classList.toggle('active',this.gizmo.mode===mode);
+  }
+  $('quickGizmoCad')?.classList.toggle('active',!!this.cadPanelOpen);
+ }
+ applyGizmoCadDimensions(){
+  const obj=this.selected;
+  if(!obj||this.tool!=='pick')return notify('Сначала выдели готовую деталь','warn');
+  const dims=this.physicalSize(obj);
+  if(!dims)return notify('Размеры детали не определены','warn');
+  const target={
+   x:Number($('gizmoWidthMeters').value),y:Number($('gizmoHeightMeters').value),
+   z:Number($('gizmoDepthMeters').value)
+  };
+  if(!Object.values(target).every(v=>Number.isFinite(v)&&v>=.05&&v<=100))
+   return notify('Укажи размеры в метрах от 0,05 до 100','warn');
+  const axes={...obj.axes};let newThickness=obj.thickness;
+  for(const axis of ['x','y','z']){
+   const old=Math.max(.00001,dims[axis]/100);
+   if(obj.kind==='wall'&&axis==='z'){
+    if(target.z<.025||target.z>.8)
+     return notify('Толщина обычной стены от 2,5 до 80 см','warn');
+    newThickness=target.z;continue;
+   }
+   const next=(axes[axis]||1)*(target[axis]/old);
+   if(!Number.isFinite(next)||next<.1||next>10)
+    return notify('Размер вне диапазона масштабирования 10–1000%','warn');
+   axes[axis]=next;
+  }
+  this.recordEdit();
+  obj.axes=axes;obj.thickness=newThickness;
+  this.applyTransform(obj);
+  if(WallOpenings.supported(obj.kind))this.updateGeometry(obj);
+  else if(obj.kind==='floor')this.rebuildFloor(obj,obj.floorTrim);
+  else if(obj.thicknessEditable)this.rebuildImported(obj);
+  else this.applySurfaceTo(obj);
+  if(this.outline)this.outline.setFromObject(obj.root);
+  this.syncInspector();this.gizmo.update();
+  notify('📐 CAD: размеры изменены. Положение детали осталось прежним','success');
+ }
+ selectGizmoMode(mode){
+  this.gizmo.setMode(mode);this.updateGizmoDock();
+  if(this.tool!=='pick')notify('Сначала выдели готовую деталь','warn');
+ }
+ focusGizmoView(view='focus'){
+  if(!this.selected)return notify('Выдели деталь для выбора вида','warn');
+  this.setMode('build');
+  const root=this.selected.root;
+  root.updateMatrixWorld(true,true);
+  const box=new THREE.Box3().setFromObject(root),center=box.getCenter(V());
+  if(box.isEmpty())return;
+  const size=box.getSize(V()),distance=Math.max(5,size.length()*1.65);
+  if(view==='focus'){
+   const direction=this.camera.position.clone().sub(this.controls.target).normalize();
+   this.camera.position.copy(center).addScaledVector(direction,distance);
+  }else{
+   const direction=view==='front'?V(0,.10,1):
+    view==='side'?V(1,.10,0):V(.04,1,.12);
+   this.camera.position.copy(center).add(direction.normalize().multiplyScalar(distance));
+  }
+  this.controls.target.copy(center);
+  this.camera.lookAt(center);this.controls.update();this.gizmo.update();
+  notify('📐 Камера: '+({focus:'к объекту',front:'спереди',
+   side:'сбоку',top:'сверху'})[view]+'. Сам объект не перемещён','success');
  }
  // Navigation only: this must never mutate the building or its coordinates.
  startCameraFocus(){
@@ -1390,7 +1477,7 @@ class CleanBuilder{
    this.applySurfaceTo(item.obj);
   }
   if(this.outline&&this.selected)this.outline.setFromObject(this.selected.root);
-  this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
   this.syncInspector();return true;
  }
  addOpening(){
@@ -1502,7 +1589,7 @@ class CleanBuilder{
   }
   this.applySurfaceTo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(newRoot);
-  this.gizmo.attach(this.tool==='pick'?this.selected:null);
+  this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
  }
  editField(id){
   const obj=this.target();if(!obj)return;
@@ -2442,14 +2529,19 @@ class CleanBuilder{
    }
   };
   for(const mode of ['move','rotate','scale']){
-   const id='gizmo'+mode[0].toUpperCase()+mode.slice(1);
-   $(id).onclick=()=>{
-    this.gizmo.setMode(mode);
-    for(const name of ['move','rotate','scale'])
-     $('gizmo'+name[0].toUpperCase()+name.slice(1)).classList.toggle('active',mode===name);
-    if(this.tool!=='pick')notify('Для гизмо нажми «Выделить» и выбери деталь','warn');
-   };
+   const cap=mode[0].toUpperCase()+mode.slice(1);
+   $('gizmo'+cap).onclick=()=>this.selectGizmoMode(mode);
+   $('quickGizmo'+cap).onclick=()=>this.selectGizmoMode(mode);
   }
+  $('quickGizmoCad').onclick=()=>{
+   this.cadPanelOpen=!this.cadPanelOpen;
+   this.gizmo.toggleCad(true);this.updateGizmoDock();
+  };
+  $('btnGizmoApplyDimensions').onclick=()=>this.applyGizmoCadDimensions();
+  $('quickGizmoFocus').onclick=()=>this.focusGizmoView();
+  $('quickViewFront').onclick=()=>this.focusGizmoView('front');
+  $('quickViewSide').onclick=()=>this.focusGizmoView('side');
+  $('quickViewTop').onclick=()=>this.focusGizmoView('top');
   $('btnHideUi').onclick=()=>document.body.classList.toggle('uiHidden');
   $('btnSave').onclick=()=>this.save();
   $('btnLoad').onclick=()=>this.load();
