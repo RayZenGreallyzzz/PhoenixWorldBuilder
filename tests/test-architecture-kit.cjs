@@ -115,8 +115,21 @@ for(const [style,frameStyle] of [['round','round'],['gothic','gothic'],['rune','
   w:1.1,h:1.0,frameStyle:'round'};
  const wall=G.create('arc180');
  assert(Wall.render(wall,'arc180',[roundWindow]).ok,'Round window in semicircular wall');
- assert(wall.getObjectByName('structure:arched-lintel'),
-  'Curved wall has 3D arch masonry over window');
+ const structure=wall.getObjectByName('structure:wall');
+ assert(structure&&!wall.getObjectByName('structure:arched-lintel'),
+  'Curved window arch is carved into the curved masonry itself');
+ const prof=Wall.profile('arc180'),material=structure.material,
+  oldSide=material.side;
+ material.side=THREE.DoubleSide;wall.updateMatrixWorld(true,true);
+ const rayAt=s=>{
+  const p=prof.pos(s),n=new THREE.Vector3(p.nx,0,p.nz).normalize();
+  return new THREE.Raycaster(new THREE.Vector3(p.x,1.72,p.z)
+   .addScaledVector(n,.6),n.clone().negate(),0,1.2)
+   .intersectObject(structure,false).length;
+ };
+ assert.equal(rayAt(prof.length/2),0,'Round window is open at the arch centre');
+ assert(rayAt(prof.length/2+.49)>0,'Curved masonry fills window arch shoulder');
+ material.side=oldSide;
  assert(wall.getObjectByName('window:glass'),'Curved glazing inserted');
 }
 const html=fs.readFileSync(path.join(base,'index.html'),'utf8'),
