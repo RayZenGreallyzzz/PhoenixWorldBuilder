@@ -556,6 +556,7 @@ class CleanBuilder{
  }
 
  chooseTexture(style,imageId=''){
+  if(!this.canEditObject())return;
   const obj=this.target();
   if(!obj){
    this.pendingTexture={style,imageId};
@@ -710,6 +711,7 @@ class CleanBuilder{
    imageId:prev.imageId||this.activeTextureId||''});
  }
  shiftTexture(direction){
+  if(!this.canEditObject())return;
   const obj=this.target();
   if(!obj||!['wall','floor'].includes(obj.category))
    return notify('Выбери пол или стену, чтобы расположить текстуру','warn');
@@ -735,6 +737,7 @@ class CleanBuilder{
    '. Положение рисунка сохраняется в проекте','success');
  }
  applySurfaceToAllWalls(){
+  if(!this.canEditObject())return;
   const source=this.selected;
   if(this.tool!=='pick'||!source||!['wall','floor'].includes(source.category))
    return notify('Выдели построенную стену или плиту пола','warn');
@@ -757,6 +760,7 @@ class CleanBuilder{
    '. Материал сохраняется в проекте и GLB','success');
  }
  changeSurface(reset=false){
+  if(!this.canEditObject())return;
   const obj=this.target();
   if(!obj)return notify('Выбери деталь','warn');
   const scope=this.textureScope(obj);
@@ -1407,6 +1411,7 @@ class CleanBuilder{
   $('quickGizmoCad')?.classList.toggle('active',!!this.cadPanelOpen);
  }
  applyGizmoCadDimensions(){
+  if(!this.canEditObject())return;
   const obj=this.selected;
   if(!obj||this.tool!=='pick')return notify('Сначала выдели готовую деталь','warn');
   const dims=this.physicalSize(obj);
@@ -1583,6 +1588,7 @@ class CleanBuilder{
   notify('🎯 Точка центра выбрана. Введи размер в см и нажми «Вырезать»','success');
  }
  cutForPrefabDoor(){
+  if(!this.canEditObject())return;
   const door=this.selected;
   if(this.tool!=='pick'||!door||!ArchitectureKit.has(door.kind)||
    !door.kind.startsWith('door'))
@@ -1604,6 +1610,8 @@ class CleanBuilder{
  openingParts(plan){
   const staged=[];
   for(const [obj,newOpenings] of plan){
+   if(!SceneManager.editingAllowed(obj))return {ok:false,
+    reason:'Соседняя стена скрыта или заблокирована. Открой замок в списке сцены.'};
    const check=WallOpenings.validate(newOpenings,obj.kind);
    if(!check.ok)return {ok:false,reason:check.reason};
    const root=this.cloneTemplate(obj.kind,obj.thickness,obj.scale,obj.axes);
@@ -1633,6 +1641,7 @@ class CleanBuilder{
   this.syncInspector();return true;
  }
  addOpening(){
+  if(!this.canEditObject())return;
   const obj=this.selected;
   if(this.tool!=='pick'||!obj||!WallOpenings.supported(obj.kind))
    return notify('Выдели построенную прямую, угловую или полукруглую стену','warn');
@@ -1663,6 +1672,7 @@ class CleanBuilder{
     (typ==='door'?'петли и дверные створки':'рама и стекло')),'success');
  }
  restyleOpening(){
+  if(!this.canEditObject())return;
   const selected=this.selected;
   if(this.tool!=='pick'||!selected)return notify('Выдели стену с готовым проёмом','warn');
   const id=$('openingSelect').value,opening=selected.openings?.find(o=>o.id===id);
@@ -1684,6 +1694,7 @@ class CleanBuilder{
    ' применён к '+changes.size+' модулям стены. Сохрани проект.','success');
  }
  removeOpening(){
+  if(!this.canEditObject())return;
   const obj=this.selected;
   if(!obj||!WallOpenings.supported(obj.kind))return notify('Выдели стену с проёмом','warn');
   const id=$('openingSelect').value,o=(obj.openings||[]).find(o=>o.id===id);
@@ -1699,10 +1710,15 @@ class CleanBuilder{
   notify('Проём удалён, '+changes.size+' стен восстановлено','success');
  }
  setDoorSwing(){
+  if(!this.canEditObject())return;
   const obj=this.selected;if(!obj)return;
   const o=obj.openings?.find(o=>o.id===$('openingSelect').value);
   if(!o||o.type!=='door')return;
   const angle=clamp(Number($('doorSwing').value)||0,-110,110),group=o.group||o.id;
+  if(this.entries.some(w=>!SceneManager.editingAllowed(w)&&
+   w.openings?.some(entry=>(entry.group||entry.id)===group)))
+   return notify('Одна из стен проёма защищена. Сними замок для изменения двери','warn');
+  this.recordEdit();
   for(const wall of this.entries){
    for(const sibling of wall.openings||[]){
     if((sibling.group||sibling.id)!==group||sibling.type!=='door')continue;
@@ -1809,6 +1825,7 @@ class CleanBuilder{
   return true;
  }
  applyFloorSettings(reset=false){
+  if(!this.canEditObject())return;
   const obj=this.target();
   if(obj?.kind!=='floor')return notify('Выбери стандартную плиту пола','warn');
   const edit=reset?{...obj.floorTrim,enabled:false}:{...obj.floorTrim,enabled:true,
@@ -1833,6 +1850,7 @@ class CleanBuilder{
   return [...(cut?[cut]:[]),...FloorClip.normalizeCuts(auto)];
  }
  applyImportedCut(reset=false){
+  if(!this.canEditObject())return;
   const obj=this.target();
   if(!obj||CleanGeometry.isBuiltIn(obj.kind))return notify('Выбери импортированную GLB-деталь','warn');
   try{
@@ -1851,6 +1869,8 @@ class CleanBuilder{
   }catch(err){notify(err.message,'error')}
  }
  trimWholeProject(reset=false){
+  if(this.entries.some(e=>e.category==='floor'&&!SceneManager.editingAllowed(e)))
+   return notify('На этажах есть скрытые/защищённые плиты. Разблокируй их перед массовой подрезкой','warn');
   const floors=this.entries.filter(e=>e.category==='floor').length;
   if(!floors)return notify('В проекте нет плит пола','warn');
   const action=reset?'Снять автоподрезку со всех плит':'Подрезать все плиты по стенам';
@@ -1877,6 +1897,7 @@ class CleanBuilder{
   }
  }
  applyAutomaticTrim(reset=false){
+  if(!this.canEditObject())return;
   const obj=this.target();
   if(!obj||obj.category!=='floor')return notify('Выбери плиту или GLB категории «Пол»','warn');
   const builtin=obj.kind==='floor';
@@ -1943,6 +1964,7 @@ class CleanBuilder{
   return true;
  }
  applyMeshSettings(reset=false){
+  if(!this.canEditObject())return;
   const obj=this.target();
   if(!obj||CleanGeometry.isBuiltIn(obj.kind))
    return notify('Выбери импортированную GLB-модель','warn');
@@ -1962,6 +1984,7 @@ class CleanBuilder{
    'Изгиб и обрезка применены к выбранной детали. Сохранение проекта запомнит форму.','success');
  }
  changeCategory(){
+  if(!this.canEditObject())return;
   const obj=this.target();if(!obj)return;
   obj.category=$('moduleCategory').value;
   if(this.assets.has(obj.kind))this.assets.get(obj.kind).category=obj.category;
@@ -1972,6 +1995,7 @@ class CleanBuilder{
   notify('Назначение детали изменено: '+$('moduleCategory').selectedOptions[0].textContent,'success');
  }
  setSockets(){
+  if(!this.canEditObject())return;
   const obj=this.target();if(!obj||CleanGeometry.isBuiltIn(obj.kind))return;
   const extract=prefix=>{
    const x=Number($('socket'+prefix+'X').value),z=Number($('socket'+prefix+'Z').value),
@@ -1986,7 +2010,8 @@ class CleanBuilder{
    obj.sockets=[a,b];notify('Оба торца сохранены: магнит будет использовать их вместо границ модели','success');
   }catch(error){notify(error.message,'error')}
  }
- clearSockets(){const obj=this.target();if(!obj)return;obj.sockets=null;this.syncInspector();
+ clearSockets(){
+  if(!this.canEditObject())return;const obj=this.target();if(!obj)return;obj.sockets=null;this.syncInspector();
   notify('Возврат к автоматическому распознаванию прямой стены','neutral')}
  rayPoint(event,planeY=this.floor*2.6){
   const r=this.canvas.getBoundingClientRect();
@@ -1996,6 +2021,7 @@ class CleanBuilder{
   const hit=V();return this.ray.ray.intersectPlane(plane,hit)?hit:null;
  }
  nudgeSelected(dx,dz,dy=0){
+  if(!this.canEditObject())return;
   const obj=this.selected;
   if(!obj||this.tool!=='pick')return notify('Нажми «Выделить» и выбери готовую деталь','warn');
   this.recordEdit();
@@ -2014,7 +2040,7 @@ class CleanBuilder{
  }
  // Two-stage touch drag: first tap selects, second gesture moves in any X/Z direction.
  beginObjectDrag(e){
-  if(this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
+  if(!SceneManager.editingAllowed(this.selected)||this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
   const rect=this.canvas.getBoundingClientRect();
   this.pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
   this.ray.setFromCamera(this.pointer,this.camera);
@@ -2352,6 +2378,7 @@ class CleanBuilder{
   this.syncInspector();notify('Создана копия детали','success');
  }
  delete(){
+  if(!this.canEditObject())return;
   if(!this.selected)return notify('Сначала выдели деталь','warn');
   this.recordEdit();
   const idx=this.entries.indexOf(this.selected);
@@ -2773,7 +2800,7 @@ class CleanBuilder{
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();
   this.canvas.addEventListener('pointerdown',e=>{
-   if(this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
+   if(!SceneManager.editingAllowed(this.selected)||this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
    this.gizmoBefore=this.project();
    this.gizmoPointer=e.pointerId;this.controls.enabled=false;
    if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
