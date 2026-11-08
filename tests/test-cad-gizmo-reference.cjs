@@ -95,11 +95,14 @@ const html=fs.readFileSync(path.join(base,'index.html'),'utf8'),
 for(const id of ['gizmoCadOverlay','gizmoMeasureWidth','gizmoMeasureHeight',
  'gizmoMeasureDepth','gizmoQuickbar','quickGizmoRotate',
  'quickGizmoMove','quickGizmoScale','quickGizmoCad','quickGizmoFocus',
- 'quickViewFront','quickViewSide','quickViewTop'])
+ 'quickViewFront','quickViewSide','quickViewTop',
+ 'gizmoCadSizePanel','gizmoWidthMeters','gizmoHeightMeters',
+ 'gizmoDepthMeters','btnGizmoApplyDimensions'])
  assert(html.includes('id="'+id+'"'),'Gizmo HUD is missing '+id);
 assert(css.includes('pointer-events:none'),'Dimension badges must not intercept touch');
 for(const fragment of ['updateGizmoDock(){','selectGizmoMode(mode){',
- 'focusGizmoView(view=',"this.gizmo.toggleCad();",
+ 'focusGizmoView(view=',"this.gizmo.toggleCad(true)",
+ 'applyGizmoCadDimensions(){','this.recordEdit();',
  "this.focusGizmoView('front')","this.focusGizmoView('side')",
  "this.focusGizmoView('top')"])
  assert(app.includes(fragment),'Missing reference-style gizmo behavior '+fragment);
