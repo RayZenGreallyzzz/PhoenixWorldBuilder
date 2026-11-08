@@ -101,7 +101,9 @@ class CleanBuilder{
   this.catalogMeta=this.loadCatalogMeta();this.smartCatalogFolder='all';
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
-  this.cameraFocusPick=false;this.surfaceSidePick=false;
+  this.cameraFocusPick=false;this.surfaceSidePick=false;this.decalPickMode=false;
+  this.decals=[];this.decalMeshes=[];this.decalGeneration=0;
+  this.decalRebuildTimer=null;this.activeDecalImageId='';
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
@@ -790,6 +792,194 @@ class CleanBuilder{
    this.textureCache.set(id,tex);return tex;
   }finally{URL.revokeObjectURL(url)}
  }
+ // Graphical decals are independent meshes, NOT texture substitutions.
+ // Keeping them outside this.entries ensures they never modify the original
+ // building geometry, collision, wall openings, floor UVs or module library.
+ async importDecalImage(file){
+  if(!file)return;
+  try{
+   if(!/\.(png|webp)$/i.test(file.name))
+    throw Error('Для наклейки выбери PNG или WebP с прозрачностью');
+   const cap=Math.min(4096,this.renderer?.capabilities?.maxTextureSize||4096);
+   const prepared=await PhoenixFiles.prepareTexture(file,cap,{lossless:true});
+   const id='texture:decal:'+Date.now().toString(36)+'-'+
+    Math.random().toString(36).slice(2,8);
+   await putAsset(id,prepared.bytes);
+   this.textureFiles.push({id,name:safeName(file.name),type:prepared.type,
+    width:prepared.width,height:prepared.height,bytes:prepared.storedBytes,
+    folder:'my-textures'});
+   this.textureFiles=this.textureFiles.slice(-1500);
+   localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
+   this.activeDecalImageId=id;
+   $('decalImageStatus').textContent='✅ '+safeName(file.name)+' (PNG с альфа-каналом)';
+   this.renderTextureLibrary();
+   notify('🖼 Прозрачный рисунок загружен отдельно от текущих текстур','success');
+  }catch(err){notify('Граффити: '+err.message,'error')}
+ }
+ startDecalPlacement(){
+  if(!this.activeDecalImageId)
+   return notify('Сначала загрузи PNG с прозрачным фоном','warn');
+  this.setMode('build');this.setTool('pick');
+  this.decalPickMode=true;this.surfaceSidePick=false;
+  this.cameraFocusPick=false;this.openingPickMode=false;
+  $('decalPanel').open=true;
+  notify('👆 Коснись поверхности пола, стены или крыши: рисунок ляжет поверх неё','success');
+ }
+ async placeDecalAt(event){
+  if(!this.decalPickMode)return;
+  this.decalPickMode=false;
+  const rect=this.canvas.getBoundingClientRect();
+  this.pointer.set((event.clientX-rect.left)/rect.width*2-1,
+   -(event.clientY-rect.top)/rect.height*2+1);
+  this.ray.setFromCamera(this.pointer,this.camera);
+  const candidates=this.entries.filter(o=>!o.hidden&&
+   ['wall','floor','roof'].includes(o.category));
+  const hits=this.ray.intersectObjects(candidates.map(o=>o.root),true);
+  let picked=null;
+  for(const hit of hits){
+   const entry=candidates.find(o=>{
+    let node=hit.object;
+    while(node){if(node===o.root)return true;node=node.parent}
+    return false;
+   });
+   if(!entry||hit.object.userData?.phoenixLODProxy||
+      hit.object.userData?.phoenixInsert||!hit.face?.normal)continue;
+   picked={entry,hit};break;
+  }
+  if(!picked)return notify('Не попала на поверхность пола, стены или крыши','warn');
+  const {entry,hit}=picked;
+  if(!SceneManager.editingAllowed(entry))
+   return notify('Эта деталь защищена. Сними замок перед наклейкой','warn');
+  const normal=hit.face.normal.clone().applyMatrix3(
+   new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
+  // Some imported and rebuilt faces wind backwards; orient to the camera
+  // so the actual, visible side receives the +3 mm overlay offset.
+  if(normal.dot(this.ray.ray.direction)>0)normal.negate();
+  const room=entry.category==='floor'&&$('decalWholeRoom').checked;
+  const bounds=room?this.joinedFloorRegion(entry):null;
+  const position=hit.point.clone();
+  let width=Number($('decalWidth').value)||2,
+   height=Number($('decalHeight').value)||2;
+  if(bounds?.region){
+   const [minX,minZ,maxX,maxZ]=bounds.region;
+   width=maxX-minX;height=maxZ-minZ;
+   position.x=(minX+maxX)/2;position.z=(minZ+maxZ)/2;
+   position.y=new THREE.Box3().setFromObject(entry.root).max.y;
+   normal.set(0,1,0);
+  }
+  // Save local anchor. Moving or rotating the physical floor/roof/wall
+  // carries its graffiti with it; the PNG is not nailed to world coords.
+  entry.root.updateWorldMatrix(true,true);
+  const localPoint=entry.root.worldToLocal(position.clone());
+  const localNormal=normal.clone().applyMatrix3(new THREE.Matrix3()
+   .getNormalMatrix(entry.root.matrixWorld).invert()).normalize();
+  const decal=SurfaceDecals.clean({id:'d'+Date.now().toString(36)+
+    Math.random().toString(36).slice(2,6),imageId:this.activeDecalImageId,
+   targetId:entry.id,space:'local',
+   position:localPoint.toArray(),normal:localNormal.toArray(),
+   width,height,rotation:Number($('decalRotation').value)||0,
+   opacity:Number($('decalOpacity').value)||1,room});
+  if(!decal)return notify('Не удалось подготовить прозрачный слой','error');
+  if(this.decals.length>=48)return notify('Максимум 48 граффити в проекте','warn');
+  this.recordEdit();this.decals.push(decal);
+  await this.refreshDecals();this.syncDecalList(decal.id);
+  notify('✅ Граффити приклеено поверх исходной текстуры. Материал не менялся','success');
+ }
+ syncDecalList(prefer=null){
+  const select=$('decalSelect'),chosen=prefer||select.value;
+  select.textContent='';
+  const empty=document.createElement('option');
+  empty.value='';empty.textContent='Выбери наклейку';
+  select.append(empty);
+  for(const d of this.decals){
+   const item=document.createElement('option');
+   item.value=d.id;
+   const target=this.entries.find(e=>e.id===d.targetId);
+   item.textContent=(target?this.sceneDisplayName(target):'Объект удалён')+
+    ' · '+d.id;
+   select.append(item);
+  }
+  if(this.decals.some(d=>d.id===chosen))select.value=chosen;
+  this.syncDecalControls();
+ }
+ syncDecalControls(){
+  const d=this.decals.find(x=>x.id===$('decalSelect').value);
+  if(!d)return;
+  for(const [id,val] of [['decalWidth',d.width],['decalHeight',d.height],
+   ['decalRotation',d.rotation],['decalOpacity',d.opacity]])
+   $(id).value=String(val);
+  $('decalWholeRoom').checked=d.room;
+  this.activeDecalImageId=d.imageId;
+  $('decalImageStatus').textContent=this.textureFiles.find(t=>
+   t.id===d.imageId)?.name||'Сохранённый PNG';
+ }
+ updateDecal(){
+  const index=this.decals.findIndex(x=>x.id===$('decalSelect').value);
+  if(index<0)return notify('Выбери рисунок в списке','warn');
+  this.recordEdit();this.decals[index]={...this.decals[index],
+   imageId:this.activeDecalImageId||this.decals[index].imageId,
+   width:Math.max(.1,Math.min(100,Number($('decalWidth').value)||2)),
+   height:Math.max(.1,Math.min(100,Number($('decalHeight').value)||2)),
+   rotation:Number($('decalRotation').value)||0,
+   opacity:Number($('decalOpacity').value)||1};
+  this.refreshDecals();notify('✅ Масштаб и поворот граффити обновлены, пол не изменён','success');
+ }
+ deleteDecal(){
+  const index=this.decals.findIndex(x=>x.id===$('decalSelect').value);
+  if(index<0)return notify('Выбери рисунок в списке','warn');
+  this.recordEdit();this.decals.splice(index,1);
+  this.refreshDecals();this.syncDecalList();
+  notify('🗑 Удалён только прозрачный рисунок; основание не затронуто','success');
+ }
+ queueDecalRebuild(){
+  if(!this.decals?.length)return;
+  clearTimeout(this.decalRebuildTimer);
+  this.decalRebuildTimer=setTimeout(()=>this.refreshDecals(),140);
+ }
+ async refreshDecals(){
+  const gen=++this.decalGeneration,pending=[];
+  try{
+   for(const decal of this.decals){
+    const entry=this.entries.find(e=>e.id===decal.targetId);
+    if(!entry||entry.hidden)continue;
+    let entries=[entry];
+    if(decal.room&&entry.category==='floor')
+     entries=this.joinedFloorRegion(entry)?.entries||[entry];
+    entries=entries.filter(e=>!e.hidden&&e.category===entry.category);
+    // v2 decals are optional. Legacy world-space descriptors (if any)
+    // still work, but new locally attached decals follow object transforms.
+    let placed=decal;
+    if(decal.space==='local'){
+     entry.root.updateWorldMatrix(true,true);
+     const worldPosition=entry.root.localToWorld(V(...decal.position)).toArray();
+     const worldNormal=V(...decal.normal).applyMatrix3(new THREE.Matrix3()
+      .getNormalMatrix(entry.root.matrixWorld)).normalize().toArray();
+     // A floor image must turn with the room, not remain north-aligned.
+     const extra=entry.category==='floor'?entry.root.rotation.y*180/Math.PI:0;
+     placed={...decal,position:worldPosition,normal:worldNormal,
+      rotation:decal.rotation+extra};
+    }
+    const geometry=SurfaceDecals.geometryFor(placed,entries);
+    if(!geometry)continue;
+    let texture;
+    try{texture=await this.textureAsset(decal.imageId)}
+    catch(err){geometry.dispose();console.warn('Decal image missing:',err);continue}
+    if(gen!==this.decalGeneration){geometry.dispose();break}
+    const mesh=SurfaceDecals.createMesh(decal,geometry,texture);
+    if(mesh)pending.push(mesh);
+   }
+  }catch(err){
+   for(const mesh of pending)SurfaceDecals.dispose(mesh);
+   notify('Граффити: '+err.message,'warn');return false;
+  }
+  if(gen!==this.decalGeneration){
+   for(const mesh of pending)SurfaceDecals.dispose(mesh);return false;
+  }
+  for(const mesh of this.decalMeshes)SurfaceDecals.dispose(mesh);
+  this.decalMeshes=pending;
+  for(const mesh of pending)this.scene.add(mesh);
+  return true;
+ }
  textureScope(obj=this.target()){
   const selected=$('textureFaceScope').value;
   return obj&&['wall','floor'].includes(obj.category)&&
@@ -1255,6 +1445,7 @@ class CleanBuilder{
   if(obj[property]===value)return;
   this.recordEdit();
   SceneManager.apply(obj,{[property]:value});
+  if(property==='hidden')this.queueDecalRebuild();
   if(obj===this.selected&&obj.hidden){
    this.selected=null;
    if(this.outline){this.scene.remove(this.outline);
@@ -1954,7 +2145,7 @@ class CleanBuilder{
     {thickness:obj.thickness,axes:obj.axes});
    if(!result.ok)throw Error('Не удалось восстановить проёмы: '+result.reason);
   }
-  this.applySurfaceTo(obj);
+  this.applySurfaceTo(obj);this.queueDecalRebuild();
   if(this.outline&&obj===this.selected)this.outline.setFromObject(newRoot);
   this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
  }
@@ -1995,6 +2186,7 @@ class CleanBuilder{
   this.applyTransform(obj);
   if(['scaleAll','sizeX','sizeY','sizeZ'].includes(id)&&obj.thicknessEditable)
    this.rebuildImported(obj);
+  this.queueDecalRebuild();
   // Direct XYZ entry is authoritative: never overwrite a manually typed
   // millimetre position with a cursor position (or 25 cm grid rounding).
   if(obj===this.preview&&!['posX','posY','posZ'].includes(id))
@@ -2019,6 +2211,7 @@ class CleanBuilder{
   }
   this.scene.add(fresh);old.removeFromParent();
   obj.root=fresh;obj.floorTrim=edit;obj.root.visible=!obj.hidden;
+  this.queueDecalRebuild();
   this.applySurfaceTo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(fresh);
   return true;
@@ -2154,7 +2347,7 @@ class CleanBuilder{
   }
   this.scene.add(template);old.removeFromParent();
   obj.root=template;obj.meshEdit=requested;obj.root.visible=!obj.hidden;
-  this.applySurfaceTo(obj);
+  this.applySurfaceTo(obj);this.queueDecalRebuild();
   obj.capResult=editResult;
   if(obj!==this.preview)this.attachImportedLOD(obj);
   obj.thicknessEditable=!CleanMeshEdit.active(requested)&&
@@ -2239,7 +2432,8 @@ class CleanBuilder{
  }
  // Two-stage touch drag: first tap selects, second gesture moves in any X/Z direction.
  beginObjectDrag(e){
-  if(!SceneManager.editingAllowed(this.selected)||this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
+  if(!SceneManager.editingAllowed(this.selected)||this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||
+   this.decalPickMode||this.tool!=='pick'||!this.selected||e.button!==0||e.isPrimary===false)return;
   const rect=this.canvas.getBoundingClientRect();
   this.pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
   this.ray.setFromCamera(this.pointer,this.camera);
@@ -2278,6 +2472,7 @@ class CleanBuilder{
   if(this.canvas.hasPointerCapture?.(e.pointerId))this.canvas.releasePointerCapture(e.pointerId);
   if(drag.moved){
    this.recordEdit(drag.historyBefore);
+   this.queueDecalRebuild();
    if(this.selected?.surface?.style!=='none')this.applySurfaceTo(this.selected);
    notify('Деталь перемещена по X/Z: '+this.sizeText(this.selected),'success');
   }
@@ -2487,7 +2682,7 @@ class CleanBuilder{
   if(!entry){notify('Не удалось разместить модуль','error');return}
   this.recordEdit();
   this.scene.add(entry.root);this.entries.push(entry);
-  this.attachImportedLOD(entry);
+  this.attachImportedLOD(entry);this.queueDecalRebuild();
   this.selectKind(source.kind);
   this.preview.root.position.fromArray(data.position);
   this.settings={scale:data.scale,axes:data.axes,thickness:data.thickness};
@@ -2584,6 +2779,7 @@ class CleanBuilder{
   const idx=this.entries.indexOf(this.selected);
   if(idx>=0)this.entries.splice(idx,1);
   this.selected.root.removeFromParent();this.selected=null;
+  this.queueDecalRebuild();
   this.gizmo.attach(null);
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose();this.outline=null}
   this.syncInspector();notify('Деталь удалена');
@@ -2609,6 +2805,7 @@ class CleanBuilder{
    heights:[],objects:this.entries.map(obj=>{
     const item=this.encode(obj);item.rot=obj.root.rotation.y;return item;
    }),floor:this.floor,nextId:this.nextId,
+    decals:SurfaceDecals.normalize(this.decals),
     textureLibrary:this.textureFiles.map(t=>({
      id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,
      bytes:t.bytes,folder:t.folder||'my-textures',path:t.path||''
@@ -2628,13 +2825,18 @@ class CleanBuilder{
     const updated=await this.applySurfaceTo(obj);
     if(!updated)throw Error('Не удалось подготовить материалы для '+obj.kind);
    }
-   const scene={objects:this.entries.filter(obj=>!obj.hidden).map(obj=>({mesh:obj.root,data:{
+   // Export overlays separately from original walls and floors; each PNG
+   // retains real alpha and the building's base maps stay untouched.
+   await this.refreshDecals();
+   const scene={objects:[...this.entries.filter(obj=>!obj.hidden).map(obj=>({mesh:obj.root,data:{
     id:obj.id,kind:obj.kind,category:obj.category,storey:obj.storey,
     groupId:obj.groupId||null,roomRole:obj.roomRole||null,
     label:obj.label||null,
     suggestedCollider:['wall','floor','roof'].includes(obj.category)||
      obj.kind==='stairsStraight'?'static-mesh':'manual'
-   }}))};
+   }})),...this.decalMeshes.map((mesh,i)=>({mesh,data:{
+    id:-i-1,kind:'decal',category:'decor',storey:0,label:mesh.name,
+    suggestedCollider:'none'}}))]};
    const blob=await SceneExporter.build(scene,{houseOnly:true,
     keepWorldCoordinates:true});
    await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_Scene.glb','model/gltf-binary');
@@ -2748,6 +2950,9 @@ class CleanBuilder{
   // All-or-nothing restore: keep current scene if a GLB was lost.
   for(const obj of this.entries)obj.root.removeFromParent();
   this.entries=staged;for(const e of staged){this.scene.add(e.root);this.attachImportedLOD(e)}
+  // Optional v2 extension: old saved projects without decals load unchanged.
+  this.decals=SurfaceDecals.normalize(doc.decals);
+  await this.refreshDecals();this.syncDecalList();
   this.floor=Number.isInteger(doc.floor)?clamp(doc.floor,0,49):0;
   this.nextId=Math.max(1,...this.entries.map(e=>e.id+1),doc.nextId||1);
   this.selected=null;this.setTool('place');this.selectKind('wall');
@@ -2909,6 +3114,15 @@ class CleanBuilder{
   $('btnApplyTexture').onclick=()=>this.changeSurface();
   $('btnClearTexture').onclick=()=>this.changeSurface(true);
   $('btnSurfaceAllWalls').onclick=()=>this.applySurfaceToAllWalls();
+  $('btnDecalImage').onclick=()=>$('decalImageInput').click();
+  $('decalImageInput').onchange=e=>{
+   const file=e.target.files?.[0];e.target.value='';
+   this.importDecalImage(file);
+  };
+  $('btnPlaceDecal').onclick=()=>this.startDecalPlacement();
+  $('decalSelect').onchange=()=>this.syncDecalControls();
+  $('btnUpdateDecal').onclick=()=>this.updateDecal();
+  $('btnDeleteDecal').onclick=()=>this.deleteDecal();
   for(const [id,direction] of [
    ['textureShiftUp','up'],['textureShiftDown','down'],
    ['textureShiftLeft','left'],['textureShiftRight','right'],
@@ -3056,7 +3270,7 @@ class CleanBuilder{
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();
   this.canvas.addEventListener('pointerdown',e=>{
-   if(!SceneManager.editingAllowed(this.selected)||this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
+   if(!SceneManager.editingAllowed(this.selected)||this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.decalPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
    this.gizmoBefore=this.project();
    this.gizmoPointer=e.pointerId;this.controls.enabled=false;
    if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
@@ -3081,6 +3295,7 @@ class CleanBuilder{
    }
    if(drag?.changed){
     if(this.gizmoBefore)this.recordEdit(this.gizmoBefore);
+    this.queueDecalRebuild();
     if(this.selected){
      this.selected.root.updateMatrixWorld(true);
      if(this.selected.surface?.style!=='none')this.applySurfaceTo(this.selected);
@@ -3107,6 +3322,7 @@ class CleanBuilder{
    if(!start||e.pointerId!==start.pointerId||e.isPrimary===false)return;
    this.pointerStart=null;
    if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)return;
+   if(this.decalPickMode){this.placeDecalAt(e);return}
    if(this.surfaceSidePick){this.pickTextureFace(e);return}
    if(this.cameraFocusPick){this.setCameraFocusAt(e);return}
    if(this.tool==='pick'){
