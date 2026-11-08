@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence, feature/free-camera-orbit-focus, feature/mesh-workshop-textures-materials, feature/zip-smart-catalog-character-collisions, fix/texture-joystick-xyz-gizmo, feature/floor-wall-texture-placement-controls, feature/dual-face-slab-materials, feature/complete-building-workflow, feature/cad-touch-gizmo-video-style, feature/scene-manager-visibility-locks, fix/true-arched-door-cutouts, fix/skinned-avatar-real-height]
+    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence, feature/free-camera-orbit-focus, feature/mesh-workshop-textures-materials, feature/zip-smart-catalog-character-collisions, fix/texture-joystick-xyz-gizmo, feature/floor-wall-texture-placement-controls, feature/dual-face-slab-materials, feature/complete-building-workflow, feature/cad-touch-gizmo-video-style, feature/scene-manager-visibility-locks, fix/true-arched-door-cutouts, fix/skinned-avatar-real-height, fix/avatar-stable-scale-during-animation]
   pull_request:
     branches: [main, feature/planner5d-precision-tools, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement]
 
