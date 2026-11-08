@@ -852,6 +852,9 @@ class CleanBuilder{
    return notify('Эта деталь защищена. Сними замок перед наклейкой','warn');
   const normal=hit.face.normal.clone().applyMatrix3(
    new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
+  // Some imported and rebuilt faces wind backwards; orient to the camera
+  // so the actual, visible side receives the +3 mm overlay offset.
+  if(normal.dot(this.ray.ray.direction)>0)normal.negate();
   const room=entry.category==='floor'&&$('decalWholeRoom').checked;
   const bounds=room?this.joinedFloorRegion(entry):null;
   const position=hit.point.clone();
@@ -864,9 +867,16 @@ class CleanBuilder{
    position.y=new THREE.Box3().setFromObject(entry.root).max.y;
    normal.set(0,1,0);
   }
+  // Save local anchor. Moving or rotating the physical floor/roof/wall
+  // carries its graffiti with it; the PNG is not nailed to world coords.
+  entry.root.updateWorldMatrix(true,true);
+  const localPoint=entry.root.worldToLocal(position.clone());
+  const localNormal=normal.clone().applyMatrix3(new THREE.Matrix3()
+   .getNormalMatrix(entry.root.matrixWorld).invert()).normalize();
   const decal=SurfaceDecals.clean({id:'d'+Date.now().toString(36)+
     Math.random().toString(36).slice(2,6),imageId:this.activeDecalImageId,
-   targetId:entry.id,position:position.toArray(),normal:normal.toArray(),
+   targetId:entry.id,space:'local',
+   position:localPoint.toArray(),normal:localNormal.toArray(),
    width,height,rotation:Number($('decalRotation').value)||0,
    opacity:Number($('decalOpacity').value)||1,room});
   if(!decal)return notify('Не удалось подготовить прозрачный слой','error');
@@ -936,7 +946,20 @@ class CleanBuilder{
     if(decal.room&&entry.category==='floor')
      entries=this.joinedFloorRegion(entry)?.entries||[entry];
     entries=entries.filter(e=>!e.hidden&&e.category===entry.category);
-    const geometry=SurfaceDecals.geometryFor(decal,entries);
+    // v2 decals are optional. Legacy world-space descriptors (if any)
+    // still work, but new locally attached decals follow object transforms.
+    let placed=decal;
+    if(decal.space==='local'){
+     entry.root.updateWorldMatrix(true,true);
+     const worldPosition=entry.root.localToWorld(V(...decal.position)).toArray();
+     const worldNormal=V(...decal.normal).applyMatrix3(new THREE.Matrix3()
+      .getNormalMatrix(entry.root.matrixWorld)).normalize().toArray();
+     // A floor image must turn with the room, not remain north-aligned.
+     const extra=entry.category==='floor'?entry.root.rotation.y*180/Math.PI:0;
+     placed={...decal,position:worldPosition,normal:worldNormal,
+      rotation:decal.rotation+extra};
+    }
+    const geometry=SurfaceDecals.geometryFor(placed,entries);
     if(!geometry)continue;
     let texture;
     try{texture=await this.textureAsset(decal.imageId)}
