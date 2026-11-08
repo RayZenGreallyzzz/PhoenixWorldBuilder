@@ -29,7 +29,7 @@ const SceneExporter=(()=>{
    let idx=gltf.accessors.length;gltf.accessors.push(meta);return idx;}
   async function material(m){if(Array.isArray(m))m=m[0];if(!m)m=new THREE.MeshStandardMaterial();if(matIdx.has(m))return matIdx.get(m);
    let color=m.color||new THREE.Color(1,1,1),a=m.opacity??1;
-   let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:a<1?'BLEND':'OPAQUE'};
+   let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:m.transparent||a<1?'BLEND':'OPAQUE'};
    if(m.map){let textureIndex=texIdx.get(m.map);if(textureIndex===undefined){const image=await encodeTexture(m.map);if(image){const imageIndex=gltf.images.length;gltf.images.push({bufferView:data(image),mimeType:'image/png'});textureIndex=gltf.textures.length;gltf.textures.push({source:imageIndex,sampler:0});texIdx.set(m.map,textureIndex)}}if(textureIndex!==undefined)md.pbrMetallicRoughness.baseColorTexture={index:textureIndex};}
    // Workshop relief is a real tangent-space normal map and belongs in GLB.
    // For imported source GLBs keep their existing normal map when available.
