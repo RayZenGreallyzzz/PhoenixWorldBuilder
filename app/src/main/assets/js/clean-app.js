@@ -239,7 +239,9 @@ class CleanBuilder{
   else notify('Строительство: выбери деталь, затем коснись места установки');
   $('inspector').classList.remove('unavailable');
   this.preview?.root&&(this.preview.root.visible=this.tool==='place');
-  this.controls.update();this.aimPlacement();this.updateGizmoDock();
+  this.controls.update();this.aimPlacement();
+  this.gizmo.attach(mode==='build'&&this.tool==='pick'?this.selected:null);
+  this.updateGizmoDock();
  }
  async cacheModel(id,buffer,category='wall',name='GLB',keep=true){
   const started=typeof performance!=='undefined'?performance.now():Date.now();
