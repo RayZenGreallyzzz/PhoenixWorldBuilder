@@ -746,10 +746,10 @@ class CleanBuilder{
    return notify('Сначала выбери своё изображение','warn');
   this.recordEdit();
   let count=0;
-  const group=source.category==='floor'&&surface.mapping==='joined'?
+  const group=(source.category==='floor'&&surface.mapping==='joined'?
    this.joinedFloorRegion(source)?.entries||[source]:
    this.entries.filter(entry=>entry.category===source.category&&
-    entry.storey===source.storey);
+    entry.storey===source.storey)).filter(entry=>SceneManager.editingAllowed(entry));
   for(const target of group){
    target.surface=SurfaceMaterials.normalize(surface);
    this.applySurfaceTo(target);count++;
@@ -2222,7 +2222,7 @@ class CleanBuilder{
   this.selected=staged[0];this.setTool('pick');
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose();}
   this.outline=new THREE.BoxHelper(this.selected.root,0x44ffb8);
-  this.scene.add(this.outline);this.gizmo.attach(this.selected);
+  this.scene.add(this.outline);this.gizmo.attach(SceneManager.editingAllowed(this.selected)?this.selected:null);
   this.syncInspector();
   notify('🏠 '+label+': '+staged.length+' деталей. Можно редактировать каждую','success');
   return staged;
@@ -2256,6 +2256,7 @@ class CleanBuilder{
    const plan=BuildingWorkflow.duplicateStorey(this.project().objects,this.floor);
    this.addPlannedModules(plan,'Копия этажа '+(this.floor+2));
    this.floor++;$('levelLabel').textContent=this.floor+1;
+   this.renderSceneManager();
   }catch(err){notify('Копия этажа: '+err.message,'error')}
  }
  async exportGameManifest(){
@@ -2312,7 +2313,7 @@ class CleanBuilder{
   this.pointer.set((event.clientX-rect.left)/rect.width*2-1,
    -(event.clientY-rect.top)/rect.height*2+1);
   this.ray.setFromCamera(this.pointer,this.camera);
-  const options=this.entries.filter(obj=>['floor','wall'].includes(obj.category));
+  const options=this.entries.filter(obj=>!obj.hidden&&['floor','wall'].includes(obj.category));
   const hits=this.ray.intersectObjects(options.map(obj=>obj.root),true);
   for(const hit of hits){
    const obj=options.find(candidate=>{
@@ -2730,6 +2731,14 @@ class CleanBuilder{
   $('quickViewSide').onclick=()=>this.focusGizmoView('side');
   $('quickViewTop').onclick=()=>this.focusGizmoView('top');
   $('btnHideUi').onclick=()=>document.body.classList.toggle('uiHidden');
+  $('sceneSearch').oninput=()=>{this.sceneRowsSignature='';this.renderSceneManager()};
+  $('sceneFloorFilter').onchange=()=>{
+   this.sceneRowsSignature='';this.renderSceneManager();
+  };
+  $('btnSceneRename').onclick=()=>this.renameSceneObject();
+  $('sceneName').addEventListener('keydown',e=>{
+   if(e.key==='Enter'){e.preventDefault();this.renameSceneObject();}
+  });
   $('btnSave').onclick=()=>this.save();
   $('btnLoad').onclick=()=>this.load();
   $('btnExportGLB').onclick=()=>this.exportGLB();
@@ -2751,9 +2760,11 @@ class CleanBuilder{
   $('btnConfirm').onclick=()=>{if(this.mode!=='build')this.aimPlacement();this.place()};
   $('btnCancel').onclick=()=>{this.setTool('pick');this.syncInspector()};
   $('btnLevelDown').onclick=()=>{this.floor=clamp(this.floor-1,0,49);
-   $('levelLabel').textContent=this.floor+1;this.updatePreview(this.cursor)};
+   $('levelLabel').textContent=this.floor+1;this.updatePreview(this.cursor);
+   this.renderSceneManager()};
   $('btnLevelUp').onclick=()=>{this.floor=clamp(this.floor+1,0,49);
-   $('levelLabel').textContent=this.floor+1;this.updatePreview(this.cursor)};
+   $('levelLabel').textContent=this.floor+1;this.updatePreview(this.cursor);
+   this.renderSceneManager()};
   $('magnet').onchange=e=>{this.magnet=e.target.checked;this.updatePreview(this.cursor)};
   $('gridSnap').onchange=e=>{
    this.gridSnap=e.target.checked;
