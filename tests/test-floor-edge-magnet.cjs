@@ -17,8 +17,9 @@ const first=entry(1,initial);
 const feet=G.sockets('floor',initial,null,'floor');
 assert.equal(feet.length,4,'Built-in square floor must expose 4 edge sockets');
 const source=entry(-1,G.create('floor'));
-assert.deepEqual(feet.map(s=>s.point.toArray().map(x=>Math.round(x*1000)/1000)),
- [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]);
+assert.deepEqual(feet.map(s=>s.point.toArray().map(x=>{
+ const value=Math.round(x*1000)/1000;return value===0?0:value;
+})),[[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]);
 const sourceUV=Array.from(source.root.children[0].geometry.getAttribute('uv').array);
 for(const [cursor,want] of [
  [V(2.17,0,.06),V(2,0,0)],
@@ -50,9 +51,11 @@ assert.deepEqual(Array.from(source.root.children[0].geometry.getAttribute('uv').
  const center=expected.point.clone().addScaledVector(expected.out,1);
  const match=G.solveSnap(candidate,[existing],center,0,0);
  assert(match,'Snap next to scaled, rotated existing floor');
- const transform=G.rotate(V(1,0,0),match.rotation).add(match.position);
- close(transform.x,expected.point.x,'World edge midpoint X exact');
- close(transform.z,expected.point.z,'World edge midpoint Z exact');
+ const chosen=G.sockets('floor',candidate.root,null,'floor')[match.from];
+ const transform=G.rotate(chosen.point,match.rotation).add(match.position);
+ const targetEdge=G.worldSockets(existing)[match.to];
+ close(transform.x,targetEdge.point.x,'World edge midpoint X exact');
+ close(transform.z,targetEdge.point.z,'World edge midpoint Z exact');
 }
 // Imported GLB floor with a true rectangular physical footprint receives
 // edge sockets; a quarter-circle tile should NOT falsely use its AABB.
