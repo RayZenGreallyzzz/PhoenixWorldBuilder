@@ -96,6 +96,7 @@ class CleanBuilder{
   this.gridStep=PrecisionPlacement.step(
    localStorage.getItem('phoenix-builder-grid-step'),.25);
   this.entries=[];this.assets=new Map();this.nextId=1;this.preview=null;
+  this.history=new EditorHistory(20);
   this.catalogMeta=this.loadCatalogMeta();this.smartCatalogFolder='all';
   this.selected=null;this.previewStatus=null;this.outline=null;
   this.presets=this.loadPresets();this.dragMove=null;this.openingPickMode=false;
@@ -563,6 +564,7 @@ class CleanBuilder{
   this.activeTextureId=imageId||this.activeTextureId;
   const scope=this.textureScope(obj);
   if(style==='none'){this.changeSurface(true);return}
+  if(this.entries.includes(obj))this.recordEdit();
   const current=scope==='all'?obj.surface:obj.surfaceSides?.[scope]||obj.surface;
   const next=SurfaceMaterials.normalize({...current,style,
    imageId:style==='custom'?this.activeTextureId:''});
@@ -716,6 +718,7 @@ class CleanBuilder{
    return notify('Сначала выбери своё изображение из библиотеки','warn');
   const step=Number($('textureAlignStep').value);
   const next=SurfaceMaterials.normalize(TexturePlacement.move(style,direction,step));
+  if(this.entries.includes(obj))this.recordEdit();
   const scope=this.textureScope(obj);
   if(scope==='all')obj.surface=next;
   else{obj.surfaceSides=obj.surfaceSides||{};obj.surfaceSides[scope]=next;}
@@ -734,6 +737,7 @@ class CleanBuilder{
   const surface=this.surfaceFromControls(source);
   if(surface.style==='custom'&&!surface.imageId)
    return notify('Сначала выбери своё изображение','warn');
+  this.recordEdit();
   let count=0;
   const group=source.category==='floor'&&surface.mapping==='joined'?
    this.joinedFloorRegion(source)?.entries||[source]:
@@ -755,6 +759,7 @@ class CleanBuilder{
   const next=reset?SurfaceMaterials.normalize({style:'none'}):
    this.surfaceFromControls(obj);
   if(next.style==='custom'&&!next.imageId)return notify('Выбери или загрузи картинку слева','warn');
+  if(this.entries.includes(obj))this.recordEdit();
   if(scope!=='all'){
    obj.surfaceSides=obj.surfaceSides||{};
    if(reset)delete obj.surfaceSides[scope];
@@ -839,6 +844,7 @@ class CleanBuilder{
    obj.doorAngle=clamp(Number(preset.doorAngle)||0,-110,110);
    obj.openings=WallOpenings.normalize(preset.openings);
    obj.surface=SurfaceMaterials.normalize(preset.surface);
+   obj.surfaceSides=SurfaceMaterials.normalizeSides(preset.surfaceSides);
    obj.manualEdgeCut=preset.manualEdgeCut||null;
    obj.autoEdgeCuts=FloorClip.normalizeCuts(preset.autoEdgeCuts);
    if(obj.kind==='floor')this.rebuildFloor(obj,preset.floorTrim);
@@ -996,8 +1002,8 @@ class CleanBuilder{
   data.axes={...defaultSettings().axes,...(config.axes||{})};
   // Backwards compatible: old projects have rot (yaw) only; new ones
   // additionally store all three Euler angles in radians.
-  const rotation={x:Number(data.rotation?.x)||0,
-   y:Number(data.rotation?.y??data.rot)||0,z:Number(data.rotation?.z)||0};
+  const rotation={x:Number(config.rotation?.x)||0,
+   y:Number(config.rotation?.y??config.rot)||0,z:Number(config.rotation?.z)||0};
   const root=this.cloneTemplate(kind,data.thickness,data.scale,data.axes);if(!root)return null;
   const meta=this.descriptor(kind);
   const obj={id:config.id||this.nextId++,kind,category:config.category||meta?.category||
@@ -1011,7 +1017,9 @@ class CleanBuilder{
     autoEdgeCuts:FloorClip.normalizeCuts(config.autoEdgeCuts),
     openings:WallOpenings.normalize(config.openings),
     surface:SurfaceMaterials.normalize(config.surface),
-    surfaceSides:SurfaceMaterials.normalizeSides(config.surfaceSides)};
+    surfaceSides:SurfaceMaterials.normalizeSides(config.surfaceSides),
+    groupId:typeof config.groupId==='string'?config.groupId.slice(0,72):'',
+    roomRole:['wall','floor','ceiling'].includes(config.roomRole)?config.roomRole:''};
   if(WallOpenings.supported(kind)&&obj.openings.length){
    const result=WallOpenings.render(obj.root,kind,obj.openings,
     {thickness:obj.thickness,axes:obj.axes});
@@ -1022,6 +1030,8 @@ class CleanBuilder{
    if(!result.ok)throw Error('Не удалось восстановить подрезку пола: '+result.reason);
   }
   this.applyTransform(obj);
+  if(obj.groupId&&obj.roomRole)
+   obj.root.name=obj.roomRole+':'+obj.groupId+':'+obj.id;
   if(!CleanGeometry.isBuiltIn(kind)&&obj.category==='wall'){
    const detected=CleanGeometry.thicknessInfo(obj);
    if(detected){
@@ -1372,6 +1382,7 @@ class CleanBuilder{
  }
  commitOpenings(plan){
   if(!plan.ok)return false;
+  this.recordEdit();
   for(const item of plan.staged){
    const old=item.obj.root;
    this.scene.add(item.root);old.removeFromParent();
@@ -1496,6 +1507,7 @@ class CleanBuilder{
  editField(id){
   const obj=this.target();if(!obj)return;
   const value=Number($(id).value);if(!Number.isFinite(value))return;
+  if(this.entries.includes(obj))this.recordEdit();
   if(id==='scaleAll')obj.scale=clamp(value/100,.1,10);
   if(id==='sizeX')obj.axes.x=clamp(value/100,.1,10);
   if(id==='sizeY')obj.axes.y=clamp(value/100,.1,10);
@@ -1746,6 +1758,7 @@ class CleanBuilder{
  nudgeSelected(dx,dz,dy=0){
   const obj=this.selected;
   if(!obj||this.tool!=='pick')return notify('Нажми «Выделить» и выбери готовую деталь','warn');
+  this.recordEdit();
   const step=PrecisionPlacement.step($('moveStep').value,.001);
   obj.root.position.x=PrecisionPlacement.nudge(obj.root.position.x,dx,step);
   obj.root.position.y=PrecisionPlacement.nudge(obj.root.position.y,dy,step);
@@ -1769,7 +1782,8 @@ class CleanBuilder{
   const hit=this.rayPoint(e,this.selected.root.position.y);
   if(!hit)return;
   this.dragMove={pointerId:e.pointerId,x:e.clientX,y:e.clientY,
-   hit,base:this.selected.root.position.clone(),moved:false};
+   hit,base:this.selected.root.position.clone(),moved:false,
+   historyBefore:this.project()};
   this.controls.enabled=false;
   if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
   e.preventDefault();e.stopImmediatePropagation();
@@ -1798,6 +1812,7 @@ class CleanBuilder{
   this.dragMove=null;this.controls.enabled=true;
   if(this.canvas.hasPointerCapture?.(e.pointerId))this.canvas.releasePointerCapture(e.pointerId);
   if(drag.moved){
+   this.recordEdit(drag.historyBefore);
    if(this.selected?.surface?.style!=='none')this.applySurfaceTo(this.selected);
    notify('Деталь перемещена по X/Z: '+this.sizeText(this.selected),'success');
   }
@@ -1895,6 +1910,97 @@ class CleanBuilder{
   obj.root.updateMatrixWorld(true);
   this.syncInspector();
  }
+ updateHistoryButtons(){
+  $('btnUndo').disabled=!this.history.canUndo||this.history.busy;
+  $('btnRedo').disabled=!this.history.canRedo||this.history.busy;
+ }
+ recordEdit(snapshot){
+  const ok=this.history.record(snapshot||this.project());
+  this.updateHistoryButtons();return ok;
+ }
+ async historyAction(direction){
+  if(this.history.busy)return;
+  try{
+   const change=direction==='undo'?
+    this.history.undo(this.project(),doc=>this.restore(doc)):
+    this.history.redo(this.project(),doc=>this.restore(doc));
+   const done=await change;this.updateHistoryButtons();
+   notify(done?(direction==='undo'?'↶ Изменение отменено':'↷ Изменение повторено'):
+    'История действий пуста',done?'success':'warn');
+  }catch(err){this.updateHistoryButtons();
+   notify('История: '+err.message,'error');}
+ }
+ addPlannedModules(data,label){
+  if(!Array.isArray(data)||!data.length)throw Error('Нет деталей для создания');
+  if(data.length>BuildingWorkflow.MAX_OBJECTS||
+   this.entries.length+data.length>BuildingWorkflow.MAX_OBJECTS)
+   throw Error('Достигнут предел 900 деталей для одного проекта');
+  const oldNextId=this.nextId,staged=[];
+  try{
+   for(const spec of data){
+    if(!Array.isArray(spec.position)||spec.position.length!==3||
+     !spec.position.every(Number.isFinite))throw Error('Неверное положение детали');
+    const entry=this.createEntry(spec.kind,spec);
+    if(!entry)throw Error('Модель не найдена: '+spec.kind);
+    staged.push(entry);
+   }
+  }catch(err){
+   for(const entry of staged)entry.root.removeFromParent();
+   this.nextId=oldNextId;throw err;
+  }
+  this.recordEdit();
+  for(const entry of staged){
+   this.entries.push(entry);this.scene.add(entry.root);
+   this.attachImportedLOD(entry);
+  }
+  this.selected=staged[0];this.setTool('pick');
+  if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose();}
+  this.outline=new THREE.BoxHelper(this.selected.root,0x44ffb8);
+  this.scene.add(this.outline);this.gizmo.attach(this.selected);
+  this.syncInspector();
+  notify('🏠 '+label+': '+staged.length+' деталей. Можно редактировать каждую','success');
+  return staged;
+ }
+ createRoom(){
+  try{
+   const plan=BuildingWorkflow.roomPlan({
+    width:$('roomWidth').value,depth:$('roomDepth').value,
+    x:$('roomX').value,z:$('roomZ').value,storey:this.floor,
+    floor:$('roomIncludeFloor').checked,
+    ceiling:$('roomIncludeCeiling').checked
+   });
+   this.addPlannedModules(plan.items,'Комната '+plan.width+' × '+plan.depth+' м');
+  }catch(err){notify('Комната: '+err.message,'error')}
+ }
+ copySelectedRoom(){
+  try{
+   const group=this.selected?.groupId;
+   if(!group)throw Error('Сначала выдели стену/пол созданной комнаты');
+   const members=this.entries.filter(entry=>entry.groupId===group);
+   const bounds=new THREE.Box3();
+   for(const entry of members)bounds.expandByObject(entry.root);
+   const distance=Math.ceil((bounds.max.x-bounds.min.x+2)/2)*2;
+   const plan=BuildingWorkflow.duplicateRoom(
+    this.project().objects,group,[distance,0,0]);
+   this.addPlannedModules(plan,'Копия комнаты');
+  }catch(err){notify('Копия комнаты: '+err.message,'error')}
+ }
+ copyCurrentStorey(){
+  try{
+   const plan=BuildingWorkflow.duplicateStorey(this.project().objects,this.floor);
+   this.addPlannedModules(plan,'Копия этажа '+(this.floor+2));
+   this.floor++;$('levelLabel').textContent=this.floor+1;
+  }catch(err){notify('Копия этажа: '+err.message,'error')}
+ }
+ async exportGameManifest(){
+  if(!this.entries.length)return notify('Сначала построй здание','warn');
+  try{
+   const manifest=BuildingWorkflow.gameManifest(this.project());
+   const blob=new Blob([JSON.stringify(manifest,null,2)],{type:'application/json'});
+   await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_GameScene.json','application/json');
+   notify('🎮 JSON экспортирован: отдельно выгрузи GLB. В игре создай коллайдеры по метаданным','success');
+  }catch(err){notify('Игровой экспорт: '+err.message,'error')}
+ }
  place(){
   if(!this.preview)return;
   if(this.preview.category==='decor'&&!this.preview._hasWallTarget)return notify('Коснись стены для настенного декора','warn');
@@ -1913,6 +2019,7 @@ class CleanBuilder{
    position:source.root.position.toArray()};
   const entry=this.createEntry(source.kind,data);
   if(!entry){notify('Не удалось разместить модуль','error');return}
+  this.recordEdit();
   this.scene.add(entry.root);this.entries.push(entry);
   this.attachImportedLOD(entry);
   this.selectKind(source.kind);
@@ -1989,8 +2096,10 @@ class CleanBuilder{
  duplicate(){
   const obj=this.selected;if(!obj)return notify('Сначала выдели деталь','warn');
   const data=this.encode(obj);delete data.id;
+  delete data.groupId;delete data.roomRole;
   data.position[0]+=1.5;
   const clone=this.createEntry(obj.kind,data);if(!clone)return;
+  this.recordEdit();
   this.entries.push(clone);this.scene.add(clone.root);this.selected=clone;
   this.attachImportedLOD(clone);this.setTool('pick');
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose()}
@@ -2000,6 +2109,7 @@ class CleanBuilder{
  }
  delete(){
   if(!this.selected)return notify('Сначала выдели деталь','warn');
+  this.recordEdit();
   const idx=this.entries.indexOf(this.selected);
   if(idx>=0)this.entries.splice(idx,1);
   this.selected.root.removeFromParent();this.selected=null;
@@ -2018,6 +2128,7 @@ class CleanBuilder{
    manualEdgeCut:obj.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(obj.autoEdgeCuts),
    openings:WallOpenings.normalize(obj.openings),surface:SurfaceMaterials.normalize(obj.surface),
    surfaceSides:SurfaceMaterials.normalizeSides(obj.surfaceSides),
+   groupId:obj.groupId||'',roomRole:obj.roomRole||'',
    sizeCm:this.physicalSize(obj)};
  }
  project(){
@@ -2044,7 +2155,12 @@ class CleanBuilder{
     const updated=await this.applySurfaceTo(obj);
     if(!updated)throw Error('Не удалось подготовить материалы для '+obj.kind);
    }
-   const scene={objects:this.entries.map(obj=>({mesh:obj.root}))};
+   const scene={objects:this.entries.map(obj=>({mesh:obj.root,data:{
+    id:obj.id,kind:obj.kind,category:obj.category,storey:obj.storey,
+    groupId:obj.groupId||null,roomRole:obj.roomRole||null,
+    suggestedCollider:['wall','floor','roof'].includes(obj.category)||
+     obj.kind==='stairsStraight'?'static-mesh':'manual'
+   }}))};
    const blob=await SceneExporter.build(scene,{houseOnly:true,
     keepWorldCoordinates:true});
    await PhoenixFiles.saveBlob(blob,'PhoenixBuilder_Scene.glb','model/gltf-binary');
@@ -2085,6 +2201,7 @@ class CleanBuilder{
     }))].slice(-1500);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    await this.restore(result.project);
+   this.history.clear();this.updateHistoryButtons();
    this.renderTextureLibrary();this.renderCatalog();
    this.save();
    notify('✅ Восстановлен проект: '+this.entries.length+
@@ -2114,6 +2231,7 @@ class CleanBuilder{
     localStorage.getItem('phoenix-builder-clean-v2');
    if(!json){notify('Нет сохранённого проекта версии 2.0','warn');return}
    await this.restore(JSON.parse(json));
+   this.history.clear();this.updateHistoryButtons();
    notify('Проект загружен из сохранения','success');
   }catch(err){notify('Ошибка загрузки: '+err.message,'error')}
  }
@@ -2336,6 +2454,13 @@ class CleanBuilder{
   $('btnSave').onclick=()=>this.save();
   $('btnLoad').onclick=()=>this.load();
   $('btnExportGLB').onclick=()=>this.exportGLB();
+  $('btnExportGameManifest').onclick=()=>this.exportGameManifest();
+  $('btnBuildRoom').onclick=()=>this.createRoom();
+  $('btnCopyRoom').onclick=()=>this.copySelectedRoom();
+  $('btnCopyStorey').onclick=()=>this.copyCurrentStorey();
+  $('btnUndo').onclick=()=>this.historyAction('undo');
+  $('btnRedo').onclick=()=>this.historyAction('redo');
+  this.updateHistoryButtons();
   $('btnBackupProject').onclick=()=>this.exportBackup();
   $('btnImportBackup').onclick=()=>$('importProjectBackup').click();
   $('importProjectBackup').onchange=e=>{
@@ -2397,6 +2522,7 @@ class CleanBuilder{
   $('btnClearSockets').onclick=()=>this.clearSockets();
   this.canvas.addEventListener('pointerdown',e=>{
    if(this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
+   this.gizmoBefore=this.project();
    this.gizmoPointer=e.pointerId;this.controls.enabled=false;
    if(this.canvas.setPointerCapture)this.canvas.setPointerCapture(e.pointerId);
    e.preventDefault();e.stopImmediatePropagation();
@@ -2419,6 +2545,7 @@ class CleanBuilder{
     else if(this.selected.thicknessEditable)this.rebuildImported(this.selected);
    }
    if(drag?.changed){
+    if(this.gizmoBefore)this.recordEdit(this.gizmoBefore);
     if(this.selected){
      this.selected.root.updateMatrixWorld(true);
      if(this.selected.surface?.style!=='none')this.applySurfaceTo(this.selected);
@@ -2426,6 +2553,7 @@ class CleanBuilder{
     this.syncInspector();
     notify('Гизмо: изменение выполнено, параметры сохраняются в проекте','success');
    }
+   this.gizmoBefore=null;
    e.preventDefault();e.stopImmediatePropagation();
   };
   for(const type of ['pointerup','pointercancel'])
@@ -2463,6 +2591,12 @@ class CleanBuilder{
   window.addEventListener('keydown',e=>{
    const tag=document.activeElement?.tagName;
    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
+   if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='z'){
+    e.preventDefault();this.historyAction(e.shiftKey?'redo':'undo');return;
+   }
+   if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='y'){
+    e.preventDefault();this.historyAction('redo');return;
+   }
    this.keys.add(e.key.toLowerCase());
    if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase()))e.preventDefault();
    if(e.key==='Delete'&&this.tool==='pick')this.delete();

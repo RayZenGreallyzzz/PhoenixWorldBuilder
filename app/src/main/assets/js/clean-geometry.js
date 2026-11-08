@@ -13,6 +13,7 @@ const CleanGeometry=(()=>{
   (typeof require==='function'?require('./architecture-kit.js'):null);
  const catalog=[
   {kind:'floor',name:'Пол 2 × 2 м',category:'floor'},
+  {kind:'stairsStraight',name:'🪜 Лестница 2,6 м — 13 ступеней',category:'prop',group:'stairs'},
   {kind:'wall',name:'Прямая стена 2 м',category:'wall'},
   {kind:'corner',name:'Угол 90°',category:'wall'},
   {kind:'arc90',name:'Четверть круга 90°',category:'wall'},
@@ -57,6 +58,18 @@ const CleanGeometry=(()=>{
    m.rotation.z=rotationZ;root.add(m);return m};
   const h=2.6;
   if(kind==='floor')add(new THREE.BoxGeometry(2,.18,2),0,.09,0);
+  if(kind==='stairsStraight'){
+   // Each step is supported from the ground: 13 risers x 0.2m = 2.6m.
+   // 0.30m treads and 1.2m width make it walkable by the existing
+   // 0.26m character step-height collision solver.
+   const tread=.30,riser=.20,steps=13,width=1.2;
+   for(let i=0;i<steps;i++){
+    const height=(i+1)*riser;
+    const mesh=add(new THREE.BoxGeometry(width,height,tread),
+     0,height/2,-steps*tread/2+(i+.5)*tread);
+    mesh.name='stairs:tread:'+String(i+1);
+   }
+  }
   if(kind==='wall')add(new THREE.BoxGeometry(2,h,thickness/sz),0,h/2,0);
   if(kind==='corner'){
    add(new THREE.BoxGeometry(2,h,thickness/sz),-.9,h/2,0);

@@ -279,8 +279,20 @@ const SceneExporter=(()=>{
     }
     const mi=gltf.meshes.length;gltf.meshes.push({name:mesh.name||'Деталь',primitives});
     const ni=gltf.nodes.length;
-    gltf.nodes.push({mesh:mi,name:mesh.name||root.name||'Объект',
-     matrix:new THREE.Matrix4().makeTranslation(shift.x,shift.y,shift.z).multiply(mesh.matrixWorld).toArray()});
+    // Portable semantic metadata survives in glTF 2.0 extras. This is
+    // descriptive: game engines must instantiate their own colliders.
+    const node={mesh:mi,name:mesh.name||root.name||'Объект',
+     matrix:new THREE.Matrix4().makeTranslation(shift.x,shift.y,shift.z)
+      .multiply(mesh.matrixWorld).toArray()};
+    if(entry?.data&&Number.isInteger(entry.data.id)){
+     const info=entry.data;
+     node.name='Phoenix_'+info.id+'_'+(mesh.name||info.kind||'module');
+     node.extras={phoenix:{id:info.id,kind:info.kind,
+      category:info.category,storey:info.storey,
+      groupId:info.groupId||null,roomRole:info.roomRole||null,
+      suggestedCollider:info.suggestedCollider||'manual'}};
+    }
+    gltf.nodes.push(node);
     gltf.scenes[0].nodes.push(ni);
    }
   }
