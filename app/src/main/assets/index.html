@@ -355,6 +355,26 @@
      </div>
      <label class="check"><input id="textureApplyFrames" type="checkbox">
       <span>Покрыть оконные и дверные рамы (стекло оставить прозрачным)</span></label>
+    <details class="rowSection" id="decalPanel">
+      <summary>🖼 Прозрачное граффити поверх текстуры (PNG)</summary>
+      <small class="tip">Самостоятельный прозрачный слой на стену, пол или наклонную крышу. Не перекрашивает исходный камень/дерево и не закрывает настоящие проёмы. PNG должен содержать прозрачность.</small>
+      <input id="decalImageInput" type="file" accept=".png,.webp,image/png,image/webp" hidden>
+      <button id="btnDecalImage" type="button" class="alt">🖼 Загрузить PNG с прозрачным фоном</button>
+      <small id="decalImageStatus" class="tip">Граффити не выбрано</small>
+      <div class="cols2">
+       <label>Ширина, м<input id="decalWidth" type="number" min=".1" max="100" step=".1" value="2"></label>
+       <label>Высота, м<input id="decalHeight" type="number" min=".1" max="100" step=".1" value="2"></label>
+      </div>
+      <div class="cols2">
+       <label>Поворот, °<input id="decalRotation" type="number" min="-360" max="360" step="5" value="0"></label>
+       <label>Прозрачность слоя<input id="decalOpacity" type="range" min=".05" max="1" step=".05" value="1"></label>
+      </div>
+      <label class="check"><input id="decalWholeRoom" type="checkbox"><span>Один рисунок на все соединённые плиты пола комнаты</span></label>
+      <button id="btnPlaceDecal" type="button" class="primary">👆 Приклеить рисунок касанием 3D</button>
+      <label>Наклейки в проекте<select id="decalSelect"><option value="">Нет наклеек</option></select></label>
+      <div class="cols2"><button id="btnUpdateDecal" type="button" class="alt">↔ Применить размеры</button><button id="btnDeleteDecal" type="button" class="alt">🗑 Удалить рисунок</button></div>
+      <small class="tip">Выдели слой в списке для изменения размера, поворота и непрозрачности. Рисунок остаётся отдельным объектом при сохранении проекта и в экспортном GLB.</small>
+    </details>
     <div class="cols2"><button id="btnApplyTexture" class="primary">Применить к детали</button><button id="btnClearTexture" class="alt">Сбросить</button></div>
     <button id="btnSurfaceAllWalls" class="alt">🧱 На все стены / соединённые плиты этажа</button>
     <small class="tip">Повтор по метрам даёт одинаковый размер узора на прямых, угловых и круглых стенах. «Общая разметка» растягивает одно изображение по соединённым плитам пола при применении ко всей группе. UV и рельеф переносятся в GLB. Скульптурные изгибы GLB остаются нетронутыми.</small>
@@ -453,6 +473,7 @@
 <script src="js/avatar-fit.js"></script>
  <script src="js/surface-workshop.js"></script>
  <script src="js/surface-materials.js"></script>
+ <script src="js/surface-decals.js"></script>
  <script src="js/wall-openings.js"></script>
  <script src="js/precision-placement.js"></script>
  <script src="js/free-camera.js"></script>
