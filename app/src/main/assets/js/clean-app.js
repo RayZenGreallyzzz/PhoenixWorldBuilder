@@ -1445,6 +1445,7 @@ class CleanBuilder{
   if(obj[property]===value)return;
   this.recordEdit();
   SceneManager.apply(obj,{[property]:value});
+  if(property==='hidden')this.queueDecalRebuild();
   if(obj===this.selected&&obj.hidden){
    this.selected=null;
    if(this.outline){this.scene.remove(this.outline);
@@ -2144,7 +2145,7 @@ class CleanBuilder{
     {thickness:obj.thickness,axes:obj.axes});
    if(!result.ok)throw Error('Не удалось восстановить проёмы: '+result.reason);
   }
-  this.applySurfaceTo(obj);
+  this.applySurfaceTo(obj);this.queueDecalRebuild();
   if(this.outline&&obj===this.selected)this.outline.setFromObject(newRoot);
   this.gizmo.attach(this.mode==='build'&&this.tool==='pick'?this.selected:null);
  }
@@ -2210,6 +2211,7 @@ class CleanBuilder{
   }
   this.scene.add(fresh);old.removeFromParent();
   obj.root=fresh;obj.floorTrim=edit;obj.root.visible=!obj.hidden;
+  this.queueDecalRebuild();
   this.applySurfaceTo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(fresh);
   return true;
@@ -2345,7 +2347,7 @@ class CleanBuilder{
   }
   this.scene.add(template);old.removeFromParent();
   obj.root=template;obj.meshEdit=requested;obj.root.visible=!obj.hidden;
-  this.applySurfaceTo(obj);
+  this.applySurfaceTo(obj);this.queueDecalRebuild();
   obj.capResult=editResult;
   if(obj!==this.preview)this.attachImportedLOD(obj);
   obj.thicknessEditable=!CleanMeshEdit.active(requested)&&
