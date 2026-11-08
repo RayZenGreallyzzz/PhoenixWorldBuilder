@@ -2456,7 +2456,7 @@ class CleanBuilder{
    $('textureFaceScope').value=side;
    this.surfaceSidePick=false;
    $('textureInspector').open=true;
-   this.syncInspector();this.renderTextureLibrary();
+   this.syncInspector();this.renderTextureLibrary();this.syncQuickTextureFaces();
    notify('✅ Выбрана '+(obj.category==='floor'?
     (side==='front'?'верхняя':'нижняя'):
     (side==='front'?'лицевая':'обратная'))+
@@ -2752,6 +2752,7 @@ class CleanBuilder{
   $('optimizationAutoResolution').onchange=()=>this.updateAutoResolution();
   $('btnPerfReport').onclick=()=>this.exportPerformanceReport();
   $('tabParts').onclick=()=>this.setTextureTab('parts');
+  $('tabCharacter').onclick=()=>this.setTextureTab('character');
   for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
    button.onclick=()=>{
     this.catalogGroup=button.dataset.catalogGroup;
@@ -2770,11 +2771,23 @@ class CleanBuilder{
    this.importZIP(file);
   };
   $('tabTextures').onclick=()=>this.setTextureTab('textures');
+  for(const [side,id] of [['all','faceQuickAll'],['front','faceQuickFront'],
+   ['back','faceQuickBack']])
+   $(id).onclick=()=>this.quickTextureFace(side);
+  $('faceQuickPick').onclick=()=>{
+   this.setTextureTab('textures');
+   $('btnPickTextureFace').click();
+  };
+  $('faceQuickSettings').onclick=()=>this.openTextureSettings();
+  $('importTextureZIP').onchange=e=>{
+   const file=e.target.files?.[0];e.target.value='';
+   this.importZIP(file,'textures');
+  };
   $('btnQuickImportGLB').onclick=()=>{
    this.setTextureTab('parts');
    $('catalogImport').open=true;
    $('catalogImport').scrollIntoView({block:'nearest',behavior:'auto'});
-   notify('📥 Выбери тип модуля и нажми «Загрузить GLB»','neutral');
+   notify('📥 Выбери папку и формат модели: GLB, FBX, OBJ, VOX, STL или PLY','neutral');
   };
   $('avatarInBuild').onchange=e=>{
    this.showAvatarInBuild=e.target.checked;
@@ -2794,7 +2807,7 @@ class CleanBuilder{
   };
   $('importTexture').onchange=e=>{this.importTextureFile(e.target.files?.[0]);e.target.value=''};
   $('textureFaceScope').onchange=()=>{
-   this.syncInspector();this.renderTextureLibrary();
+   this.syncInspector();this.renderTextureLibrary();this.syncQuickTextureFaces();
   };
   $('btnPickTextureFace').onclick=()=>{
    if(this.surfaceSidePick){
@@ -2940,6 +2953,9 @@ class CleanBuilder{
   $('btnApplyMeshEdit').onclick=()=>this.applyMeshSettings();
   $('btnResetMeshEdit').onclick=()=>this.applyMeshSettings(true);
   $('importModel').onchange=e=>{this.importGLB(e.target.files?.[0]);e.target.value=''};
+  $('importOtherModel').onchange=e=>{
+   this.importOtherModel(e.target.files?.[0]);e.target.value='';
+  };
   $('importAvatar').onchange=e=>{this.importAvatar(e.target.files?.[0]);e.target.value=''};
   for(const id of ['scaleAll','sizeX','sizeY','sizeZ','thickness','posX','posY','posZ','rotX','rotY','rotZ'])
    $(id).onchange=()=>this.editField(id);
