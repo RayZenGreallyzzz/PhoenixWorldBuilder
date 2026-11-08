@@ -92,8 +92,8 @@ const BuildingWorkflow=(()=>{
    format:'PhoenixGameBuilding',version:1,unit:'meter',
    coordinateSystem:'Three.js Y-up',geometry:'PhoenixBuilder_Scene.glb',
    caveat:'Import GLB mesh; instantiate colliders and door interactions in the game engine using this manifest. This manifest is NOT a physics engine.',
-   objects:objects.map(o=>({
-    id:o.id,kind:o.kind,category:o.category,storey:o.storey||0,
+   objects:objects.filter(o=>o.hidden!==true).map(o=>({
+    id:o.id,label:o.label||null,kind:o.kind,category:o.category,storey:o.storey||0,
     groupId:o.groupId||null,roomRole:o.roomRole||null,
     position:o.position,rotation:o.rotation||{x:0,y:o.rot||0,z:0},
     collision:['wall','floor','roof'].includes(o.category)?'static-mesh':
@@ -101,7 +101,7 @@ const BuildingWorkflow=(()=>{
     door:{swing:o.doorAngle||0,openings:o.openings||[]},
     visual:{surface:o.surface||null,surfaceSides:o.surfaceSides||{}}
    })),
-   floors:[...new Set(objects.map(o=>o.storey||0))].sort((a,b)=>a-b)
+   floors:[...new Set(objects.filter(o=>o.hidden!==true).map(o=>o.storey||0))].sort((a,b)=>a-b)
   };
  }
  return {HEIGHT,MAX_OBJECTS,roomPlan,duplicateStorey,duplicateRoom,gameManifest};
