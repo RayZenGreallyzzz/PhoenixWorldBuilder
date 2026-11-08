@@ -94,7 +94,10 @@ const SurfaceDecals=(()=>{
      b.fromBufferAttribute(positions,bi).applyMatrix4(mesh.matrixWorld);
      c.fromBufferAttribute(positions,ci).applyMatrix4(mesh.matrixWorld);
      face.copy(ab.subVectors(b,a)).cross(ac.subVectors(c,a)).normalize();
-     if(face.dot(normal)<.66)continue;
+     // Built-in BoxGeometry and rebuilt wall openings may wind front triangles
+     // in opposite directions. We select by the actual physical plane DEPTH,
+     // not by arbitrary triangle winding, preserving genuine door holes.
+     if(Math.abs(face.dot(normal))<.66)continue;
      const poly=[a,b,c].map(p=>{
       const delta=p.clone().sub(origin);
       return {p:p.clone(),u:delta.dot(right),v:delta.dot(up),
