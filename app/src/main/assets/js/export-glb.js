@@ -287,7 +287,7 @@ const SceneExporter=(()=>{
     if(entry?.data&&Number.isInteger(entry.data.id)){
      const info=entry.data;
      node.name='Phoenix_'+info.id+'_'+(mesh.name||info.kind||'module');
-     node.extras={phoenix:{id:info.id,kind:info.kind,
+     node.extras={phoenix:{id:info.id,label:info.label||null,kind:info.kind,
       category:info.category,storey:info.storey,
       groupId:info.groupId||null,roomRole:info.roomRole||null,
       suggestedCollider:info.suggestedCollider||'manual'}};
