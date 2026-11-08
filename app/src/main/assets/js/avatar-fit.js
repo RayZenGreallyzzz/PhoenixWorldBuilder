@@ -4,13 +4,60 @@
 const AvatarFit=(()=>{
  'use strict';
  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
- function measure(root){
+ // In Three.js r140, Box3.setFromObject() measures the BIND-POSE
+ // geometry of SkinnedMesh, NOT the geometry deformed by bones. On some
+ // imported humanoids the difference is huge (centimetres vs metres).
+ // Measure real, skin-deformed vertices and express them in the fit wrapper's
+ // LOCAL coordinates so camera orbit and the player's yaw cannot affect scale.
+ function measure(root,relativeTo=null){
   if(!root||typeof THREE==='undefined')throw Error('Модель персонажа отсутствует');
-  root.updateWorldMatrix(true,true);
-  const b=new THREE.Box3().setFromObject(root);
+  // Important: SkinnedMesh overrides updateMatrixWorld() to refresh
+  // bindMatrixInverse in attached skeleton mode. updateWorldMatrix() alone
+  // BYPASSES that override; after scaling the fit wrapper, a subsequent
+  // measure would read the bone scale twice and undo the correct fitting.
+  if(relativeTo)relativeTo.updateWorldMatrix(true,false);
+  root.updateWorldMatrix(true,false);
+  root.updateMatrixWorld(true);
+  const inverse=relativeTo?
+   relativeTo.matrixWorld.clone().invert():new THREE.Matrix4();
+  const b=new THREE.Box3().makeEmpty(),point=new THREE.Vector3();
+  const transform=new THREE.Matrix4();
+  let count=0;
+  root.traverse(mesh=>{
+   if(!mesh.isMesh||!mesh.geometry?.getAttribute('position'))return;
+   let ancestor=mesh,hidden=false;
+   while(ancestor){if(!ancestor.visible){hidden=true;break}
+    if(ancestor===root)break;ancestor=ancestor.parent;}
+   if(hidden)return;
+   const positions=mesh.geometry.getAttribute('position');
+   if(!positions.count)return;
+   transform.multiplyMatrices(inverse,mesh.matrixWorld);
+   if(mesh.isSkinnedMesh&&mesh.skeleton?.bones?.length&&
+      mesh.geometry.getAttribute('skinIndex')&&
+      mesh.geometry.getAttribute('skinWeight')&&
+      typeof mesh.boneTransform==='function'){
+    // One-time operation on import, limited for pathological >150k vertex rigs.
+    const stride=Math.max(1,Math.ceil(positions.count/150000));
+    for(let i=0;i<positions.count;i+=stride){
+     point.fromBufferAttribute(positions,i);
+     mesh.boneTransform(i,point);
+     b.expandByPoint(point.applyMatrix4(transform));count++;
+    }
+    if((positions.count-1)%stride!==0){
+     const i=positions.count-1;
+     point.fromBufferAttribute(positions,i);
+     mesh.boneTransform(i,point);
+     b.expandByPoint(point.applyMatrix4(transform));count++;
+    }
+   }else{
+    if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();
+    const box=mesh.geometry.boundingBox;
+    if(box&&!box.isEmpty()){b.union(box.clone().applyMatrix4(transform));count++;}
+   }
+  });
   const size=b.getSize(new THREE.Vector3());
-  if(b.isEmpty()||![size.x,size.y,size.z].every(Number.isFinite)||size.y<1e-6)
-   throw Error('Невозможно определить размеры персонажа');
+  if(!count||b.isEmpty()||![size.x,size.y,size.z].every(Number.isFinite)||
+    size.y<1e-6)throw Error('Невозможно определить размеры персонажа');
   return {min:b.min.clone(),max:b.max.clone(),size};
  }
  function compute(metrics,heightCm=175){

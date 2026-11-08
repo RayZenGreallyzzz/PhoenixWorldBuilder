@@ -105,6 +105,7 @@ class CleanBuilder{
   this.catalogGroup='structure';this.previewOutline=null;
   this.textureFiles=this.loadTextureFiles();this.textureCache=new Map();
   this.activeTextureId='';this.pendingTexture=null;this.avatarFitGroup=null;this.avatarMetrics=null;
+  this.avatarModelRoot=null;this.avatarFitChecksLeft=0;this.avatarFitCheckTimer=0;
   this.avatarHeightCm=175;
   this.showAvatarInBuild=localStorage.getItem('phoenix-builder-avatar-build')==='on';
   this.collisionsEnabled=localStorage.getItem('phoenix-builder-collisions')!=='off';
@@ -161,6 +162,7 @@ class CleanBuilder{
  }
  setDefaultAvatar(){
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
+  this.avatarModelRoot=null;this.avatarFitChecksLeft=0;this.avatarFitCheckTimer=0;
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';
   const cloth=new THREE.MeshStandardMaterial({color:0x355d82});
   const skin=new THREE.MeshStandardMaterial({color:0xe0b783});
@@ -193,12 +195,11 @@ class CleanBuilder{
    AndroidAssetOpt.optimize(scene.root,this.optimizationQuality);
    const root=THREE.SkeletonUtils?.clone?
     THREE.SkeletonUtils.clone(scene.root):scene.root.clone(true);
-   const metrics=AvatarFit.measure(root);
    const fitted=new THREE.Group();fitted.name='avatar:stable-fit';
    fitted.add(root);
-   const fit=AvatarFit.apply(fitted,metrics,this.avatarHeightCm);
-   this.player.clear();this.player.add(fitted);
-   this.avatarFitGroup=fitted;this.avatarMetrics=metrics;
+   // Animation can change bone positions and even root scale. The previous
+   // code measured the inactive bind pose before starting the idle clip.
+   // First evaluate the actual idle pose, then measure its skinned vertices.
    this.avatarClips=scene.animations||[];
    this.avatarMixer=this.avatarClips.length?new THREE.AnimationMixer(root):null;
    this.avatarActions={};this.avatarState='';
@@ -206,12 +207,29 @@ class CleanBuilder{
     for(const clip of this.avatarClips)this.avatarActions[clip.name]=
      this.avatarMixer.clipAction(clip);
     this.setAvatarAnimation(false);
+    this.avatarMixer.update(1/60);
    }
+   const metrics=AvatarFit.measure(root,fitted);
+   const fit=AvatarFit.apply(fitted,metrics,this.avatarHeightCm);
+   this.player.clear();this.player.add(fitted);
+   this.avatarModelRoot=root;this.avatarFitGroup=fitted;this.avatarMetrics=metrics;
+   this.avatarFitChecksLeft=this.avatarMixer?3:0;
+   this.avatarFitCheckTimer=0;
+   this.player.updateWorldMatrix(true,true);
    notify('Персонаж подогнан: '+safeName(file.name)+
-    ' — высота '+Math.round(metrics.size.y*fit.uniform*100)+' см','success');
+    ' — высота '+Math.round(metrics.size.y*fit.uniform*100)+
+    ' см (с учётом скелета и анимации)','success');
   }catch(err){console.error(err);this.setDefaultAvatar();notify('Ошибка персонажа: '+err.message,'error')}
  }
 
+ resetCharacterView(){
+  // This only resets accidental camera zoom; do not change avatar scale.
+  const centre=this.player.position.clone().add(V(0,1.15,0));
+  this.controls.target.copy(centre);
+  this.camera.position.copy(centre).add(V(0,2.45,6));
+  this.camera.lookAt(centre);this.controls.update();
+  notify('📷 Камера отдалена для просмотра персонажа в реальном масштабе','success');
+ }
  setMode(mode){
   this.mode=mode;
   for(const m of ['Build','Character','Drone'])$('mode'+m).classList.toggle('active',
@@ -2573,9 +2591,31 @@ class CleanBuilder{
    if(name!==selected.name&&other.isRunning())other.fadeOut(.18);
   if(!action.isRunning())action.reset().fadeIn(.18).play();
   this.avatarState=mode;
+  // A walking clip may stretch bones or animate the imported GLB root.
+  // Check only during the first few poses after switching animation,
+  // avoiding expensive per-frame skinned vertex scans on Android.
+  this.avatarFitChecksLeft=3;this.avatarFitCheckTimer=0;
  }
  updatePlayer(dt){
-  if(this.avatarMixer)this.avatarMixer.update(dt);
+  if(this.avatarMixer){
+   this.avatarMixer.update(dt);
+   if(this.avatarFitChecksLeft>0&&this.avatarFitGroup&&this.avatarModelRoot){
+    this.avatarFitCheckTimer+=dt;
+    if(this.avatarFitCheckTimer>=.38){
+     this.avatarFitCheckTimer=0;this.avatarFitChecksLeft--;
+     try{
+      const actual=AvatarFit.measure(this.avatarModelRoot,this.avatarFitGroup);
+      const wanted=AvatarFit.compute(actual,this.avatarHeightCm);
+      const scale=this.avatarFitGroup.scale.x;
+      if(Number.isFinite(scale)&&Math.abs(wanted.uniform/scale-1)>.06){
+       this.avatarMetrics=actual;
+       AvatarFit.apply(this.avatarFitGroup,actual,this.avatarHeightCm);
+       this.player.updateWorldMatrix(true,true);
+      }
+     }catch(e){console.warn('Измерение персонажа во время анимации:',e)}
+    }
+   }
+  }
   if(this.mode!=='character'&&this.mode!=='drone')return;
   const down=(...keys)=>keys.some(k=>this.keys.has(k));
   const left=down('a','arrowleft','left'),right=down('d','arrowright','right'),
@@ -2609,6 +2649,7 @@ class CleanBuilder{
  bind(){
   $('modeBuild').onclick=()=>this.setMode('build');
   $('modeCharacter').onclick=()=>this.setMode('character');
+  $('btnResetCharacterView').onclick=()=>this.resetCharacterView();
   $('modeDrone').onclick=()=>this.setMode('drone');
   $('optimizationQuality').onchange=()=>this.updateOptimizer();
   $('optimizationLOD').onchange=()=>this.updateOptimizer();
