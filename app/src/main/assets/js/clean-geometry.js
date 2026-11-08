@@ -292,9 +292,53 @@ const CleanGeometry=(()=>{
   for(const item of prepared)item.mesh.geometry=item.geo;
   root.updateMatrixWorld(true);return true;
  }
+ // Four REAL horizontal edge midpoints for rectangular floor slabs. The
+ // previous socket contract had only wall ENDPOINTS, so floor tiles never
+ // participated in magnet joins (even the built-in 2 x 2 m floor).
+ // Custom GLB floors must have all four physical footprint corners. This
+ // deliberately rejects triangular/curved/quarter-circle tiles: an AABB is
+ // NOT enough evidence that a curved edge can join a straight slab.
+ function floorSockets(kind,root){
+  if(!root)return [];
+  const box=localBounds(root),size=box.getSize(V());
+  if(box.isEmpty()||size.x<.15||size.z<.15)return [];
+  if(kind!=='floor'){
+   root.updateWorldMatrix(true,true);
+   const inv=root.matrixWorld.clone().invert();
+   const required=[[box.min.x,box.min.z],[box.min.x,box.max.z],
+    [box.max.x,box.min.z],[box.max.x,box.max.z]];
+   const covered=required.map(()=>false);
+   const margin=Math.max(.012,Math.min(.07,Math.min(size.x,size.z)*.025));
+   let scanned=0;
+   root.traverse(mesh=>{
+    if(!mesh.isMesh||!mesh.visible||mesh.userData?.phoenixLODProxy||
+       !mesh.geometry?.attributes?.position)return;
+    const points=mesh.geometry.attributes.position;
+    const transform=inv.clone().multiply(mesh.matrixWorld),p=V();
+    // Keep this cheap for huge imported libraries on an Android tablet.
+    const stride=Math.max(1,Math.ceil(points.count/12000));
+    for(let i=0;i<points.count;i+=stride){
+     p.fromBufferAttribute(points,i).applyMatrix4(transform);scanned++;
+     for(let j=0;j<required.length;j++)
+      if(Math.abs(p.x-required[j][0])<=margin&&
+         Math.abs(p.z-required[j][1])<=margin)covered[j]=true;
+    }
+   });
+   if(!scanned||!covered.every(Boolean))return [];
+  }
+  const cx=(box.min.x+box.max.x)/2,cz=(box.min.z+box.max.z)/2,
+   y=box.min.y;
+  return [
+   {point:V(box.max.x,y,cz),out:V(1,0,0)},
+   {point:V(box.min.x,y,cz),out:V(-1,0,0)},
+   {point:V(cx,y,box.max.z),out:V(0,0,1)},
+   {point:V(cx,y,box.min.z),out:V(0,0,-1)}
+  ];
+ }
  function sockets(kind,root,custom=null,category='wall'){
   if(Array.isArray(custom)&&custom.length===2)
    return custom.map(s=>({point:V(...s.point),out:V(...s.out).setY(0).normalize()}));
+  if(category==='floor'||kind==='floor')return floorSockets(kind,root);
   if(isBuiltIn(kind))return builtinSockets(kind);
   return extractedSockets(root,category);
  }
@@ -334,11 +378,25 @@ const CleanGeometry=(()=>{
     const middle=rotate(V(center.x*preview.root.scale.x,center.y*preview.root.scale.y,
       center.z*preview.root.scale.z),yaw).add(pos);
     const distance=Math.hypot(middle.x-cursor.x,middle.z-cursor.z);
-    // Magnets activate only when placement preview is genuinely near a
-    // matching physical end, not wherever an AABB edge happens to be.
-    const maxDist=Math.min(3.6,Math.max(1.6,shape.getSize(V()).length()*.49));
+    const floorJoin=preview.category==='floor';
+    if(floorJoin){
+     // A floor at another manually raised level must never pull a slab
+     // upward/downward into an unrelated surface on the same storey.
+     const currentBase=preview.root.position.y+
+      src.point.y*preview.root.scale.y;
+     if(Math.abs(currentBase-tgt.point.y)>.035)continue;
+    }
+    // Existing wall/roof sockets keep their original magnet strength.
+    // Floor edges attract only when their REAL centers are nearby.
+    const foot=shape.getSize(V());
+    const maxDist=floorJoin?Math.max(.18,Math.min(.65,
+      Math.min(foot.x*Math.abs(preview.root.scale.x),
+       foot.z*Math.abs(preview.root.scale.z))*.28)):
+      Math.min(3.6,Math.max(1.6,foot.length()*.49));
     if(distance>maxDist)continue;
-    const score=distance+Math.hypot(tgt.point.x-cursor.x,tgt.point.z-cursor.z)*.1;
+    const turn=Math.atan2(Math.sin(yaw-extraRotation),Math.cos(yaw-extraRotation));
+    const score=distance+Math.hypot(tgt.point.x-cursor.x,tgt.point.z-cursor.z)*.1+
+     (floorJoin?Math.abs(turn)*.12:0);
     if(!best||score<best.score)best={score,position:pos,rotation:yaw,
       from:i,to:tgt.index,target:entry.id,kind:entry.kind};
    }
