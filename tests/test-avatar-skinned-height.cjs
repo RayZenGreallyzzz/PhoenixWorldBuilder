@@ -63,6 +63,7 @@ const shoe=new T.Mesh(new T.BoxGeometry(.4,.12,.32),new T.MeshStandardMaterial()
 shoe.position.y=-1;model.add(shoe);
 const helper=new T.Mesh(new T.BoxGeometry(400,900,400),new T.MeshStandardMaterial());
 helper.visible=false;model.add(helper);
+bone.scale.y=4;
 const mixed=Fit.measure(model,wrapper);
 assert(mixed.size.y<10,'Hidden GLB helper cannot make avatar tiny');
 const newFit=Fit.apply(wrapper,mixed,175);
