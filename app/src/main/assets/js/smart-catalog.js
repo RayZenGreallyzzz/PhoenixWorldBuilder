@@ -34,6 +34,11 @@ const SmartCatalog=(()=>{
  }
  function detect(text,textureOnly=false){
   const t=tokenize(text);
+  // User's actual pack is named "03_Полы_и_перекрытия": the generic
+  // "перекрытия" keyword previously won over the floor keyword and put
+  // every curved/sector floor into the Ceilings folder.
+  if(!textureOnly&&/полы\s+и\s+перекрыти|floors?\s+(?:and|&)\s+slabs?/iu.test(t))
+   return 'floors';
   for(const [id,rx] of definitions){
    if(textureOnly&&!['textures','my-textures'].includes(id))continue;
    if(rx.test(t))return id;
