@@ -50,7 +50,8 @@ const gizmo=new Gizmo(scene,cam,canvas,new T.Raycaster());
 const obj={root:new T.Group(),rot:0,rotation:{x:0,y:0,z:0},
  scale:1,axes:{x:1,y:1,z:1}};
 scene.add(obj.root);gizmo.attach(obj);gizmo.setMode('rotate');
-assert.equal(gizmo.handles.rotate.length,6,'There must be three coloured rings and large touch targets');
+assert.equal(gizmo.handles.rotate.length,8,
+ 'XYZ rings and one gold view ring must each have a fat touch target');
 const angleAxes={
  x:a=>new T.Vector3(0,Math.cos(a),Math.sin(a)),
  y:a=>new T.Vector3(Math.sin(a),0,Math.cos(a)),
