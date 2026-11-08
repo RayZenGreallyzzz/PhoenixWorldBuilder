@@ -43,8 +43,8 @@ const SmartCatalog=(()=>{
  function classify(path,override=null){
   const clean=String(path||'').replace(/\\/g,'/');
   const ext=clean.split('.').pop()?.toLowerCase();
-  const texture=['png','jpg','jpeg','webp'].includes(ext);
-  const model=ext==='glb';
+  const texture=['png','jpg','jpeg','webp','bmp','gif'].includes(ext);
+  const model=['glb','gltf','fbx','obj','vox','stl','ply'].includes(ext);
   if(!texture&&!model)return null;
   const chunks=clean.split('/').filter(Boolean),name=chunks.pop()||'';
   const possible=texture?['textures','my-textures']:order;
