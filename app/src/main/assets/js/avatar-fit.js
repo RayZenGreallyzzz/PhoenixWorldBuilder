@@ -11,8 +11,13 @@ const AvatarFit=(()=>{
  // LOCAL coordinates so camera orbit and the player's yaw cannot affect scale.
  function measure(root,relativeTo=null){
   if(!root||typeof THREE==='undefined')throw Error('Модель персонажа отсутствует');
-  root.updateWorldMatrix(true,true);
-  if(relativeTo)relativeTo.updateWorldMatrix(true,true);
+  // Important: SkinnedMesh overrides updateMatrixWorld() to refresh
+  // bindMatrixInverse in attached skeleton mode. updateWorldMatrix() alone
+  // BYPASSES that override; after scaling the fit wrapper, a subsequent
+  // measure would read the bone scale twice and undo the correct fitting.
+  if(relativeTo)relativeTo.updateWorldMatrix(true,false);
+  root.updateWorldMatrix(true,false);
+  root.updateMatrixWorld(true);
   const inverse=relativeTo?
    relativeTo.matrixWorld.clone().invert():new THREE.Matrix4();
   const b=new THREE.Box3().makeEmpty(),point=new THREE.Vector3();
