@@ -36,15 +36,22 @@
  <button id="btnFocusCamera" class="quickOpening" title="Переместить точку вращения: на выбранную деталь или касанием сцены">🎯 Камера</button>
  <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
-<section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active" type="button">📦 Модули</button><button id="tabTextures" type="button">🎨 Текстуры</button><button id="tabCharacter" type="button">🧍 Персонаж</button></div><small>Нажми вкладку → раскрой нужную папку</small></div><div id="libraryModuleDrawer" class="libraryDrawer"><details id="catalogImport" class="importZone"><summary>📥 Файлы моделей и оптимизация</summary><div class="importZoneBody">
+<section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active" type="button">📦 Модули</button><button id="tabTextures" type="button">🎨 Текстуры</button><button id="tabCharacter" type="button">🧍 Персонаж</button></div><small>Нажми вкладку → раскрой нужную папку</small></div><div id="libraryModuleDrawer" class="libraryDrawer">
+<div id="moduleQuickImport" class="stickyImportBar" role="group" aria-label="Быстрый импорт модулей">
+ <button type="button" id="btnDirectModuleZip">📦 Загрузить ZIP</button>
+ <button type="button" id="btnDirectModuleFile">📐 Загрузить 3D-файл</button>
+ <input id="importUniversalModel" type="file" hidden>
+ <input id="importZip" type="file" hidden>
+ <small id="zipQuickStatus" class="tip" aria-live="polite">ZIP: папки будут сохранены. Выбор файла без ограничения форматов.</small>
+</div>
+<details id="catalogImport" class="importZone"><summary>📥 Файлы моделей и оптимизация</summary><div class="importZoneBody">
  <label for="importCategory">Импортировать модель как</label>
  <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
  <label class="fileButton">＋ Загрузить GLB / GLB Meshopt / Draco / KTX2<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
   <label class="fileButton">📐 FBX / OBJ / VOX / STL / PLY / glTF
    <input id="importOtherModel" type="file" accept=".fbx,.obj,.vox,.stl,.ply,.gltf" hidden></label>
   <small class="tip">Офлайн-импорт моделей: исходные GLB сохраняются без изменений. Другие форматы преобразуются в статические GLB для библиотеки. Для персонажей с анимацией используй отдельную вкладку «Персонаж».</small>
-  <label class="fileButton">📦 ZIP с моделями и текстурами
-   <input id="importZip" type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden></label>
+  <button id="btnZipFromMore" type="button" class="fileButton">📦 Загрузить ZIP с моделями и текстурами</button>
   <details id="importOptimizer"><summary>⚡ Оптимизация для Android</summary>
    <label>Качество текстур при импорте<select id="optimizationQuality">
     <option value="balanced" selected>Баланс: максимум 2048 px</option>
@@ -95,21 +102,25 @@
   <option value="frames">Рамы</option><option value="decor">Декор</option>
   <option value="my-modules">Мои модули</option>
  </select></label>
- <small id="zipImportStatus" class="tip" aria-live="polite">ZIP: GLB и PNG/JPG/WebP; папки сохраняются. Неизвестные модели — в «Мои модули».</small>
+ <small id="zipImportStatus" class="tip" aria-live="polite">ZIP: GLB, FBX, OBJ, VOX, STL, PLY и PNG/JPEG/WebP/BMP/GIF; папки сохраняются.</small>
 </div>
 <div id="catalogItems" class="parts smartGallery" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
  </div>
-<div id="textureLibrary" class="textureLibrary" hidden><b>Текстуры для выбранной детали</b>
+<div id="textureLibrary" class="textureLibrary" hidden>
+ <div id="textureQuickImport" class="stickyImportBar" role="group" aria-label="Загрузка текстур">
+  <button id="btnDirectImage" type="button">🖼 Загрузить PNG / JPEG / JPG / WebP / BMP / GIF</button>
+  <button id="btnDirectTextureZip" type="button">📦 Загрузить ZIP с текстурами</button>
+  <input id="importTexture" type="file" hidden>
+  <input id="importTextureZIP" type="file" hidden>
+  <small id="textureImportStatus" class="tip" aria-live="polite">Изображения и ZIP выбираются в Android «Все файлы», без серых неподдерживаемых фильтров.</small>
+ </div>
+ <b>Текстуры для выбранной детали</b>
  <div class="cols2"><label>Папка<select id="textureCategoryFilter">
  <option value="all">Все текстуры</option><option value="textures">🎨 Текстуры</option>
  <option value="my-textures">🖼 Мои текстуры</option></select></label>
  <label>Поиск<input id="textureSearch" type="search" placeholder="Имя текстуры"></label></div>
- <details id="textureUploadFold" class="drawerFold"><summary>📥 Загрузить изображение или ZIP</summary>
+ <details id="textureUploadFold" class="drawerFold"><summary>⚙ Качество загружаемых текстур</summary>
  <div class="drawerFoldBody">
-  <label class="fileButton">🖼 PNG / JPG / JPEG / WebP / BMP / GIF
-   <input type="file" id="importTexture" accept=".png,.jpg,.jpeg,.webp,.bmp,.gif,image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden></label>
-  <label class="fileButton">📦 ZIP с текстурами
-   <input id="importTextureZIP" type="file" accept=".zip,application/zip" hidden></label>
   <label>Качество при загрузке
    <select id="textureImportQuality"><option value="lossless">Максимальное: PNG без нового сжатия с потерями</option>
    <option value="balanced">Экономия памяти: WebP высокого качества</option></select>
