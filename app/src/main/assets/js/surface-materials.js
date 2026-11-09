@@ -250,7 +250,14 @@ const SurfaceMaterials=(()=>{
    const leftX=-dir.z,leftZ=dir.x;
    if(Math.abs(nx*leftX+nz*leftZ)<.72)return null;
    const origin=firstArm?first:turn;
-   return (point.x-origin.x)*leftX+(point.z-origin.z)*leftZ>=0?'front':'back';
+   // A baked left-hand L turns the opposite way to a right-hand L.
+   // Keep "front" on the physical convex/outside surface for BOTH,
+   // independent of vertex winding. Root transforms remain root-local.
+   const cross=(turn.x-first.x)*(end.z-turn.z)-
+    (turn.z-first.z)*(end.x-turn.x);
+   const outsideSign=cross<=0?1:-1;
+   const signed=((point.x-origin.x)*leftX+(point.z-origin.z)*leftZ)*outsideSign;
+   return signed>=0?'front':'back';
   }
   if(point&&kind==='wall'){
    // End caps and door/window reveals must keep their own material.
