@@ -111,7 +111,8 @@ const SurfaceWorkshop=(()=>{
     aa+=weight*tx*tx;ab+=weight*tx*tz;bb+=weight*tz*tz;
     ax+=weight*tx*rhs;bx+=weight*tz*rhs;total+=weight;
     records.push({x:mid.x,z:mid.z,nx:normal.x/horizontal,
-     nz:normal.z/horizontal,weight});
+     nz:normal.z/horizontal,weight,
+     vertices:[a.x,a.z,b.x,b.z,c.x,c.z]});
    }
   });
   const det=aa*bb-ab*ab,trace=aa+bb;
@@ -139,7 +140,14 @@ const SurfaceWorkshop=(()=>{
   for(const p of records){
    const x=p.x-cx,z=p.z-cz,r=Math.hypot(x,z);
    if(r<.2||Math.abs((p.nx*x+p.nz*z)/r)<.85)continue;
-   accepted.push({r,w:p.weight});angles.push((Math.atan2(z,x)+Math.PI*2)%(Math.PI*2));
+   accepted.push({r,w:p.weight});
+   // Face-centroid angles lose the ends of a quarter arc. Collect angles
+   // from actual broad-face vertices so texture spans the REAL end caps.
+   for(let i=0;i<6;i+=2){
+    const vx=p.vertices[i]-cx,vz=p.vertices[i+1]-cz;
+    if(Math.hypot(vx,vz)>.2)
+     angles.push((Math.atan2(vz,vx)+Math.PI*2)%(Math.PI*2));
+   }
    good+=p.weight;rSum+=r*p.weight;weighted+=p.weight;
   }
   if(good/Math.max(total,.00001)<.68||angles.length<16)return null;
@@ -164,7 +172,10 @@ const SurfaceWorkshop=(()=>{
    prev.copy(now);
   }
   return {type:'arc',cx,cz,radius,length:dist[steps],at(point){
-   const theta=(Math.atan2(point.z-cz,point.x-cx)-start+4*Math.PI)%(2*Math.PI);
+   let theta=(Math.atan2(point.z-cz,point.x-cx)-start+4*Math.PI)%(2*Math.PI);
+   // Numerical jitter across the angular seam must not jump from U=0
+   // to U=full length. Clamp to the NEAREST end of the real wall arc.
+   if(theta>sweep)theta=2*Math.PI-theta<theta-sweep?0:sweep;
    const q=Math.min(steps,Math.max(0,theta/sweep*steps));
    const i=Math.min(steps-1,Math.floor(q));
    return dist[i]+(dist[i+1]-dist[i])*(q-i);
