@@ -13,7 +13,7 @@ const image=new T.DataTexture(new Uint8Array(16).fill(255),2,2,T.RGBAFormat);
 const imageId='texture:regression';
 const front={style:'custom',mapping:'repeat',imageId,tileMeters:1,color:'#ffffff'};
 const sides={front,back:{...front,offsetU:.27}};
-const textures=new Map([[imageId,image]);
+const textures=new Map([[imageId,image]]);
 const V=()=>new T.Vector3();
 function triangle(mesh,i,root){
  const pos=mesh.geometry.getAttribute('position'),idx=mesh.geometry.index;
