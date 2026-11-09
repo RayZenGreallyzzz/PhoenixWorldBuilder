@@ -263,7 +263,8 @@ const BuilderGizmo=(()=>{
     const factor=Math.exp((dx-dy)*.008);
     if(drag.axis==='all')obj.scale=cap(drag.scale*factor,.1,10);
     else obj.axes[drag.axis]=cap(drag.axes[drag.axis]*factor,.1,10);
-    obj.root.scale.set(obj.scale*obj.axes.x,obj.scale*obj.axes.y,obj.scale*obj.axes.z);
+    obj.root.scale.set((obj.mirrorX?-1:1)*obj.scale*obj.axes.x,
+     obj.scale*obj.axes.y,obj.scale*obj.axes.z);
    }
    drag.px=e.clientX;drag.py=e.clientY;
    obj.root.updateMatrixWorld(true);this.update();return true;
