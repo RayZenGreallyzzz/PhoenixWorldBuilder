@@ -238,10 +238,13 @@ const SurfaceMaterials=(()=>{
   }
   if(point&&profile?.type==='corner'){
    const first=profile.a,turn=profile.b,end=profile.c;
-   const firstArm=(Math.hypot(point.x-first.x,point.z-first.z)+
-    Math.hypot(point.x-turn.x,point.z-turn.z))<=
-    (Math.hypot(point.x-turn.x,point.z-turn.z)+
-    Math.hypot(point.x-end.x,point.z-end.z));
+   const distance=(a,b)=>{
+    const x=b.x-a.x,z=b.z-a.z;
+    const t=Math.max(0,Math.min(1,((point.x-a.x)*x+
+     (point.z-a.z)*z)/Math.max(1e-8,x*x+z*z)));
+    return Math.hypot(point.x-a.x-t*x,point.z-a.z-t*z);
+   };
+   const firstArm=distance(first,turn)<=distance(turn,end);
    const dir=firstArm?turn.clone().sub(first):end.clone().sub(turn);
    dir.y=0;dir.normalize();
    const leftX=-dir.z,leftZ=dir.x;
