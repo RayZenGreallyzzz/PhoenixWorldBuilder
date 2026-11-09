@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence, feature/free-camera-orbit-focus, feature/mesh-workshop-textures-materials, feature/zip-smart-catalog-character-collisions, fix/texture-joystick-xyz-gizmo, feature/floor-wall-texture-placement-controls, feature/dual-face-slab-materials, feature/complete-building-workflow, feature/cad-touch-gizmo-video-style, feature/scene-manager-visibility-locks, fix/true-arched-door-cutouts, fix/skinned-avatar-real-height, fix/avatar-stable-scale-during-animation, fix/avatar-feet-ground-contact, feature/compact-import-drawers-per-face-textures, fix/tablet-import-zip-texture-picker-ui, fix/curved-corner-wall-face-texture-direction, feature/user-pwb-library-import-transparent-glass-arch-cut, fix/magnetic-edge-snap-floor-tiles, feature/non-destructive-surface-decals, fix/pr44-safe-curved-uv-window-glass, fix/pr44-physical-corner-sides-and-cut-safe-uv]
+    branches: [main, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement, feature/door-cut-corners-seams-arcs, fix/video-door-export-texture-persistence, feature/free-camera-orbit-focus, feature/mesh-workshop-textures-materials, feature/zip-smart-catalog-character-collisions, fix/texture-joystick-xyz-gizmo, feature/floor-wall-texture-placement-controls, feature/dual-face-slab-materials, feature/complete-building-workflow, feature/cad-touch-gizmo-video-style, feature/scene-manager-visibility-locks, fix/true-arched-door-cutouts, fix/skinned-avatar-real-height, fix/avatar-stable-scale-during-animation, fix/avatar-feet-ground-contact, feature/compact-import-drawers-per-face-textures, fix/tablet-import-zip-texture-picker-ui, fix/curved-corner-wall-face-texture-direction, feature/user-pwb-library-import-transparent-glass-arch-cut, fix/magnetic-edge-snap-floor-tiles, feature/non-destructive-surface-decals, fix/pr44-safe-curved-uv-window-glass, fix/pr44-physical-corner-sides-and-cut-safe-uv, restore/pr44-original-mirror-duplicate]
   pull_request:
     branches: [main, feature/planner5d-precision-tools, feature/android-offline-glb-meshopt-ktx2-lod, feature/millimeter-free-placement]
 
@@ -102,6 +102,7 @@ jobs:
           node tests/test-mesh-workshop-surfaces.cjs
           node tests/test-curved-glb-glass-uv.cjs
           node tests/test-corner-physical-faces-openings.cjs
+          node tests/test-mirror-duplicate-restored.cjs
           node tests/test-touch-gizmo-texture.cjs
           node tests/test-cad-gizmo-reference.cjs
           node tests/test-scene-manager.cjs
