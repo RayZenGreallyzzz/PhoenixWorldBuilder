@@ -100,6 +100,7 @@ jobs:
           node tests/test-avatar-skinned-height.cjs
           node tests/test-avatar-ground-contact.cjs
           node tests/test-mesh-workshop-surfaces.cjs
+          node tests/test-curved-glb-glass-uv.cjs
           node tests/test-touch-gizmo-texture.cjs
           node tests/test-cad-gizmo-reference.cjs
           node tests/test-scene-manager.cjs
