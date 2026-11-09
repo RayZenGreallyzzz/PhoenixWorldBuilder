@@ -2716,7 +2716,7 @@ class CleanBuilder{
     return false;
    });
    if(!obj)continue;
-   const side=SurfaceMaterials.faceFromHit(hit,obj.root,obj.category);
+   const side=SurfaceMaterials.faceFromHit(hit,obj.root,obj.category,obj.kind);
    if(!side)continue;
    this.pick(event);
    if(this.selected!==obj)return notify('Не удалось выделить нужную сторону','warn');

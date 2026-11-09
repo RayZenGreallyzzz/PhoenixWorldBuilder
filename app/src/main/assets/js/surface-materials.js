@@ -87,12 +87,56 @@ const SurfaceMaterials=(()=>{
   t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;
   t.anisotropy=4;proceduralCache.set(style,t);return t;
  }
+
+ // Preserve source glass / alpha materials, including transparent glass
+ // primitives INSIDE a single imported multi-material GLB mesh.
+ const materialList=m=>Array.isArray(m)?m:[m];
+ const glassName=name=>/(glass|glaz|glazing|стекл|витраж|vitre|window.?pane)/i
+  .test(String(name||''));
+ function protectedMaterial(m){
+  return !!m&&(glassName(m.name)||
+   (Number(m.transmission)||0)>.001||
+   (m.transparent===true&&(Number(m.opacity)<.999||m.alphaTest>0)));
+ }
+ function protectedMesh(mesh){
+  return glassName(mesh.name)||materialList(mesh.material).every(protectedMaterial);
+ }
+ // Geometry stays a private clone. Restore AUTHOR UVs for original glass
+ // triangle groups even when opaque parts of that mesh get new physical UVs.
+ function restoreProtectedUV(projected,original,originalMaterials){
+  const protectedSlots=new Set(originalMaterials.map((m,i)=>
+   protectedMaterial(m)?i:-1).filter(i=>i>=0));
+  if(!protectedSlots.size)return;
+  const target=projected?.getAttribute('uv');
+  const flat=original.index?original.toNonIndexed():original;
+  const source=flat.getAttribute('uv');
+  if(!target||!source||source.count!==target.count){
+   if(flat!==original)flat.dispose();return;
+  }
+  const groups=original.groups||[];
+  for(let i=0;i<target.count;i+=3){
+   const group=groups.find(g=>i>=g.start&&i<g.start+g.count);
+   const slot=group?.materialIndex||0;
+   if(!protectedSlots.has(slot))continue;
+   for(let j=0;j<3;j++)target.setXY(i+j,source.getX(i+j),source.getY(i+j));
+  }
+  target.needsUpdate=true;
+  if(flat!==original)flat.dispose();
+ }
+ function wallProfile(root,kind,category){
+  const workshop=typeof SurfaceWorkshop!=='undefined'?SurfaceWorkshop:null;
+  return workshop?.importedWallProfile?.(root,kind,category)||null;
+ }
+ function mappingFor(style,kind,profile){
+  return style.mapping==='auto'?
+   (String(kind).startsWith('glb:')&&!profile?'source':'repeat'):style.mapping;
+ }
  function apply(root,raw,customTexture=null,options={}){
   const style=normalize(raw),kind=String(options.kind||root?.name||'');
   if(!root)return {ok:false,reason:'Нет 3D-объекта'};
-  // GLB models have authored UVs. Procedural walls/arcs use physical world UVs.
-  const mapping=style.mapping==='auto'?
-   (kind.startsWith('glb:')?'source':'repeat'):style.mapping;
+  // Only verified imported curved/L walls change from authored UV to metres.
+  const profile=wallProfile(root,kind,options.category);
+  const mapping=mappingFor(style,kind,profile);
   if(style.style==='custom'&&!customTexture)
    return {ok:false,reason:'Сначала выбери загруженное изображение'};
   const template=style.style==='custom'?customTexture:
@@ -115,7 +159,7 @@ const SurfaceMaterials=(()=>{
    if(!mesh.isMesh||mesh.userData.phoenixLODProxy)return;
    const isFrame=mesh.name?.startsWith('frame:');
    if(mesh.userData.phoenixInsert&&!(isFrame&&style.applyFrames))return;
-   if(mesh.name?.includes('glass')||mesh.name?.includes('door:leaf'))return;
+   if(mesh.name?.includes('door:leaf')||protectedMesh(mesh))return;
    let original=cache.get(mesh);
    if(!original){
     original={geometry:mesh.geometry,material:mesh.material,
@@ -136,8 +180,11 @@ const SurfaceMaterials=(()=>{
    if(texture&&workshop){
     const g=workshop.project(root,mesh,original.geometry,
      {...style,mapping,textureAspect:texture.image?.width/
-      Math.max(1,texture.image?.height)},kind);
-    if(g){mesh.geometry=g;original.ownedGeometry=g;changedGeometry++}
+      Math.max(1,texture.image?.height)},kind,profile);
+    if(g){
+     restoreProtectedUV(g,original.geometry,materialList(original.material));
+     mesh.geometry=g;original.ownedGeometry=g;changedGeometry++;
+    }
    }
    const update=source=>{
     const copy=(source||new THREE.MeshStandardMaterial()).clone();
@@ -152,10 +199,10 @@ const SurfaceMaterials=(()=>{
     }else if(style.relief===0&&'normalMap' in copy)copy.normalMap=null;
     copy.needsUpdate=true;return copy;
    };
-   const copies=(Array.isArray(original.material)?original.material:[original.material])
-    .map(update);
+   const sourceMaterials=materialList(original.material);
+   const copies=sourceMaterials.map(m=>protectedMaterial(m)?m:update(m));
    mesh.material=Array.isArray(original.material)?copies:copies[0];
-   original.ownedMaterials=copies;
+   original.ownedMaterials=copies.filter((m,i)=>m!==sourceMaterials[i]);
    count++;
   });
   return {ok:true,changed:count>0,meshes:count,mapped:changedGeometry,mode:mapping};
@@ -175,13 +222,36 @@ const SurfaceMaterials=(()=>{
  // point is a root-local position on the face (not a world position).
  // "front" = local +Z on a straight wall, outer radius on a round wall,
  // or the outside of the two arms of the built-in L corner.
- function sideFromNormal(normal,category='wall',kind='',point=null){
+ function sideFromNormal(normal,category='wall',kind='',point=null,profile=null){
   if(category==='floor'){
    if(Math.abs(normal.y)<.65)return null;
    return normal.y>0?'front':'back'; // top / bottom
   }
   if(category!=='wall'||Math.abs(normal.y)>.45)return null;
   const nx=normal.x,nz=normal.z;
+  if(point&&profile?.type==='arc'){
+   const dx=point.x-profile.cx,dz=point.z-profile.cz;
+   const radius=Math.hypot(dx,dz)||1;
+   const radial=(nx*dx+nz*dz)/radius;
+   if(Math.abs(radial)<.72)return null; // end caps / reveals
+   return radius>=profile.radius?'front':'back';
+  }
+  if(point&&profile?.type==='corner'){
+   const first=profile.a,turn=profile.b,end=profile.c;
+   const distance=(a,b)=>{
+    const x=b.x-a.x,z=b.z-a.z;
+    const t=Math.max(0,Math.min(1,((point.x-a.x)*x+
+     (point.z-a.z)*z)/Math.max(1e-8,x*x+z*z)));
+    return Math.hypot(point.x-a.x-t*x,point.z-a.z-t*z);
+   };
+   const firstArm=distance(first,turn)<=distance(turn,end);
+   const dir=firstArm?turn.clone().sub(first):end.clone().sub(turn);
+   dir.y=0;dir.normalize();
+   const leftX=-dir.z,leftZ=dir.x;
+   if(Math.abs(nx*leftX+nz*leftZ)<.72)return null;
+   const origin=firstArm?first:turn;
+   return (point.x-origin.x)*leftX+(point.z-origin.z)*leftZ>=0?'front':'back';
+  }
   if(point&&kind==='wall'){
    // End caps and door/window reveals must keep their own material.
    if(Math.abs(nz)<.72)return null;
@@ -221,7 +291,8 @@ const SurfaceMaterials=(()=>{
   const normal=hit.face.normal.clone().applyMatrix3(
    new THREE.Matrix3().getNormalMatrix(relative)).normalize();
   const position=hit.point?root.worldToLocal(hit.point.clone()):null;
-  return sideFromNormal(normal,category,kind,position);
+  const profile=wallProfile(root,kind,category);
+  return sideFromNormal(normal,category,kind,position,profile);
  }
  function faceTexture(spec,textures){
   const source=spec.style==='custom'?textures?.get(spec.imageId):
@@ -262,10 +333,11 @@ const SurfaceMaterials=(()=>{
   const workshop=typeof SurfaceWorkshop!=='undefined'?SurfaceWorkshop:null;
   root.updateWorldMatrix(true,true);
   const inverseRoot=root.matrixWorld.clone().invert();
+  const profile=wallProfile(root,options.kind,category);
   let modified=0;
   root.traverse(mesh=>{
    if(!mesh.isMesh||mesh.isSkinnedMesh||mesh.userData?.phoenixLODProxy||
-    mesh.userData?.phoenixInsert||mesh.name?.includes('glass')||
+    mesh.userData?.phoenixInsert||protectedMesh(mesh)||
     mesh.name?.includes('door:leaf')||!mesh.geometry?.getAttribute('position'))return;
    const remembered=cache.get(mesh);
    const baseline=mesh.geometry;
@@ -273,20 +345,20 @@ const SurfaceMaterials=(()=>{
    const pos=renderGeometry.getAttribute('position');
    if(pos.count%3!==0){renderGeometry.dispose();return}
    const originalGroups=baseline.groups||[];
-   const baseMaterials=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+   const baseMaterials=materialList(mesh.material);
    const sideMaterial=new Map(),sideUV=new Map(),materials=baseMaterials.slice();
    const originals=remembered?.geometry||baseline;
    for(const side of overrides){
     const spec=sides[side],texture=faceTexture(spec,textures);
     if(spec.style==='custom'&&!texture)continue;
-    const mat=faceMaterial(baseMaterials[0],spec,texture,workshop);
+    const mat=faceMaterial(baseMaterials.find(m=>!protectedMaterial(m)),
+     spec,texture,workshop);
     sideMaterial.set(side,materials.length);materials.push(mat);
     if(texture&&workshop){
-     const mapping=spec.mapping==='auto'?
-      (String(options.kind).startsWith('glb:')?'source':'repeat'):spec.mapping;
+     const mapping=mappingFor(spec,options.kind,profile);
      const projected=workshop.project(root,mesh,originals,
       {...spec,mapping,textureAspect:texture.image?.width/
-       Math.max(1,texture.image?.height)},options.kind||'');
+       Math.max(1,texture.image?.height)},options.kind||'',profile);
      if(projected){
       if(projected.getAttribute('uv')?.count===pos.count)
        sideUV.set(side,projected.getAttribute('uv'));
@@ -319,9 +391,11 @@ const SurfaceMaterials=(()=>{
     d.fromBufferAttribute(pos,i+2).applyMatrix4(transform);
     normal.copy(ab.subVectors(b,a)).cross(ac.subVectors(d,a)).normalize();
     faceCenter.copy(a).add(b).add(d).multiplyScalar(1/3);
-    const side=sideFromNormal(normal,category,options.kind,faceCenter);
-    const index=sideMaterial.get(side);
-    const matIndex=index===undefined?groupAt(i):index;
+    const side=sideFromNormal(normal,category,options.kind,faceCenter,profile);
+    const originalIndex=groupAt(i);
+    const index=protectedMaterial(baseMaterials[originalIndex])?
+     undefined:sideMaterial.get(side);
+    const matIndex=index===undefined?originalIndex:index;
     if(index!==undefined)changed=true;
     if(selected!==matIndex){
      if(i>start)renderGeometry.addGroup(start,i-start,selected);
