@@ -258,8 +258,17 @@ const SurfaceWorkshop=(()=>{
     axis==='zy'?[ext.z,ext.y]:[ext.x,ext.y];
    const mid=profile?.type==='corner'?p0.clone().add(p1).add(p2)
     .multiplyScalar(1/3).applyMatrix4(rootInverse):null;
+   // Determine which L-wall arm owns each triangle in ROOT-LOCAL space.
+   // World normal X/Z swaps under rotation (90/270 degrees), which previously
+   // projected the opposite arm onto a tiny strip. Local triangle normal is
+   // stable for clockwise/counter-clockwise rotation and mirrored instances.
+   const localNormal=kind==='corner'?p1.clone().sub(p0)
+    .applyMatrix3(new THREE.Matrix3().setFromMatrix4(rootInverse))
+    .cross(p2.clone().sub(p0).applyMatrix3(
+     new THREE.Matrix3().setFromMatrix4(rootInverse))).normalize():null;
    const firstArm=profile?.type==='corner'?
     closestDistance(mid,corner.a,corner.b)<=closestDistance(mid,corner.b,corner.c):
+    kind==='corner'?Math.abs(localNormal.z)>=Math.abs(localNormal.x):
     Math.abs(n.z)>=Math.abs(n.x);
    const pathLength=!top?(curve?.length||corner?.length||0):0;
    if(pathLength){dimensions[0]=pathLength;dimensions[1]=physicalExt.y;}
