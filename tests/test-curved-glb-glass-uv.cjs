@@ -41,6 +41,9 @@ for(const [shape,minLength] of [['arc90',2.7],['arc180',5.7],['corner',3.5]]){
  const profile=W.importedWallProfile(root,'glb:'+shape,'wall');
  assert(profile,shape+' should be recognized geometrically');
  assert.equal(profile.type,shape==='corner'?'corner':'arc');
+ if(shape!=='corner')assert(Math.abs(profile.length-
+  (shape==='arc90'?Math.PI:2*Math.PI))<.12,
+  shape+' must use complete physical end-to-end arc length');
  const result=M.apply(root,style(),texture(),{kind:'glb:'+shape,category:'wall'});
  assert.equal(result.mode,'repeat',shape+' must use physical UV');
  assert(uSpan(mesh.geometry.getAttribute('uv'))>minLength,
