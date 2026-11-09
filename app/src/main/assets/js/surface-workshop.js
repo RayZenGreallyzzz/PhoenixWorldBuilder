@@ -47,10 +47,121 @@ const SurfaceWorkshop=(()=>{
    return dist[i]+(dist[i+1]-dist[i])*(s-i);
   }};
  }
- const V=()=>new THREE.Vector3();
+ const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
+
+ // Only explicitly recognized imported WALL geometry gets automatic physical UV.
+ // A generic GLB still uses its authored UVs; other editor tools are untouched.
+ function importedWallProfile(root,kind,category){
+  if(category!=='wall'||!String(kind).startsWith('glb:'))return null;
+  root.updateWorldMatrix(true,true);
+  const sockets=typeof CleanGeometry!=='undefined'?
+   CleanGeometry.sockets(kind,root,null,'wall'):[];
+  if(sockets.length===2&&!sockets.profile){
+   const a=sockets[0],b=sockets[1],outA=a.out,outB=b.out;
+   if(Math.abs(outA.dot(outB))<.15){
+    const d1=outA.clone().negate(),d2=outB.clone().negate();
+    const dx=b.point.x-a.point.x,dz=b.point.z-a.point.z;
+    const cross=d1.x*d2.z-d1.z*d2.x;
+    if(Math.abs(cross)>.9){
+     const t=(dx*d2.z-dz*d2.x)/cross;
+     const u=(dx*d1.z-dz*d1.x)/cross;
+     if(t>.4&&u>.4&&t<120&&u<120){
+      const turn=a.point.clone().addScaledVector(d1,t);
+      const start=a.point.clone(),end=b.point.clone();
+      const w0=start.clone().applyMatrix4(root.matrixWorld),
+       w1=turn.clone().applyMatrix4(root.matrixWorld),
+       w2=end.clone().applyMatrix4(root.matrixWorld);
+      const f=w1.clone().sub(w0),g=w2.clone().sub(w1);
+      const firstLength=f.length(),secondLength=g.length();
+      if(firstLength>.2&&secondLength>.2)
+       return {type:'corner',start:w0,turn:w1,first:f.normalize(),
+        second:g.normalize(),firstLength,length:firstLength+secondLength,
+        a:start,b:turn,c:end};
+     }
+    }
+   }
+  }
+  // An arc must have genuinely radial broad triangles. Do not infer one
+  // merely from an object's name or bounding box.
+  const inverse=root.matrixWorld.clone().invert();
+  const records=[],a=V(),b=V(),c=V(),edge1=V(),edge2=V(),normal=V(),mid=V();
+  let aa=0,ab=0,bb=0,ax=0,bx=0,total=0;
+  root.traverse(mesh=>{
+   if(!mesh.isMesh||mesh.isSkinnedMesh||mesh.userData?.phoenixLODProxy||
+      !mesh.geometry?.attributes?.position)return;
+   const geom=mesh.geometry,position=geom.getAttribute('position'),
+    idx=geom.index,n=idx?idx.count:position.count;
+   if(n<24||n>160000)return;
+   const trans=inverse.clone().multiply(mesh.matrixWorld);
+   const step=Math.max(3,Math.ceil(n/2400/3)*3);
+   for(let i=0;i+2<n;i+=step){
+    a.fromBufferAttribute(position,idx?idx.getX(i):i).applyMatrix4(trans);
+    b.fromBufferAttribute(position,idx?idx.getX(i+1):i+1).applyMatrix4(trans);
+    c.fromBufferAttribute(position,idx?idx.getX(i+2):i+2).applyMatrix4(trans);
+    normal.copy(edge1.subVectors(b,a)).cross(edge2.subVectors(c,a));
+    const area=normal.length();
+    if(area<1e-7)continue;
+    normal.divideScalar(area);
+    if(Math.abs(normal.y)>.25)continue;
+    mid.copy(a).add(b).add(c).multiplyScalar(1/3);
+    const horizontal=Math.hypot(normal.x,normal.z);
+    if(horizontal<.95)continue;
+    const tx=-normal.z/horizontal,tz=normal.x/horizontal,
+     rhs=tx*mid.x+tz*mid.z,weight=Math.min(area,.3);
+    aa+=weight*tx*tx;ab+=weight*tx*tz;bb+=weight*tz*tz;
+    ax+=weight*tx*rhs;bx+=weight*tz*rhs;total+=weight;
+    records.push({x:mid.x,z:mid.z,nx:normal.x/horizontal,
+     nz:normal.z/horizontal,weight});
+   }
+  });
+  const det=aa*bb-ab*ab,trace=aa+bb;
+  if(records.length<16||!Number.isFinite(det)||det<.012*trace*trace)return null;
+  const cx=(ax*bb-ab*bx)/det,cz=(aa*bx-ab*ax)/det;
+  const accepted=[],angles=[];
+  let good=0,rSum=0,weighted=0;
+  for(const p of records){
+   const x=p.x-cx,z=p.z-cz,r=Math.hypot(x,z);
+   if(r<.2||Math.abs((p.nx*x+p.nz*z)/r)<.85)continue;
+   accepted.push({r,w:p.weight});angles.push((Math.atan2(z,x)+Math.PI*2)%(Math.PI*2));
+   good+=p.weight;rSum+=r*p.weight;weighted+=p.weight;
+  }
+  if(good/Math.max(total,.00001)<.68||angles.length<16)return null;
+  const radius=rSum/weighted;
+  const spread=Math.sqrt(accepted.reduce((sum,p)=>
+   sum+(p.r-radius)*(p.r-radius)*p.w,0)/weighted);
+  if(radius<.2||spread>radius*.18)return null;
+  angles.sort((x,y)=>x-y);
+  let gap=0,start=angles[0];
+  for(let i=0;i<angles.length;i++){
+   const next=i+1<angles.length?angles[i+1]:angles[0]+Math.PI*2;
+   if(next-angles[i]>gap){gap=next-angles[i];start=next%(2*Math.PI)}
+  }
+  const sweep=2*Math.PI-gap;
+  if(sweep<.5||sweep>3.8)return null; // quarter/half arcs; no full cylinders
+  const steps=128,dist=[0],prev=V(),now=V();
+  for(let i=0;i<=steps;i++){
+   const theta=start+sweep*i/steps;
+   now.set(cx+radius*Math.cos(theta),0,cz+radius*Math.sin(theta))
+    .applyMatrix4(root.matrixWorld);
+   if(i)dist.push(dist[i-1]+now.distanceTo(prev));
+   prev.copy(now);
+  }
+  return {type:'arc',cx,cz,radius,length:dist[steps],at(point){
+   const theta=(Math.atan2(point.z-cz,point.x-cx)-start+4*Math.PI)%(2*Math.PI);
+   const q=Math.min(steps,Math.max(0,theta/sweep*steps));
+   const i=Math.min(steps-1,Math.floor(q));
+   return dist[i]+(dist[i+1]-dist[i])*(q-i);
+  }};
+ }
+ function closestDistance(point,a,b){
+  const dx=b.x-a.x,dz=b.z-a.z;
+  const t=clamp(((point.x-a.x)*dx+(point.z-a.z)*dz)/
+   Math.max(1e-8,dx*dx+dz*dz),0,1);
+  return Math.hypot(point.x-a.x-t*dx,point.z-a.z-t*dz);
+ }
  // World-space UV keeps real tiles equally sized on flat walls and corners.
  // Arc sides use physical walk-length rather than a new [0,1] map per triangle.
- function project(root,mesh,source,raw,kind=''){
+ function project(root,mesh,source,raw,kind='',profile=null){
   if(!source?.attributes?.position)return null;
   const spec=settings(raw),mode=spec.mapping;
   if(mesh.isSkinnedMesh||source.morphAttributes&&
@@ -86,16 +197,17 @@ const SurfaceWorkshop=(()=>{
   const uvs=new Float32Array(pos.count*2);
   const p0=V(),p1=V(),p2=V(),n=V(),e=V(),f=V(),local=V();
   const mapScale=spec.tileMeters/Math.max(.01,Number(raw?.repeat)||1);
-  const curve=curveLengths(root,kind);
+  const curve=curveLengths(root,kind)||(profile?.type==='arc'?profile:null);
   // Real continuous walk-distance across the two perpendicular arms of an L
   // wall. This removes the old quarter/half-tile jump at its inner corner.
-  const corner=kind==='corner'?(()=>{
+  const corner=profile?.type==='corner'?profile:kind==='corner'?(()=>{
    const a=new THREE.Vector3(-1.9,0,0).applyMatrix4(root.matrixWorld);
    const b=new THREE.Vector3(0,0,0).applyMatrix4(root.matrixWorld);
    const c=new THREE.Vector3(0,0,-1.9).applyMatrix4(root.matrixWorld);
    const first=b.clone().sub(a),second=c.clone().sub(b);
    const firstLength=first.length();
-   return {start:a,turn:b,firstLength,first:first.normalize(),second:second.normalize()};
+   return {start:a,turn:b,firstLength,length:firstLength+second.length(),
+    first:first.normalize(),second:second.normalize()};
   })():null;
   const angle=spec.rotation*Math.PI/180;
   const co=Math.cos(angle),si=Math.sin(angle);
@@ -116,6 +228,13 @@ const SurfaceWorkshop=(()=>{
    const ext=mode==='joined'?worldExt:physicalExt;
    const dimensions=axis==='xz'?[ext.x,ext.z]:
     axis==='zy'?[ext.z,ext.y]:[ext.x,ext.y];
+   const mid=profile?.type==='corner'?p0.clone().add(p1).add(p2)
+    .multiplyScalar(1/3).applyMatrix4(rootInverse):null;
+   const firstArm=profile?.type==='corner'?
+    closestDistance(mid,corner.a,corner.b)<=closestDistance(mid,corner.b,corner.c):
+    Math.abs(n.z)>=Math.abs(n.x);
+   const pathLength=!top?(curve?.length||corner?.length||0):0;
+   if(pathLength){dimensions[0]=pathLength;dimensions[1]=physicalExt.y;}
    for(let j=0;j<3;j++){
     tmp.fromBufferAttribute(pos,i+j);
     const world=tmp.clone().applyMatrix4(rootToWorld);
@@ -133,9 +252,8 @@ const SurfaceWorkshop=(()=>{
      [u,v]=plane(point);
      if(curve&&!top){
       const theta=Math.atan2(local.z,local.x);
-      u=curve.at(theta);
+      u=profile?.type==='arc'?curve.at(local):curve.at(theta);
      }else if(corner&&!top){
-      const firstArm=Math.abs(n.z)>=Math.abs(n.x);
       const dir=firstArm?corner.first:corner.second,
        origin=firstArm?corner.start:corner.turn;
       u=(firstArm?0:corner.firstLength)+world.clone().sub(origin).dot(dir);
@@ -147,10 +265,17 @@ const SurfaceWorkshop=(()=>{
     }else{
      // One complete image per module, or aspect-correct crop of one image.
      const localPoint=local,localMin=localBox.min;
-     const q=axis==='xz'?[localPoint.x-localMin.x,localPoint.z-localMin.z]:
+     const q=pathLength?
+      [curve?(profile?.type==='arc'?curve.at(localPoint):
+        curve.at(Math.atan2(localPoint.z,localPoint.x))):
+        (firstArm?0:corner.firstLength)+world.clone().sub(
+          firstArm?corner.start:corner.turn).dot(firstArm?corner.first:corner.second),
+       localPoint.y-localMin.y]:
+      axis==='xz'?[localPoint.x-localMin.x,localPoint.z-localMin.z]:
       axis==='zy'?[localPoint.z-localMin.z,localPoint.y-localMin.y]:
       [localPoint.x-localMin.x,localPoint.y-localMin.y];
-     const ext=axis==='xz'?[localExt.x,localExt.z]:
+     const ext=pathLength?[pathLength,localExt.y]:
+      axis==='xz'?[localExt.x,localExt.z]:
       axis==='zy'?[localExt.z,localExt.y]:[localExt.x,localExt.y];
      u=q[0]/Math.max(.00001,ext[0]);
      v=q[1]/Math.max(.00001,ext[1]);
@@ -213,6 +338,6 @@ const SurfaceWorkshop=(()=>{
    return output;
   }catch(e){console.warn('Normal map unavailable',e);return null}
  }
- return {modes,settings,project,normalFromTexture,curveLengths};
+ return {modes,settings,project,normalFromTexture,curveLengths,importedWallProfile};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=SurfaceWorkshop;
