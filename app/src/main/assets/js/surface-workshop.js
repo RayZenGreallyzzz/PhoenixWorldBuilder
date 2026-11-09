@@ -235,7 +235,9 @@ const SurfaceWorkshop=(()=>{
    const first=b.clone().sub(a),second=c.clone().sub(b);
    const firstLength=first.length();
    return {start:a,turn:b,firstLength,length:firstLength+second.length(),
-    first:first.normalize(),second:second.normalize()};
+    first:first.normalize(),second:second.normalize(),
+    a:new THREE.Vector3(-1.9,0,0),b:new THREE.Vector3(0,0,0),
+    c:new THREE.Vector3(0,0,-1.9)};
   })():null;
   const angle=spec.rotation*Math.PI/180;
   const co=Math.cos(angle),si=Math.sin(angle);
@@ -256,11 +258,14 @@ const SurfaceWorkshop=(()=>{
    const ext=mode==='joined'?worldExt:physicalExt;
    const dimensions=axis==='xz'?[ext.x,ext.z]:
     axis==='zy'?[ext.z,ext.y]:[ext.x,ext.y];
-   const mid=profile?.type==='corner'?p0.clone().add(p1).add(p2)
+   // Choose the L arm by PHYSICAL root-local triangle position, never
+   // by a world-space normal: turning or mirroring the wall must not
+   // collapse a 2-metre face into a .22-metre stripe. This also works
+   // for the many triangles rebuilt after a real window/door cut.
+   const mid=corner?p0.clone().add(p1).add(p2)
     .multiplyScalar(1/3).applyMatrix4(rootInverse):null;
-   const firstArm=profile?.type==='corner'?
-    closestDistance(mid,corner.a,corner.b)<=closestDistance(mid,corner.b,corner.c):
-    Math.abs(n.z)>=Math.abs(n.x);
+   const firstArm=corner?
+    closestDistance(mid,corner.a,corner.b)<=closestDistance(mid,corner.b,corner.c):false;
    const pathLength=!top?(curve?.length||corner?.length||0):0;
    if(pathLength){dimensions[0]=pathLength;dimensions[1]=physicalExt.y;}
    for(let j=0;j<3;j++){

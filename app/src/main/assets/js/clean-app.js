@@ -1200,6 +1200,7 @@ class CleanBuilder{
    obj.category=preset.category||obj.category;
    obj.scale=Number(preset.scale)||1;obj.axes={x:1,y:1,z:1,...(preset.axes||{})};
    obj.thickness=Number(preset.thickness)||.22;obj.rot=Number(preset.rot)||0;
+   obj.mirrorX=preset.mirrorX===true;
    obj.sockets=preset.sockets||null;
    obj.meshEdit=CleanMeshEdit.normalize(preset.meshEdit);
    obj.doorAngle=clamp(Number(preset.doorAngle)||0,-110,110);
@@ -1533,7 +1534,7 @@ class CleanBuilder{
     groupId:typeof config.groupId==='string'?config.groupId.slice(0,72):'',
     roomRole:['wall','floor','ceiling'].includes(config.roomRole)?config.roomRole:'',
     label:SceneManager.cleanName(config.label),
-    locked:config.locked===true,hidden:config.hidden===true};
+    locked:config.locked===true,hidden:config.hidden===true,mirrorX:config.mirrorX===true};
   if(WallOpenings.supported(kind)&&obj.openings.length){
    const result=WallOpenings.render(obj.root,kind,obj.openings,
     {thickness:obj.thickness,axes:obj.axes});
@@ -1567,7 +1568,7 @@ class CleanBuilder{
  }
  applyTransform(obj){
   const a=obj.axes||defaultSettings().axes;
-  obj.root.scale.set(obj.scale*a.x,obj.scale*a.y,obj.scale*a.z);
+  obj.root.scale.set((obj.mirrorX?-1:1)*obj.scale*a.x,obj.scale*a.y,obj.scale*a.z);
   obj.rotation=obj.rotation||{x:0,y:obj.rot||0,z:0};
   obj.rotation.y=Number(obj.rot)||0;
   obj.root.rotation.set(Number(obj.rotation.x)||0,obj.rotation.y,
@@ -1638,6 +1639,7 @@ class CleanBuilder{
   for(const [id,v] of Object.entries(fields))
    if(document.activeElement!==$(id))$(id).value=String(v);
   read('scaleAll',Math.round((obj?.scale||1)*100));
+  $('btnMirrorDuplicate').disabled=!SceneManager.editingAllowed(this.selected);
   for(const [key,axis] of [['sizeX','x'],['sizeY','y'],['sizeZ','z']])
    read(key,Math.round(a[axis]*100));
   read('thickness',Math.round((obj?.thickness||.22)*1000)/10);
@@ -2668,6 +2670,7 @@ class CleanBuilder{
   const source=this.preview;
   const data={category:source.category,storey:this.floor,scale:source.scale,
    axes:cloneJSON(source.axes),thickness:source.thickness,
+   mirrorX:source.mirrorX===true,
    rot:source._snapRotation??source.rot,
    rotation:{x:source.root.rotation.x,y:source._snapRotation??source.root.rotation.y,
     z:source.root.rotation.z},
@@ -2687,6 +2690,7 @@ class CleanBuilder{
   this.preview.root.position.fromArray(data.position);
   this.settings={scale:data.scale,axes:data.axes,thickness:data.thickness};
   this.preview.scale=data.scale;this.preview.axes=data.axes;this.preview.thickness=data.thickness;
+  this.preview.mirrorX=data.mirrorX===true;
   this.preview.meshEdit=CleanMeshEdit.normalize(data.meshEdit);
   this.preview.doorAngle=data.doorAngle||0;
   this.preview.openings=WallOpenings.normalize(data.openings);
@@ -2756,21 +2760,30 @@ class CleanBuilder{
    this.chooseTexture(pending.style,pending.imageId);
   }
  }
- duplicate(){
+ duplicate(mirror=false){
   const obj=this.selected;if(!obj)return notify('Сначала выдели деталь','warn');
   if(!this.canEditObject(obj))return;
   const data=this.encode(obj);delete data.id;
   delete data.groupId;delete data.roomRole;data.locked=false;data.hidden=false;
   data.label=data.label?data.label+' — копия':'';
-  data.position[0]+=1.5;
+  if(mirror)data.mirrorX=!data.mirrorX;
+  else data.position[0]+=1.5;
   const clone=this.createEntry(obj.kind,data);if(!clone)return;
+  if(mirror){
+   // The original mirror tool places the new physical footprint next to
+   // the source; do not overlap or destructively modify its GLB geometry.
+   const originalBox=new THREE.Box3().setFromObject(obj.root),
+    cloneBox=new THREE.Box3().setFromObject(clone.root);
+   clone.root.position.x+=Math.max(.1,originalBox.max.x-cloneBox.min.x+.15);
+   clone.root.updateMatrixWorld(true);
+  }
   this.recordEdit();
   this.entries.push(clone);this.scene.add(clone.root);this.selected=clone;
   this.attachImportedLOD(clone);this.setTool('pick');
   if(this.outline){this.scene.remove(this.outline);this.outline.geometry.dispose()}
   this.outline=new THREE.BoxHelper(clone.root,0x44ffb8);this.scene.add(this.outline);
   this.gizmo.attach(clone);
-  this.syncInspector();notify('Создана копия детали','success');
+  this.syncInspector();notify(mirror?'Создана зеркальная копия':'Создана копия детали','success');
  }
  delete(){
   if(!this.canEditObject())return;
@@ -2790,6 +2803,7 @@ class CleanBuilder{
    rotation:{x:obj.root.rotation.x,y:obj.root.rotation.y,z:obj.root.rotation.z},
    displayRotation:obj.root.rotation.y,storey:obj.storey,
    scale:obj.scale,axes:obj.axes,thickness:obj.thickness,sockets:obj.sockets,
+   ...(obj.mirrorX?{mirrorX:true}:{}),
    doorAngle:obj.doorAngle||0,
    meshEdit:CleanMeshEdit.normalize(obj.meshEdit),floorTrim:FloorClip.normalize(obj.floorTrim),
    manualEdgeCut:obj.manualEdgeCut||null,autoEdgeCuts:FloorClip.normalizeCuts(obj.autoEdgeCuts),
@@ -3266,6 +3280,7 @@ class CleanBuilder{
    this.updatePreview(this.cursor);this.syncInspector();
   };
   $('btnDuplicate').onclick=()=>this.duplicate();
+  $('btnMirrorDuplicate').onclick=$('quickMirrorDuplicate').onclick=()=>this.duplicate(true);
   $('btnDelete').onclick=()=>this.delete();
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();

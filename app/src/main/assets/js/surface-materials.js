@@ -123,14 +123,67 @@ const SurfaceMaterials=(()=>{
   target.needsUpdate=true;
   if(flat!==original)flat.dispose();
  }
+ // Recognize a verified flat imported wall aligned with either local X or Z.
+ // Do not repaint arbitrary GLB sculptures just because the user tagged them wall.
+ function flatWallProfile(root,kind,category){
+  if(category!=='wall'||!String(kind).startsWith('glb:')||
+     typeof CleanGeometry==='undefined'||!CleanGeometry.localBounds)return null;
+  const bounds=CleanGeometry.localBounds(root),size=bounds.getSize(new THREE.Vector3());
+  if(bounds.isEmpty()||size.y<.4)return null;
+  const thickness=Math.min(size.x,size.z),length=Math.max(size.x,size.z);
+  if(thickness<.01||thickness>.8||length<.5||length/thickness<3.2)return null;
+  return {type:'flat',axis:size.x<size.z?'x':'z',
+   centre:size.x<size.z?(bounds.min.x+bounds.max.x)/2:
+    (bounds.min.z+bounds.max.z)/2};
+ }
  function wallProfile(root,kind,category){
   const workshop=typeof SurfaceWorkshop!=='undefined'?SurfaceWorkshop:null;
-  return workshop?.importedWallProfile?.(root,kind,category)||null;
+  return workshop?.importedWallProfile?.(root,kind,category)||
+   flatWallProfile(root,kind,category);
  }
  function mappingFor(style,kind,profile){
   return style.mapping==='auto'?
-   (String(kind).startsWith('glb:')&&!profile?'source':'repeat'):style.mapping;
+   (String(kind).startsWith('glb:')&&
+    !['arc','corner'].includes(profile?.type)?'source':'repeat'):style.mapping;
  }
+ // Each L arm faces away from the INTERIOR of its own geometric bend.
+ // Unlike a winding-based convention this assigns one physical exterior to
+ // both arms of left- and right-handed L models and ignores cut-out reveals.
+ function cornerFace(normal,point,a,b,c){
+  const closest=(p,s,e)=>{
+   const dx=e.x-s.x,dz=e.z-s.z;
+   const u=clamp(((p.x-s.x)*dx+(p.z-s.z)*dz)/
+    Math.max(1e-8,dx*dx+dz*dz),0,1);
+   return Math.hypot(p.x-s.x-u*dx,p.z-s.z-u*dz);
+  };
+  const segmentNormal=(s,e)=>{
+   const dx=e.x-s.x,dz=e.z-s.z,length=Math.hypot(dx,dz)||1;
+   return [-dz/length,dx/length];
+  };
+  const n0=segmentNormal(a,b),n1=segmentNormal(b,c);
+  const align0=Math.abs(normal.x*n0[0]+normal.z*n0[1]),
+   align1=Math.abs(normal.x*n1[0]+normal.z*n1[1]);
+  const d0=closest(point,a,b),d1=closest(point,b,c);
+  // Closest-point alone wrongly swaps the arm for triangles beside the
+  // inner L elbow (especially its back face). Require face alignment too.
+  const first=align0>.72&&align1<.72?true:
+   align1>.72&&align0<.72?false:d0<=d1;
+  const origin=first?a:b,finish=first?b:c;
+  const dx=finish.x-origin.x,dz=finish.z-origin.z,
+   length=Math.hypot(dx,dz);
+  if(length<.1)return null;
+  const leftX=-dz/length,leftZ=dx/length;
+  if(Math.abs(normal.x*leftX+normal.z*leftZ)<.72)return null;
+  // For the second arm the earlier arm extends from the turn towards a.
+  const towardX=first?c.x-b.x:a.x-b.x,
+   towardZ=first?c.z-b.z:a.z-b.z;
+  const bend=leftX*towardX+leftZ*towardZ;
+  if(Math.abs(bend)<.1)return null;
+  const signed=(point.x-origin.x)*leftX+(point.z-origin.z)*leftZ;
+  if(Math.abs(signed)<.0005)return null;
+  return signed*bend<0?'front':'back';
+ }
+
  function apply(root,raw,customTexture=null,options={}){
   const style=normalize(raw),kind=String(options.kind||root?.name||'');
   if(!root)return {ok:false,reason:'Нет 3D-объекта'};
@@ -229,6 +282,12 @@ const SurfaceMaterials=(()=>{
   }
   if(category!=='wall'||Math.abs(normal.y)>.45)return null;
   const nx=normal.x,nz=normal.z;
+  if(point&&profile?.type==='flat'){
+   const axis=profile.axis,component=axis==='x'?nx:nz,
+    signed=point[axis]-profile.centre;
+   if(Math.abs(component)<.72||Math.abs(signed)<.0005)return null;
+   return signed>0?'front':'back';
+  }
   if(point&&profile?.type==='arc'){
    const dx=point.x-profile.cx,dz=point.z-profile.cz;
    const radius=Math.hypot(dx,dz)||1;
@@ -236,22 +295,8 @@ const SurfaceMaterials=(()=>{
    if(Math.abs(radial)<.72)return null; // end caps / reveals
    return radius>=profile.radius?'front':'back';
   }
-  if(point&&profile?.type==='corner'){
-   const first=profile.a,turn=profile.b,end=profile.c;
-   const distance=(a,b)=>{
-    const x=b.x-a.x,z=b.z-a.z;
-    const t=Math.max(0,Math.min(1,((point.x-a.x)*x+
-     (point.z-a.z)*z)/Math.max(1e-8,x*x+z*z)));
-    return Math.hypot(point.x-a.x-t*x,point.z-a.z-t*z);
-   };
-   const firstArm=distance(first,turn)<=distance(turn,end);
-   const dir=firstArm?turn.clone().sub(first):end.clone().sub(turn);
-   dir.y=0;dir.normalize();
-   const leftX=-dir.z,leftZ=dir.x;
-   if(Math.abs(nx*leftX+nz*leftZ)<.72)return null;
-   const origin=firstArm?first:turn;
-   return (point.x-origin.x)*leftX+(point.z-origin.z)*leftZ>=0?'front':'back';
-  }
+  if(point&&profile?.type==='corner')
+   return cornerFace(normal,point,profile.a,profile.b,profile.c);
   if(point&&kind==='wall'){
    // End caps and door/window reveals must keep their own material.
    if(Math.abs(nz)<.72)return null;
@@ -268,16 +313,9 @@ const SurfaceMaterials=(()=>{
    // Built-in arcs are centred at the local origin, radius 2 m.
    return radius>=2?'front':'back';
   }
-  if(point&&kind==='corner'){
-   // First arm runs along negative X with its broad faces at Z=+/-thick.
-   // Second arm runs along negative Z with its broad faces at X=+/-thick.
-   // Never treat either arm's perpendicular end cap as a broad face.
-   if(Math.abs(nz)>.72&&point.z>-.35&&point.z<.35)
-    return point.z>=0?'front':'back';
-   if(Math.abs(nx)>.72&&point.x>-.35&&point.x<.35)
-    return point.x>=0?'front':'back';
-   return null;
-  }
+  if(point&&kind==='corner')
+   return cornerFace(normal,point,new THREE.Vector3(-1.9,0,0),
+    new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-1.9));
   // Imported arbitrary GLB walls: retain the previous object-local mapping
   // rather than assume a circular or rectangular profile.
   if(Math.abs(nz)<.65||Math.abs(nz)<Math.abs(nx))return null;
