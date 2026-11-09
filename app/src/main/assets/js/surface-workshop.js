@@ -116,7 +116,24 @@ const SurfaceWorkshop=(()=>{
   });
   const det=aa*bb-ab*ab,trace=aa+bb;
   if(records.length<16||!Number.isFinite(det)||det<.012*trace*trace)return null;
-  const cx=(ax*bb-ab*bx)/det,cz=(aa*bx-ab*ax)/det;
+  let cx=(ax*bb-ab*bx)/det,cz=(aa*bx-ab*ax)/det;
+  // End caps of a 90-degree arc have HORIZONTAL but non-radial normals.
+  // Remove them from the circle fit, or the centre drifts towards the bend
+  // and the inside can mistakenly be classified as the outside.
+  for(let iter=0;iter<3;iter++){
+   let x2=0,xy=0,y2=0,xc=0,yc=0,used=0;
+   for(const p of records){
+    const dx=p.x-cx,dz=p.z-cz,rad=Math.hypot(dx,dz);
+    if(rad<.2||Math.abs((p.nx*dx+p.nz*dz)/rad)<.8)continue;
+    const tx=-p.nz,tz=p.nx,rhs=tx*p.x+tz*p.z,w=p.weight;
+    x2+=w*tx*tx;xy+=w*tx*tz;y2+=w*tz*tz;
+    xc+=w*tx*rhs;yc+=w*tz*rhs;used++;
+   }
+   const determinant=x2*y2-xy*xy;
+   if(used<12||determinant<.008*(x2+y2)*(x2+y2))break;
+   cx=(xc*y2-xy*yc)/determinant;
+   cz=(x2*yc-xy*xc)/determinant;
+  }
   const accepted=[],angles=[];
   let good=0,rSum=0,weighted=0;
   for(const p of records){
