@@ -3,8 +3,11 @@ const assert=require('node:assert/strict');
 const T=require('../app/src/main/assets/js/three.min.js');
 const core=require('../app/src/main/assets/engine/core/phoenix-core.js');
 const prefabs=require('../app/src/main/assets/engine/core/phoenix-prefabs.js');
+const ai=require('../app/src/main/assets/engine/core/phoenix-ai.js');
+const anim=require('../app/src/main/assets/engine/runtime/phoenix-animations.js');
 global.THREE=T;global.PhoenixCore=core;global.PhoenixPrefabs=prefabs;
-global.window={PhoenixCore:core,PhoenixPrefabs:prefabs};
+global.PhoenixAI=ai;global.PhoenixAnimations=anim;
+global.window={PhoenixCore:core,PhoenixPrefabs:prefabs,PhoenixAI:ai,PhoenixAnimations:anim};
 class Element {
  constructor(id){this.id=id;this.value='';this.textContent='';this.hidden=id==='phoenixPrefabPanel';this.listeners={};this.options=[];}
  addEventListener(name,handler){this.listeners[name]=handler;}
@@ -18,7 +21,9 @@ const names=['phoenixPrefabPanel','btnPhoenixPrefabs','btnPrefabClose',
  'phoenixPrefabAsset','phoenixPrefabEntities','phoenixPrefabName',
  'phoenixPrefabType','phoenixPrefabFaction','phoenixPrefabHP',
  'phoenixPrefabDamage','phoenixPrefabSpeed','phoenixPrefabIdle',
- 'phoenixPrefabWalk','phoenixPrefabAttack','phoenixPrefabClipList',
+ 'phoenixPrefabWalk','phoenixPrefabRun','phoenixPrefabAttack','phoenixPrefabHit',
+ 'phoenixPrefabDeath','phoenixPrefabCast','phoenixPrefabAI','phoenixPrefabPatrolRadius',
+ 'phoenixPrefabAggroRadius','phoenixPrefabAttackRange','phoenixPrefabCooldown','phoenixPrefabClipList',
  'phoenixPrefabClips','phoenixPrefabCounts','phoenixPrefabStatus',
  'btnPrefabImportGlb','importUniversalModel','status'];
 const els=Object.fromEntries(names.map(id=>[id,new Element(id)]));
@@ -27,6 +32,9 @@ els.phoenixPrefabType.value='mob';
 els.phoenixPrefabFaction.value='enemy';
 els.phoenixPrefabHP.value='200';els.phoenixPrefabDamage.value='33';
 els.phoenixPrefabSpeed.value='3';els.phoenixPrefabIdle.value='Idle';
+els.phoenixPrefabAI.value='patrol';els.phoenixPrefabPatrolRadius.value='2';
+els.phoenixPrefabAggroRadius.value='7';els.phoenixPrefabAttackRange.value='1.25';
+els.phoenixPrefabCooldown.value='1.8';
 global.document={getElementById:id=>els[id]||null,createElement:tag=>new Element(tag)};
 const builder={
  scene:new T.Scene(),ground:new T.Mesh(new T.PlaneGeometry(100,100),new T.MeshBasicMaterial()),
@@ -52,6 +60,14 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert.equal(ed.layer.children.length,1);
  assert.equal(ed.world.getComponent(entity,'stats').hp,200);
  assert.equal(ed.world.getComponent(entity,'character').faction,'enemy');
+ assert.equal(ed.world.getComponent(entity,'character').ai.mode,'patrol');
+ ed.setPlaying(true);ed.update(.15);
+ assert(ed.rendered.get(entity).root.position.x>5,
+  'Patrol should move without changing saved world transform');
+ assert.deepEqual(ed.world.getComponent(entity,'transform').position,[5,0,7]);
+ ed.setPlaying(false);
+ assert.equal(ed.rendered.get(entity).root.position.x,5,
+  'EDIT restores authored NPC position');
  assert.equal(ed.hasContent(),true);
  assert.equal(ed.rendered.size,1);
  const snapshot=ed.serialize();
