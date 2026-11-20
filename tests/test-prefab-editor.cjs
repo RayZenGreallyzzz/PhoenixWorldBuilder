@@ -38,6 +38,7 @@ els.phoenixPrefabCooldown.value='1.8';
 global.document={getElementById:id=>els[id]||null,createElement:tag=>new Element(tag)};
 const builder={
  scene:new T.Scene(),ground:new T.Mesh(new T.PlaneGeometry(100,100),new T.MeshBasicMaterial()),
+ player:{position:new T.Vector3(4,0,7)},collisionsEnabled:false,
  camera:new T.PerspectiveCamera(),entries:[{kind:'wall',category:'wall'}],
  catalogMeta:new Map(),assets:new Map(),playBridge:{active:false,gameWorld:new core.PhoenixWorld()},
  preview:{root:{visible:true}},previewOutline:{visible:true},canvas:{getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})},
