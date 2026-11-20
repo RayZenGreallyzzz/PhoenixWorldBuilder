@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, stable/uv44]
   pull_request:
     branches: [main]
 
@@ -47,6 +47,7 @@ jobs:
           cp /tmp/phoenix-three/node_modules/three/LICENSE THREEJS_LICENSE.txt
 
       - name: Validate Phoenix Builder v2
+        if: github.ref != 'refs/heads/stable/uv44'
         run: |
           for file in app/src/main/assets/js/*.js; do node --check "$file"; done
           node tests/test-clean-builder.cjs
@@ -54,6 +55,22 @@ jobs:
           node tests/test-clean-browser-smoke.cjs
           node tests/test-clean-interactions.cjs
           node tests/test-android-branding.cjs
+
+      - name: Validate original UV44 and corner UV post-fix
+        if: github.ref == 'refs/heads/stable/uv44'
+        run: |
+          for file in app/src/main/assets/js/*.js; do node --check "$file"; done
+          python3 - <<'PY'
+          import hashlib, pathlib
+          checks={
+              'surface-workshop.js':'75b0e0e6179384dfa834e6a73481486e4249ea1c4cd2143c181bfa794fdf7a9e',
+              'surface-materials.js':'c77b97d1075f66b613ccdab7d10a2244aa1aa5982bffc9378150e656587f72b6'}
+          for file,expected in checks.items():
+              data=pathlib.Path('app/src/main/assets/js')/file
+              assert hashlib.sha256(data.read_bytes()).hexdigest()==expected, file
+          print('UV44 patched source hashes verified')
+          PY
+          node tests/test-uv44-postfix.cjs
 
       - name: Configure Java 17
         uses: actions/setup-java@v4
@@ -78,7 +95,7 @@ jobs:
       - name: Publish APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PhoenixWorldBuilder-Android-APK
+          name: ${{ github.ref == 'refs/heads/stable/uv44' && 'PhoenixBuilder-UV44-Test-APK' || 'PhoenixWorldBuilder-Android-APK' }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
