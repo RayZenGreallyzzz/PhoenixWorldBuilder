@@ -230,7 +230,8 @@
    const shooter=!!this.builder.skillEditor?.layout?.slots?.some(s=>s.id==='fire'&&s.enabled);
    if(this.ammoLine)this.ammoLine.hidden=!shooter;
    if(this.crosshair)this.crosshair.hidden=!shooter;
-   if(this.mpLine)this.mpLine.hidden=!(this.builder.skillDefinitionEditor?.runtime);
+   if(this.mpLine)this.mpLine.hidden=!
+    Object.keys(this.builder.skillDefinitionEditor?.runtime?.skills||{}).length;
    this.updateAmmoHud();
    this.updateManaHud();
   }
