@@ -20,6 +20,7 @@ on:
       - 'tests/test-phoenix-animations.cjs'
       - 'tests/test-phoenix-combat.cjs'
       - 'tests/test-player-hud.cjs'
+      - 'tests/test-visible-engine-ui.cjs'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
 permissions:
@@ -58,3 +59,4 @@ jobs:
           node tests/test-phoenix-animations.cjs
           node tests/test-phoenix-combat.cjs
           node tests/test-player-hud.cjs
+          node tests/test-visible-engine-ui.cjs
