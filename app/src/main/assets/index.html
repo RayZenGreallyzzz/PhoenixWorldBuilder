@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
-<title>Phoenix Engine 0.7 — Skill HUD Editor</title><link rel="stylesheet" href="clean.css"></head>
+<title>Phoenix Engine 0.8 — MOBA HUD Presets</title><link rel="stylesheet" href="clean.css"></head>
 <body>
 <canvas id="view" aria-label="Строительная 3D-сцена"></canvas>
 <div id="gizmoCadOverlay" class="gizmoCadOverlay" hidden aria-hidden="true">
@@ -43,8 +43,8 @@
  <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnQuickProjectJson" title="Скачать редактируемый дом с текстурами в .phoenix.json">💾 JSON</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnProjectLoadSettings" title="Настройки загрузки дома" aria-label="Настройки загрузки проекта" aria-expanded="false">⚙️</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
 <!-- Separate always-visible Engine toolbar: never put PLAY inside UV44's crowded header. -->
-<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 0.7 — игровые инструменты">
- <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 0.7">🔥 ENGINE <strong>v0.7</strong><small>UV44</small></span>
+<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 0.8 — игровые инструменты">
+ <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 0.8">🔥 ENGINE <strong>v0.8</strong><small>UV44</small></span>
  <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
  <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 МОБЫ / NPC</button>
  <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить игровые кнопки и скиллы">🎮 HUD / СКИЛЛЫ</button>
@@ -52,11 +52,20 @@
 <section id="phoenixSkillEditor" class="phoenixSkillEditor" hidden role="region" aria-label="Редактор игровых кнопок">
  <div class="phoenixSkillTitle"><b>🎮 Редактор скиллов · HUD</b><button id="btnSkillClose" type="button" aria-label="Закрыть настройку HUD">✕</button></div>
  <small>В EDIT перетащи любую кнопку пальцем. Настрой внешний вид и сохрани расположение для PLAY.</small>
+ <label>Готовая MOBA-раскладка<select id="phoenixSkillPreset">
+  <option value="mobile-legends">Mobile Legends — большой удар и дуга скиллов</option>
+  <option value="wild-rift">Wild Rift — Q / W / E / R</option>
+  <option value="classic">Классическая — от Phoenix 0.7</option>
+ </select></label>
+ <button id="btnSkillApplyPreset" type="button">🎮 Применить раскладку</button>
+ <small>Это расположение кнопок, а не готовые герои или способности. Его можно изменить пальцем и сохранить.</small>
  <label>Кнопка<select id="phoenixSkillSelect">
   <option value="attack">⚔ Атака — работает</option>
   <option value="heal">💚 Лечение — работает</option>
   <option value="slot3">✨ Слот 3 — для будущего скилла</option>
-  <option value="slot4">🛡 Слот 4 — для будущего скилла</option>
+  <option value="slot4">🌀 Слот 4 — для будущего скилла</option>
+  <option value="slot5">🌟 Слот 5 — для будущего скилла</option>
+  <option value="ultimate">🔥 Ульта — для будущего скилла</option>
  </select></label>
  <div class="phoenixSkillRow"><label>Иконка / эмодзи<input id="phoenixSkillIcon" maxlength="24" value="⚔" autocomplete="off"></label>
  <label>Подпись<input id="phoenixSkillLabel" maxlength="16" value="АТАКА" autocomplete="off"></label></div>
@@ -67,7 +76,7 @@
  <label class="phoenixSkillCheck"><input id="phoenixSkillEnabled" type="checkbox" checked> Показывать эту кнопку в игре</label>
  <div class="phoenixSkillRow"><button id="btnSkillSave" type="button">💾 Сохранить раскладку</button><button id="btnSkillReset" type="button">↻ Сбросить</button></div>
  <small id="phoenixSkillFeedback" aria-live="polite">Нажми кнопку на экране и перетащи её пальцем.</small>
- <small>Настройки сохраняются на устройстве и в JSON проекта. Слоты 3 и 4 пока без игрового действия.</small>
+ <small>Настройки сохраняются на устройстве и в JSON проекта. Пока работают Атака и Лечение; остальные слоты — заготовки под будущий Skill Editor персонажей.</small>
 </section>
 <section id="phoenixPrefabPanel" class="phoenixPrefabPanel" hidden role="region" aria-label="Phoenix Prefab Editor">
  <div class="phoenixPrefabTitle"><b>🧬 Phoenix Prefab Editor</b><button type="button" id="btnPrefabClose" aria-label="Закрыть редактор">✕</button></div>
@@ -658,7 +667,9 @@
  <button id="btnPhoenixAttack" class="phoenixSkillButton" type="button" aria-label="Атака">⚔ АТАКА</button>
  <button id="btnPhoenixHeal" class="phoenixSkillButton" type="button" aria-label="Лечение">💚 ЛЕЧЕНИЕ</button>
  <button id="btnPhoenixSlot3" class="phoenixSkillButton" type="button" aria-label="Слот 3" hidden>✨ СКИЛЛ 3</button>
- <button id="btnPhoenixSlot4" class="phoenixSkillButton" type="button" aria-label="Слот 4" hidden>🛡 СКИЛЛ 4</button>
+ <button id="btnPhoenixSlot4" class="phoenixSkillButton" type="button" aria-label="Слот 4" hidden>🌀 УМЕНИЕ 2</button>
+ <button id="btnPhoenixSlot5" class="phoenixSkillButton" type="button" aria-label="Слот 5" hidden>🌟 УМЕНИЕ 3</button>
+ <button id="btnPhoenixUltimate" class="phoenixSkillButton" type="button" aria-label="Ульта" hidden>🔥 УЛЬТА</button>
 </div>
 <div id="charControls" hidden>
  <div class="joystickTitle">🕹 Движение</div>
