@@ -46,4 +46,32 @@ assert.throws(()=>new Session({damage:-1}),/Invalid damage/);
 const missing=new Session();
 missing.reset([]);
 assert.equal(missing.attack([0,0,0],[],5).reason,'miss');
+const retaliation=new Session({playerHp:60});
+retaliation.reset(start);
+assert.deepEqual(retaliation.getPlayer(),{hp:60,maxHp:60,dead:false,kills:0});
+assert.equal(retaliation.damagePlayer('friend',20).ok,false,
+ 'Allied or neutral NPCs cannot damage the player');
+assert.equal(retaliation.damagePlayer('unknown',20).ok,false);
+let incoming=retaliation.damagePlayer('wolf',25);
+assert.deepEqual([incoming.ok,incoming.hp,incoming.dead],[true,35,false]);
+incoming=retaliation.damagePlayer('wolf',40);
+assert.equal(incoming.hp,0);
+assert.equal(incoming.dead,true);
+assert.equal(retaliation.isPlayerDead(),true);
+assert.equal(retaliation.attack([0,0,0],targets,1).reason,'player-dead',
+ 'Dead player cannot attack');
+assert.equal(retaliation.damagePlayer('wolf',10).ok,false,
+ 'Further NPC hits must not underflow player HP');
+retaliation.reset(start);
+assert.equal(retaliation.getPlayer().hp,60);
+assert.equal(retaliation.getPlayer().dead,false);
+assert.equal(retaliation.getPlayer().kills,0);
+assert.throws(()=>retaliation.damagePlayer('wolf',Infinity),/Invalid enemy damage/);
+retaliation.attack([0,0,0],targets,1);
+retaliation.attack([0,0,0],targets,2);
+retaliation.attack([0,0,0],targets,3);
+assert.equal(retaliation.getPlayer().kills,1);
+retaliation.reset(start);
+assert.equal(retaliation.getPlayer().kills,0);
+console.log('PASS: Phoenix Combat: player death, enemy retaliation, protection, respawn HP and kills');
 console.log('PASS: Phoenix Combat HP, death, range, cooldown, blocked walls, factions and PLAY reset');
