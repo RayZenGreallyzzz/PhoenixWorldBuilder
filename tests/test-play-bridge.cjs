@@ -8,8 +8,8 @@ class V {
 }
 const classes = new Set();
 const dom = {};
-for(const id of ['btnPhoenixPlay','btnPhoenixEdit','phoenixPlayHud','status','placementDot']) {
- dom[id] = {hidden:id==='phoenixPlayHud',textContent:'',className:'',listeners:{},
+for(const id of ['btnPhoenixPlay','btnPhoenixEdit','phoenixPlayHud','phoenixCombatHud','btnPhoenixAttack','phoenixCombatHP','phoenixCombatTarget','phoenixCombatNotice','status','placementDot']) {
+ dom[id] = {hidden:id==='phoenixPlayHud'||id==='phoenixCombatHud',textContent:'',className:'',listeners:{},
   addEventListener(event,cb){this.listeners[event]=cb;}};
 }
 const document = {
@@ -23,6 +23,7 @@ class Controller {
  setMode(m){if(!['edit','play','live-edit'].includes(m))throw Error('invalid');this.mode=m;}
 }
 let modeChanges=[];
+let attacks=0,playAttackAnimations=0,playingSwitches=[];
 const builder = {
  mode:'build',tool:'place',projectLoadRunning:false,restoringProject:false,
  projectLoadPaused:false,bakeBusy:false,gizmoPointer:null,dragMove:null,
@@ -36,7 +37,14 @@ const builder = {
   this.controls.target.copy(new V(1,1,1));
   this.preview.root.visible=true;
  }},
- setAvatarAnimation(moving){this.avatarMoving=moving;}
+ setAvatarAnimation(moving){this.avatarMoving=moving;},
+ playAttackAnimation(){playAttackAnimations++;return true;},
+ prefabEditor:{
+  close(){},
+  setPlaying(v){playingSwitches.push(v);},
+  attackNearest(){attacks++;return {ok:true,id:'wolf',name:'Волк',
+   hp:75,maxHp:100,damage:25,killed:false}}
+ }
 };
 const bridge = new PhoenixPlayBridge(builder,{PhoenixWorld:World,PhoenixModeController:Controller},document);
 assert.equal(bridge.active,false);
@@ -52,6 +60,13 @@ assert.equal(bridge.modeController.mode,'play');
 assert.equal(builder.preview.root.visible,false);
 assert.equal(builder.previewOutline.visible,false);
 assert.equal(dom.phoenixPlayHud.hidden,false);
+assert.equal(dom.phoenixCombatHud.hidden,false);
+dom.btnPhoenixAttack.listeners.click();
+assert.equal(attacks,1);
+assert.equal(dom.phoenixCombatTarget.textContent,'Волк · HP 75/100');
+assert.equal(dom.phoenixCombatHP.value,75);
+assert.equal(dom.phoenixCombatHP.hidden,false);
+assert.equal(playAttackAnimations,1);
 assert.equal(classes.has('phoenixPlaying'),true);
 assert.equal(builder.keys.size,0);
 assert.equal(bridge.gameWorld instanceof World,true);
@@ -61,10 +76,13 @@ builder.player.position.copy(new V(20,0,30));
 builder.player.rotation.copy(new V(0,5,0));
 builder.camera.position.copy(new V(30,10,30));
 let prevented=0;
+assert.equal(bridge.handleKeyDown({key:'f',code:'KeyF',repeat:false,
+ preventDefault(){prevented++;}}),true);
+assert.equal(attacks,2);
 assert.equal(bridge.handleKeyDown({key:'Delete',preventDefault(){prevented++;}}),true);
 assert.equal(bridge.handleKeyDown({key:'w',preventDefault(){prevented++;}}),false);
 assert.equal(bridge.handleKeyDown({key:'Escape',preventDefault(){prevented++;}}),true);
-assert.equal(prevented,2);
+assert.equal(prevented,3);
 assert.equal(bridge.active,false);
 assert.equal(builder.mode,'build');
 assert.deepEqual(builder.camera.position,originalCamera);
@@ -76,6 +94,8 @@ assert.equal(builder.previewOutline.visible,true);
 assert.equal(builder.entries,entries);
 assert.equal(classes.has('phoenixPlaying'),false);
 assert.equal(dom.phoenixPlayHud.hidden,true);
+assert.equal(dom.phoenixCombatHud.hidden,true);
+assert.deepEqual(playingSwitches.slice(0,2),[true,false]);
 assert.equal(bridge.modeController.mode,'edit');
 assert.equal(bridge.exit(),false);
 assert.equal(builder.avatarMoving,false);
