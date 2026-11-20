@@ -9,7 +9,8 @@
  'use strict';
  const BUTTONS={
   attack:'btnPhoenixAttack',heal:'btnPhoenixHeal',
-  slot3:'btnPhoenixSlot3',slot4:'btnPhoenixSlot4'
+  slot3:'btnPhoenixSlot3',slot4:'btnPhoenixSlot4',
+  slot5:'btnPhoenixSlot5',ultimate:'btnPhoenixUltimate'
  };
  class PhoenixSkillEditor{
   constructor(builder,doc){
@@ -35,7 +36,7 @@
    this.buttons.heal.addEventListener('click',()=>{
     if(this.playing&&!this.editing)this.builder.playBridge?.heal();
    });
-   for(const id of ['slot3','slot4']){
+   for(const id of ['slot3','slot4','slot5','ultimate']){
     this.buttons[id].addEventListener('click',()=>{
      if(this.playing&&!this.editing){
       const msg=this.get('phoenixCombatNotice');
@@ -47,6 +48,8 @@
    this.get('btnSkillClose')?.addEventListener('click',()=>this.close());
    this.get('btnSkillSave')?.addEventListener('click',()=>this.save());
    this.get('btnSkillReset')?.addEventListener('click',()=>this.reset());
+   this.get('btnSkillApplyPreset')?.addEventListener('click',()=>this.applyPreset(
+    this.get('phoenixSkillPreset').value));
    this.select.addEventListener('change',()=>this.loadForm());
    for(const id of ['phoenixSkillIcon','phoenixSkillLabel','phoenixSkillSize',
     'phoenixSkillColor','phoenixSkillShape','phoenixSkillOpacity','phoenixSkillEnabled']){
@@ -85,7 +88,9 @@
     attack:'⚔ Рабочая атака, связана с боевой системой.',
     heal:'💚 Рабочее лечение: +30 HP, перезарядка 12 секунд.',
     slot3:'✨ Резервная кнопка — пока без игрового действия.',
-    slot4:'🛡 Резервная кнопка — пока без игрового действия.'
+    slot4:'🌀 Резервная кнопка — пока без игрового действия.',
+    slot5:'🌟 Резервная кнопка — пока без игрового действия.',
+    ultimate:'🔥 Ульта пока не подключена к игровой механике.'
    };
    node.textContent=message||'Перетаскивай кнопку пальцем. '+functionality[id];
   }
@@ -191,8 +196,17 @@
    this.describe('✅ Раскладка сохранена в настройках и проекте.');
    return data;
   }
+  applyPreset(name){
+   // Only changes the HUD layout; saving remains explicit and user-controlled.
+   this.layout=this.schema.presetLayout(name);
+   this.loadForm();this.render();
+   this.describe('✅ Раскладка '+(
+    name==='mobile-legends'?'Mobile Legends':name==='wild-rift'?'Wild Rift':'Классическая'
+   )+' применена. Подстрой пальцем и нажми «Сохранить раскладку».');
+   return this.serialize();
+  }
   reset(){
-   this.layout=this.schema.defaultLayout();this.loadForm();this.render();
+   this.layout=this.schema.presetLayout('classic');this.loadForm();this.render();
    this.save();
    this.describe('↻ Восстановлена раскладка по умолчанию.');
   }
