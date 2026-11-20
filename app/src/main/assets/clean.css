@@ -650,3 +650,18 @@ body.phoenixPlaying #phoenixCombatHud{top:max(78px,env(safe-area-inset-top));bot
  #phoenixSkillLayer .phoenixSkillIcon{font-size:21px}
  body.phoenixPlaying #phoenixCombatHud{top:max(74px,env(safe-area-inset-top));width:min(160px,27vw)}
 }
+
+/* Engine 1.0: MMO editor and FPS aim feedback; no per-frame layout churn. */
+#phoenixSkillDefinitions{left:max(10px,env(safe-area-inset-left));top:max(66px,env(safe-area-inset-top));z-index:65}
+#phoenixSkillDefinitions[hidden]{display:none!important}
+#phoenixSkillDefinitions textarea{width:100%;min-height:65px;resize:vertical;
+ box-sizing:border-box;background:#244158;color:#e8fbff;border:1px solid #638dba;border-radius:7px;padding:7px}
+#phoenixSkillDefinitions #skillDefPreview{display:block;padding:10px;background:#1b5d5c;border-radius:8px;text-align:center}
+#phoenixAmmoLine,#phoenixMpLine{font-size:12px;font-weight:800;color:#c8f3ff;line-height:1.35}
+#phoenixAmmoLine[hidden],#phoenixMpLine[hidden],#phoenixCrosshair[hidden]{display:none!important}
+#phoenixCrosshair{position:fixed;left:50vw;top:50vh;transform:translate(-50%,-50%);z-index:31;
+ pointer-events:none;border-radius:50%;width:28px;height:28px;text-align:center;
+ font-size:30px;color:#e5ffef;text-shadow:0 0 4px #030b13,0 0 9px #030b13;line-height:28px}
+#phoenixEngineDock #btnPhoenixSkillDefs{background:#5d4f86;border-color:#c9a1ed;color:#fff}
+body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
+@media(max-width:900px){#phoenixSkillDefinitions{width:min(300px,calc(100vw - 16px));max-height:calc(100dvh - 70px);padding:9px}}
