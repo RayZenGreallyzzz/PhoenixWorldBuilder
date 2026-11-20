@@ -6,17 +6,18 @@ android {
         applicationId 'com.phoenix.worldbuilder'
         minSdk 26
         targetSdk 35
-        versionCode 5
-        versionName '0.5.0'
+        versionCode 6
+        versionName '0.6.0'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes {
-        // Preview APK installs alongside the existing debug application, so
-        // testing cannot overwrite or erase projects inside the old app.
+        // Stable Phoenix Engine app ID. Never change this suffix again:
+        // future updates must increment versionCode and use the SAME signing certificate.
+        // Initial v0.6 install is separate from older experimental package IDs.
         debug {
-            applicationIdSuffix '.enginehp'
-            versionNameSuffix '-player-hp-test'
-            manifestPlaceholders = [appLabel: 'Phoenix Engine HP']
+            applicationIdSuffix '.engine.stable'
+            versionNameSuffix '-stable-test'
+            manifestPlaceholders = [appLabel: 'Phoenix Engine 0.6']
         }
         release {
             minifyEnabled false
