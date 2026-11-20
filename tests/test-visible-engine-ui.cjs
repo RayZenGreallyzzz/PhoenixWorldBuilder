@@ -14,7 +14,7 @@ assert(!header[0].includes('id="btnPhoenixPrefabs"'),'Prefab button must not be 
 assert(dock[0].includes('id="btnPhoenixPlay"'));
 assert(dock[0].includes('id="btnPhoenixPrefabs"'));
 assert(dock[0].includes('ENGINE'));
-assert(dock[0].includes('v0.7'));
+assert(dock[0].includes('v0.8'));
 assert(dock[0].includes('id="btnPhoenixSkills"'), 'Skill editor must be visible beside PLAY');
 for(const id of ['btnPhoenixPlay','btnPhoenixPrefabs','btnPhoenixSkills','phoenixEngineDock']){
  const matches=html.match(new RegExp('id="'+id+'"','g'))||[];
@@ -24,15 +24,22 @@ assert(css.includes('#phoenixEngineDock{position:fixed'),
  'Game controls must be independent of oversized UV44 topbar');
 assert(css.includes('body.phoenixPlaying #phoenixEngineDock{display:none!important}'),
  'Editor controls must disappear during PLAY');
-assert(html.includes('<title>Phoenix Engine 0.7 — Skill HUD Editor</title>'));
+assert(html.includes('<title>Phoenix Engine 0.8 — MOBA HUD Presets</title>'));
 assert(html.includes('id="phoenixSkillEditor"'));
 assert(html.includes('id="phoenixSkillLayer"'));
 assert(html.includes('id="btnPhoenixHeal"'));
+assert(html.includes('id="phoenixSkillPreset"'));
+assert(html.includes('id="btnSkillApplyPreset"'));
+assert(html.includes('id="btnPhoenixSlot5"'));
+assert(html.includes('id="btnPhoenixUltimate"'));
+assert(html.includes('Mobile Legends'));
+assert(html.includes('Wild Rift'));
+
 assert(css.includes('#phoenixSkillLayer{position:fixed'));
 assert(css.includes('#phoenixSkillEditor{position:fixed'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"),
  'Permanent Android ID must not vary between new engine versions');
-assert(gradle.includes('versionCode 7'));
+assert(gradle.includes('versionCode 8'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"));
-assert(gradle.includes("appLabel: 'Phoenix Engine 0.7'"));
+assert(gradle.includes("appLabel: 'Phoenix Engine 0.8'"));
 console.log('PASS: distinct Phoenix Engine 0.6 badge, visible PLAY/Prefabs/Skills dock and stable package ID');
