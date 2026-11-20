@@ -4,14 +4,20 @@ const SceneExporter=(()=>{
  const te=new TextEncoder();const align=n=>(n+3)&~3;
  // Use the same pixel budget as high-resolution decal imports. Keep wide
  // PNG/JPEG pictures at full native resolution when they fit in memory.
- function textureDimensions(width,height){
-  const maxEdge=4096,maxPixels=2048*2048;
-  const scale=Math.min(1,maxEdge/Math.max(width,height),Math.sqrt(maxPixels/(width*height)));
+ // Preserve UV9's original limits for callers without a texture preset.
+ // New opt-in presets affect only the bytes written into the exported GLB,
+ // never the textures/materials of the editable scene.
+ function textureDimensions(width,height,preset='legacy'){
+  if(preset==='original')return {width,height};
+  const edge=preset==='1024'?1024:preset==='2048'?2048:4096;
+  const pixels=preset==='1024'?1024*1024:2048*2048;
+  const scale=Math.min(1,edge/Math.max(width,height),Math.sqrt(pixels/(width*height)));
   return {width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale))};
  }
- async function encodeTexture(tex){
+ function safePreset(value){return ['original','2048','1024'].includes(value)?value:'legacy'}
+ async function encodeTexture(tex,preset){
   const img=tex?.image;if(!img||!img.width||!img.height)return null;
-  const size=textureDimensions(img.width,img.height);
+  const size=textureDimensions(img.width,img.height,preset);
   const cv=document.createElement('canvas');cv.width=size.width;cv.height=size.height;
   const ctx=cv.getContext('2d');
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
@@ -20,8 +26,65 @@ const SceneExporter=(()=>{
   return blob?new Uint8Array(await blob.arrayBuffer()):null;
  }
  async function build(world,options={}){
-  const gltf={asset:{version:'2.0',generator:'Phoenix World Builder'},scene:0,scenes:[{nodes:[]}],nodes:[],meshes:[],materials:[],accessors:[],bufferViews:[],buffers:[{byteLength:0}],images:[],textures:[],samplers:[{magFilter:9729,minFilter:9987,wrapS:10497,wrapT:10497}]};
-  const binary=[],matIdx=new Map(),texIdx=new Map();let offset=0;
+  const gltf={asset:{version:'2.0',generator:'Phoenix World Builder'},scene:0,scenes:[{nodes:[]}],nodes:[],meshes:[],materials:[],accessors:[],bufferViews:[],buffers:[{byteLength:0}],images:[],textures:[],samplers:[]};
+  const binary=[],matIdx=new Map(),texIdx=new Map(),samplerIdx=new Map();let offset=0;
+  const preset=safePreset(options.textureQuality);
+  const encodedBySource=new WeakMap(),imagesByHash=new Map(),texturePairs=new Map();
+  const statistics={preset,encodedImages:0,duplicateImages:0,
+   duplicateImageBytes:0,reusedTextureReferences:0};
+  // Fast candidate lookup + byte comparison. This avoids false deduplication
+  // when two images happen to have the same inexpensive fingerprint.
+  function fingerprint(bytes){
+   let a=2166136261,b=0x9e3779b9;
+   for(let i=0;i<bytes.length;i++){
+    a=Math.imul(a^bytes[i],16777619)>>>0;
+    b=(Math.imul(b^bytes[i],0x5bd1e995)+0x27d4eb2d)>>>0;
+   }
+   return bytes.length+':'+a+':'+b;
+  }
+  function imageFor(bytes){
+   const key=fingerprint(bytes),existing=imagesByHash.get(key)||[];
+   for(const candidate of existing){
+    const other=candidate.bytes;
+    if(other.length<bytes.length)continue;
+    let same=true;
+    for(let i=0;i<bytes.length;i++)if(bytes[i]!==other[i]){same=false;break}
+    if(same){statistics.duplicateImages++;
+     statistics.duplicateImageBytes+=bytes.length;return candidate.index;}
+   }
+   const index=gltf.images.length;
+   gltf.images.push({bufferView:data(bytes),mimeType:'image/png'});
+   // data() has already stored a padded copy; reference it, not a second copy.
+   existing.push({index,bytes:binary[binary.length-1]});
+   imagesByHash.set(key,existing);statistics.encodedImages++;
+   return index;
+  }
+  async function textureFor(texture){
+   if(texIdx.has(texture))return texIdx.get(texture);
+   const source=texture?.image;
+   if(!source?.width||!source?.height)return null;
+   let encoded=encodedBySource.get(source);
+   if(!encoded){encoded=encodeTexture(texture,preset);encodedBySource.set(source,encoded)}
+   const bytes=await encoded;
+   if(!bytes)return null;
+   const imageIndex=imageFor(bytes),sampler=samplerFor(texture);
+   const pair=imageIndex+':'+sampler;
+   let index=texturePairs.get(pair);
+   if(index===undefined){index=gltf.textures.length;
+    gltf.textures.push({source:imageIndex,sampler});texturePairs.set(pair,index)}
+   else statistics.reusedTextureReferences++;
+   texIdx.set(texture,index);return index;
+  }
+  function samplerFor(texture){
+   const wrap=value=>value===THREE.ClampToEdgeWrapping?33071:
+    value===THREE.MirroredRepeatWrapping?33648:10497;
+   const wrapS=wrap(texture.wrapS),wrapT=wrap(texture.wrapT),key=wrapS+':'+wrapT;
+   if(!samplerIdx.has(key)){
+    samplerIdx.set(key,gltf.samplers.length);
+    gltf.samplers.push({magFilter:9729,minFilter:9987,wrapS,wrapT});
+   }
+   return samplerIdx.get(key);
+  }
   function data(arr,target){const bytes=arr instanceof Uint8Array?arr:new Uint8Array(arr.buffer,arr.byteOffset,arr.byteLength);const padded=new Uint8Array(align(bytes.length));padded.set(bytes);const index=gltf.bufferViews.length;gltf.bufferViews.push({buffer:0,byteOffset:offset,byteLength:bytes.length,...(target?{target}:{})});binary.push(padded);offset+=padded.length;return index}
   function access(typed,num,kind){let components={SCALAR:1,VEC2:2,VEC3:3,VEC4:4}[kind],comp=typed instanceof Uint32Array?5125:typed instanceof Uint16Array?5123:5126;
    const meta={bufferView:data(typed,num===1?34963:34962),componentType:comp,count:typed.length/components,type:kind};
@@ -29,8 +92,17 @@ const SceneExporter=(()=>{
    let idx=gltf.accessors.length;gltf.accessors.push(meta);return idx;}
   async function material(m){if(Array.isArray(m))m=m[0];if(!m)m=new THREE.MeshStandardMaterial();if(matIdx.has(m))return matIdx.get(m);
    let color=m.color||new THREE.Color(1,1,1),a=m.opacity??1;
-   let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:a<1?'BLEND':'OPAQUE'};
-   if(m.map){let textureIndex=texIdx.get(m.map);if(textureIndex===undefined){const image=await encodeTexture(m.map);if(image){const imageIndex=gltf.images.length;gltf.images.push({bufferView:data(image),mimeType:'image/png'});textureIndex=gltf.textures.length;gltf.textures.push({source:imageIndex,sampler:0});texIdx.set(m.map,textureIndex)}}if(textureIndex!==undefined)md.pbrMetallicRoughness.baseColorTexture={index:textureIndex};}
+   let md={name:m.name||'Материал',pbrMetallicRoughness:{baseColorFactor:[color.r,color.g,color.b,a],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===THREE.DoubleSide,alphaMode:m.transparent||a<1?'BLEND':'OPAQUE'};
+   if(m.map){const textureIndex=await textureFor(m.map);
+    if(textureIndex!==null)md.pbrMetallicRoughness.baseColorTexture={index:textureIndex};}
+   // Workshop relief is a real tangent-space normal map and belongs in GLB.
+   // For imported source GLBs keep their existing normal map when available.
+   if(m.normalMap){
+    const normalIndex=await textureFor(m.normalMap);
+    if(normalIndex!==null)
+     md.normalTexture={index:normalIndex,scale:Math.max(0,
+      Math.min(2,Math.abs(m.normalScale?.x??1)))};
+   }
    let idx=gltf.materials.length;gltf.materials.push(md);matIdx.set(m,idx);return idx;}
   const entries=options.houseOnly?
    world.objects.map(item=>({root:item.mesh,entry:item})):
@@ -38,7 +110,7 @@ const SceneExporter=(()=>{
   const models=entries.map(item=>item.root);
   const assembledBounds=new THREE.Box3();
   for(const obj of models){obj.updateMatrixWorld(true);assembledBounds.expandByObject(obj)}
-  const shift=options.houseOnly&&!assembledBounds.isEmpty()
+  const shift=options.houseOnly&&!options.keepWorldCoordinates&&!assembledBounds.isEmpty()
     ?new THREE.Vector3(-((assembledBounds.min.x+assembledBounds.max.x)/2),-assembledBounds.min.y,-((assembledBounds.min.z+assembledBounds.max.z)/2))
     :new THREE.Vector3();
   if(options.houseOnly&&!models.length)throw Error('Сначала построй дом');
@@ -112,7 +184,11 @@ const SceneExporter=(()=>{
    const toRoot=hasEmblems?root.matrixWorld.clone().invert():null;
    const surfaceLocalBounds=hasPaint?SurfacePaint.localBounds(root):null;
    const surfaceToRoot=hasPaint?root.matrixWorld.clone().invert():null;
-   const meshes=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)meshes.push(o)});
+   const meshes=[];root.traverse(o=>{
+    // Exclude temporary runtime low-poly LOD copies from the GLB snapshot.
+    if(o.isMesh&&o.geometry?.attributes?.position&&!o.userData?.phoenixLODProxy)
+     meshes.push(o);
+   });
    for(const mesh of meshes){
     const geom=mesh.geometry;if(geom.index&&geom.index.count>700000)continue;
     const pos=geom.getAttribute('position');if(!pos||pos.count<3)continue;
@@ -123,12 +199,30 @@ const SceneExporter=(()=>{
     if(col&&col.itemSize===3)attrs.COLOR_0=access(new Float32Array(col.array),0,'VEC3');
     let primitives=[];
     if(!hasPaint&&!hasEmblems){
-     const prim={attributes:attrs,mode:4,material:await material(mesh.material)};
-     if(geom.index){
-      const indices=geom.index.array;
-      prim.indices=access(indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),1,'SCALAR');
+     const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material],
+      groups=geom.groups||[],indices=geom.index?.array;
+     if(materials.length>1&&groups.length){
+      // Retain original material regions, rather than incorrectly painting
+      // all of an imported multi-material GLB with its first material.
+      const total=indices?.length||pos.count;
+      for(const group of groups){
+       const start=Math.max(0,group.start),
+        end=Math.min(total,start+group.count);
+       if(end-start<3)continue;
+       const subset=[];
+       for(let i=start;i<end;i++)subset.push(indices?indices[i]:i);
+       let largest=0;for(const v of subset)largest=Math.max(v,largest);
+       const arr=largest>65535?new Uint32Array(subset):new Uint16Array(subset);
+       primitives.push({attributes:attrs,mode:4,indices:access(arr,1,'SCALAR'),
+        material:await material(materials[group.materialIndex]||materials[0])});
+      }
+     }else{
+      const prim={attributes:attrs,mode:4,material:await material(mesh.material)};
+      if(indices)prim.indices=access(
+       indices instanceof Uint32Array?new Uint32Array(indices):new Uint16Array(indices),
+       1,'SCALAR');
+      primitives.push(prim);
      }
-     primitives.push(prim);
     }else{
      // Keep one glTF mesh and one vertex buffer. Painted sides use separate
      // *index primitives*, not duplicated ceiling/floor meshes or triangles.
@@ -239,8 +333,20 @@ const SceneExporter=(()=>{
     }
     const mi=gltf.meshes.length;gltf.meshes.push({name:mesh.name||'Деталь',primitives});
     const ni=gltf.nodes.length;
-    gltf.nodes.push({mesh:mi,name:mesh.name||root.name||'Объект',
-     matrix:new THREE.Matrix4().makeTranslation(shift.x,shift.y,shift.z).multiply(mesh.matrixWorld).toArray()});
+    // Portable semantic metadata survives in glTF 2.0 extras. This is
+    // descriptive: game engines must instantiate their own colliders.
+    const node={mesh:mi,name:mesh.name||root.name||'Объект',
+     matrix:new THREE.Matrix4().makeTranslation(shift.x,shift.y,shift.z)
+      .multiply(mesh.matrixWorld).toArray()};
+    if(entry?.data&&Number.isInteger(entry.data.id)){
+     const info=entry.data;
+     node.name='Phoenix_'+info.id+'_'+(mesh.name||info.kind||'module');
+     node.extras={phoenix:{id:info.id,label:info.label||null,kind:info.kind,
+      category:info.category,storey:info.storey,
+      groupId:info.groupId||null,roomRole:info.roomRole||null,
+      suggestedCollider:info.suggestedCollider||'manual'}};
+    }
+    gltf.nodes.push(node);
     gltf.scenes[0].nodes.push(ni);
    }
   }
@@ -248,7 +354,60 @@ const SceneExporter=(()=>{
   const jsonData=te.encode(JSON.stringify(gltf)),jsonSize=align(jsonData.length),binSize=offset,total=12+8+jsonSize+8+binSize;
   const out=new Uint8Array(total),v=new DataView(out.buffer);v.setUint32(0,0x46546c67,true);v.setUint32(4,2,true);v.setUint32(8,total,true);v.setUint32(12,jsonSize,true);v.setUint32(16,0x4e4f534a,true);out.fill(32,20,20+jsonSize);out.set(jsonData,20);
   let p=20+jsonSize;v.setUint32(p,binSize,true);v.setUint32(p+4,0x004e4942,true);p+=8;for(const x of binary){out.set(x,p);p+=x.length;}
-  return new Blob([out],{type:'model/gltf-binary'});
+  const blob=new Blob([out],{type:'model/gltf-binary'});
+  blob.phoenixStats={...statistics,meshCount:gltf.meshes.length,
+   primitiveCount:gltf.meshes.reduce((n,m)=>n+m.primitives.length,0),
+   materialCount:gltf.materials.length,imageCount:gltf.images.length,
+   transparentMaterials:gltf.materials.filter(m=>m.alphaMode==='BLEND').length,
+   bytes:blob.size};
+  return blob;
  }
- return {build,textureDimensions};
+ // Check actual exported bytes before saving to disk or the module library.
+ // Reads the JSON chunk only: no second full-size 3D buffer in Android RAM.
+ async function inspect(blob){
+  if(!blob||blob.size<28)throw Error('GLB слишком короткий');
+  const header=new DataView(await blob.slice(0,20).arrayBuffer());
+  if(header.getUint32(0,true)!==0x46546c67||header.getUint32(4,true)!==2||
+   header.getUint32(8,true)!==blob.size||header.getUint32(16,true)!==0x4e4f534a)
+   throw Error('Повреждён заголовок GLB');
+  const jsonSize=header.getUint32(12,true);
+  if(jsonSize<2||jsonSize>blob.size-28)throw Error('Некорректная JSON-часть GLB');
+  const json=JSON.parse(await blob.slice(20,20+jsonSize).text());
+  if(json.asset?.version!=='2.0'||!Array.isArray(json.meshes)||
+   !json.meshes.length||!Array.isArray(json.nodes))
+   throw Error('В GLB отсутствует геометрия');
+  const bufferLength=Number(json.buffers?.[0]?.byteLength)||0;
+  if(20+jsonSize+8+bufferLength>blob.size)throw Error('Недостаточно данных геометрии');
+  for(const v of json.bufferViews||[]){
+   if(v.buffer!==0||v.byteOffset<0||v.byteLength<0||
+    (v.byteOffset||0)+v.byteLength>bufferLength)
+    throw Error('Ошибочный блок данных GLB');
+  }
+  let primitives=0;
+  for(const mesh of json.meshes)for(const prim of mesh.primitives||[]){
+   if(prim.attributes?.POSITION===undefined||
+    !json.accessors?.[prim.attributes.POSITION])
+    throw Error('У детали отсутствуют вершины');
+   if(prim.material!==undefined&&!json.materials?.[prim.material])
+    throw Error('Не найден материал GLB');
+   if(prim.indices!==undefined&&!json.accessors?.[prim.indices])
+    throw Error('Повреждены индексы геометрии');
+   primitives++;
+  }
+  if(!primitives)throw Error('В GLB отсутствуют треугольники');
+  for(const im of json.images||[]){
+   if(im.bufferView===undefined||!json.bufferViews?.[im.bufferView]||
+    !['image/png','image/jpeg','image/webp'].includes(im.mimeType))
+    throw Error('Повреждена текстура GLB');
+  }
+  for(const tex of json.textures||[]){
+   if(!json.images?.[tex.source]||(tex.sampler!==undefined&&
+    !json.samplers?.[tex.sampler]))throw Error('Текстура без изображения');
+  }
+  return {ok:true,bytes:blob.size,meshes:json.meshes.length,
+   primitives,images:json.images?.length||0,materials:json.materials?.length||0,
+   transparentMaterials:(json.materials||[]).filter(m=>m.alphaMode==='BLEND').length,
+   nodeCount:json.nodes.length};
+ }
+ return {build,inspect,textureDimensions};
 })();

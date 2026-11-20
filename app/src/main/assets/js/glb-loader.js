@@ -4,15 +4,68 @@ const GLB = (()=>{
  const td=new TextDecoder(); const typeCount={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT4:16};
  const typeCtor={5120:Int8Array,5121:Uint8Array,5122:Int16Array,5123:Uint16Array,5125:Uint32Array,5126:Float32Array};
  const typeSize={5120:1,5121:1,5122:2,5123:2,5125:4,5126:4};
+ // Pin to the vendored Three.js r140 decoder pair; never fetch from a CDN.
+ const state={renderer:null,draco:null,ktx2:null};
+ const compressorName=['EXT_meshopt_compression','KHR_draco_mesh_compression','KHR_texture_basisu'];
+ function inspect(input){
+  let array=input instanceof ArrayBuffer?input:
+   ArrayBuffer.isView(input)?input.buffer.slice(input.byteOffset,input.byteOffset+input.byteLength):null;
+  if(!array||array.byteLength<20)return {extensions:[],bytes:array?.byteLength||0,compressed:false};
+  const dv=new DataView(array);
+  if(dv.getUint32(0,true)!==0x46546c67||dv.getUint32(4,true)!==2)
+   return {extensions:[],bytes:array.byteLength,compressed:false};
+  const size=dv.getUint32(12,true),code=dv.getUint32(16,true);
+  if(code!==0x4e4f534a||size<2||size>array.byteLength-20)throw Error('Повреждён заголовок GLB');
+  const json=JSON.parse(td.decode(new Uint8Array(array,20,size)).replace(/\0+$/g,''));
+  const extensions=[...(json.extensionsUsed||[])];
+  const required=[...(json.extensionsRequired||[])];
+  return {extensions,required,bytes:array.byteLength,
+   compressed:extensions.some(e=>compressorName.includes(e)),
+   meshes:json.meshes?.length||0,animations:json.animations?.length||0,
+   textureCount:json.textures?.length||0};
+ }
+ function configure(renderer){
+  state.renderer=renderer||state.renderer;
+  if(!state.draco&&typeof THREE.DRACOLoader==='function'){
+   state.draco=new THREE.DRACOLoader();
+   state.draco.setDecoderPath('js/draco/').setWorkerLimit(2);
+  }
+  if(!state.ktx2&&typeof THREE.KTX2Loader==='function'&&state.renderer){
+   state.ktx2=new THREE.KTX2Loader();
+   state.ktx2.setTranscoderPath('js/basis/').setWorkerLimit(2);
+   state.ktx2.detectSupport(state.renderer);
+  }
+  return {meshopt:typeof MeshoptDecoder!=='undefined'&&MeshoptDecoder.supported===true,
+   draco:!!state.draco,ktx2:!!state.ktx2};
+ }
+ function createGLTFLoader(info){
+  const loader=new THREE.GLTFLoader();
+  if(typeof MeshoptDecoder!=='undefined'&&MeshoptDecoder.supported)
+   loader.setMeshoptDecoder(MeshoptDecoder);
+  if(state.draco)loader.setDRACOLoader(state.draco);
+  if(state.ktx2)loader.setKTX2Loader(state.ktx2);
+  if(info.required?.includes('EXT_meshopt_compression')&&
+   (typeof MeshoptDecoder==='undefined'||!MeshoptDecoder.supported))
+   throw Error('Для этого GLB требуется MeshoptDecoder (нет WASM-декодера)');
+  if(info.required?.includes('KHR_draco_mesh_compression')&&!state.draco)
+   throw Error('Для этого GLB требуется DracoDecoder (в APK не установлен)');
+  if(info.required?.includes('KHR_texture_basisu')&&!state.ktx2)
+   throw Error('Для этого GLB с текстурами KTX2 нужно открыть редактор с WebGL');
+  return loader;
+ }
  async function load(input){
   let ab;
   if(input instanceof ArrayBuffer)ab=input;
   else if(ArrayBuffer.isView(input))ab=input.buffer.slice(input.byteOffset,input.byteOffset+input.byteLength);
   else if(input&&typeof input.arrayBuffer==='function')ab=await input.arrayBuffer();
   else throw new TypeError('GLB: ожидается файл, ArrayBuffer или Uint8Array');
+  const info=inspect(ab);
+  if(info.compressed&&typeof THREE.GLTFLoader!=='function')
+   throw Error('Сжатый GLB требует официального GLTFLoader');
   if(typeof THREE.GLTFLoader==='function'){
+   const loader=createGLTFLoader(info);
    const gltf=await new Promise((resolve,reject)=>{
-    try{new THREE.GLTFLoader().parse(ab,'',resolve,reject)}catch(err){reject(err)}
+    try{loader.parse(ab,'',resolve,reject)}catch(err){reject(err)}
    });
    const root=gltf.scene||gltf.scenes?.[0];
    if(!root)throw new Error('GLB не содержит 3D-сцену');
@@ -20,7 +73,8 @@ const GLB = (()=>{
    root.traverse(o=>{if(o.isMesh&&o.geometry){
     let g=o.geometry;triangles+=(g.index?g.index.count:g.attributes.position?.count||0)/3;
    }});
-   return {root,animations:gltf.animations||[],triangles,json:gltf.parser?.json||null};
+   return {root,animations:gltf.animations||[],triangles,json:gltf.parser?.json||null,
+    info:{...info,triangles}};
   }
   const dv=new DataView(ab);
   if(dv.getUint32(0,true)!==0x46546c67)throw Error('Нужен GLB 2.0');
@@ -98,5 +152,8 @@ const GLB = (()=>{
   const bounds=new THREE.Box3().setFromObject(root);if(!bounds.isEmpty())root.userData.originalBounds={min:bounds.min.toArray(),max:bounds.max.toArray()};
   return {root,json,animations:[],triangles:gm.reduce((a,g)=>a+g.children.reduce((s,m)=>s+(m.geometry.index?m.geometry.index.count:m.geometry.attributes.position.count)/3,0),0)};
  }
- return {load};
+ return {load,configure,inspect,codecStatus:()=>({
+  meshopt:typeof MeshoptDecoder!=='undefined'&&MeshoptDecoder.supported===true,
+  draco:!!state.draco,ktx2:!!state.ktx2})};
 })();
+if(typeof module!=='undefined'&&module.exports)module.exports=GLB;
