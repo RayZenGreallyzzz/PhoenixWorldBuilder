@@ -66,6 +66,7 @@
     controlsEnabled: b.controls.enabled
    };
    try {
+    b.prefabEditor?.close();
     b.keys.clear();
     if (b.joystick) b.joystick.reset();
     this.saved = saved;
@@ -76,10 +77,12 @@
     this.document.body.classList.add('phoenixPlaying');
     this.hud.hidden = false;
     this.modeController.setMode('play');
+    b.prefabEditor?.setPlaying(true);
     return true;
    } catch (error) {
     // Entering PLAY must never leave the editor with a half-finished UI.
     this.active = false;
+    b.prefabEditor?.setPlaying(false);
     this.document.body.classList.remove('phoenixPlaying');
     this.hud.hidden = true;
     this.restore(saved);
@@ -109,6 +112,7 @@
    b.keys.clear();
    if (b.joystick) b.joystick.reset();
    this.active = false;
+   b.prefabEditor?.setPlaying(false);
    this.document.body.classList.remove('phoenixPlaying');
    this.hud.hidden = true;
    const saved = this.saved;
