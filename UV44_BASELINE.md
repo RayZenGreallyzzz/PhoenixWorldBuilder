@@ -9,7 +9,7 @@ This branch was created as a dedicated UV44 restoration target. It is **not yet*
 - Embedded WebView files: `assets/index.html`, `assets/style.css`, `assets/clean.css`, `assets/js/`, `assets/pwb/`
 - 71 JavaScript files in `assets/js/`
 - 1,832 bundled GLB models in `assets/pwb/`
-- `assets/js/clean-app.js`: 259,644 bytes, SHA-256 `958c50751f4740d1f62b3c3e54b37ebdb25032b7e1cc1ee1bddaa76b472c8a3` *(verify with the APK before copying; metadata is supplied primarily to identify the binary)*
+- `assets/js/clean-app.js`: 259,644 bytes, SHA-256 `958c50751f4740d1f62bca0345347f49b88f2d465844b4d4337586df9306d10b` *(verify with the APK before copying; metadata is supplied primarily to identify the binary)*
 
 ## Status
 
