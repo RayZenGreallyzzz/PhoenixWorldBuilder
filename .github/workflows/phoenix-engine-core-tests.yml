@@ -8,6 +8,11 @@ on:
     paths:
       - 'app/src/main/assets/engine/**'
       - 'tests/test-phoenix-core.cjs'
+      - 'app/src/main/assets/index.html'
+      - 'app/src/main/assets/clean.css'
+      - 'app/src/main/assets/js/clean-app.js'
+      - 'tests/test-play-bridge.cjs'
+      - 'tests/test-play-wiring.cjs'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
 permissions:
@@ -25,6 +30,12 @@ jobs:
         with:
           node-version: '20'
       - name: Syntax check
-        run: node --check app/src/main/assets/engine/core/phoenix-core.js
+        run: |
+          node --check app/src/main/assets/engine/core/phoenix-core.js
+          node --check app/src/main/assets/engine/builder/play-bridge.js
+          node --check app/src/main/assets/js/clean-app.js
       - name: Run Phoenix Core unit tests
-        run: node tests/test-phoenix-core.cjs
+        run: |
+          node tests/test-phoenix-core.cjs
+          node tests/test-play-bridge.cjs
+          node tests/test-play-wiring.cjs
