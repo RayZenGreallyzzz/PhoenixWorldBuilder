@@ -21,6 +21,8 @@ on:
       - 'tests/test-phoenix-combat.cjs'
       - 'tests/test-player-hud.cjs'
       - 'tests/test-visible-engine-ui.cjs'
+      - 'tests/test-skill-layout.cjs'
+      - 'tests/test-skill-editor.cjs'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
 permissions:
@@ -44,6 +46,8 @@ jobs:
           node --check app/src/main/assets/engine/core/phoenix-prefabs.js
           node --check app/src/main/assets/engine/core/phoenix-ai.js
           node --check app/src/main/assets/engine/core/phoenix-combat.js
+          node --check app/src/main/assets/engine/core/phoenix-skill-layout.js
+          node --check app/src/main/assets/engine/builder/skill-hud-editor.js
           node --check app/src/main/assets/engine/runtime/phoenix-animations.js
           node --check app/src/main/assets/engine/builder/prefab-editor.js
           node --check app/src/main/assets/js/clean-app.js
@@ -60,3 +64,5 @@ jobs:
           node tests/test-phoenix-combat.cjs
           node tests/test-player-hud.cjs
           node tests/test-visible-engine-ui.cjs
+          node tests/test-skill-layout.cjs
+          node tests/test-skill-editor.cjs
