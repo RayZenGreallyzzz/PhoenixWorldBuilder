@@ -1,4 +1,4 @@
-/* Phoenix Skill HUD Editor 0.7 — drag buttons with a finger in EDIT.
+/* Phoenix Skill HUD Editor 0.9 — configurable mobile UI for MOBA/MMO/Shooter.
  * Independent of 3D objects and renderer; project JSON + local preferences.
  */
 (function(root,factory){
@@ -10,7 +10,10 @@
  const BUTTONS={
   attack:'btnPhoenixAttack',heal:'btnPhoenixHeal',
   slot3:'btnPhoenixSlot3',slot4:'btnPhoenixSlot4',
-  slot5:'btnPhoenixSlot5',ultimate:'btnPhoenixUltimate'
+  slot5:'btnPhoenixSlot5',ultimate:'btnPhoenixUltimate',
+  slot6:'btnPhoenixSlot6',slot7:'btnPhoenixSlot7',
+  fire:'btnPhoenixFire',aim:'btnPhoenixAim',reload:'btnPhoenixReload',
+  jump:'btnPhoenixJump',crouch:'btnPhoenixCrouch'
  };
  class PhoenixSkillEditor{
   constructor(builder,doc){
@@ -36,11 +39,13 @@
    this.buttons.heal.addEventListener('click',()=>{
     if(this.playing&&!this.editing)this.builder.playBridge?.heal();
    });
-   for(const id of ['slot3','slot4','slot5','ultimate']){
+   for(const id of ['slot3','slot4','slot5','ultimate','slot6','slot7','fire','aim','reload','jump','crouch']){
     this.buttons[id].addEventListener('click',()=>{
      if(this.playing&&!this.editing){
       const msg=this.get('phoenixCombatNotice');
-      if(msg)msg.textContent='✨ Это слот оформления. Способность пока не назначена.';
+      if(msg)msg.textContent=['fire','aim','reload','jump','crouch'].includes(id)
+       ?'🎮 Это кнопка раскладки шутера. Механика пока не добавлена.'
+       :'✨ Это слот оформления. Способность пока не назначена.';
      }
     });
    }
@@ -90,7 +95,14 @@
     slot3:'✨ Резервная кнопка — пока без игрового действия.',
     slot4:'🌀 Резервная кнопка — пока без игрового действия.',
     slot5:'🌟 Резервная кнопка — пока без игрового действия.',
-    ultimate:'🔥 Ульта пока не подключена к игровой механике.'
+    ultimate:'🔥 Ульта пока не подключена к игровой механике.',
+    slot6:'💠 Резервный слот MMO: навык назначим в Skill Editor.',
+    slot7:'🌙 Резервный слот MMO: навык назначим в Skill Editor.',
+    fire:'🔫 Кнопка стрельбы для будущей системы оружия. Сейчас не стреляет.',
+    aim:'🎯 Прицеливание будет добавлено с механикой оружия.',
+    reload:'🔄 Перезарядка появится с системой оружия и боезапаса.',
+    jump:'⬆️ Прыжок — пока кнопка интерфейса, без действия.',
+    crouch:'🧎 Присесть — пока кнопка интерфейса, без действия.'
    };
    node.textContent=message||'Перетаскивай кнопку пальцем. '+functionality[id];
   }
@@ -158,7 +170,7 @@
    this.layer.hidden=!(this.editing||this.playing);
    for(const s of this.layout.slots){
     const button=this.buttons[s.id];
-    button.hidden=!(s.enabled||this.editing);
+    button.hidden=!(s.enabled||(this.editing&&this.select.value===s.id));
     button.style.left=s.x+'%';
     button.style.top=s.y+'%';
     button.style.width=s.size+'px';
@@ -201,7 +213,8 @@
    this.layout=this.schema.presetLayout(name);
    this.loadForm();this.render();
    this.describe('✅ Раскладка '+(
-    name==='mobile-legends'?'Mobile Legends':name==='wild-rift'?'Wild Rift':'Классическая'
+    name==='mobile-legends'?'Mobile Legends':name==='wild-rift'?'Wild Rift':
+    name==='mmorpg'?'MMORPG':name==='shooter'?'Шутер':'Классическая'
    )+' применена. Подстрой пальцем и нажми «Сохранить раскладку».');
    return this.serialize();
   }
