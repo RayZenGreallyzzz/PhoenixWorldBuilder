@@ -5,9 +5,10 @@ const core=require('../app/src/main/assets/engine/core/phoenix-core.js');
 const prefabs=require('../app/src/main/assets/engine/core/phoenix-prefabs.js');
 const ai=require('../app/src/main/assets/engine/core/phoenix-ai.js');
 const anim=require('../app/src/main/assets/engine/runtime/phoenix-animations.js');
+const combat=require('../app/src/main/assets/engine/core/phoenix-combat.js');
 global.THREE=T;global.PhoenixCore=core;global.PhoenixPrefabs=prefabs;
-global.PhoenixAI=ai;global.PhoenixAnimations=anim;
-global.window={PhoenixCore:core,PhoenixPrefabs:prefabs,PhoenixAI:ai,PhoenixAnimations:anim};
+global.PhoenixAI=ai;global.PhoenixAnimations=anim;global.PhoenixCombat=combat;
+global.window={PhoenixCore:core,PhoenixPrefabs:prefabs,PhoenixAI:ai,PhoenixAnimations:anim,PhoenixCombat:combat};
 class Element {
  constructor(id){this.id=id;this.value='';this.textContent='';this.hidden=id==='phoenixPrefabPanel';this.listeners={};this.options=[];}
  addEventListener(name,handler){this.listeners[name]=handler;}
@@ -66,7 +67,13 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert(ed.rendered.get(entity).root.position.x>5,
   'Patrol should move without changing saved world transform');
  assert.deepEqual(ed.world.getComponent(entity,'transform').position,[5,0,7]);
+ const battle=ed.attackNearest(1);
+ assert.equal(battle.ok,true,'Melee should find nearest hostile mob');
+ assert.equal(battle.hp,175);
+ assert.equal(ed.rendered.get(entity).animation?.state,'hit');
+ assert.equal(ed.attackNearest(1.01).reason,'cooldown');
  ed.setPlaying(false);
+ assert.equal(ed.combat.get(entity),null,'EDIT must not retain temporary battle HP');
  assert.equal(ed.rendered.get(entity).root.position.x,5,
   'EDIT restores authored NPC position');
  assert.equal(ed.hasContent(),true);
