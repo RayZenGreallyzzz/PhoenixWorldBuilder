@@ -11,7 +11,7 @@
  'use strict';
  class PhoenixPrefabEditor{
   constructor(builder){
-   if(!builder?.playBridge||!window.PhoenixCore||!window.PhoenixPrefabs)
+   if(!builder?.playBridge||!window.PhoenixCore||!window.PhoenixPrefabs||!window.PhoenixAI||!window.PhoenixAnimations)
     throw Error('Phoenix Core, prefabs and PLAY bridge are required');
    this.b=builder;this.registry=new PhoenixPrefabs.PhoenixPrefabCatalog();
    this.world=builder.playBridge.gameWorld;
@@ -19,6 +19,7 @@
    builder.scene.add(this.layer);
    this.rendered=new Map();this.selectedId='';this.pendingPlace='';
    this.playing=false;this.loadGeneration=0;this.clipGeneration=0;this.previewBefore=null;
+   this.aiCursor=0;this.collider=null;
    this.panel=document.getElementById('phoenixPrefabPanel');
    if(!this.panel)throw Error('Prefab Editor UI is missing');
    this.bind();this.refreshModels();this.refresh();
@@ -92,7 +93,13 @@
    this.el('phoenixPrefabHP').value='100';
    this.el('phoenixPrefabDamage').value='10';
    this.el('phoenixPrefabSpeed').value='2';
-   for(const a of ['Idle','Walk','Attack'])this.el('phoenixPrefab'+a).value='';
+   for(const a of ['Idle','Walk','Run','Attack','Hit','Death','Cast'])
+    this.el('phoenixPrefab'+a).value='';
+   this.el('phoenixPrefabAI').value='idle';
+   this.el('phoenixPrefabPatrolRadius').value='3';
+   this.el('phoenixPrefabAggroRadius').value='7';
+   this.el('phoenixPrefabAttackRange').value='1.25';
+   this.el('phoenixPrefabCooldown').value='1.8';
    this.el('phoenixPrefabSaved').value='';
    this.refreshClips(false);this.status('Создай шаблон и поставь его на сцену.');
   }
@@ -105,9 +112,15 @@
     stats:{hp:Number(this.el('phoenixPrefabHP').value),
      damage:Number(this.el('phoenixPrefabDamage').value),
      speed:Number(this.el('phoenixPrefabSpeed').value)},
-    animations:{idle:this.el('phoenixPrefabIdle').value.trim(),
-     walk:this.el('phoenixPrefabWalk').value.trim(),
-     attack:this.el('phoenixPrefabAttack').value.trim()}
+    animations:Object.fromEntries(
+     ['idle','walk','run','attack','hit','death','cast'].map(name=>[
+      name,this.el('phoenixPrefab'+name[0].toUpperCase()+name.slice(1)).value.trim()
+     ])),
+    ai:{mode:this.el('phoenixPrefabAI').value,
+     patrolRadius:Number(this.el('phoenixPrefabPatrolRadius').value),
+     aggroRadius:Number(this.el('phoenixPrefabAggroRadius').value),
+     attackRange:Number(this.el('phoenixPrefabAttackRange').value),
+     attackCooldown:Number(this.el('phoenixPrefabCooldown').value)}
    };
   }
   selectPrefab(id){
@@ -120,8 +133,13 @@
    this.el('phoenixPrefabHP').value=String(p.stats.hp);
    this.el('phoenixPrefabDamage').value=String(p.stats.damage);
    this.el('phoenixPrefabSpeed').value=String(p.stats.speed);
-   for(const a of ['idle','walk','attack'])
+   for(const a of ['idle','walk','run','attack','hit','death','cast'])
     this.el('phoenixPrefab'+a[0].toUpperCase()+a.slice(1)).value=p.animations[a]||'';
+   this.el('phoenixPrefabAI').value=p.ai?.mode||'idle';
+   this.el('phoenixPrefabPatrolRadius').value=String(p.ai?.patrolRadius??3);
+   this.el('phoenixPrefabAggroRadius').value=String(p.ai?.aggroRadius??7);
+   this.el('phoenixPrefabAttackRange').value=String(p.ai?.attackRange??1.25);
+   this.el('phoenixPrefabCooldown').value=String(p.ai?.attackCooldown??1.8);
    this.el('phoenixPrefabSaved').value=id;
    this.refreshClips();
   }
@@ -280,7 +298,7 @@
     this.world.setComponent(id,'transform',{position:position.slice(),yaw:0});
     this.world.setComponent(id,'stats',p.stats);
     this.world.setComponent(id,'character',{type:p.type,faction:p.faction,
-     assetId:p.assetId,animations:p.animations});
+     assetId:p.assetId,animations:p.animations,ai:p.ai});
     this.attach(id,render,{position,yaw:0});
    }catch(err){
     render.root.removeFromParent();
