@@ -540,3 +540,11 @@ body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .
 .seamlessScaleBox[hidden]{display:none!important}
 .seamlessScaleBox label{display:flex;justify-content:space-between;gap:8px}
 .seamlessScaleBox input[type=range]{width:100%;min-height:34px;accent-color:#69cbd1}
+
+/* Phoenix Engine 0.1: PLAY isolates editor chrome, not the 3D render loop. */
+.phoenixPlayEntry{border:1px solid #78f5ce;background:#176246;color:#e5fff3;font-weight:800;white-space:nowrap;min-width:90px}
+#phoenixPlayHud{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;z-index:20;display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid #4af1bb;border-radius:12px;background:#102b2bec;color:#d9fff2;box-shadow:0 3px 18px #0009;font-weight:800}
+#btnPhoenixEdit{background:#176f59;border-color:#5de6c1;color:#fff;min-height:45px;min-width:92px;font-weight:800}
+body.phoenixPlaying .topbar,body.phoenixPlaying .panel,body.phoenixPlaying .bottombar,body.phoenixPlaying #hud,body.phoenixPlaying .gizmoQuickbar,body.phoenixPlaying .gizmoCadOverlay,body.phoenixPlaying .shapeToolPanel,body.phoenixPlaying .projectLoadSettings{display:none!important}
+body.phoenixPlaying #charControls{z-index:11;bottom:max(18px,env(safe-area-inset-bottom));left:max(10px,env(safe-area-inset-left))}
+@media(max-width:700px){#phoenixPlayHud{top:max(6px,env(safe-area-inset-top));right:6px;font-size:12px;padding:5px 7px}#btnPhoenixEdit{font-size:12px;min-height:43px;min-width:82px}.phoenixPlayEntry{min-width:65px;padding:6px}}
