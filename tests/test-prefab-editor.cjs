@@ -76,6 +76,21 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert.equal(ed.combat.get(entity),null,'EDIT must not retain temporary battle HP');
  assert.equal(ed.rendered.get(entity).root.position.x,5,
   'EDIT restores authored NPC position');
+ const template=ed.registry.get('prefab-1');
+ template.ai.mode='chase';
+ ed.registry.update('prefab-1',template);
+ const incoming=[];
+ builder.playBridge.onPlayerHit=(hit,name)=>incoming.push({hit,name});
+ ed.setPlaying(true);
+ ed.update(.15);
+ assert.equal(ed.combat.getPlayer().hp,67,
+  'Hostile NPC must damage player when in attack range');
+ assert.equal(incoming.length,1,'PLAY bridge must receive enemy hit event');
+ assert.equal(incoming[0].name,'Лесной волк');
+ ed.setPlaying(false);
+ assert.equal(ed.combat.getPlayer().hp,100,
+  'End of PLAY must reset temporary player HP');
+
  assert.equal(ed.hasContent(),true);
  assert.equal(ed.rendered.size,1);
  const snapshot=ed.serialize();
