@@ -26,7 +26,10 @@ const ids=['phoenixSkillLayer','phoenixSkillEditor','phoenixSkillSelect',
  'phoenixSkillIcon','phoenixSkillLabel','phoenixSkillSize','phoenixSkillColor',
  'phoenixSkillShape','phoenixSkillOpacity','phoenixSkillEnabled',
  'phoenixSkillFeedback','btnPhoenixAttack','btnPhoenixHeal','btnPhoenixSlot3',
- 'btnPhoenixSlot4','btnPhoenixSlot5','btnPhoenixUltimate','btnPhoenixSkills','btnSkillClose','btnSkillSave','btnSkillReset',
+ 'btnPhoenixSlot4','btnPhoenixSlot5','btnPhoenixUltimate',
+ 'btnPhoenixSlot6','btnPhoenixSlot7','btnPhoenixFire','btnPhoenixAim',
+ 'btnPhoenixReload','btnPhoenixJump','btnPhoenixCrouch',
+ 'btnPhoenixSkills','btnSkillClose','btnSkillSave','btnSkillReset',
  'phoenixSkillPreset','btnSkillApplyPreset',
  'phoenixCombatNotice'];
 const elements=Object.fromEntries(ids.map(id=>[id,new E(id)]));
@@ -37,7 +40,7 @@ const builder={playBridge:{active:false,heals:0,heal(){this.heals++}},
  saves:0,save(){this.saves++}};
 const Editor=require('../app/src/main/assets/engine/builder/skill-hud-editor.js');
 const editor=new Editor(builder,doc);
-assert.equal(editor.layout.slots.length,6);
+assert.equal(editor.layout.slots.length,13);
 assert.equal(elements.phoenixSkillLayer.hidden,true);
 assert.equal(editor.open(),true);
 assert.equal(elements.phoenixSkillEditor.hidden,false);
@@ -87,8 +90,8 @@ restored.loadFromProject({version:999,slots:[]});
 assert.deepEqual(restored.serialize(),stored,'Invalid project UI must preserve device preference');
 elements.phoenixSkillPreset.value='wild-rift';
 elements.btnSkillApplyPreset.listeners.click();
-assert.equal(restored.serialize().version,2);
-assert.equal(restored.serialize().slots.length,6);
+assert.equal(restored.serialize().version,3);
+assert.equal(restored.serialize().slots.length,13);
 assert.equal(restored.serialize().slots[2].label,'Q');
 assert.equal(restored.serialize().slots[5].label,'R · УЛЬТА');
 assert.equal(restored.serialize().slots[5].enabled,true);
@@ -101,4 +104,32 @@ restored.setPlaying(true);
 assert.equal(elements.btnPhoenixUltimate.hidden,false,'Enabled MOBA ultimate must show in PLAY');
 assert.equal(elements.btnPhoenixSlot5.hidden,false,'Wild Rift third skill must show in PLAY');
 restored.setPlaying(false);
-console.log('PASS: MOBA layout presets and finger-drag HUD, icon/color/shape, device save, JSON restore and heal click');
+// Switching genres must not replace the scene, just the authored HUD.
+restored.applyPreset('mmorpg');
+assert.equal(restored.serialize().slots.filter(s=>s.enabled).length,8);
+assert.equal(restored.serialize().slots.find(s=>s.id==='slot7').enabled,true);
+restored.open();
+assert.equal(elements.btnPhoenixSlot7.hidden,false);
+assert.equal(elements.btnPhoenixFire.hidden,true);
+restored.close();
+restored.applyPreset('shooter');
+assert.equal(restored.serialize().slots.filter(s=>s.enabled).length,7);
+assert.equal(restored.serialize().slots.find(s=>s.id==='fire').enabled,true);
+restored.setPlaying(true);
+for(const id of ['btnPhoenixFire','btnPhoenixAim','btnPhoenixReload','btnPhoenixJump','btnPhoenixCrouch'])
+ assert.equal(elements[id].hidden,false,id+' must be visible in shooter PLAY');
+const warning=elements.phoenixCombatNotice;
+elements.btnPhoenixFire.listeners.click();
+assert(warning.textContent.includes('пока не добавлена'),
+ 'Shooter fire must not pretend a weapon system already exists');
+assert.equal(elements.btnPhoenixSlot7.hidden,true,'MMO actions hidden in shooter PLAY');
+restored.setPlaying(false);
+const earlier={version:2,slots:schema.presetLayout('wild-rift').slots.slice(0,6)};
+earlier.slots[0]={...earlier.slots[0],x:71};
+settings.set('phoenix-engine-skill-hud-v1',JSON.stringify(earlier));
+const migratedEditor=new Editor(builder,doc);
+assert.equal(migratedEditor.serialize().version,3);
+assert.equal(migratedEditor.serialize().slots[0].x,71,
+ 'Old 0.8 HUD position must migrate without resetting custom values');
+assert.equal(migratedEditor.serialize().slots.length,13);
+console.log('PASS: MOBA/MMO/Shooter HUD finger-drag, display, placeholders and safe 0.8 migration');
