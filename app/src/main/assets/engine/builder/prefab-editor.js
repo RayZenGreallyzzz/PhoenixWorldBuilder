@@ -34,7 +34,7 @@
   }
   open(){
    if(this.b.playBridge.active)return;
-   this.b.skillEditor?.close();
+   this.b.skillEditor?.close();this.b.skillDefinitionEditor?.close();
    this.refreshModels();this.panel.hidden=false;
   }
   close(){this.panel.hidden=true;this.cancelPlacement();}
@@ -170,7 +170,7 @@
     const value=this.collect();
     if(this.selectedId)this.registry.update(this.selectedId,value);
     else this.selectedId=this.registry.create(value);
-    this.refresh();this.b.save();
+    this.refresh();this.b.skillDefinitionEditor?.refreshCharacters();this.b.save();
     this.status('✅ Шаблон сохранён. Изменения применяются к новым экземплярам.');
    }catch(err){this.status('Ошибка шаблона: '+err.message)}
   }
@@ -179,7 +179,9 @@
    const used=this.world.entityIds().some(id=>
     this.world.getComponent(id,'prefab')?.id===this.selectedId);
    if(used)return this.status('Сначала удали экземпляры этого шаблона со сцены.');
-   this.registry.remove(this.selectedId);this.newDraft();this.refresh();this.b.save();
+   this.b.skillDefinitionEditor?.catalog.removeCharacter(this.selectedId);
+   this.registry.remove(this.selectedId);this.newDraft();this.refresh();
+   this.b.skillDefinitionEditor?.refreshCharacters();this.b.save();
    this.status('Шаблон удалён.');
   }
   beginPlacement(){
@@ -477,10 +479,12 @@
    this.removeRender(id);this.world.removeEntity(id);
    this.refresh();this.b.save();this.status('Экземпляр убран со сцены.');
   }
-  hasContent(){return this.registry.list().length>0||this.world.entityIds().length>0;}
+  hasContent(){return this.registry.list().length>0||this.world.entityIds().length>0||
+   !!this.b.skillDefinitionEditor?.catalog.characters().length;}
   serialize(){
    return {version:1,catalog:this.registry.serialize(),world:this.world.serialize(),
-    hudLayout:this.b.skillEditor?.serialize()||null};
+    hudLayout:this.b.skillEditor?.serialize()||null,
+    skills:this.b.skillDefinitionEditor?.serialize()||null};
   }
   async loadFromProject(doc){
    this.cancelPlacement();
