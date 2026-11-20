@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
-<title>Phoenix Engine 0.6 — UV44 Builder</title><link rel="stylesheet" href="clean.css"></head>
+<title>Phoenix Engine 0.7 — Skill HUD Editor</title><link rel="stylesheet" href="clean.css"></head>
 <body>
 <canvas id="view" aria-label="Строительная 3D-сцена"></canvas>
 <div id="gizmoCadOverlay" class="gizmoCadOverlay" hidden aria-hidden="true">
@@ -43,11 +43,32 @@
  <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnQuickProjectJson" title="Скачать редактируемый дом с текстурами в .phoenix.json">💾 JSON</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnProjectLoadSettings" title="Настройки загрузки дома" aria-label="Настройки загрузки проекта" aria-expanded="false">⚙️</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
 <!-- Separate always-visible Engine toolbar: never put PLAY inside UV44's crowded header. -->
-<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 0.6 — игровые инструменты">
- <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 0.6">🔥 ENGINE <strong>v0.6</strong><small>UV44</small></span>
+<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 0.7 — игровые инструменты">
+ <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 0.7">🔥 ENGINE <strong>v0.7</strong><small>UV44</small></span>
  <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
  <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 МОБЫ / NPC</button>
+ <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить игровые кнопки и скиллы">🎮 HUD / СКИЛЛЫ</button>
 </div>
+<section id="phoenixSkillEditor" class="phoenixSkillEditor" hidden role="region" aria-label="Редактор игровых кнопок">
+ <div class="phoenixSkillTitle"><b>🎮 Редактор скиллов · HUD</b><button id="btnSkillClose" type="button" aria-label="Закрыть настройку HUD">✕</button></div>
+ <small>В EDIT перетащи любую кнопку пальцем. Настрой внешний вид и сохрани расположение для PLAY.</small>
+ <label>Кнопка<select id="phoenixSkillSelect">
+  <option value="attack">⚔ Атака — работает</option>
+  <option value="heal">💚 Лечение — работает</option>
+  <option value="slot3">✨ Слот 3 — для будущего скилла</option>
+  <option value="slot4">🛡 Слот 4 — для будущего скилла</option>
+ </select></label>
+ <div class="phoenixSkillRow"><label>Иконка / эмодзи<input id="phoenixSkillIcon" maxlength="24" value="⚔" autocomplete="off"></label>
+ <label>Подпись<input id="phoenixSkillLabel" maxlength="16" value="АТАКА" autocomplete="off"></label></div>
+ <div class="phoenixSkillRow"><label>Цвет<input id="phoenixSkillColor" type="color" value="#a63929"></label>
+ <label>Форма<select id="phoenixSkillShape"><option value="circle">Круг</option><option value="rounded">Скруглённый квадрат</option></select></label></div>
+ <div class="phoenixSkillRow"><label>Размер (48–120)<input id="phoenixSkillSize" type="range" min="48" max="120" step="2" value="82"></label>
+ <label>Прозрачность<input id="phoenixSkillOpacity" type="range" min="45" max="100" step="5" value="100"></label></div>
+ <label class="phoenixSkillCheck"><input id="phoenixSkillEnabled" type="checkbox" checked> Показывать эту кнопку в игре</label>
+ <div class="phoenixSkillRow"><button id="btnSkillSave" type="button">💾 Сохранить раскладку</button><button id="btnSkillReset" type="button">↻ Сбросить</button></div>
+ <small id="phoenixSkillFeedback" aria-live="polite">Нажми кнопку на экране и перетащи её пальцем.</small>
+ <small>Настройки сохраняются на устройстве и в JSON проекта. Слоты 3 и 4 пока без игрового действия.</small>
+</section>
 <section id="phoenixPrefabPanel" class="phoenixPrefabPanel" hidden role="region" aria-label="Phoenix Prefab Editor">
  <div class="phoenixPrefabTitle"><b>🧬 Phoenix Prefab Editor</b><button type="button" id="btnPrefabClose" aria-label="Закрыть редактор">✕</button></div>
  <small>Игровые мобы и NPC отдельно от строительных деталей. Без программирования.</small>
@@ -628,11 +649,17 @@
  <div id="phoenixKills">☠ Побеждено: 0</div>
  <div id="phoenixCombatTarget">⚔ Выбери врага рядом</div>
  <progress id="phoenixCombatHP" max="100" value="100" hidden aria-label="HP цели"></progress>
- <button id="btnPhoenixAttack" type="button" aria-label="Атаковать ближайшего врага">⚔ АТАКА</button>
- <small id="phoenixCombatNotice" aria-live="polite">Касайся ⚔ или нажми F</small>
+  <small id="phoenixCombatNotice" aria-live="polite">Касайся ⚔ или нажми F</small>
  <div id="phoenixDeathNotice" hidden role="alert">☠ Персонаж погиб</div>
  <button id="btnPhoenixRespawn" type="button" hidden>↻ Возродиться</button>
 </section>
+<!-- Single game skill layer: EDIT shows movable buttons, PLAY shows saved arrangement. -->
+<div id="phoenixSkillLayer" hidden role="group" aria-label="Кнопки скиллов">
+ <button id="btnPhoenixAttack" class="phoenixSkillButton" type="button" aria-label="Атака">⚔ АТАКА</button>
+ <button id="btnPhoenixHeal" class="phoenixSkillButton" type="button" aria-label="Лечение">💚 ЛЕЧЕНИЕ</button>
+ <button id="btnPhoenixSlot3" class="phoenixSkillButton" type="button" aria-label="Слот 3" hidden>✨ СКИЛЛ 3</button>
+ <button id="btnPhoenixSlot4" class="phoenixSkillButton" type="button" aria-label="Слот 4" hidden>🛡 СКИЛЛ 4</button>
+</div>
 <div id="charControls" hidden>
  <div class="joystickTitle">🕹 Движение</div>
  <div id="joystickPad" class="joystickPad" role="group"
@@ -696,9 +723,11 @@
 <script src="engine/core/phoenix-core.js"></script>
 <script src="engine/core/phoenix-ai.js"></script>
 <script src="engine/core/phoenix-combat.js"></script>
+<script src="engine/core/phoenix-skill-layout.js"></script>
 <script src="engine/core/phoenix-prefabs.js"></script>
 <script src="engine/runtime/phoenix-animations.js"></script>
 <script src="engine/builder/play-bridge.js"></script>
 <script src="engine/builder/prefab-editor.js"></script>
+<script src="engine/builder/skill-hud-editor.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
