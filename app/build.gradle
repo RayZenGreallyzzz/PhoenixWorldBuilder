@@ -14,9 +14,9 @@ android {
         // Preview APK installs alongside the existing debug application, so
         // testing cannot overwrite or erase projects inside the old app.
         debug {
-            applicationIdSuffix '.preview'
-            versionNameSuffix '-preview'
-            manifestPlaceholders = [appLabel: 'Phoenix Builder TEST']
+            applicationIdSuffix '.engine'
+            versionNameSuffix '-engine-play'
+            manifestPlaceholders = [appLabel: 'Phoenix Engine PLAY']
         }
         release {
             minifyEnabled false
