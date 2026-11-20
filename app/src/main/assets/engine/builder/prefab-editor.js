@@ -213,8 +213,12 @@
   placeholder(){
    const group=new THREE.Group();
    group.name='phoenix:placeholder';
-   const body=new THREE.Mesh(new THREE.CapsuleGeometry(.28,.95,3,6),
-    new THREE.MeshStandardMaterial({color:0xde8134,roughness:1}));
+   // Share the primitive GPU buffers between all placeholders on Android.
+   this.placeholderGeometry=this.placeholderGeometry||
+    new THREE.CapsuleGeometry(.28,.95,3,6);
+   this.placeholderMaterial=this.placeholderMaterial||
+    new THREE.MeshStandardMaterial({color:0xde8134,roughness:1});
+   const body=new THREE.Mesh(this.placeholderGeometry,this.placeholderMaterial);
    body.position.y=1.03;group.add(body);return group;
   }
   async meshFor(assetId,allowMissing=false){
