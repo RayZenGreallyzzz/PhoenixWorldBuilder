@@ -195,11 +195,12 @@ class CleanBuilder{
   this.setMode('build');this.selectKind('wall');
   // Engine attaches to existing UV44 player/controls, no extra render loop.
   this.playBridge=new PhoenixPlayBridge(this,window.PhoenixCore);
+  this.prefabEditor=new PhoenixPrefabEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
-   this.updatePlayer(dt);this.controls.update();
+   this.updatePlayer(dt);this.prefabEditor?.update(dt);this.controls.update();
    if(!this.playBridge?.active)this.gizmo.update();
    if(this.previewOutline&&this.previewOutline.visible)this.previewOutline.update();
    this.renderer.render(this.scene,this.camera);
@@ -483,6 +484,7 @@ class CleanBuilder{
    localStorage.setItem('phoenix-builder-catalog-folder-v2',folder);
    this.renderCatalog();
    this.selectKind(id);
+   this.prefabEditor?.refreshModels(id);
    notify('GLB импортирован в «'+SmartCatalog.labels[folder]+'»: '+safeName(file.name)+' · '+
     $('optimizationStats').textContent+'. Оригинальный файл сохранён.','success');
   }catch(err){
@@ -4141,6 +4143,7 @@ class CleanBuilder{
    heights:[],objects:this.entries.map(obj=>{
     const item=this.encode(obj);item.rot=obj.root.rotation.y;return item;
    }),floor:this.floor,nextId:this.nextId,
+    phoenixGame:this.prefabEditor?.serialize()||null,
     decals:SurfaceDecals.normalize(this.decals),
     textureLibrary:this.textureFiles.map(t=>({
      id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,
@@ -4192,8 +4195,8 @@ class CleanBuilder{
    notify('Ошибка GLB: '+(err?.message||err),'error')}
  }
  async exportBackup(){
-  if(!this.entries.length&&!this.textureFiles.length)
-   return notify('В проекте ещё нет модулей или текстур','warn');
+  if(!this.entries.length&&!this.textureFiles.length&&!this.prefabEditor?.hasContent())
+   return notify('В проекте ещё нет модулей, текстур или игровых объектов','warn');
   try{
    notify('📁 Собираю редактируемый проект вместе с изображениями и GLB...','neutral');
     const installed=[...this.assets.keys(),...this.catalogMeta.keys()]
@@ -4442,6 +4445,16 @@ class CleanBuilder{
    this.syncInspector();
   }else{
    this.selected=null;this.setTool('place');this.selectKind('wall');
+  }
+  // Optional extension: old UV44 JSON files have no phoenixGame key.
+  // Load game data only after the building geometry has been restored.
+  if(this.prefabEditor){
+   try{await this.prefabEditor.loadFromProject(doc.phoenixGame||null)}
+   catch(err){
+    console.warn('Game data ignored during project restore',err);
+    await this.prefabEditor.loadFromProject(null);
+    notify('Дом открыт, но игровые объекты в JSON повреждены: '+err.message,'warn');
+   }
   }
  }
  setAvatarAnimation(moving){
@@ -4944,6 +4957,7 @@ class CleanBuilder{
    if(!start||e.pointerId!==start.pointerId||e.isPrimary===false)return;
    this.pointerStart=null;
    if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)return;
+   if(this.prefabEditor?.pendingPlace){this.prefabEditor.placeFromEvent(e);return}
    if(this.shapeSourceMode){this.shapeSourceAt(e);return}
    if(this.decalPickMode){this.placeDecalAt(e);return}
    if(this.surfaceSidePick&&this.libraryTab==='textures'){
@@ -4962,7 +4976,7 @@ class CleanBuilder{
   });
   this.canvas.addEventListener('pointercancel',()=>{this.pointerStart=null});
   this.canvas.addEventListener('pointermove',e=>{
-   if(this.playBridge?.active)return;
+   if(this.playBridge?.active||this.prefabEditor?.pendingPlace)return;
    if(e.buttons||this.cameraFocusPick||this.tool!=='place')return;
    const point=this.rayPoint(e);if(!point&&!this.floor)return;
    if(point)this.cursor.copy(point);
