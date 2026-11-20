@@ -34,6 +34,7 @@
   }
   open(){
    if(this.b.playBridge.active)return;
+   this.b.skillEditor?.close();
    this.refreshModels();this.panel.hidden=false;
   }
   close(){this.panel.hidden=true;this.cancelPlacement();}
@@ -444,7 +445,8 @@
   }
   hasContent(){return this.registry.list().length>0||this.world.entityIds().length>0;}
   serialize(){
-   return {version:1,catalog:this.registry.serialize(),world:this.world.serialize()};
+   return {version:1,catalog:this.registry.serialize(),world:this.world.serialize(),
+    hudLayout:this.b.skillEditor?.serialize()||null};
   }
   async loadFromProject(doc){
    this.cancelPlacement();
