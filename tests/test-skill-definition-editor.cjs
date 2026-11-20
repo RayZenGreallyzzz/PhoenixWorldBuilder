@@ -1,0 +1,67 @@
+'use strict';
+const assert=require('node:assert/strict');
+const Skills=require('../app/src/main/assets/engine/core/phoenix-skills.js');
+global.PhoenixSkills=Skills;
+class Element{
+ constructor(id){this.id=id;this.value='';this.textContent='';this.hidden=true;this.options=[];this.listeners={};}
+ addEventListener(n,fn){this.listeners[n]=fn;}
+ replaceChildren(...nodes){this.options=nodes;}
+ appendChild(node){this.options.push(node)}
+}
+const ids=['phoenixSkillDefinitions','btnPhoenixSkillDefs','btnSkillDefClose',
+ 'btnSkillDefSave','btnSkillDefDelete','btnSkillDefLevelUp',
+ 'skillDefCharacter','skillDefSlot','skillDefName','skillDefDescription','skillDefIcon',
+ 'skillDefType','skillDefLevel','skillDefMaxLevel','skillDefBasePower','skillDefGrowth',
+ 'skillDefManaCost','skillDefCooldown','skillDefRange','skillDefAnimation',
+ 'skillDefPreview','skillDefMessage'];
+const elements=Object.fromEntries(ids.map(id=>[id,new Element(id)]));
+elements.skillDefSlot.value='slot3';
+const doc={getElementById:id=>elements[id]||null,createElement:tag=>new Element(tag)};
+let saved=0;
+const p={id:'prefab-1',name:'Медведь',type:'mob'};
+const builder={playBridge:{active:false},skillEditor:{close(){}},
+ prefabEditor:{close(){},registry:{list(){return [p]},get(id){return id===p.id?p:null}}},
+ save(){saved++}};
+const Editor=require('../app/src/main/assets/engine/builder/skill-definition-editor.js');
+const ed=new Editor(builder,doc);
+assert.equal(ed.open(),true);
+assert.equal(elements.phoenixSkillDefinitions.hidden,false);
+elements.skillDefName.value='Огненный шар';
+elements.skillDefDescription.value='Урон на расстоянии';
+elements.skillDefIcon.value='🔥';
+elements.skillDefType.value='damage';
+elements.skillDefMaxLevel.value='5';
+elements.skillDefLevel.value='2';
+elements.skillDefBasePower.value='80';
+elements.skillDefGrowth.value='25';
+elements.skillDefManaCost.value='30';
+elements.skillDefCooldown.value='6';
+elements.skillDefRange.value='12';
+elements.skillDefAnimation.value='cast';
+assert.equal(ed.save(),true);
+assert.equal(saved,1);
+assert.equal(ed.catalog.get('player','slot3').basePower,80);
+assert.equal(ed.catalog.get('player','slot3').level,2);
+assert.equal(elements.skillDefPreview.textContent,'Сила на уровне 2: 105');
+elements.skillDefCharacter.value='prefab-1';
+elements.skillDefSlot.value='ultimate';
+ed.loadForm();
+elements.skillDefName.value='Рёв';
+elements.skillDefDescription.value='Сила медведя';
+assert.equal(ed.save(),true);
+assert.equal(ed.catalog.get('prefab-1','ultimate').name,'Рёв');
+const json=ed.serialize();
+const other=new Editor(builder,doc);other.loadFromProject(JSON.parse(JSON.stringify(json)));
+assert.deepEqual(other.serialize(),json);
+other.startPlay();
+assert.equal(other.panel.hidden,true);
+assert.equal(other.runtime.cast('slot3',1,()=>true).power,105);
+assert.equal(other.runtime.status(1).mp,70);
+assert.equal(other.runtime.cast('slot3',2).reason,'cooldown');
+other.resetPlay();assert.equal(other.runtime.status(2).mp,100);
+other.stopPlay();assert.equal(other.runtime,null);
+other.loadFromProject(null);
+assert.equal(other.catalog.characters().length,0);
+assert.equal(other.open(),true);
+assert.equal(other.catalog.get('player','slot3'),null);
+console.log('PASS: per-character Skill Editor saves player and NPC abilities, JSON, MP and level scaling');
