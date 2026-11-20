@@ -28,11 +28,17 @@
    this.hpBar = this.document.getElementById('phoenixCombatHP');
    this.hpTarget = this.document.getElementById('phoenixCombatTarget');
    this.combatNotice = this.document.getElementById('phoenixCombatNotice');
+   this.playerHPBar = this.document.getElementById('phoenixPlayerHP');
+   this.playerHPText = this.document.getElementById('phoenixPlayerHPText');
+   this.killsLabel = this.document.getElementById('phoenixKills');
+   this.deathNotice = this.document.getElementById('phoenixDeathNotice');
+   this.respawnButton = this.document.getElementById('btnPhoenixRespawn');
    if (!playButton || !editButton || !this.hud)
     throw new Error('Phoenix Engine PLAY/EDIT UI is missing');
    playButton.addEventListener('click', () => this.enter());
    editButton.addEventListener('click', () => this.exit());
    this.attackButton?.addEventListener('click', () => this.attack());
+   this.respawnButton?.addEventListener('click', () => this.respawn());
   }
 
   message(text, level) {
@@ -85,6 +91,7 @@
     this.modeController.setMode('play');
     b.prefabEditor?.setPlaying(true);
     if(this.combatHud)this.combatHud.hidden=false;
+    this.updatePlayerHud();
     if(this.hpBar)this.hpBar.hidden=true;
     if(this.hpTarget)this.hpTarget.textContent='⚔ Ближайший враг';
     if(this.combatNotice)this.combatNotice.textContent='Касайся ⚔ или нажми F';
@@ -139,6 +146,58 @@
    return true;
   }
 
+  updatePlayerHud(){
+   const player=this.builder.prefabEditor?.combat?.getPlayer();
+   if(!player)return;
+   if(this.playerHPBar){
+    this.playerHPBar.max=player.maxHp;
+    this.playerHPBar.value=player.hp;
+   }
+   if(this.playerHPText)this.playerHPText.textContent=
+    player.hp+' / '+player.maxHp+' HP';
+   if(this.killsLabel)this.killsLabel.textContent='☠ Побеждено: '+player.kills;
+   if(this.deathNotice)this.deathNotice.hidden=!player.dead;
+   if(this.respawnButton)this.respawnButton.hidden=!player.dead;
+   if(this.attackButton)this.attackButton.disabled=player.dead;
+  }
+
+  onPlayerHit(hit,mobName='Враг'){
+   if(!this.active||!hit?.ok)return;
+   this.updatePlayerHud();
+   if(this.combatNotice)this.combatNotice.textContent=
+    '💔 '+mobName+': −'+hit.damage+' HP';
+   if(hit.dead){
+    this.builder.keys.clear();
+    this.builder.joystick?.reset();
+    this.builder.playDeathAnimation?.();
+    if(this.combatNotice)this.combatNotice.textContent=
+     '☠ Ты погиб. Нажми «Возродиться»';
+   }
+  }
+
+  respawn(){
+   if(!this.active||!this.saved||
+      !this.builder.prefabEditor?.combat?.isPlayerDead())return false;
+   const b=this.builder;
+   // Restart only the disposable PLAY runtime; never touch Builder project JSON.
+   b.prefabEditor.setPlaying(false);
+   const delta=this.saved.playerPosition.clone().sub(b.player.position);
+   b.player.position.add(delta);
+   b.player.rotation.copy(this.saved.playerRotation);
+   b.camera.position.add(delta);
+   b.controls.target.add(delta);
+   b.controls.update();
+   b.keys.clear();b.joystick?.reset();
+   b.avatarAttackUntil=0;b.avatarState='';
+   b.prefabEditor.setPlaying(true);
+   b.setAvatarAnimation?.(false);
+   if(this.hpBar)this.hpBar.hidden=true;
+   if(this.hpTarget)this.hpTarget.textContent='⚔ Ближайший враг';
+   if(this.combatNotice)this.combatNotice.textContent='❤️ Возрождение · 100% HP';
+   this.updatePlayerHud();
+   return true;
+  }
+
   attack(){
    if(!this.active)return false;
    const now=(typeof performance!=='undefined'?performance.now():Date.now())/1000;
@@ -149,8 +208,10 @@
      '⏳ Перезарядка '+result.remaining.toFixed(1)+' сек';
     return true;
    }
+   if(result.reason==='player-dead')return false;
    this.builder.playAttackAnimation?.();
    if(result.ok){
+    this.updatePlayerHud();
     if(this.hpTarget)this.hpTarget.textContent=
      result.name+' · HP '+result.hp+'/'+result.maxHp;
     if(this.hpBar){
