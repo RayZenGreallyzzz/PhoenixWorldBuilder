@@ -14,7 +14,7 @@ assert(!header[0].includes('id="btnPhoenixPrefabs"'),'Prefab button must not be 
 assert(dock[0].includes('id="btnPhoenixPlay"'));
 assert(dock[0].includes('id="btnPhoenixPrefabs"'));
 assert(dock[0].includes('ENGINE'));
-assert(dock[0].includes('v0.9'));
+assert(dock[0].includes('v1.0'));
 assert(dock[0].includes('id="btnPhoenixSkills"'), 'Skill editor must be visible beside PLAY');
 for(const id of ['btnPhoenixPlay','btnPhoenixPrefabs','btnPhoenixSkills','phoenixEngineDock']){
  const matches=html.match(new RegExp('id="'+id+'"','g'))||[];
@@ -24,7 +24,7 @@ assert(css.includes('#phoenixEngineDock{position:fixed'),
  'Game controls must be independent of oversized UV44 topbar');
 assert(css.includes('body.phoenixPlaying #phoenixEngineDock{display:none!important}'),
  'Editor controls must disappear during PLAY');
-assert(html.includes('<title>Phoenix Engine 0.9 — MOBA / MMO / Shooter HUD</title>'));
+assert(html.includes('<title>Phoenix Engine 1.0 — FPS + RPG Skills</title>'));
 assert(html.includes('id="phoenixSkillEditor"'));
 assert(html.includes('id="phoenixSkillLayer"'));
 assert(html.includes('id="btnPhoenixHeal"'));
@@ -36,6 +36,14 @@ assert(html.includes('Mobile Legends'));
 assert(html.includes('Wild Rift'));
 assert(html.includes('MMORPG'));
 assert(html.includes('Шутер'));
+assert(dock[0].includes('btnPhoenixSkillDefs'),'Skill definition editor must be in dock');
+for(const id of ['phoenixSkillDefinitions','btnPhoenixSkillDefs','skillDefCharacter',
+ 'skillDefSlot','skillDefBasePower','skillDefGrowth','skillDefManaCost',
+ 'skillDefCooldown','skillDefLevel','skillDefMaxLevel',
+ 'phoenixAmmoText','phoenixAmmoLine','phoenixMpLine','phoenixMpText','phoenixCrosshair']){
+ assert(html.includes('id="'+id+'"'),'Missing FPS/Skill Editor UI element: '+id);
+}
+
 for(const id of ['btnPhoenixSlot6','btnPhoenixSlot7','btnPhoenixFire',
  'btnPhoenixAim','btnPhoenixReload','btnPhoenixJump','btnPhoenixCrouch']){
  assert(html.includes('id="'+id+'"'),'Missing separate genre HUD control '+id);
@@ -46,7 +54,7 @@ assert(css.includes('#phoenixSkillLayer{position:fixed'));
 assert(css.includes('#phoenixSkillEditor{position:fixed'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"),
  'Permanent Android ID must not vary between new engine versions');
-assert(gradle.includes('versionCode 9'));
+assert(gradle.includes('versionCode 10'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"));
-assert(gradle.includes("appLabel: 'Phoenix Engine 0.9'"));
-console.log('PASS: distinct Phoenix Engine 0.9 badge, visible PLAY/Prefabs/Skills dock and stable package ID');
+assert(gradle.includes("appLabel: 'Phoenix Engine 1.0'"));
+console.log('PASS: distinct Phoenix Engine 1.0 badge, visible PLAY/Prefabs/Skills dock and stable package ID');
