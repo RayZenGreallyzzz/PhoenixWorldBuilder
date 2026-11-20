@@ -20,6 +20,7 @@
    this.modeController = new core.PhoenixModeController('edit');
    this.active = false;
    this.saved = null;
+   this.healReadyAt=0;
    const playButton = this.document.getElementById('btnPhoenixPlay');
    const editButton = this.document.getElementById('btnPhoenixEdit');
    this.hud = this.document.getElementById('phoenixPlayHud');
@@ -90,6 +91,8 @@
     this.hud.hidden = false;
     this.modeController.setMode('play');
     b.prefabEditor?.setPlaying(true);
+    b.skillEditor?.setPlaying(true);
+    this.healReadyAt=0;
     if(this.combatHud)this.combatHud.hidden=false;
     this.updatePlayerHud();
     if(this.hpBar)this.hpBar.hidden=true;
@@ -100,6 +103,7 @@
     // Entering PLAY must never leave the editor with a half-finished UI.
     this.active = false;
     b.prefabEditor?.setPlaying(false);
+    b.skillEditor?.setPlaying(false);
     this.document.body.classList.remove('phoenixPlaying');
     this.hud.hidden = true;
     if(this.combatHud)this.combatHud.hidden=true;
@@ -132,6 +136,7 @@
    if (b.joystick) b.joystick.reset();
    this.active = false;
    b.prefabEditor?.setPlaying(false);
+   b.skillEditor?.setPlaying(false);
    this.document.body.classList.remove('phoenixPlaying');
    this.hud.hidden = true;
    if(this.combatHud)this.combatHud.hidden=true;
@@ -190,11 +195,34 @@
    b.keys.clear();b.joystick?.reset();
    b.avatarAttackUntil=0;b.avatarState='';
    b.prefabEditor.setPlaying(true);
+   this.healReadyAt=0;
    b.setAvatarAnimation?.(false);
    if(this.hpBar)this.hpBar.hidden=true;
    if(this.hpTarget)this.hpTarget.textContent='⚔ Ближайший враг';
    if(this.combatNotice)this.combatNotice.textContent='❤️ Возрождение · 100% HP';
    this.updatePlayerHud();
+   return true;
+  }
+
+  heal(){
+   if(!this.active)return false;
+   const now=(typeof performance!=='undefined'?performance.now():Date.now())/1000;
+   if(now<this.healReadyAt){
+    if(this.combatNotice)this.combatNotice.textContent=
+     '💚 Лечение через '+(this.healReadyAt-now).toFixed(1)+' сек';
+    return false;
+   }
+   const result=this.builder.prefabEditor?.combat?.healPlayer(30);
+   if(!result?.ok){
+    if(this.combatNotice)this.combatNotice.textContent=
+     result?.reason==='full'?'❤️ HP уже полные':
+     '💔 Лечение недоступно после смерти';
+    return false;
+   }
+   this.healReadyAt=now+12;
+   this.updatePlayerHud();
+   if(this.combatNotice)this.combatNotice.textContent=
+    '💚 Восстановлено '+result.healed+' HP · откат 12 сек';
    return true;
   }
 
