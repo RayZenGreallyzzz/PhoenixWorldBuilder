@@ -1,0 +1,201 @@
+/* Phoenix Skill HUD Editor 0.7 — drag buttons with a finger in EDIT.
+ * Independent of 3D objects and renderer; project JSON + local preferences.
+ */
+(function(root,factory){
+ 'use strict';const api=factory();
+ if(typeof module!=='undefined'&&module.exports)module.exports=api;
+ if(root)root.PhoenixSkillEditor=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(){
+ 'use strict';
+ const BUTTONS={
+  attack:'btnPhoenixAttack',heal:'btnPhoenixHeal',
+  slot3:'btnPhoenixSlot3',slot4:'btnPhoenixSlot4'
+ };
+ class PhoenixSkillEditor{
+  constructor(builder,doc){
+   if(!builder||!globalThis.PhoenixSkillLayout)
+    throw new Error('Skill HUD schema and Builder required');
+   this.builder=builder;this.doc=doc||document;this.schema=globalThis.PhoenixSkillLayout;
+   this.layer=this.get('phoenixSkillLayer');
+   this.panel=this.get('phoenixSkillEditor');
+   this.select=this.get('phoenixSkillSelect');
+   if(!this.layer||!this.panel||!this.select)
+    throw new Error('Missing Skill HUD editor UI');
+   this.buttons={};this.drag=null;this.editing=false;this.playing=false;
+   this.layout=this.restoreLocal();
+   for(const id of this.schema.IDS){
+    const btn=this.get(BUTTONS[id]);
+    if(!btn)throw new Error('Missing skill button '+id);
+    this.buttons[id]=btn;
+    btn.addEventListener('pointerdown',e=>this.dragStart(id,e));
+    btn.addEventListener('pointermove',e=>this.dragMove(id,e));
+    for(const type of ['pointerup','pointercancel','lostpointercapture'])
+     btn.addEventListener(type,e=>this.dragEnd(id,e));
+   }
+   this.buttons.heal.addEventListener('click',()=>{
+    if(this.playing&&!this.editing)this.builder.playBridge?.heal();
+   });
+   for(const id of ['slot3','slot4']){
+    this.buttons[id].addEventListener('click',()=>{
+     if(this.playing&&!this.editing){
+      const msg=this.get('phoenixCombatNotice');
+      if(msg)msg.textContent='✨ Это слот оформления. Способность пока не назначена.';
+     }
+    });
+   }
+   this.get('btnPhoenixSkills')?.addEventListener('click',()=>this.toggle());
+   this.get('btnSkillClose')?.addEventListener('click',()=>this.close());
+   this.get('btnSkillSave')?.addEventListener('click',()=>this.save());
+   this.get('btnSkillReset')?.addEventListener('click',()=>this.reset());
+   this.select.addEventListener('change',()=>this.loadForm());
+   for(const id of ['phoenixSkillIcon','phoenixSkillLabel','phoenixSkillSize',
+    'phoenixSkillColor','phoenixSkillShape','phoenixSkillOpacity','phoenixSkillEnabled']){
+    const input=this.get(id);
+    input?.addEventListener('input',()=>this.updateFromForm());
+    input?.addEventListener('change',()=>this.updateFromForm());
+   }
+   this.select.value='attack';
+   this.loadForm();this.render();
+  }
+  get(id){return this.doc.getElementById(id)}
+  restoreLocal(){
+   try {
+    const stored=localStorage.getItem('phoenix-engine-skill-hud-v1');
+    if(stored)return this.schema.validate(JSON.parse(stored));
+   }catch(e){console.warn('Skill HUD: resetting invalid local layout',e)}
+   return this.schema.defaultLayout();
+  }
+  current(){return this.layout.slots.find(s=>s.id===this.select.value)||this.layout.slots[0]}
+  loadForm(){
+   const s=this.current();
+   const values={
+    phoenixSkillIcon:s.icon,phoenixSkillLabel:s.label,
+    phoenixSkillSize:String(s.size),phoenixSkillColor:s.color,
+    phoenixSkillShape:s.shape,phoenixSkillOpacity:String(Math.round(s.opacity*100))
+   };
+   for(const [key,value] of Object.entries(values))this.get(key).value=value;
+   this.get('phoenixSkillEnabled').checked=s.enabled;
+   this.describe();
+  }
+  describe(message){
+   const node=this.get('phoenixSkillFeedback');
+   if(!node)return;
+   const id=this.current().id;
+   const functionality={
+    attack:'⚔ Рабочая атака, связана с боевой системой.',
+    heal:'💚 Рабочее лечение: +30 HP, перезарядка 12 секунд.',
+    slot3:'✨ Резервная кнопка — пока без игрового действия.',
+    slot4:'🛡 Резервная кнопка — пока без игрового действия.'
+   };
+   node.textContent=message||'Перетаскивай кнопку пальцем. '+functionality[id];
+  }
+  updateFromForm(){
+   const id=this.current().id;
+   const changed={
+    icon:this.get('phoenixSkillIcon').value,
+    label:this.get('phoenixSkillLabel').value,
+    size:Number(this.get('phoenixSkillSize').value),
+    color:this.get('phoenixSkillColor').value,
+    shape:this.get('phoenixSkillShape').value,
+    opacity:Number(this.get('phoenixSkillOpacity').value)/100,
+    enabled:this.get('phoenixSkillEnabled').checked
+   };
+   try{
+    this.layout=this.schema.update(this.layout,id,changed);
+    this.render();this.describe();
+   }catch(error){this.describe('Проверь данные: '+error.message)}
+  }
+  open(){
+   if(this.builder.playBridge?.active)return false;
+   this.builder.prefabEditor?.close();
+   this.editing=true;this.panel.hidden=false;
+   this.doc.body.classList.add('phoenixSkillEditing');
+   this.layer.hidden=false;
+   this.loadForm();this.render();return true;
+  }
+  close(){
+   if(!this.editing)return false;
+   this.drag=null;this.editing=false;this.panel.hidden=true;
+   this.doc.body.classList.remove('phoenixSkillEditing');
+   this.render();return true;
+  }
+  toggle(){return this.editing?this.close():this.open()}
+  setPlaying(value){
+   this.playing=!!value;
+   if(this.playing)this.close();
+   this.render();
+  }
+  dragStart(id,event){
+   if(!this.editing)return;
+   event.preventDefault();
+   this.select.value=id;this.loadForm();
+   this.drag={id,pointerId:event.pointerId};
+   this.buttons[id].setPointerCapture?.(event.pointerId);
+  }
+  dragMove(id,event){
+   if(!this.editing||this.drag?.id!==id||this.drag.pointerId!==event.pointerId)return;
+   event.preventDefault();
+   const width=Math.max(1,window.innerWidth),height=Math.max(1,window.innerHeight);
+   const s=this.layout.slots.find(s=>s.id===id);
+   const marginX=Math.max(5,s.size/2/width*100);
+   const marginY=Math.max(8,s.size/2/height*100);
+   const x=Math.max(marginX,Math.min(100-marginX,event.clientX/width*100));
+   const y=Math.max(marginY,Math.min(100-marginY,event.clientY/height*100));
+   this.layout=this.schema.update(this.layout,id,{x,y});
+   this.render();
+  }
+  dragEnd(id,event){
+   if(this.drag?.id!==id||this.drag.pointerId!==event.pointerId)return;
+   this.drag=null;
+   this.describe('Положение изменено. Нажми «Сохранить раскладку».');
+  }
+  render(){
+   this.layer.hidden=!(this.editing||this.playing);
+   for(const s of this.layout.slots){
+    const button=this.buttons[s.id];
+    button.hidden=!(s.enabled||this.editing);
+    button.style.left=s.x+'%';
+    button.style.top=s.y+'%';
+    button.style.width=s.size+'px';
+    button.style.height=s.size+'px';
+    button.style.opacity=String(s.opacity);
+    button.style.backgroundColor=s.color;
+    button.style.borderRadius=s.shape==='circle'?'50%':'18px';
+    button.classList.toggle('phoenixSkillDisabled',!s.enabled);
+    button.classList.toggle('phoenixSkillSelected',this.editing&&this.select.value===s.id);
+    button.setAttribute('aria-label',s.label+' — '+s.id);
+    const icon=this.doc.createElement('span');
+    icon.className='phoenixSkillIcon';icon.textContent=s.icon;
+    const label=this.doc.createElement('small');
+    label.className='phoenixSkillCaption';label.textContent=s.label;
+    button.replaceChildren(icon,label);
+   }
+  }
+  serialize(){return this.schema.validate(this.layout)}
+  loadFromProject(raw){
+   if(raw!==null&&raw!==undefined){
+    try{this.layout=this.schema.validate(raw)}
+    catch(error){
+     console.warn('Invalid skill HUD in project, using device preferences',error);
+     this.layout=this.restoreLocal();
+    }
+   }else this.layout=this.restoreLocal();
+   this.loadForm();this.render();
+  }
+  save(){
+   this.updateFromForm();
+   const data=this.serialize();
+   try{localStorage.setItem('phoenix-engine-skill-hud-v1',JSON.stringify(data))}
+   catch(error){console.warn('Cannot save skill preferences locally',error)}
+   this.builder.save?.();
+   this.describe('✅ Раскладка сохранена в настройках и проекте.');
+   return data;
+  }
+  reset(){
+   this.layout=this.schema.defaultLayout();this.loadForm();this.render();
+   this.save();
+   this.describe('↻ Восстановлена раскладка по умолчанию.');
+  }
+ }
+ return PhoenixSkillEditor;
+});
