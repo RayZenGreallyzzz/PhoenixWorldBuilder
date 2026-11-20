@@ -565,3 +565,9 @@ body.phoenixPlaying #charControls{z-index:11;bottom:max(18px,env(safe-area-inset
 .phoenixPrefabPanel #phoenixPrefabStatus{padding:8px;background:#213b48;border-radius:6px;color:#9be8d5;min-height:30px}
 .phoenixPrefabPanel hr{width:100%;border:0;border-top:1px solid #3a6475}
 @media(max-width:680px){.phoenixPrefabPanel{top:max(7px,env(safe-area-inset-top));bottom:max(7px,env(safe-area-inset-bottom));max-height:calc(100dvh - 14px);width:min(350px,calc(100vw - 14px));padding:9px}.phoenixPrefabEntry{padding:5px;font-size:12px}}
+
+/* Compact on tablet screens: do not push Save / JSON / GLB off the toolbar. */
+@media(max-width:1350px){
+ .topbar .phoenixPrefabEntry{font-size:0;width:40px;min-width:40px;flex:0 0 40px;padding:5px 3px}
+ .topbar .phoenixPrefabEntry::before{content:'🧬';font-size:21px;line-height:1}
+}
