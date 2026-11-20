@@ -48,6 +48,15 @@
     dead:this.playerDead,kills:this.kills};
   }
   isPlayerDead(){return this.playerDead;}
+  healPlayer(amount){
+   bounded(amount,1,1000000,'heal amount');
+   if(this.playerDead)return {ok:false,reason:'player-dead'};
+   if(this.playerHp>=this.playerMaxHp)return {ok:false,reason:'full'};
+   const before=this.playerHp;
+   this.playerHp=Math.min(this.playerMaxHp,this.playerHp+amount);
+   return {ok:true,healed:this.playerHp-before,hp:this.playerHp,
+    maxHp:this.playerMaxHp};
+  }
   damagePlayer(attackerId,damage){
    const mob=this.mobs.get(attackerId);
    if(!mob||mob.hp<=0||mob.faction!=='enemy'||this.playerDead)
