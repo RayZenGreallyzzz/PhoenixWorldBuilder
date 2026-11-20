@@ -77,6 +77,7 @@ jobs:
             node tests/test-play-wiring.cjs
             node tests/test-prefab-core.cjs
             node tests/test-prefab-editor.cjs
+            node tests/test-prefab-wiring.cjs
           fi
 
       - name: Configure Java 17
