@@ -30,3 +30,17 @@ For an Android-compatible Phoenix Engine baseline, preserve the original UV44 pr
 ## Phoenix Engine branch
 
 `phoenix-engine-0.1` remains a separate branch created from `main`. It has **not** been rebased onto this UV44 baseline.
+
+## Subsequent UV / corner fixes identified on GitHub (NOT YET APPLIED)
+
+The user recalled fixes committed after the stable UV44 APK. The supplied APK's `surface-workshop.js` and `surface-materials.js` do not contain the distinctive code added in these November 9 commits. Before making an Engine baseline, review the **whole dependency chain** in GitHub, not just isolated cherry-picks:
+
+- `7b7e5d7483e5` — physical UV dimensions and imported arc/L-corner wall mapping.
+- `6779abe9cbd7` — accurate endpoints and seam-safe UV mapping for quarter/half curved walls.
+- `edad120a2c3a` — rotated/mirrored L-corner UV orientation using local triangle normals.
+- `c5d26cd442ce` — outside/front finish for both left- and right-hand imported L-corners.
+- `b89c4bba8b1a` and `d6cdb4ee9191` — follow-up changes for mirrored L-wall exterior and imported flat-wall faces.
+
+Relevant GitHub branches: `fix/pr44-safe-curved-uv-window-glass`, `fix/pr44-physical-corner-sides-and-cut-safe-uv`, and `fix/phoenix-wall-exterior-uv-wrap-20261110`. These branches contain additional changes including tests and mirror controls; **do not copy the entire branch blindly**.
+
+**Status:** candidates identified; no code merged/cherry-picked into this baseline. The `stable/uv44` branch still needs UV44 WebView asset restoration and device testing before selective porting.
