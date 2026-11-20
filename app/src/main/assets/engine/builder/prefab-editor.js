@@ -258,30 +258,69 @@
    render.root.userData.phoenixEntityId=id;
    render.root.position.fromArray(transform.position);
    render.root.rotation.y=transform.yaw||0;
+   render.accum=0;
+   render.aiState=PhoenixAI.initial(transform.position);
    this.layer.add(render.root);this.rendered.set(id,render);
-   if(this.playing)this.playIdle(id,render);
+   if(this.playing)this.startAnimation(id,render);
   }
-  playIdle(id,render){
-   if(!render.clips?.length)return;
+  startAnimation(id,render){
    const prefabId=this.world.getComponent(id,'prefab')?.id;
-   const template=this.registry.get(prefabId);
-   const clips=render.clips;
-   const clip=clips.find(c=>c.name===template?.animations?.idle)||
-    clips.find(c=>/idle|stand|rest|покой/i.test(c.name))||clips[0];
-   if(!clip)return;
-   render.mixer=new THREE.AnimationMixer(render.root);
-   render.mixer.clipAction(clip).play();
+   const p=this.registry.get(prefabId);
+   render.animation=new PhoenixAnimations.Controller(render.root,render.clips||[],
+    p?.animations||{},THREE);
+   render.animation.setState('idle');
   }
   setPlaying(yes){
    this.playing=!!yes;
    for(const [id,render] of this.rendered){
-    if(render.mixer){render.mixer.stopAllAction();render.mixer.uncacheRoot(render.root);render.mixer=null}
-    if(this.playing)this.playIdle(id,render);
+    render.animation?.stop();render.animation=null;
+    const saved=this.world.getComponent(id,'transform');
+    if(saved){
+     render.root.position.fromArray(saved.position);
+     render.root.rotation.y=saved.yaw||0;
+     render.aiState=PhoenixAI.initial(saved.position);
+    }
+    render.accum=0;
+    if(this.playing)this.startAnimation(id,render);
    }
+   if(this.playing&&!this.collider&&typeof CharacterCollision!=='undefined')
+    this.collider=new CharacterCollision.Solver({radius:.27,height:1.6});
   }
   update(dt){
-   if(!this.playing)return;
-   for(const render of this.rendered.values())render.mixer?.update(dt);
+   if(!this.playing||!Number.isFinite(dt)||dt<=0)return;
+   for(const render of this.rendered.values())render.animation?.update(dt);
+   const entities=[...this.rendered.entries()];
+   if(!entities.length)return;
+   const player=this.b.player.position;
+   const max=Math.min(entities.length,10);
+   for(let step=0;step<max;step++){
+    const [id,render]=entities[(this.aiCursor+step)%entities.length];
+    const p=this.registry.get(this.world.getComponent(id,'prefab')?.id);
+    if(!p||p.ai?.mode==='idle')continue;
+    render.accum=Math.min(.35,(render.accum||0)+dt);
+    if(render.accum<.12)continue;
+    const dtStep=render.accum;render.accum=0;
+    if(Math.hypot(render.root.position.x-player.x,
+     render.root.position.z-player.z)>35){
+     render.animation?.setState('idle');continue;
+    }
+    const decision=PhoenixAI.tick(render.aiState,render.root.position.toArray(),
+     player.toArray(),p.ai,p.stats,dtStep,p.faction);
+    render.aiState=decision.state;
+    if(Math.hypot(decision.move[0],decision.move[2])>.0001){
+     const before=render.root.position.clone();
+     const delta=new THREE.Vector3(...decision.move);
+     if(this.collider&&this.b.collisionsEnabled&&this.b.entries.length){
+      const result=this.collider.move(before,delta,this.b.entries);
+      render.root.position.copy(result.position);
+      if(result.blocked&&result.displacement.lengthSq()<.00001)
+       decision.animation='idle';
+     }else render.root.position.add(delta);
+    }
+    if(decision.yaw!==null)render.root.rotation.y=decision.yaw;
+    render.animation?.setState(decision.animation);
+   }
+   this.aiCursor=(this.aiCursor+max)%entities.length;
   }
   async createEntity(prefabId,position){
    const p=this.registry.get(prefabId);
@@ -322,9 +361,9 @@
   }
   removeRender(id){
    const render=this.rendered.get(id);if(!render)return;
-   if(render.mixer){render.mixer.stopAllAction();render.mixer.uncacheRoot(render.root)}
+   render.animation?.stop();
    render.root.removeFromParent();this.rendered.delete(id);
-   // Geometry/materials may be shared with Builder's GLB cache: never dispose them here.
+   // Geometry/materials are shared with Builder's GLB cache; do not dispose.
   }
   removeSelectedEntity(){
    if(this.b.playBridge.active)return;
