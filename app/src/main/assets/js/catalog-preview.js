@@ -37,7 +37,24 @@ const CatalogPreview=(()=>{
    const src=renderer.domElement.toDataURL('image/jpeg',.74);
    try{await dbPut('previews',key,src)}catch(e){}
    return src;
-  }finally{turntable.remove(model)}
+  }finally{
+   turntable.remove(model);
+   // Thumbnail-only decoded GLBs must release GPU buffers/textures. Never
+   // dispose shared construction templates already in the main editor.
+   if(source?.userData?.catalogTemporary){
+    source.traverse(mesh=>{
+     if(!mesh.isMesh)return;
+     mesh.geometry?.dispose();
+     const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+     for(const mat of materials){
+      if(!mat)continue;
+      for(const key of ['map','normalMap','aoMap','roughnessMap','metalnessMap','emissiveMap'])
+       mat[key]?.dispose();
+      mat.dispose();
+     }
+    });
+   }
+  }
  }
  async function pump(){
   if(busy)return;busy=true;
