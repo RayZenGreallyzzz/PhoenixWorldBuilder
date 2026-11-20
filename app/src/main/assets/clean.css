@@ -582,3 +582,14 @@ body.phoenixPlaying #charControls{z-index:11;bottom:max(18px,env(safe-area-inset
 #btnPhoenixAttack:active{transform:scale(.96);background:#d05b3e}
 #phoenixCombatNotice{font-size:11px;min-height:25px;line-height:1.3;color:#fff1c9}
 @media(max-width:700px){#phoenixCombatHud{width:min(148px,34vw);right:max(7px,env(safe-area-inset-right));bottom:max(5px,env(safe-area-inset-bottom));padding:6px;gap:4px}#btnPhoenixAttack{width:73px;height:73px;min-width:73px;min-height:73px;font-size:12px}}
+
+/* Phoenix 0.5: player HP and death controls use the existing compact HUD. */
+#phoenixCombatHud .phoenixPlayerHealth{display:flex;flex-direction:column;align-items:stretch;gap:3px;width:100%;font-size:12px}
+#phoenixPlayerHP{width:100%;height:15px;accent-color:#51d16f}
+#phoenixPlayerHPText{font-variant-numeric:tabular-nums;font-size:12px;font-weight:800}
+#phoenixKills{font-size:11px;color:#f5d2a1}
+#phoenixDeathNotice{font-weight:900;font-size:14px;color:#ffb3a9}
+#btnPhoenixRespawn{background:#20744f;border:2px solid #a8ffce;border-radius:9px;padding:9px;color:#fff;font-weight:900;min-height:42px;width:100%;touch-action:manipulation}
+#btnPhoenixAttack:disabled{filter:grayscale(1);opacity:.45;pointer-events:none}
+#phoenixDeathNotice[hidden],#btnPhoenixRespawn[hidden]{display:none!important}
+@media(max-width:700px){#phoenixCombatHud .phoenixPlayerHealth{font-size:11px}#phoenixPlayerHPText{font-size:10px}#phoenixDeathNotice{font-size:12px}#btnPhoenixRespawn{font-size:12px;min-height:39px}}
