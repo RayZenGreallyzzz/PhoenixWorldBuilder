@@ -193,6 +193,8 @@ class CleanBuilder{
   $('avatarInBuild').checked=this.showAvatarInBuild;
   $('enableCollisions').checked=this.collisionsEnabled;
   this.setMode('build');this.selectKind('wall');
+  // Engine attaches to existing UV44 player/controls, no extra render loop.
+  this.playBridge=new PhoenixPlayBridge(this,window.PhoenixCore);
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
@@ -4850,6 +4852,7 @@ class CleanBuilder{
   $('btnSetSockets').onclick=()=>this.setSockets();
   $('btnClearSockets').onclick=()=>this.clearSockets();
   this.canvas.addEventListener('pointerdown',e=>{
+   if(this.playBridge?.active)return;
    if(e.isPrimary===false||(!this.shapePlaceMode&&!this.shapeSourceMode))return;
    // Consume before OrbitControls, regular selection, Gizmo and drag handlers.
    this.shapeConsumedPointer=e.pointerId;
@@ -4864,12 +4867,14 @@ class CleanBuilder{
    e.preventDefault();e.stopImmediatePropagation();
   },true);
   this.canvas.addEventListener('pointermove',e=>{
+   if(this.playBridge?.active)return;
    if(this.shapeDragPointer!==e.pointerId)return;
    this.updateShapeByPointer(e);
    e.preventDefault();e.stopImmediatePropagation();
   },true);
   for(const type of ['pointerup','pointercancel'])
    this.canvas.addEventListener(type,e=>{
+    if(this.playBridge?.active)return;
     if(this.shapeConsumedPointer!==e.pointerId&&this.shapeDragPointer!==e.pointerId)return;
     if(this.shapeDragPointer===e.pointerId){
      if(type==='pointerup')this.updateShapeByPointer(e);
@@ -4881,6 +4886,7 @@ class CleanBuilder{
     e.preventDefault();e.stopImmediatePropagation();
    },true);
   this.canvas.addEventListener('pointerdown',e=>{
+   if(this.playBridge?.active)return;
    if(!SceneManager.editingAllowed(this.selected)||this.surfaceSidePick||this.cameraFocusPick||this.openingPickMode||this.decalPickMode||this.tool!=='pick'||!this.selected||!this.gizmo.start(e))return;
    this.gizmoBefore=this.project();
    this.gizmoPointer=e.pointerId;this.controls.enabled=false;
@@ -4921,16 +4927,18 @@ class CleanBuilder{
   };
   for(const type of ['pointerup','pointercancel'])
    this.canvas.addEventListener(type,finishGizmo,true);
-  this.canvas.addEventListener('pointerdown',e=>this.beginObjectDrag(e),true);
-  this.canvas.addEventListener('pointermove',e=>this.continueObjectDrag(e),true);
+  this.canvas.addEventListener('pointerdown',e=>{if(!this.playBridge?.active)this.beginObjectDrag(e)},true);
+  this.canvas.addEventListener('pointermove',e=>{if(!this.playBridge?.active)this.continueObjectDrag(e)},true);
   for(const type of ['pointerup','pointercancel'])
-   this.canvas.addEventListener(type,e=>this.finishObjectDrag(e),true);
+   this.canvas.addEventListener(type,e=>{if(!this.playBridge?.active)this.finishObjectDrag(e)},true);
   this.canvas.addEventListener('pointerdown',e=>{
+   if(this.playBridge?.active)return;
    // A second finger must not generate a click/placement at the end of pan.
    if(e.isPrimary===false){this.pointerStart=null;return}
    this.pointerStart={pointerId:e.pointerId,x:e.clientX,y:e.clientY,time:performance.now()};
   });
   this.canvas.addEventListener('pointerup',e=>{
+   if(this.playBridge?.active)return;
    const start=this.pointerStart;
    if(!start||e.pointerId!==start.pointerId||e.isPrimary===false)return;
    this.pointerStart=null;
@@ -4953,6 +4961,7 @@ class CleanBuilder{
   });
   this.canvas.addEventListener('pointercancel',()=>{this.pointerStart=null});
   this.canvas.addEventListener('pointermove',e=>{
+   if(this.playBridge?.active)return;
    if(e.buttons||this.cameraFocusPick||this.tool!=='place')return;
    const point=this.rayPoint(e);if(!point&&!this.floor)return;
    if(point)this.cursor.copy(point);
@@ -4960,6 +4969,7 @@ class CleanBuilder{
    this.updatePreview(this.cursor,true,this.ray);
   });
   window.addEventListener('keydown',e=>{
+   if(this.playBridge?.handleKeyDown(e))return;
    const tag=document.activeElement?.tagName;
    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
    if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='z'){
