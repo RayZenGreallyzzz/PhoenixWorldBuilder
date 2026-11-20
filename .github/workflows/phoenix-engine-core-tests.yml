@@ -13,6 +13,8 @@ on:
       - 'app/src/main/assets/js/clean-app.js'
       - 'tests/test-play-bridge.cjs'
       - 'tests/test-play-wiring.cjs'
+      - 'tests/test-prefab-core.cjs'
+      - 'tests/test-prefab-editor.cjs'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
 permissions:
@@ -33,9 +35,13 @@ jobs:
         run: |
           node --check app/src/main/assets/engine/core/phoenix-core.js
           node --check app/src/main/assets/engine/builder/play-bridge.js
+          node --check app/src/main/assets/engine/core/phoenix-prefabs.js
+          node --check app/src/main/assets/engine/builder/prefab-editor.js
           node --check app/src/main/assets/js/clean-app.js
       - name: Run Phoenix Core unit tests
         run: |
           node tests/test-phoenix-core.cjs
           node tests/test-play-bridge.cjs
           node tests/test-play-wiring.cjs
+          node tests/test-prefab-core.cjs
+          node tests/test-prefab-editor.cjs
