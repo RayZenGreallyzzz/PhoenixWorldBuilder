@@ -4479,7 +4479,7 @@ class CleanBuilder{
   // Existing GLB avatar only; no retargeting or second AnimationMixer.
   if(!this.avatarMixer||!this.avatarClips.length)return false;
   const clip=this.avatarClips.find(c=>/death|die|dead|смерт|гибел/i.test(c.name));
-  if(!clip){this.avatarMixer.stopAllAction();return false;}
+  if(!clip){this.avatarMixer.stopAllAction();this.avatarState='death';return false;}
   const action=this.avatarActions[clip.name];if(!action)return false;
   for(const other of Object.values(this.avatarActions))
    if(other!==action&&other.isRunning())other.fadeOut(.1);
