@@ -196,6 +196,7 @@ class CleanBuilder{
   // Engine attaches to existing UV44 player/controls, no extra render loop.
   this.playBridge=new PhoenixPlayBridge(this,window.PhoenixCore);
   this.prefabEditor=new PhoenixPrefabEditor(this);
+  this.skillEditor=new PhoenixSkillEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
@@ -4456,6 +4457,8 @@ class CleanBuilder{
     notify('Дом открыт, но игровые объекты в JSON повреждены: '+err.message,'warn');
    }
   }
+  // Skill layout is optional; old UV44 JSON projects keep device preferences.
+  this.skillEditor?.loadFromProject(doc.phoenixGame?.hudLayout||null);
  }
  playAttackAnimation(){
   // Existing imported avatar clips only: no retargeter and no new mixer.
