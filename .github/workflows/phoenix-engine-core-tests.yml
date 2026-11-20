@@ -19,6 +19,7 @@ on:
       - 'tests/test-phoenix-ai.cjs'
       - 'tests/test-phoenix-animations.cjs'
       - 'tests/test-phoenix-combat.cjs'
+      - 'tests/test-player-hud.cjs'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
 permissions:
@@ -56,3 +57,4 @@ jobs:
           node tests/test-phoenix-ai.cjs
           node tests/test-phoenix-animations.cjs
           node tests/test-phoenix-combat.cjs
+          node tests/test-player-hud.cjs
