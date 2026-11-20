@@ -6,7 +6,7 @@ const read=file=>fs.readFileSync(path.join(base,file),'utf8');
 const html=read('index.html'),js=read('js/clean-app.js'),
  css=read('clean.css'),editor=read('engine/builder/prefab-editor.js'),
  bridge=read('engine/builder/play-bridge.js');
-const scripts=['engine/core/phoenix-core.js','engine/core/phoenix-prefabs.js',
+const scripts=['engine/core/phoenix-core.js','engine/core/phoenix-ai.js','engine/core/phoenix-prefabs.js','engine/runtime/phoenix-animations.js',
  'engine/builder/play-bridge.js','engine/builder/prefab-editor.js','js/clean-app.js'];
 let previous=-1;
 for(const name of scripts){
@@ -18,7 +18,10 @@ for(const id of ['btnPhoenixPrefabs','phoenixPrefabPanel','btnPrefabSave',
  'phoenixPrefabName','phoenixPrefabAsset','phoenixPrefabSaved',
  'phoenixPrefabIdle','phoenixPrefabWalk','phoenixPrefabAttack',
  'phoenixPrefabHP','phoenixPrefabDamage','phoenixPrefabSpeed',
- 'phoenixPrefabEntities','btnPrefabRemoveEntity']){
+ 'phoenixPrefabEntities','btnPrefabRemoveEntity','phoenixPrefabAI',
+ 'phoenixPrefabPatrolRadius','phoenixPrefabAggroRadius','phoenixPrefabAttackRange',
+ 'phoenixPrefabCooldown','phoenixPrefabRun','phoenixPrefabHit',
+ 'phoenixPrefabDeath','phoenixPrefabCast']){
  assert(html.includes('id="'+id+'"'),'Prefab UI field missing '+id);
 }
 assert(js.includes('this.prefabEditor=new PhoenixPrefabEditor(this)'));
