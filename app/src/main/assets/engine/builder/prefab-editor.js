@@ -288,7 +288,10 @@
   }
   update(dt){
    if(!this.playing||!Number.isFinite(dt)||dt<=0)return;
-   for(const render of this.rendered.values())render.animation?.update(dt);
+   for(const render of this.rendered.values()){
+    render.animation?.update(dt);
+    render.accum=Math.min(.35,(render.accum||0)+dt);
+   }
    const entities=[...this.rendered.entries()];
    if(!entities.length)return;
    const player=this.b.player.position;
@@ -297,7 +300,6 @@
     const [id,render]=entities[(this.aiCursor+step)%entities.length];
     const p=this.registry.get(this.world.getComponent(id,'prefab')?.id);
     if(!p||p.ai?.mode==='idle')continue;
-    render.accum=Math.min(.35,(render.accum||0)+dt);
     if(render.accum<.12)continue;
     const dtStep=render.accum;render.accum=0;
     if(Math.hypot(render.root.position.x-player.x,
