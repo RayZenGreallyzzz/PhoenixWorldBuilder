@@ -35,7 +35,7 @@ const ids=['phoenixSkillLayer','phoenixSkillEditor','phoenixSkillSelect',
 const elements=Object.fromEntries(ids.map(id=>[id,new E(id)]));
 const doc={body:new E('body'),getElementById:id=>elements[id]||null,
  createElement:name=>new E(name)};
-const builder={playBridge:{active:false,heals:0,heal(){this.heals++}},
+const builder={playBridge:{active:false,heals:0,shots:0,heals:0,heal(){this.heals++},fire(){this.shots++;return true}},
  prefabEditor:{closes:0,close(){this.closes++}},
  saves:0,save(){this.saves++}};
 const Editor=require('../app/src/main/assets/engine/builder/skill-hud-editor.js');
@@ -118,10 +118,8 @@ assert.equal(restored.serialize().slots.find(s=>s.id==='fire').enabled,true);
 restored.setPlaying(true);
 for(const id of ['btnPhoenixFire','btnPhoenixAim','btnPhoenixReload','btnPhoenixJump','btnPhoenixCrouch'])
  assert.equal(elements[id].hidden,false,id+' must be visible in shooter PLAY');
-const warning=elements.phoenixCombatNotice;
 elements.btnPhoenixFire.listeners.click();
-assert(warning.textContent.includes('пока не добавлена'),
- 'Shooter fire must not pretend a weapon system already exists');
+assert.equal(builder.playBridge.shots,1,'Shooter fire must dispatch real weapon input');
 assert.equal(elements.btnPhoenixSlot7.hidden,true,'MMO actions hidden in shooter PLAY');
 restored.setPlaying(false);
 const earlier={version:2,slots:schema.presetLayout('wild-rift').slots.slice(0,6)};
