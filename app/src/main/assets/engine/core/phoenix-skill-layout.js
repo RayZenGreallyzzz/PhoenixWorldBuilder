@@ -28,16 +28,16 @@
     style('heal',{x:69,y:89,size:52}),
     style('slot3',{x:76,y:77,size:64,label:'СКИЛЛ 1',enabled:true}),
     style('slot4',{x:83,y:67,size:64,label:'СКИЛЛ 2',enabled:true}),
-    style('slot5',{x:91,y:64,size:64,label:'СКИЛЛ 3',enabled:false}),
-    style('ultimate',{x:93,y:52,size:72,enabled:true})
+    style('slot5',{x:90,y:64,size:64,label:'СКИЛЛ 3',enabled:false}),
+    style('ultimate',{x:82,y:54,size:72,enabled:true})
    ],
    'wild-rift':[
     style('attack',{x:90,y:84,size:82}),
     style('heal',{x:70,y:91,size:50}),
     style('slot3',{x:76,y:77,size:60,label:'Q',enabled:true}),
     style('slot4',{x:83,y:69,size:60,label:'W',enabled:true}),
-    style('slot5',{x:91,y:65,size:60,label:'E',enabled:true}),
-    style('ultimate',{x:94,y:53,size:70,label:'R · УЛЬТА',enabled:true})
+    style('slot5',{x:90,y:65,size:60,label:'E',enabled:true}),
+    style('ultimate',{x:82,y:54,size:70,label:'R · УЛЬТА',enabled:true})
    ]
   };
   if(!Object.prototype.hasOwnProperty.call(presets,preset))
