@@ -1,0 +1,156 @@
+--- a/app/src/main/assets/js/surface-workshop.js
++++ b/app/src/main/assets/js/surface-workshop.js
+@@ -298,7 +298,8 @@
+   // used a single centreline and jumped by the wall thickness at the elbow.
+   const corner=kind==='corner'?(()=>{
+    const cx=Math.max(0,localBox.max.x),cz=Math.max(0,localBox.max.z);
+-   const scaleX=worldScale.x,scaleZ=worldScale.z;
++   // PHOENIX_UV44_POSTFIX_20261109: mirrored objects need positive metre lengths.
++   const scaleX=Math.abs(worldScale.x),scaleZ=Math.abs(worldScale.z);
+    return {cx,cz,scaleX,scaleZ,
+     outer:(1.9+cx)*scaleX+(1.9+cz)*scaleZ,
+     inner:(1.9-cx)*scaleX+(1.9-cz)*scaleZ};
+@@ -319,12 +320,20 @@
+    if(reversed)n.negate();
+    const orientedNormal=mode==='joined'?n:n.clone().applyQuaternion(rootInverseRotation);
+    faceCenter.copy(p0).add(p1).add(p2).multiplyScalar(1/3).applyMatrix4(rootInverse);
++   // PHOENIX_UV44_POSTFIX_20261109: classify built-in corner arms in
++   // root-local space, not rotated/mirrored world normals.
++   const cornerNormal=kind==='corner'?p1.clone().applyMatrix4(rootInverse)
++    .sub(p0.clone().applyMatrix4(rootInverse))
++    .cross(p2.clone().applyMatrix4(rootInverse)
++     .sub(p0.clone().applyMatrix4(rootInverse))).normalize():null;
++
+    // Openings can reverse winding. The physical side determines reading direction.
+    if(kind==='wall'&&Math.abs(orientedNormal.z)>.72&&orientedNormal.z*faceCenter.z<0)
+     orientedNormal.negate();
+-   const top=Math.abs(orientedNormal.y)>.55;
+-   const axis=top?'xz':Math.abs(orientedNormal.x)>=Math.abs(orientedNormal.z)?'zy':'xy';
+-   const flipU=top?orientedNormal.y<0:axis==='zy'?orientedNormal.x>0:orientedNormal.z<0;
++   const faceNormal=cornerNormal||orientedNormal;
++   const top=Math.abs(faceNormal.y)>.55;
++   const axis=top?'xz':Math.abs(faceNormal.x)>=Math.abs(faceNormal.z)?'zy':'xy';
++   const flipU=top?faceNormal.y<0:axis==='zy'?faceNormal.x>0:faceNormal.z<0;
+    // For angled walls, project onto a unit physical tangent, not world X/Z
+    // coordinates (which shrink texture scale by cos(rotation)).
+    const tangent=new THREE.Vector3(orientedNormal.z,0,-orientedNormal.x).normalize();
+--- a/app/src/main/assets/js/surface-materials.js
++++ b/app/src/main/assets/js/surface-materials.js
+@@ -367,13 +367,54 @@
+   }
+   return 'end';
+  }
++ // PHOENIX_UV44_POSTFIX_20261109: derive imported wall faces from real
++ // physical sockets, without trusting face winding or world rotation.
++ function importedWallProfile(root,kind,category){
++  if(category!=='wall'||!String(kind).startsWith('glb:')||
++     typeof CleanGeometry==='undefined'||!root)return null;
++  const sockets=CleanGeometry.sockets(kind,root,null,'wall');
++  if(sockets.length===2){
++   const [start,end]=sockets;
++   const a=start.point,b=end.point;
++   const d=start.out.clone().negate().setY(0),e=end.out.clone().negate().setY(0);
++   const cross=d.x*e.z-d.z*e.x;
++   if(Math.abs(cross)>.85){
++    const dx=b.x-a.x,dz=b.z-a.z;
++    const t=(dx*e.z-dz*e.x)/cross;
++    const u=(dx*d.z-dz*d.x)/cross;
++    const turn=a.clone().addScaledVector(d,t);
++    if(t>.4&&u>.4&&t<120&&u<120){
++     const first=turn.clone().sub(a),second=b.clone().sub(turn);
++     if(first.length()>.4&&second.length()>.4)
++      return {type:'corner',a:a.clone(),turn,b:b.clone(),
++       first,second,outsideSign:cross>0?1:-1};
++    }
++   }
++  }
++  // Only thin, upright bounding boxes with known physical end sockets
++  // qualify as flat walls. Everything else keeps UV44's original behavior.
++  if(sockets.length!==2||Math.abs(sockets[0].out.dot(sockets[1].out)+1)>.18)
++   return null;
++  const box=CleanGeometry.localBounds(root),size=box.getSize(new THREE.Vector3());
++  const thickness=Math.min(size.x,size.z),length=Math.max(size.x,size.z);
++  if(box.isEmpty()||size.y<.4||thickness<.01||thickness>.8||
++     length<.5||length/thickness<3.2)return null;
++  const thinAxis=size.x<size.z?'x':'z';
++  return {type:'flat',thinAxis,centre:(box.min[thinAxis]+box.max[thinAxis])/2};
++ }
++ function segmentDistance(point,a,b){
++  const dx=b.x-a.x,dz=b.z-a.z,den=dx*dx+dz*dz;
++  const t=Math.max(0,Math.min(1,den>1e-9?
++   ((point.x-a.x)*dx+(point.z-a.z)*dz)/den:0));
++  return Math.hypot(point.x-a.x-dx*t,point.z-a.z-dz*t);
++ }
+  // A wall side is a PHYSICAL surface, not the sign of a triangle's
+  // normal: the generator for cut-out walls has opposite winding to BoxGeometry,
+  // and circular walls turn through X/Z as they go around the building.
+  // point is a root-local position on the face (not a world position).
+  // "front" = local +Z on a straight wall, outer radius on a round wall,
+  // or the outside of the two arms of the built-in L corner.
+- function sideFromNormal(normal,category='wall',kind='',point=null){
++ function sideFromNormal(normal,category='wall',kind='',point=null,profile=null){
+   if(category==='floor'){
+    // Thin upright faces are slab END faces, not the walking surface.
+    // Keep top/bottom materials independent from the narrow rim.
+@@ -419,6 +460,27 @@
+     return point.x>=0?'front':'back';
+    return wallEndScope(kind,point);
+   }
++  if(point&&profile?.type==='corner'){
++   const first=segmentDistance(point,profile.a,profile.turn)<=
++    segmentDistance(point,profile.turn,profile.b);
++   const start=first?profile.a:profile.turn;
++   const along=first?profile.first:profile.second;
++   const length=Math.hypot(along.x,along.z);
++   if(length>.0001){
++    // Narrow cuts, wall ends, and reveals must not be repainted as fronts.
++    const perpendicularX=-along.z/length,perpendicularZ=along.x/length;
++    if(Math.abs(normal.x*perpendicularX+normal.z*perpendicularZ)<.68)
++     return 'end';
++    const sign=((point.x-start.x)*perpendicularX+
++     (point.z-start.z)*perpendicularZ)*profile.outsideSign;
++    return sign>=0?'front':'back';
++   }
++  }
++  if(point&&profile?.type==='flat'){
++   const axis=profile.thinAxis;
++   if(Math.abs(normal[axis])<.68)return 'end';
++   return point[axis]>=profile.centre?'front':'back';
++  }
+   // Imported arbitrary GLB walls: retain the previous object-local mapping
+   // rather than assume a circular or rectangular profile.
+   if(Math.abs(nz)<.65||Math.abs(nz)<Math.abs(nx))return 'end';
+@@ -432,7 +494,11 @@
+   const normal=hit.face.normal.clone().applyMatrix3(
+    new THREE.Matrix3().getNormalMatrix(relative)).normalize();
+   const position=hit.point?root.worldToLocal(hit.point.clone()):null;
+-  return sideFromNormal(normal,category,kind,position);
++  if(isGlass(Array.isArray(hit.object.material)?
++    hit.object.material[hit.face.materialIndex]||hit.object.material[0]:
++    hit.object.material))return null;
++  return sideFromNormal(normal,category,kind,position,
++   importedWallProfile(root,kind,category));
+  }
+  function faceTexture(spec,textures){
+   const source=spec.style==='custom'?textures?.get(spec.imageId):
+@@ -470,6 +536,7 @@
+   const workshop=typeof SurfaceWorkshop!=='undefined'?SurfaceWorkshop:null;
+   root.updateWorldMatrix(true,true);
+   const inverseRoot=root.matrixWorld.clone().invert();
++  const profile=importedWallProfile(root,options.kind,category);
+   let modified=0;
+   root.traverse(mesh=>{
+    if(!mesh.isMesh||mesh.isSkinnedMesh||mesh.userData?.phoenixLODProxy||
+@@ -526,8 +593,10 @@
+     d.fromBufferAttribute(pos,i+2).applyMatrix4(transform);
+     normal.copy(ab.subVectors(b,a)).cross(ac.subVectors(d,a)).normalize();
+     faceCenter.copy(a).add(b).add(d).multiplyScalar(1/3);
+-    const side=sideFromNormal(normal,category,options.kind,faceCenter);
+-    const index=sideMaterial.get(side);
++    const side=sideFromNormal(normal,category,options.kind,faceCenter,profile);
++    // Keep transparent GLB primitives (windows/glass) untouched.
++    const originalIndex=groupAt(i);
++    const index=isGlass(baseMaterials[originalIndex])?undefined:sideMaterial.get(side);
+     const matIndex=index===undefined?groupAt(i):index;
+     if(index!==undefined)changed=true;
+    if(selected!==matIndex){
