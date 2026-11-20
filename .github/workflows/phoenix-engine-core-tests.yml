@@ -18,6 +18,7 @@ on:
       - 'tests/test-prefab-wiring.cjs'
       - 'tests/test-phoenix-ai.cjs'
       - 'tests/test-phoenix-animations.cjs'
+      - 'tests/test-phoenix-combat.cjs'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
 permissions:
@@ -40,6 +41,7 @@ jobs:
           node --check app/src/main/assets/engine/builder/play-bridge.js
           node --check app/src/main/assets/engine/core/phoenix-prefabs.js
           node --check app/src/main/assets/engine/core/phoenix-ai.js
+          node --check app/src/main/assets/engine/core/phoenix-combat.js
           node --check app/src/main/assets/engine/runtime/phoenix-animations.js
           node --check app/src/main/assets/engine/builder/prefab-editor.js
           node --check app/src/main/assets/js/clean-app.js
@@ -53,3 +55,4 @@ jobs:
           node tests/test-prefab-wiring.cjs
           node tests/test-phoenix-ai.cjs
           node tests/test-phoenix-animations.cjs
+          node tests/test-phoenix-combat.cjs
