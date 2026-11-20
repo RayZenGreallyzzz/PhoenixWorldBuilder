@@ -311,6 +311,7 @@
    this.removeRender(id);this.world.removeEntity(id);
    this.refresh();this.b.save();this.status('Экземпляр убран со сцены.');
   }
+  hasContent(){return this.registry.list().length>0||this.world.entityIds().length>0;}
   serialize(){
    return {version:1,catalog:this.registry.serialize(),world:this.world.serialize()};
   }
