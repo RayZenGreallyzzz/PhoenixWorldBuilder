@@ -18,7 +18,7 @@
    this.layer=new THREE.Group();this.layer.name='phoenix:game-objects';
    builder.scene.add(this.layer);
    this.rendered=new Map();this.selectedId='';this.pendingPlace='';
-   this.playing=false;this.loadGeneration=0;this.previewBefore=null;
+   this.playing=false;this.loadGeneration=0;this.clipGeneration=0;this.previewBefore=null;
    this.panel=document.getElementById('phoenixPrefabPanel');
    if(!this.panel)throw Error('Prefab Editor UI is missing');
    this.bind();this.refreshModels();this.refresh();
