@@ -197,11 +197,12 @@ class CleanBuilder{
   this.playBridge=new PhoenixPlayBridge(this,window.PhoenixCore);
   this.prefabEditor=new PhoenixPrefabEditor(this);
   this.skillEditor=new PhoenixSkillEditor(this);
+  this.skillDefinitionEditor=new PhoenixSkillDefinitionEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
-   this.updatePlayer(dt);this.prefabEditor?.update(dt);this.controls.update();
+   this.updatePlayer(dt);this.prefabEditor?.update(dt);this.playBridge?.update(dt);this.controls.update();
    if(!this.playBridge?.active)this.gizmo.update();
    if(this.previewOutline&&this.previewOutline.visible)this.previewOutline.update();
    this.renderer.render(this.scene,this.camera);
@@ -4459,6 +4460,14 @@ class CleanBuilder{
   }
   // Skill layout is optional; old UV44 JSON projects keep device preferences.
   this.skillEditor?.loadFromProject(doc.phoenixGame?.hudLayout||null);
+  if(this.skillDefinitionEditor){
+   try{this.skillDefinitionEditor.loadFromProject(doc.phoenixGame?.skills||null)}
+   catch(err){
+    console.warn('Invalid per-character skills in project',err);
+    this.skillDefinitionEditor.loadFromProject(null);
+    notify('Навыки из проекта повреждены; строительство не изменено.','warn');
+   }
+  }
  }
  playAttackAnimation(){
   // Existing imported avatar clips only: no retargeter and no new mixer.
