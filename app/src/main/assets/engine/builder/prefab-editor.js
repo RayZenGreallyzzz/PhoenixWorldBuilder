@@ -308,6 +308,12 @@
    }
    const entities=[...this.rendered.entries()];
    if(!entities.length)return;
+   if(this.combat.isPlayerDead()){
+    for(const [id,render] of entities){
+     if(!this.combat.isDead(id))render.animation?.setState('idle');
+    }
+    return;
+   }
    const player=this.b.player.position;
    const max=Math.min(entities.length,10);
    for(let step=0;step<max;step++){
@@ -336,6 +342,15 @@
     }
     if(decision.yaw!==null)render.root.rotation.y=decision.yaw;
     render.animation?.setState(decision.animation);
+    // Only the AI's cooled-down attack intent can damage the player.
+    // Check actual Builder wall triangles before applying any HP change.
+    if(decision.attack&&p.faction==='enemy'&&!this.combat.isPlayerDead()&&
+       this.canStrike(render.root.position,player,
+        Math.hypot(render.root.position.x-player.x,
+         render.root.position.z-player.z))){
+     const hit=this.combat.damagePlayer(id,p.stats.damage);
+     if(hit.ok)this.b.playBridge?.onPlayerHit(hit,p.name);
+    }
    }
    this.aiCursor=(this.aiCursor+max)%entities.length;
   }
