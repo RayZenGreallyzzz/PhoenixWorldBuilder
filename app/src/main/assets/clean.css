@@ -614,3 +614,39 @@ body.phoenixPlaying #phoenixEngineDock{display:none!important}
  #phoenixEngineDock .phoenixEngineVersion strong{font-size:12px}
  #phoenixEngineDock button{font-size:10px;padding:5px}
 }
+
+/* Phoenix Engine 0.7: actual draggable touch skill layout, no new RAF. */
+#phoenixEngineDock .phoenixHudEntry{background:#554389;color:#f5e9ff;border-color:#c7a8ff;white-space:nowrap}
+#phoenixSkillLayer{position:fixed;inset:0;z-index:54;pointer-events:none;overflow:hidden}
+#phoenixSkillLayer[hidden],#phoenixSkillEditor[hidden],
+#phoenixSkillLayer .phoenixSkillButton[hidden]{display:none!important}
+#phoenixSkillLayer .phoenixSkillButton{position:absolute;box-sizing:border-box;transform:translate(-50%,-50%);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;padding:5px;border:2px solid #ffffff85;box-shadow:0 4px 15px #0009;color:white;font-weight:900;white-space:normal;text-align:center;touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none;overflow:hidden;background-image:none;z-index:1}
+#phoenixSkillLayer #btnPhoenixAttack{position:absolute;min-width:0;min-height:0;background-image:none}
+#phoenixSkillLayer .phoenixSkillButton:active{transform:translate(-50%,-50%) scale(.96)}
+#phoenixSkillLayer .phoenixSkillIcon{font-size:clamp(19px,2.1vw,26px);line-height:1.1}
+#phoenixSkillLayer .phoenixSkillCaption{font-size:clamp(9px,.9vw,11px);letter-spacing:.2px;line-height:1.1;color:#fff}
+#phoenixSkillLayer .phoenixSkillDisabled{opacity:.42!important;border-style:dashed;filter:grayscale(.4)}
+#phoenixSkillLayer .phoenixSkillSelected{outline:3px solid #75f3ff;outline-offset:3px}
+body.phoenixSkillEditing #phoenixSkillLayer .phoenixSkillButton{cursor:grab;outline-offset:4px}
+body.phoenixPlaying #phoenixCombatHud{top:max(78px,env(safe-area-inset-top));bottom:auto;right:max(10px,env(safe-area-inset-right))}
+#phoenixSkillEditor{position:fixed;z-index:60;left:max(9px,env(safe-area-inset-left));top:max(72px,env(safe-area-inset-top));bottom:max(8px,env(safe-area-inset-bottom));width:min(345px,calc(100vw - 18px));max-height:calc(100dvh - 82px);overflow-y:auto;overscroll-behavior:contain;padding:12px;display:flex;flex-direction:column;gap:9px;background:#142431f2;border:1px solid #a9c9ff;border-radius:14px;box-shadow:0 5px 20px #000b;color:#edfaff}
+#phoenixSkillEditor .phoenixSkillTitle{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#phoenixSkillEditor .phoenixSkillTitle button{min-height:37px;min-width:42px}
+#phoenixSkillEditor label{display:flex;flex-direction:column;gap:4px;font-size:12px;flex:1;min-width:0}
+#phoenixSkillEditor .phoenixSkillRow{display:flex;gap:9px;align-items:end}
+#phoenixSkillEditor input:not([type="checkbox"]),#phoenixSkillEditor select{width:100%;box-sizing:border-box;min-height:38px;padding:5px;border-radius:7px;border:1px solid #638dba;color:#fff;background:#244158}
+#phoenixSkillEditor input[type="color"]{height:40px;padding:2px}
+#phoenixSkillEditor input[type="range"]{accent-color:#70e4dc}
+#phoenixSkillEditor input[type="checkbox"]{width:20px;height:20px;accent-color:#6ee9be}
+#phoenixSkillEditor .phoenixSkillCheck{flex-direction:row;align-items:center}
+#phoenixSkillEditor button{min-height:40px;border:1px solid #65aeb9;border-radius:8px;background:#245065;color:#f0ffff;padding:5px;font-weight:800;flex:1}
+#phoenixSkillEditor #btnSkillSave{background:#17795e}
+#phoenixSkillEditor small{font-size:11px;color:#bfdfed;line-height:1.4}
+#phoenixSkillEditor #phoenixSkillFeedback{padding:8px;border-radius:7px;background:#234355;color:#abffee}
+@media(max-width:800px){
+ #phoenixEngineDock .phoenixHudEntry{font-size:11px}
+ #phoenixSkillEditor{width:min(310px,calc(100vw - 14px));left:7px;top:max(66px,env(safe-area-inset-top));max-height:calc(100dvh - 75px);padding:9px}
+ #phoenixSkillLayer .phoenixSkillCaption{font-size:9px}
+ #phoenixSkillLayer .phoenixSkillIcon{font-size:21px}
+ body.phoenixPlaying #phoenixCombatHud{top:max(74px,env(safe-area-inset-top));width:min(160px,27vw)}
+}
