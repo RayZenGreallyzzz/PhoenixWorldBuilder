@@ -6,17 +6,17 @@ android {
         applicationId 'com.phoenix.worldbuilder'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '0.3.0'
+        versionCode 4
+        versionName '0.4.0'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes {
         // Preview APK installs alongside the existing debug application, so
         // testing cannot overwrite or erase projects inside the old app.
         debug {
-            applicationIdSuffix '.engineai'
-            versionNameSuffix '-npc-ai-test'
-            manifestPlaceholders = [appLabel: 'Phoenix Engine AI']
+            applicationIdSuffix '.enginecombat'
+            versionNameSuffix '-combat-test'
+            manifestPlaceholders = [appLabel: 'Phoenix Engine COMBAT']
         }
         release {
             minifyEnabled false
