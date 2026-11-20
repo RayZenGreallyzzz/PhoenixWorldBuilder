@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
-<title>Phoenix Builder — Чистая студия</title><link rel="stylesheet" href="clean.css"></head>
+<title>Phoenix Engine 0.6 — UV44 Builder</title><link rel="stylesheet" href="clean.css"></head>
 <body>
 <canvas id="view" aria-label="Строительная 3D-сцена"></canvas>
 <div id="gizmoCadOverlay" class="gizmoCadOverlay" hidden aria-hidden="true">
@@ -37,13 +37,17 @@
 <header class="topbar">
  <div class="brand">🔥 PHOENIX <b>BUILDER</b><small>СТУДИЯ 2.0</small></div>
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
- <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
- <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 Prefabs</button>
  <button id="btnShapeToolTop" class="quickOpening" title="Фигурная подрезка выбранного модуля: круг, шестиугольник, звезда или круглая выемка">✂ Фигуры</button>
  <button id="btnQuickOpening" class="quickOpening" title="Выбрать стену и вырезать дверь или проход">✂ Проём</button>
  <button id="btnFocusCamera" class="quickOpening" title="Переместить точку вращения: на выбранную деталь или касанием сцены">🎯 Камера</button>
  <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnQuickProjectJson" title="Скачать редактируемый дом с текстурами в .phoenix.json">💾 JSON</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnProjectLoadSettings" title="Настройки загрузки дома" aria-label="Настройки загрузки проекта" aria-expanded="false">⚙️</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
+<!-- Separate always-visible Engine toolbar: never put PLAY inside UV44's crowded header. -->
+<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 0.6 — игровые инструменты">
+ <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 0.6">🔥 ENGINE <strong>v0.6</strong><small>UV44</small></span>
+ <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
+ <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 МОБЫ / NPC</button>
+</div>
 <section id="phoenixPrefabPanel" class="phoenixPrefabPanel" hidden role="region" aria-label="Phoenix Prefab Editor">
  <div class="phoenixPrefabTitle"><b>🧬 Phoenix Prefab Editor</b><button type="button" id="btnPrefabClose" aria-label="Закрыть редактор">✕</button></div>
  <small>Игровые мобы и NPC отдельно от строительных деталей. Без программирования.</small>
