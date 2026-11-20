@@ -20,6 +20,7 @@
    this.rendered=new Map();this.selectedId='';this.pendingPlace='';
    this.playing=false;this.loadGeneration=0;this.clipGeneration=0;this.previewBefore=null;
    this.aiCursor=0;this.collider=null;
+   this.combat=new PhoenixCombat.Session({damage:25,range:2.7,cooldown:.65});
    this.panel=document.getElementById('phoenixPrefabPanel');
    if(!this.panel)throw Error('Prefab Editor UI is missing');
    this.bind();this.refreshModels();this.refresh();
@@ -280,16 +281,29 @@
      render.root.rotation.y=saved.yaw||0;
      render.aiState=PhoenixAI.initial(saved.position);
     }
-    render.accum=0;
+    render.accum=0;render.hitHold=0;
+    render.root.userData.phoenixDead=false;
     if(this.playing)this.startAnimation(id,render);
    }
+   this.combat.reset(this.playing?[...this.rendered.keys()].map(id=>{
+    const stats=this.world.getComponent(id,'stats')||{hp:100};
+    const char=this.world.getComponent(id,'character')||{};
+    const name=this.registry.get(this.world.getComponent(id,'prefab')?.id)?.name||id;
+    return {id,maxHp:stats.hp,faction:char.faction||'enemy',name};
+   }):[]);
    if(this.playing&&!this.collider&&typeof CharacterCollision!=='undefined')
     this.collider=new CharacterCollision.Solver({radius:.27,height:1.6});
   }
   update(dt){
    if(!this.playing||!Number.isFinite(dt)||dt<=0)return;
-   for(const render of this.rendered.values()){
+   for(const [id,render] of this.rendered){
     render.animation?.update(dt);
+    if(this.combat.isDead(id))continue;
+    if(render.hitHold>0){
+     render.hitHold=Math.max(0,render.hitHold-dt);
+     if(render.hitHold===0)render.animation?.setState('idle');
+     continue;
+    }
     render.accum=Math.min(.35,(render.accum||0)+dt);
    }
    const entities=[...this.rendered.entries()];
@@ -298,6 +312,7 @@
    const max=Math.min(entities.length,10);
    for(let step=0;step<max;step++){
     const [id,render]=entities[(this.aiCursor+step)%entities.length];
+    if(this.combat.isDead(id)||render.hitHold>0)continue;
     const p=this.registry.get(this.world.getComponent(id,'prefab')?.id);
     if(!p||p.ai?.mode==='idle')continue;
     if(render.accum<.12)continue;
@@ -323,6 +338,44 @@
     render.animation?.setState(decision.animation);
    }
    this.aiCursor=(this.aiCursor+max)%entities.length;
+  }
+  canStrike(player,target,distance){
+   // Check real wall triangles so attacks do not pass through doors/walls.
+   // This only runs on a press, never in the continuous frame loop.
+   if(!this.collider||!this.b.entries?.length)return true;
+   const blockers=this.b.entries.filter(e=>e.category==='wall'&&!e.hidden);
+   if(!blockers.length)return true;
+   const begin=player.clone().add(new THREE.Vector3(0,1,0));
+   const end=target.clone().add(new THREE.Vector3(0,1,0));
+   const vector=end.clone().sub(begin),length=vector.length();
+   if(length<.25)return true;
+   const meshes=this.collider.meshes(blockers,player,distance+1.0);
+   if(!meshes.length)return true;
+   return !this.collider.hits(new THREE.Ray(begin,vector.normalize()),
+    meshes,0,Math.max(0,length-.25)).length;
+  }
+  attackNearest(now){
+   if(!this.playing)return {ok:false,reason:'edit'};
+   const player=this.b.player.position;
+   const targets=[];
+   for(const [id,render] of this.rendered)
+    targets.push({id,position:render.root.position.toArray()});
+   const result=this.combat.attack(player.toArray(),targets,now,
+    (item,distance)=>this.canStrike(player,
+     new THREE.Vector3(...item.position),distance));
+   if(!result.ok)return result;
+   const render=this.rendered.get(result.id);
+   if(render){
+    if(result.killed){
+     render.hitHold=Infinity;
+     render.root.userData.phoenixDead=true;
+     render.animation?.setState('death',.1);
+    }else{
+     render.hitHold=.45;
+     render.animation?.setState('hit',.1);
+    }
+   }
+   return result;
   }
   async createEntity(prefabId,position){
    const p=this.registry.get(prefabId);
