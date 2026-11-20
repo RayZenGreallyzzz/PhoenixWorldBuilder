@@ -23,10 +23,16 @@
    const playButton = this.document.getElementById('btnPhoenixPlay');
    const editButton = this.document.getElementById('btnPhoenixEdit');
    this.hud = this.document.getElementById('phoenixPlayHud');
+   this.combatHud = this.document.getElementById('phoenixCombatHud');
+   this.attackButton = this.document.getElementById('btnPhoenixAttack');
+   this.hpBar = this.document.getElementById('phoenixCombatHP');
+   this.hpTarget = this.document.getElementById('phoenixCombatTarget');
+   this.combatNotice = this.document.getElementById('phoenixCombatNotice');
    if (!playButton || !editButton || !this.hud)
     throw new Error('Phoenix Engine PLAY/EDIT UI is missing');
    playButton.addEventListener('click', () => this.enter());
    editButton.addEventListener('click', () => this.exit());
+   this.attackButton?.addEventListener('click', () => this.attack());
   }
 
   message(text, level) {
@@ -78,6 +84,10 @@
     this.hud.hidden = false;
     this.modeController.setMode('play');
     b.prefabEditor?.setPlaying(true);
+    if(this.combatHud)this.combatHud.hidden=false;
+    if(this.hpBar)this.hpBar.hidden=true;
+    if(this.hpTarget)this.hpTarget.textContent='⚔ Ближайший враг';
+    if(this.combatNotice)this.combatNotice.textContent='Касайся ⚔ или нажми F';
     return true;
    } catch (error) {
     // Entering PLAY must never leave the editor with a half-finished UI.
@@ -85,6 +95,7 @@
     b.prefabEditor?.setPlaying(false);
     this.document.body.classList.remove('phoenixPlaying');
     this.hud.hidden = true;
+    if(this.combatHud)this.combatHud.hidden=true;
     this.restore(saved);
     throw error;
    }
@@ -103,6 +114,7 @@
    if (saved.previewOutline && b.previewOutline === saved.previewOutline)
     saved.previewOutline.visible = saved.outlineVisible;
    b.controls.update();
+   b.avatarAttackUntil=0;
    if (typeof b.setAvatarAnimation === 'function') b.setAvatarAnimation(false);
   }
 
@@ -115,6 +127,7 @@
    b.prefabEditor?.setPlaying(false);
    this.document.body.classList.remove('phoenixPlaying');
    this.hud.hidden = true;
+   if(this.combatHud)this.combatHud.hidden=true;
    const saved = this.saved;
    this.saved = null;
    try {
@@ -126,11 +139,47 @@
    return true;
   }
 
+  attack(){
+   if(!this.active)return false;
+   const now=(typeof performance!=='undefined'?performance.now():Date.now())/1000;
+   const result=this.builder.prefabEditor?.attackNearest(now);
+   if(!result)return false;
+   if(result.reason==='cooldown'){
+    if(this.combatNotice)this.combatNotice.textContent=
+     '⏳ Перезарядка '+result.remaining.toFixed(1)+' сек';
+    return true;
+   }
+   this.builder.playAttackAnimation?.();
+   if(result.ok){
+    if(this.hpTarget)this.hpTarget.textContent=
+     result.name+' · HP '+result.hp+'/'+result.maxHp;
+    if(this.hpBar){
+     this.hpBar.max=result.maxHp;
+     this.hpBar.value=result.hp;
+     this.hpBar.hidden=false;
+    }
+    if(this.combatNotice)this.combatNotice.textContent=result.killed?
+     '☠ Враг побеждён!':'⚔ Урон: '+result.damage;
+   }else{
+    if(this.hpBar)this.hpBar.hidden=true;
+    if(this.hpTarget)this.hpTarget.textContent='⚔ Нет выбранной цели';
+    if(this.combatNotice)this.combatNotice.textContent=
+     result.reason==='blocked'?'🧱 Враг за стеной':'Подойди к врагу ближе';
+   }
+   return true;
+  }
+
   handleKeyDown(event) {
    if (!this.active) return false;
    if (event.key === 'Escape') {
     event.preventDefault();
     this.exit();
+    return true;
+   }
+   // F/Space and the touch button use the same cooldown and target selection.
+   if(event.key==='f'||event.key==='F'||event.code==='Space'){
+    event.preventDefault();
+    if(!event.repeat)this.attack();
     return true;
    }
    // In PLAY, allow WASD/joystick, but never trigger builder undo/delete.
