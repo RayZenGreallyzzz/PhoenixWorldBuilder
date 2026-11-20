@@ -1,0 +1,40 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const base=path.join(__dirname,'../app/src/main/assets');
+const read=file=>fs.readFileSync(path.join(base,file),'utf8');
+const html=read('index.html'),js=read('js/clean-app.js'),
+ css=read('clean.css'),editor=read('engine/builder/prefab-editor.js'),
+ bridge=read('engine/builder/play-bridge.js');
+const scripts=['engine/core/phoenix-core.js','engine/core/phoenix-prefabs.js',
+ 'engine/builder/play-bridge.js','engine/builder/prefab-editor.js','js/clean-app.js'];
+let previous=-1;
+for(const name of scripts){
+ const pos=html.indexOf('<script src="'+name+'"></script>');
+ assert(pos>previous,'Bad script order or absent '+name);previous=pos;
+}
+for(const id of ['btnPhoenixPrefabs','phoenixPrefabPanel','btnPrefabSave',
+ 'btnPrefabPlace','btnPrefabCancelPlace','btnPrefabImportGlb',
+ 'phoenixPrefabName','phoenixPrefabAsset','phoenixPrefabSaved',
+ 'phoenixPrefabIdle','phoenixPrefabWalk','phoenixPrefabAttack',
+ 'phoenixPrefabHP','phoenixPrefabDamage','phoenixPrefabSpeed',
+ 'phoenixPrefabEntities','btnPrefabRemoveEntity']){
+ assert(html.includes('id="'+id+'"'),'Prefab UI field missing '+id);
+}
+assert(js.includes('this.prefabEditor=new PhoenixPrefabEditor(this)'));
+assert(js.includes('this.prefabEditor?.update(dt)'), 'Must reuse UV44 frame loop');
+assert(js.includes('phoenixGame:this.prefabEditor?.serialize()'), 'Project JSON must save game');
+assert(js.includes('await this.prefabEditor.loadFromProject(doc.phoenixGame||null)'),
+ 'Project restore must load game data (old projects load empty)');
+assert(js.includes('if(this.prefabEditor?.pendingPlace){this.prefabEditor.placeFromEvent(e);return}'),
+ 'Touch placement must intercept builder actions');
+assert(js.includes('this.prefabEditor?.refreshModels(id)'),
+ 'Imported GLB should appear in Prefab model picker');
+assert(bridge.includes('b.prefabEditor?.setPlaying(true)'));
+assert(bridge.includes('b.prefabEditor?.setPlaying(false)'));
+assert(css.includes('.phoenixPrefabPanel[hidden]'));
+assert(!editor.includes('requestAnimationFrame('),'No additional RAF');
+assert(!editor.includes('new THREE.WebGLRenderer'),'Do not create 2nd renderer');
+assert(!editor.includes('localStorage.setItem('),'Do not create per-object localStorage saves');
+assert(!editor.includes('builder.entries.push('),'Do not mix game entities with building geometry');
+console.log('PASS: Phoenix Prefab Editor integrated into UV44 with isolated project JSON and single RAF');
