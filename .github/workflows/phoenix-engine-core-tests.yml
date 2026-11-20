@@ -1,0 +1,30 @@
+name: Phoenix Engine Core checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phoenix-engine-0.1
+    paths:
+      - 'app/src/main/assets/engine/**'
+      - 'tests/test-phoenix-core.cjs'
+      - '.github/workflows/phoenix-engine-core-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Platform-neutral Core
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check
+        run: node --check app/src/main/assets/engine/core/phoenix-core.js
+      - name: Run Phoenix Core unit tests
+        run: node tests/test-phoenix-core.cjs
