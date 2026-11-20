@@ -92,7 +92,7 @@ assert.equal(restored.serialize().slots.length,6);
 assert.equal(restored.serialize().slots[2].label,'Q');
 assert.equal(restored.serialize().slots[5].label,'R · УЛЬТА');
 assert.equal(restored.serialize().slots[5].enabled,true);
-assert.equal(elements.btnPhoenixUltimate.hidden,true,'Outside EDIT/PLAY, HUD must remain hidden');
+assert.equal(elements.phoenixSkillLayer.hidden,true,'Outside EDIT/PLAY, HUD layer must remain hidden');
 restored.open();
 assert.equal(elements.btnPhoenixUltimate.hidden,false,'MOBA ultimate slot must be visible in EDIT');
 restored.save();
