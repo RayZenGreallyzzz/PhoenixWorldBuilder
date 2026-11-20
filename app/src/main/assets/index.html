@@ -618,10 +618,16 @@
  <span>🔥 PHOENIX · PLAY</span><button type="button" id="btnPhoenixEdit">⏹ EDIT</button>
 </div>
 <section id="phoenixCombatHud" hidden role="group" aria-label="Phoenix Engine бой">
+ <div class="phoenixPlayerHealth"><b>❤️ Игрок</b>
+ <progress id="phoenixPlayerHP" max="100" value="100" aria-label="Здоровье игрока"></progress>
+ <span id="phoenixPlayerHPText">100 / 100 HP</span></div>
+ <div id="phoenixKills">☠ Побеждено: 0</div>
  <div id="phoenixCombatTarget">⚔ Выбери врага рядом</div>
  <progress id="phoenixCombatHP" max="100" value="100" hidden aria-label="HP цели"></progress>
  <button id="btnPhoenixAttack" type="button" aria-label="Атаковать ближайшего врага">⚔ АТАКА</button>
  <small id="phoenixCombatNotice" aria-live="polite">Касайся ⚔ или нажми F</small>
+ <div id="phoenixDeathNotice" hidden role="alert">☠ Персонаж погиб</div>
+ <button id="btnPhoenixRespawn" type="button" hidden>↻ Возродиться</button>
 </section>
 <div id="charControls" hidden>
  <div class="joystickTitle">🕹 Движение</div>
