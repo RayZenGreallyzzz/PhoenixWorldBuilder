@@ -31,7 +31,7 @@ For an Android-compatible Phoenix Engine baseline, preserve the original UV44 pr
 
 `phoenix-engine-0.1` remains a separate branch created from `main`. It has **not** been rebased onto this UV44 baseline.
 
-## Subsequent UV / corner fixes identified on GitHub (NOT YET APPLIED)
+## Subsequent UV / corner fixes identified on GitHub (tracked for backport)
 
 The user recalled fixes committed after the stable UV44 APK. The supplied APK's `surface-workshop.js` and `surface-materials.js` do not contain the distinctive code added in these November 9 commits. Before making an Engine baseline, review the **whole dependency chain** in GitHub, not just isolated cherry-picks:
 
@@ -43,23 +43,23 @@ The user recalled fixes committed after the stable UV44 APK. The supplied APK's 
 
 Relevant GitHub branches: `fix/pr44-safe-curved-uv-window-glass`, `fix/pr44-physical-corner-sides-and-cut-safe-uv`, and `fix/phoenix-wall-exterior-uv-wrap-20261110`. These branches contain additional changes including tests and mirror controls; **do not copy the entire branch blindly**.
 
-**Status:** candidates identified; no code merged/cherry-picked into this baseline. The `stable/uv44` branch still needs UV44 WebView asset restoration and device testing before selective porting.
+**Status:** candidate commits identified; a selective patch and tests are now prepared, but no app files have been committed to the branch. The `stable/uv44` branch still needs UV44 WebView asset restoration and device testing before selective porting.
 
 ## Compatible backport prepared (2026-11-20)
 
-- Patch: \`patches/uv44-corner-uv-postfix-20261109.patch\`
-- Guarded patch application: \`tools/apply_uv44_corner_fixes.py\`
-- Regression checks: \`tests/test-uv44-postfix.cjs\`
+- Patch: `patches/uv44-corner-uv-postfix-20261109.patch`
+- Guarded patch application: `tools/apply_uv44_corner_fixes.py`
+- Regression checks: `tests/test-uv44-postfix.cjs`
 
 This is a **selective backport for the supplied APK's WebView code**. The original November 9 files were from a different revision and should not replace the whole current UV44 modules.
 
 Commands from the repository checkout with the original APK accessible locally:
 
-\`\`\`sh
+```sh
 python3 tools/import_uv44_assets.py '/path/to/Phoenix_Builder_UV44_Install(3).apk' --clean
 python3 tools/apply_uv44_corner_fixes.py --check
 python3 tools/apply_uv44_corner_fixes.py
 node tests/test-uv44-postfix.cjs
-\`\`\`
+```
 
-The import skips the APK's bundled GLB library unless \`--include-models\` is passed. Review model rights and app behavior before making the WebView source public. **Current branch still does not contain the full restored UV44 asset tree**; the patch and test scripts are committed, but no APK has been built from this restoration.
+The import skips the APK's bundled GLB library unless `--include-models` is passed. Review model rights and app behavior before making the WebView source public. **Current branch still does not contain the full restored UV44 asset tree**; the patch and test scripts are committed, but no APK has been built from this restoration.
