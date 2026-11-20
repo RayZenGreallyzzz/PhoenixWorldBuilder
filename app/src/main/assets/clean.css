@@ -665,3 +665,15 @@ body.phoenixPlaying #phoenixCombatHud{top:max(78px,env(safe-area-inset-top));bot
 #phoenixEngineDock #btnPhoenixSkillDefs{background:#5d4f86;border-color:#c9a1ed;color:#fff}
 body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
 @media(max-width:900px){#phoenixSkillDefinitions{width:min(300px,calc(100vw - 16px));max-height:calc(100dvh - 70px);padding:9px}}
+
+/* Reuse HUD editor form language for the independent Skill Definition panel. */
+#phoenixSkillDefinitions{display:flex;flex-direction:column;gap:8px;overflow-y:auto;box-sizing:border-box;background:#142431f6;color:#e5f7ff;border:1px solid #7abde3;border-radius:14px;padding:12px}
+#phoenixSkillDefinitions[hidden]{display:none!important}
+#phoenixSkillDefinitions .phoenixSkillTitle{display:flex;justify-content:space-between;align-items:center}
+#phoenixSkillDefinitions label{display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1;min-width:0}
+#phoenixSkillDefinitions .phoenixSkillRow{display:flex;gap:8px;align-items:end}
+#phoenixSkillDefinitions input,#phoenixSkillDefinitions select{width:100%;min-height:38px;box-sizing:border-box;padding:5px 7px;background:#244158;color:#fff;border:1px solid #638dba;border-radius:7px}
+#phoenixSkillDefinitions button{min-height:38px;padding:6px;background:#235769;border:1px solid #73bcca;border-radius:8px;color:#fff;font-weight:800}
+#phoenixSkillDefinitions #btnSkillDefSave{background:#168062}
+#phoenixSkillDefinitions #skillDefMessage{padding:8px;background:#27445b;color:#b8e7ff;border-radius:7px;font-size:11px}
+#phoenixSkillDefinitions small{font-size:11px;color:#c6e0ed;line-height:1.4}
