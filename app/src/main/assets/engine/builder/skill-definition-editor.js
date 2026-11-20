@@ -107,6 +107,16 @@
     if(character!=='player'&&!this.b.prefabEditor?.registry.get(character))
      throw new Error('Сначала сохрани персонажа в Prefab Editor.');
     const validated=this.catalog.set(character,slot,this.read());
+    // Use this hero's authored skill icon on the mobile skill button.
+    // Do not alter location, size or other personally arranged HUD settings.
+    if(character==='player'&&this.b.skillEditor?.layout){
+     const ui=this.b.skillEditor;
+     ui.layout=ui.schema.update(ui.layout,slot,{
+      icon:validated.icon,label:[...validated.name].slice(0,16).join(''),
+      enabled:true
+     });
+     ui.render();
+    }
     this.write(validated);
     this.b.save?.();
     this.status('✅ Навык сохранён: '+validated.name+
