@@ -15,12 +15,14 @@
   return n;
  };
  class Session{
-  constructor({damage=25,range=2.7,cooldown=.65}={}){
+  constructor({damage=25,range=2.7,cooldown=.65,playerHp=100}={}){
    this.damage=bounded(damage,0,1000000,'damage');
    this.range=bounded(range,.1,100,'range');
    this.cooldown=bounded(cooldown,.05,30,'cooldown');
    this.mobs=new Map();
    this.readyAt=0;
+   this.playerMaxHp=bounded(playerHp,1,1000000,'player HP');
+   this.playerHp=this.playerMaxHp;this.playerDead=false;this.kills=0;
   }
   reset(entities=[]){
    if(!Array.isArray(entities)||entities.length>300)
@@ -34,16 +36,34 @@
      faction:entry.faction||'enemy',name:String(entry.name||entry.id).slice(0,120)});
    }
    this.mobs=next;this.readyAt=0;
+   this.playerHp=this.playerMaxHp;this.playerDead=false;this.kills=0;
   }
   get(id){
    const hp=this.mobs.get(id);
    return hp?{...hp,dead:hp.hp<=0}:null;
   }
   isDead(id){const v=this.mobs.get(id);return !!v&&v.hp<=0;}
+  getPlayer(){
+   return {hp:this.playerHp,maxHp:this.playerMaxHp,
+    dead:this.playerDead,kills:this.kills};
+  }
+  isPlayerDead(){return this.playerDead;}
+  damagePlayer(attackerId,damage){
+   const mob=this.mobs.get(attackerId);
+   if(!mob||mob.hp<=0||mob.faction!=='enemy'||this.playerDead)
+    return {ok:false,reason:!mob?'unknown':'inactive'};
+   bounded(damage,0,1000000,'enemy damage');
+   if(damage<=0)return {ok:false,reason:'no damage'};
+   this.playerHp=Math.max(0,this.playerHp-damage);
+   this.playerDead=this.playerHp<=0;
+   return {ok:true,attacker:attackerId,damage,hp:this.playerHp,
+    maxHp:this.playerMaxHp,dead:this.playerDead,kills:this.kills};
+  }
   attack(origin,targets,time,canHit=()=>true){
    if(!validPoint(origin)||!Array.isArray(targets)||
       typeof canHit!=='function')throw new TypeError('Invalid combat target list');
    bounded(time,0,Number.MAX_SAFE_INTEGER,'time');
+   if(this.playerDead)return {ok:false,reason:'player-dead'};
    if(time<this.readyAt)return {ok:false,reason:'cooldown',
     remaining:Math.max(0,this.readyAt-time)};
    // Consuming the attack even on a miss prevents repeat-tap scan spam.
@@ -62,6 +82,7 @@
    }
    if(!target)return {ok:false,reason:blocked?'blocked':'miss',remaining:this.cooldown};
    target.hp=Math.max(0,target.hp-this.damage);
+   if(target.hp<=0)this.kills++;
    return {ok:true,id:target.id,name:target.name,damage:this.damage,
     hp:target.hp,maxHp:target.maxHp,killed:target.hp<=0,
     distance:nearest,remaining:this.cooldown};
