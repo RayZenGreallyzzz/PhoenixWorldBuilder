@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
-<title>Phoenix Engine 0.9 — MOBA / MMO / Shooter HUD</title><link rel="stylesheet" href="clean.css"></head>
+<title>Phoenix Engine 1.0 — FPS + RPG Skills</title><link rel="stylesheet" href="clean.css"></head>
 <body>
 <canvas id="view" aria-label="Строительная 3D-сцена"></canvas>
 <div id="gizmoCadOverlay" class="gizmoCadOverlay" hidden aria-hidden="true">
@@ -43,12 +43,39 @@
  <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnQuickProjectJson" title="Скачать редактируемый дом с текстурами в .phoenix.json">💾 JSON</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnProjectLoadSettings" title="Настройки загрузки дома" aria-label="Настройки загрузки проекта" aria-expanded="false">⚙️</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
 <!-- Separate always-visible Engine toolbar: never put PLAY inside UV44's crowded header. -->
-<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 0.9 — игровые инструменты">
- <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 0.9">🔥 ENGINE <strong>v0.9</strong><small>UV44</small></span>
+<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 1.0 — игровые инструменты">
+ <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 1.0">🔥 ENGINE <strong>v1.0</strong><small>UV44</small></span>
  <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
  <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 МОБЫ / NPC</button>
- <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить игровые кнопки и скиллы">🎮 HUD / СКИЛЛЫ</button>
+ <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить расположение игровых кнопок">🎮 HUD</button>
+ <button id="btnPhoenixSkillDefs" type="button" class="phoenixHudEntry" aria-label="Создать способности и настроить уровни персонажей">🧙 НАВЫКИ</button>
 </div>
+<section id="phoenixSkillDefinitions" class="phoenixSkillEditor" hidden role="region" aria-label="Редактор способностей персонажей">
+ <div class="phoenixSkillTitle"><b>🧙 Character Skill Editor 1.0</b><button id="btnSkillDefClose" type="button">✕</button></div>
+ <small>Редактируй способности игрока или любого сохранённого моба/NPC. Характеристики сохраняются в JSON проекта.</small>
+ <label>Персонаж<select id="skillDefCharacter"><option value="player">🧍 Игрок / мой герой</option></select></label>
+ <label>Игровая кнопка / слот<select id="skillDefSlot">
+  <option value="slot3">✨ Умение 1</option><option value="slot4">🌀 Умение 2</option>
+  <option value="slot5">🌟 Умение 3</option><option value="slot6">💠 Умение 4 (MMO)</option>
+  <option value="slot7">🌙 Умение 5 (MMO)</option><option value="ultimate">🔥 Ульта</option>
+ </select></label>
+ <div class="phoenixSkillRow"><label>Иконка<input id="skillDefIcon" value="✨" maxlength="16"></label>
+ <label>Тип<select id="skillDefType"><option value="damage">⚔ Урон по врагу</option><option value="heal">💚 Лечение игрока</option></select></label></div>
+ <label>Название<input id="skillDefName" value="Новый навык" maxlength="80"></label>
+ <label>Описание<textarea id="skillDefDescription" rows="2" maxlength="400" placeholder="Что делает навык?"></textarea></label>
+ <div class="phoenixSkillRow"><label>Уровень<input id="skillDefLevel" type="number" min="1" max="20" value="1"></label>
+ <label>Макс. уровень<input id="skillDefMaxLevel" type="number" min="1" max="20" value="5"></label></div>
+ <div class="phoenixSkillRow"><label>База урона/лечения<input id="skillDefBasePower" type="number" min="0" max="1000000" value="30"></label>
+ <label>Прирост за уровень<input id="skillDefGrowth" type="number" min="0" max="1000000" value="10"></label></div>
+ <div class="phoenixSkillRow"><label>Расход MP<input id="skillDefManaCost" type="number" min="0" max="10000" value="15"></label>
+ <label>Кулдаун, сек<input id="skillDefCooldown" type="number" min=".1" max="120" step=".1" value="5"></label></div>
+ <div class="phoenixSkillRow"><label>Дальность, м<input id="skillDefRange" type="number" min=".5" max="60" step=".5" value="8"></label>
+ <label>Анимация GLB<input id="skillDefAnimation" maxlength="80" value="cast"></label></div>
+ <b id="skillDefPreview">Сила на уровне 1: 30</b>
+ <div class="phoenixSkillRow"><button id="btnSkillDefLevelUp" type="button">⬆ Уровень +1</button><button id="btnSkillDefSave" type="button">💾 Сохранить навык</button></div>
+ <button id="btnSkillDefDelete" type="button">🗑 Удалить навык из слота</button>
+ <small id="skillDefMessage" aria-live="polite">В PLAY навыки игрока наносят урон или лечат, расходуют MP и имеют откат. Навыки мобов пока сохраняются как характеристики для будущего ИИ.</small>
+</section>
 <section id="phoenixSkillEditor" class="phoenixSkillEditor" hidden role="region" aria-label="Редактор игровых кнопок">
  <div class="phoenixSkillTitle"><b>🎮 Редактор скиллов · HUD</b><button id="btnSkillClose" type="button" aria-label="Закрыть настройку HUD">✕</button></div>
  <small>В EDIT перетащи любую кнопку пальцем. Настрой внешний вид и сохрани расположение для PLAY.</small>
@@ -665,6 +692,9 @@
  <progress id="phoenixPlayerHP" max="100" value="100" aria-label="Здоровье игрока"></progress>
  <span id="phoenixPlayerHPText">100 / 100 HP</span></div>
  <div id="phoenixKills">☠ Побеждено: 0</div>
+ <div id="phoenixMpLine" hidden>🔵 MP <span id="phoenixMpText">100 / 100</span></div>
+ <div id="phoenixAmmoLine" hidden>🔫 Патроны: <span id="phoenixAmmoText">12 / 48</span></div>
+ <div id="phoenixCrosshair" hidden aria-label="Прицел">＋</div>
  <div id="phoenixCombatTarget">⚔ Выбери врага рядом</div>
  <progress id="phoenixCombatHP" max="100" value="100" hidden aria-label="HP цели"></progress>
   <small id="phoenixCombatNotice" aria-live="polite">Касайся ⚔ или нажми F</small>
@@ -750,11 +780,14 @@
 <script src="engine/core/phoenix-core.js"></script>
 <script src="engine/core/phoenix-ai.js"></script>
 <script src="engine/core/phoenix-combat.js"></script>
+<script src="engine/core/phoenix-weapon.js"></script>
+<script src="engine/core/phoenix-skills.js"></script>
 <script src="engine/core/phoenix-skill-layout.js"></script>
 <script src="engine/core/phoenix-prefabs.js"></script>
 <script src="engine/runtime/phoenix-animations.js"></script>
 <script src="engine/builder/play-bridge.js"></script>
 <script src="engine/builder/prefab-editor.js"></script>
 <script src="engine/builder/skill-hud-editor.js"></script>
+<script src="engine/builder/skill-definition-editor.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
