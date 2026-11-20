@@ -21,7 +21,7 @@ for(const id of ['btnPhoenixPrefabs','phoenixPrefabPanel','btnPrefabSave',
  'phoenixPrefabEntities','btnPrefabRemoveEntity','phoenixPrefabAI',
  'phoenixPrefabPatrolRadius','phoenixPrefabAggroRadius','phoenixPrefabAttackRange',
  'phoenixPrefabCooldown','phoenixPrefabRun','phoenixPrefabHit',
- 'phoenixPrefabDeath','phoenixPrefabCast','phoenixCombatHud','btnPhoenixAttack','phoenixCombatHP','phoenixCombatTarget','phoenixCombatNotice']){
+ 'phoenixPrefabDeath','phoenixPrefabCast','phoenixCombatHud','btnPhoenixAttack','phoenixCombatHP','phoenixCombatTarget','phoenixCombatNotice','phoenixPlayerHP','phoenixPlayerHPText','phoenixKills','phoenixDeathNotice','btnPhoenixRespawn']){
  assert(html.includes('id="'+id+'"'),'Prefab UI field missing '+id);
 }
 assert(js.includes('this.prefabEditor=new PhoenixPrefabEditor(this)'));
@@ -47,4 +47,12 @@ assert(!editor.includes('requestAnimationFrame('),'No additional RAF');
 assert(!editor.includes('new THREE.WebGLRenderer'),'Do not create 2nd renderer');
 assert(!editor.includes('localStorage.setItem('),'Do not create per-object localStorage saves');
 assert(!editor.includes('builder.entries.push('),'Do not mix game entities with building geometry');
+assert(js.includes('playDeathAnimation()'),'GLB avatar death animation must exist');
+assert(js.includes('this.prefabEditor?.combat?.isPlayerDead()'),
+ 'Dead player movement must stop');
+assert(bridge.includes('onPlayerHit(hit'),'PLAY bridge must handle NPC attacks');
+assert(bridge.includes('  respawn()'),'PLAY must support safe respawn');
+assert(editor.includes('this.combat.damagePlayer('),
+ 'Hostile mob must use combat runtime to damage player');
+assert(css.includes('#phoenixPlayerHP'),'Player HP should be visible');
 console.log('PASS: Phoenix Prefab Editor integrated into UV44 with isolated project JSON and single RAF');
