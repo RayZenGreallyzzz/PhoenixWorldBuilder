@@ -593,3 +593,24 @@ body.phoenixPlaying #charControls{z-index:11;bottom:max(18px,env(safe-area-inset
 #btnPhoenixAttack:disabled{filter:grayscale(1);opacity:.45;pointer-events:none}
 #phoenixDeathNotice[hidden],#btnPhoenixRespawn[hidden]{display:none!important}
 @media(max-width:700px){#phoenixCombatHud .phoenixPlayerHealth{font-size:11px}#phoenixPlayerHPText{font-size:10px}#phoenixDeathNotice{font-size:12px}#btnPhoenixRespawn{font-size:12px;min-height:39px}}
+
+/* Phoenix 0.6 visibility fix: stable floating game toolbar, outside crowded UV44 topbar. */
+#phoenixEngineDock{position:fixed;z-index:42;left:50%;top:76px;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:9px;max-width:calc(100vw - 24px);min-height:48px;padding:5px 8px;border:2px solid #6fffd5;border-radius:14px;background:#071d31f5;color:#fff;box-shadow:0 4px 20px #000c;pointer-events:auto}
+#phoenixEngineDock .phoenixEngineVersion{display:flex;align-items:center;flex-direction:column;font-size:11px;font-weight:900;line-height:1.15;color:#82f5d2;white-space:nowrap;text-shadow:0 0 7px #38e7b9aa}
+#phoenixEngineDock .phoenixEngineVersion strong{font-size:17px;color:#fff}
+#phoenixEngineDock .phoenixEngineVersion small{font-size:9px;color:#91c9de;letter-spacing:.9px}
+#phoenixEngineDock button{position:relative;min-height:42px;padding:9px 12px;white-space:nowrap;border-radius:9px;font-size:13px;font-weight:900;box-shadow:inset 0 1px 0 #ffffff29}
+#phoenixEngineDock #btnPhoenixPlay{background:#1b9263;border-color:#77ffbd;color:#fff}
+#phoenixEngineDock #btnPhoenixPrefabs{background:#1e6190;border-color:#8de4ff;color:#fff}
+body.phoenixPlaying #phoenixEngineDock{display:none!important}
+@media(max-width:900px){
+ #phoenixEngineDock{top:72px;gap:5px;min-height:38px;padding:4px 6px;border-width:1px}
+ #phoenixEngineDock .phoenixEngineVersion{font-size:9px}
+ #phoenixEngineDock .phoenixEngineVersion strong{font-size:14px}
+ #phoenixEngineDock button{min-height:36px;padding:6px 7px;font-size:11px}
+}
+@media(max-width:590px){
+ #phoenixEngineDock .phoenixEngineVersion{font-size:8px}
+ #phoenixEngineDock .phoenixEngineVersion strong{font-size:12px}
+ #phoenixEngineDock button{font-size:10px;padding:5px}
+}
