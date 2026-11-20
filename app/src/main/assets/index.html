@@ -38,11 +38,40 @@
  <div class="brand">🔥 PHOENIX <b>BUILDER</b><small>СТУДИЯ 2.0</small></div>
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
  <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
+ <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 Prefabs</button>
  <button id="btnShapeToolTop" class="quickOpening" title="Фигурная подрезка выбранного модуля: круг, шестиугольник, звезда или круглая выемка">✂ Фигуры</button>
  <button id="btnQuickOpening" class="quickOpening" title="Выбрать стену и вырезать дверь или проход">✂ Проём</button>
  <button id="btnFocusCamera" class="quickOpening" title="Переместить точку вращения: на выбранную деталь или касанием сцены">🎯 Камера</button>
  <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnQuickProjectJson" title="Скачать редактируемый дом с текстурами в .phoenix.json">💾 JSON</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnProjectLoadSettings" title="Настройки загрузки дома" aria-label="Настройки загрузки проекта" aria-expanded="false">⚙️</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
+<section id="phoenixPrefabPanel" class="phoenixPrefabPanel" hidden role="region" aria-label="Phoenix Prefab Editor">
+ <div class="phoenixPrefabTitle"><b>🧬 Phoenix Prefab Editor</b><button type="button" id="btnPrefabClose" aria-label="Закрыть редактор">✕</button></div>
+ <small>Игровые мобы и NPC отдельно от строительных деталей. Без программирования.</small>
+ <label>Шаблоны<select id="phoenixPrefabSaved"><option value="">— Новый шаблон —</option></select></label>
+ <div class="phoenixPrefabRow"><button type="button" id="btnPrefabNew">＋ Новый</button><button type="button" id="btnPrefabDelete">🗑 Шаблон</button></div>
+ <label>Имя<input type="text" id="phoenixPrefabName" maxlength="120" value="Новый моб" autocomplete="off"></label>
+ <div class="phoenixPrefabRow"><label>Тип<select id="phoenixPrefabType"><option value="mob">🐺 Моб</option><option value="npc">🧑 NPC</option></select></label>
+ <label>Сторона<select id="phoenixPrefabFaction"><option value="enemy">Враг</option><option value="neutral">Нейтрал</option><option value="ally">Союзник</option></select></label></div>
+ <label>3D-модель GLB<select id="phoenixPrefabAsset"><option value="">Капсула-заглушка</option></select></label>
+ <button type="button" id="btnPrefabImportGlb">📂 Импортировать GLB</button>
+ <small>Используются модели из библиотеки Builder. Для сохранения на другом устройстве нужна резервная копия проекта с GLB.</small>
+ <div class="phoenixPrefabRow"><label>HP<input id="phoenixPrefabHP" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="100"></label>
+ <label>Урон<input id="phoenixPrefabDamage" type="number" min="0" max="1000000" step="1" inputmode="numeric" value="10"></label>
+ <label>Скорость<input id="phoenixPrefabSpeed" type="number" min="0" max="100" step=".1" inputmode="decimal" value="2"></label></div>
+ <datalist id="phoenixPrefabClipList"></datalist>
+ <label>Idle<input id="phoenixPrefabIdle" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
+ <label>Walk<input id="phoenixPrefabWalk" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
+ <label>Attack<input id="phoenixPrefabAttack" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
+ <small id="phoenixPrefabClips">Выбери GLB, чтобы увидеть доступные анимации.</small>
+ <div class="phoenixPrefabRow"><button id="btnPrefabSave" type="button" class="primary">💾 Сохранить шаблон</button><button id="btnPrefabPlace" type="button">👆 Поставить моба</button></div>
+ <button type="button" id="btnPrefabCancelPlace">✖ Отменить размещение</button>
+ <hr>
+ <b>Объекты на сцене</b><small id="phoenixPrefabCounts">Шаблонов: 0 · На сцене: 0</small>
+ <label>Размещённые мобы<select id="phoenixPrefabEntities"><option value="">— Выбери моба на сцене —</option></select></label>
+ <button type="button" id="btnPrefabRemoveEntity">🗑 Удалить со сцены</button>
+ <small id="phoenixPrefabStatus" aria-live="polite">Создай шаблон, затем коснись места на сцене.</small>
+ <small>В PLAY анимированные мобы проигрывают Idle. ИИ, передвижение и атаки — следующие этапы.</small>
+</section>
 <section id="shapeToolPanel" class="shapeToolPanel" hidden aria-label="Фигурная подрезка модуля">
  <div class="shapeToolTitle"><b>✂ Фигурная подрезка</b><button id="btnShapeClose" type="button" aria-label="Закрыть">✕</button></div>
  <small id="shapeToolInfo">Выдели установленный модуль. Работает с полом, крышей, стеной или статическим GLB.</small>
@@ -634,6 +663,8 @@
  <script src="js/scene-manager.js"></script>
  <script src="js/project-load-stages.js"></script>
 <script src="engine/core/phoenix-core.js"></script>
+<script src="engine/core/phoenix-prefabs.js"></script>
 <script src="engine/builder/play-bridge.js"></script>
+<script src="engine/builder/prefab-editor.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
