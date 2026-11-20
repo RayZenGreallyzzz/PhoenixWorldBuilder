@@ -26,6 +26,7 @@ on:
       - 'tests/test-phoenix-weapon.cjs'
       - 'tests/test-phoenix-skills.cjs'
       - 'tests/test-skill-definition-editor.cjs'
+      - 'tests/test-play-weapon-skills.cjs'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
 permissions:
@@ -75,3 +76,4 @@ jobs:
           node tests/test-phoenix-weapon.cjs
           node tests/test-phoenix-skills.cjs
           node tests/test-skill-definition-editor.cjs
+          node tests/test-play-weapon-skills.cjs
