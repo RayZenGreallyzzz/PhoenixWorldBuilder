@@ -199,7 +199,8 @@ class CleanBuilder{
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
-   this.updatePlayer(dt);this.controls.update();this.gizmo.update();
+   this.updatePlayer(dt);this.controls.update();
+   if(!this.playBridge?.active)this.gizmo.update();
    if(this.previewOutline&&this.previewOutline.visible)this.previewOutline.update();
    this.renderer.render(this.scene,this.camera);
    // Read renderer counters AFTER drawing the visible frame.
@@ -364,7 +365,7 @@ class CleanBuilder{
   else notify('Строительство: выбери деталь, затем коснись места установки');
   $('inspector').classList.remove('unavailable');
   this.preview?.root&&(this.preview.root.visible=this.tool==='place');
-  this.controls.update();this.aimPlacement();
+  this.controls.update();if(!this.playBridge?.active)this.aimPlacement();
   this.gizmo.attach(mode==='build'&&this.tool==='pick'&&
    SceneManager.editingAllowed(this.selected)?this.selected:null);
   this.updateGizmoDock();
@@ -4506,7 +4507,7 @@ class CleanBuilder{
    this.controls.target.add(movement);this.camera.position.add(movement);
    this.setAvatarAnimation(movement.lengthSq()>.0000001);
   }
-  if(this.tool==='place')this.aimPlacement();
+  if(this.tool==='place'&&!this.playBridge?.active)this.aimPlacement();
  }
  bind(){
   $('modeBuild').onclick=()=>{this.setTextureTab('parts');this.setMode('build')};
