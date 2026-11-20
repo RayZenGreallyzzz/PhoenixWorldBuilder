@@ -5,3 +5,7 @@ node_modules/
 *.aab
 local.properties
 .DS_Store
+
+# Bundled UV44 GLB models are restored from the owner's APK locally.
+# Do not publish third-party art in a public source repository without licensing.
+app/src/main/assets/pwb/
