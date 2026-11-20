@@ -617,6 +617,12 @@
 <div id="phoenixPlayHud" hidden role="group" aria-label="Phoenix Engine игровой режим">
  <span>🔥 PHOENIX · PLAY</span><button type="button" id="btnPhoenixEdit">⏹ EDIT</button>
 </div>
+<section id="phoenixCombatHud" hidden role="group" aria-label="Phoenix Engine бой">
+ <div id="phoenixCombatTarget">⚔ Выбери врага рядом</div>
+ <progress id="phoenixCombatHP" max="100" value="100" hidden aria-label="HP цели"></progress>
+ <button id="btnPhoenixAttack" type="button" aria-label="Атаковать ближайшего врага">⚔ АТАКА</button>
+ <small id="phoenixCombatNotice" aria-live="polite">Касайся ⚔ или нажми F</small>
+</section>
 <div id="charControls" hidden>
  <div class="joystickTitle">🕹 Движение</div>
  <div id="joystickPad" class="joystickPad" role="group"
@@ -679,6 +685,7 @@
  <script src="js/project-load-stages.js"></script>
 <script src="engine/core/phoenix-core.js"></script>
 <script src="engine/core/phoenix-ai.js"></script>
+<script src="engine/core/phoenix-combat.js"></script>
 <script src="engine/core/phoenix-prefabs.js"></script>
 <script src="engine/runtime/phoenix-animations.js"></script>
 <script src="engine/builder/play-bridge.js"></script>
