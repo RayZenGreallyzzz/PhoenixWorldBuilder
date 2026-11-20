@@ -177,7 +177,7 @@ class CleanBuilder{
   this.placementScale=clamp(Number(localStorage.getItem('phoenix-builder-placement-scale'))||1,.1,10);
   this.clock=new THREE.Clock();
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
-  this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;
+  this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;this.avatarAttackUntil=0;
   this.setDefaultAvatar();
   this.keys=new Set();this.joy={x:0,y:0};this.pointerStart=null;this.lastFrame=0;
   this.bind();
@@ -229,7 +229,7 @@ class CleanBuilder{
  setDefaultAvatar(){
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarRoot=null;this.avatarGroundY=0;this.avatarGroundTimer=0;
-  this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';
+  this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
   const cloth=new THREE.MeshStandardMaterial({color:0x355d82});
   const skin=new THREE.MeshStandardMaterial({color:0xe0b783});
   const dark=new THREE.MeshStandardMaterial({color:0x21384b});
@@ -271,7 +271,7 @@ class CleanBuilder{
    // First evaluate the actual idle pose, then measure its skinned vertices.
    this.avatarClips=scene.animations||[];
    this.avatarMixer=this.avatarClips.length?new THREE.AnimationMixer(root):null;
-   this.avatarActions={};this.avatarState='';
+   this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
    if(this.avatarMixer){
     for(const clip of this.avatarClips)this.avatarActions[clip.name]=
      this.avatarMixer.clipAction(clip);
@@ -4457,7 +4457,26 @@ class CleanBuilder{
    }
   }
  }
+ playAttackAnimation(){
+  // Existing imported avatar clips only: no retargeter and no new mixer.
+  if(!this.avatarMixer||!this.avatarClips.length)return false;
+  const clip=this.avatarClips.find(c=>
+   /attack|strike|melee|удар|атак/i.test(c.name));
+  if(!clip)return false;
+  const action=this.avatarActions[clip.name];if(!action)return false;
+  for(const other of Object.values(this.avatarActions))
+   if(other!==action&&other.isRunning())other.fadeOut(.12);
+  action.reset();
+  action.clampWhenFinished=true;
+  action.setLoop(THREE.LoopOnce,1);
+  action.fadeIn(.12).play();
+  this.avatarState='attack';
+  this.avatarAttackUntil=performance.now()+
+   Math.max(350,Math.min(1000,(clip.duration||.6)*1000));
+  return true;
+ }
  setAvatarAnimation(moving){
+  if(this.playBridge?.active&&this.avatarAttackUntil>performance.now())return;
   if(!this.avatarMixer||!this.avatarClips.length)return;
   const mode=moving?'walk':'idle';
   if(this.avatarState===mode)return;
