@@ -26,7 +26,8 @@ const ids=['phoenixSkillLayer','phoenixSkillEditor','phoenixSkillSelect',
  'phoenixSkillIcon','phoenixSkillLabel','phoenixSkillSize','phoenixSkillColor',
  'phoenixSkillShape','phoenixSkillOpacity','phoenixSkillEnabled',
  'phoenixSkillFeedback','btnPhoenixAttack','btnPhoenixHeal','btnPhoenixSlot3',
- 'btnPhoenixSlot4','btnPhoenixSkills','btnSkillClose','btnSkillSave','btnSkillReset',
+ 'btnPhoenixSlot4','btnPhoenixSlot5','btnPhoenixUltimate','btnPhoenixSkills','btnSkillClose','btnSkillSave','btnSkillReset',
+ 'phoenixSkillPreset','btnSkillApplyPreset',
  'phoenixCombatNotice'];
 const elements=Object.fromEntries(ids.map(id=>[id,new E(id)]));
 const doc={body:new E('body'),getElementById:id=>elements[id]||null,
@@ -36,7 +37,7 @@ const builder={playBridge:{active:false,heals:0,heal(){this.heals++}},
  saves:0,save(){this.saves++}};
 const Editor=require('../app/src/main/assets/engine/builder/skill-hud-editor.js');
 const editor=new Editor(builder,doc);
-assert.equal(editor.layout.slots.length,4);
+assert.equal(editor.layout.slots.length,6);
 assert.equal(elements.phoenixSkillLayer.hidden,true);
 assert.equal(editor.open(),true);
 assert.equal(elements.phoenixSkillEditor.hidden,false);
@@ -71,7 +72,8 @@ editor.close();
 assert.equal(elements.phoenixSkillLayer.hidden,true);
 editor.setPlaying(true);
 assert.equal(elements.phoenixSkillLayer.hidden,false);
-assert.equal(elements.btnPhoenixSlot3.hidden,true);
+assert.equal(elements.btnPhoenixSlot3.hidden,false);
+assert.equal(elements.btnPhoenixSlot5.hidden,true);
 elements.btnPhoenixHeal.listeners.click();
 assert.equal(builder.playBridge.heals,1,'Heal slot must trigger PLAY action');
 editor.setPlaying(false);
@@ -83,4 +85,20 @@ restored.loadFromProject(alternate);
 assert.equal(restored.serialize().slots[1].x,50);
 restored.loadFromProject({version:999,slots:[]});
 assert.deepEqual(restored.serialize(),stored,'Invalid project UI must preserve device preference');
-console.log('PASS: finger-drag HUD, icon/color/shape, device save, JSON restore and heal click');
+elements.phoenixSkillPreset.value='wild-rift';
+elements.btnSkillApplyPreset.listeners.click();
+assert.equal(restored.serialize().version,2);
+assert.equal(restored.serialize().slots.length,6);
+assert.equal(restored.serialize().slots[2].label,'Q');
+assert.equal(restored.serialize().slots[5].label,'R · УЛЬТА');
+assert.equal(restored.serialize().slots[5].enabled,true);
+assert.equal(elements.btnPhoenixUltimate.hidden,true,'Outside EDIT/PLAY, HUD must remain hidden');
+restored.open();
+assert.equal(elements.btnPhoenixUltimate.hidden,false,'MOBA ultimate slot must be visible in EDIT');
+restored.save();
+restored.close();
+restored.setPlaying(true);
+assert.equal(elements.btnPhoenixUltimate.hidden,false,'Enabled MOBA ultimate must show in PLAY');
+assert.equal(elements.btnPhoenixSlot5.hidden,false,'Wild Rift third skill must show in PLAY');
+restored.setPlaying(false);
+console.log('PASS: MOBA layout presets and finger-drag HUD, icon/color/shape, device save, JSON restore and heal click');
