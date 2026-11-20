@@ -4475,7 +4475,22 @@ class CleanBuilder{
    Math.max(350,Math.min(1000,(clip.duration||.6)*1000));
   return true;
  }
+ playDeathAnimation(){
+  // Existing GLB avatar only; no retargeting or second AnimationMixer.
+  if(!this.avatarMixer||!this.avatarClips.length)return false;
+  const clip=this.avatarClips.find(c=>/death|die|dead|смерт|гибел/i.test(c.name));
+  if(!clip){this.avatarMixer.stopAllAction();return false;}
+  const action=this.avatarActions[clip.name];if(!action)return false;
+  for(const other of Object.values(this.avatarActions))
+   if(other!==action&&other.isRunning())other.fadeOut(.1);
+  action.reset();action.clampWhenFinished=true;
+  action.setLoop(THREE.LoopOnce,1);
+  action.fadeIn(.1).play();
+  this.avatarState='death';this.avatarAttackUntil=Infinity;
+  return true;
+ }
  setAvatarAnimation(moving){
+  if(this.playBridge?.active&&this.prefabEditor?.combat?.isPlayerDead())return;
   if(this.playBridge?.active&&this.avatarAttackUntil>performance.now())return;
   if(!this.avatarMixer||!this.avatarClips.length)return;
   const mode=moving?'walk':'idle';
@@ -4507,6 +4522,7 @@ class CleanBuilder{
    AvatarFit.ground(this.avatarFitGroup,this.avatarGroundY,dt);
   }
   if(this.mode!=='character'&&this.mode!=='drone')return;
+  if(this.playBridge?.active&&this.prefabEditor?.combat?.isPlayerDead())return;
   const down=(...keys)=>keys.some(k=>this.keys.has(k));
   const left=down('a','arrowleft','left'),right=down('d','arrowright','right'),
    up=down('w','arrowup','up'),back=down('s','arrowdown','down');
