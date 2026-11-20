@@ -370,6 +370,51 @@
    return !this.collider.hits(new THREE.Ray(begin,vector.normalize()),
     meshes,0,Math.max(0,length-.25)).length;
   }
+  findEnemy(range,{forward=false}={}){
+   if(!this.playing||this.combat.isPlayerDead())return null;
+   const origin=this.b.player.position;
+   const facing=new THREE.Vector3();
+   if(forward){
+    this.b.camera.getWorldDirection(facing);facing.y=0;
+    if(facing.lengthSq()<.01)return null;
+    facing.normalize();
+   }
+   let best=null,nearest=Infinity;
+   for(const [id,render] of this.rendered){
+    const mob=this.combat.get(id);
+    if(!mob||mob.dead||mob.faction!=='enemy')continue;
+    const target=render.root.position;
+    const dx=target.x-origin.x,dz=target.z-origin.z;
+    const d=Math.hypot(dx,dz);
+    if(d>range||d>=nearest||Math.abs(target.y-origin.y)>1.8)continue;
+    if(forward){
+     const depth=dx*facing.x+dz*facing.z;
+     const spread=Math.abs(dx*facing.z-dz*facing.x);
+     if(depth<=0||spread>Math.max(.85,depth*.10))continue;
+    }
+    if(!this.canStrike(origin,target,d))continue;
+    best={id,distance:d,position:target.clone()};nearest=d;
+   }
+   return best;
+  }
+  animateHit(id,result){
+   if(!result?.ok)return result;
+   const render=this.rendered.get(id);
+   if(!render)return result;
+   if(result.killed){
+    render.hitHold=Infinity;
+    render.root.userData.phoenixDead=true;
+    render.animation?.setState('death',.1);
+   }else{
+    render.hitHold=.45;
+    render.animation?.setState('hit',.1);
+   }
+   return result;
+  }
+  damageEnemy(id,amount){
+   if(!this.playing)return {ok:false,reason:'edit'};
+   return this.animateHit(id,this.combat.damageMob(id,amount));
+  }
   attackNearest(now){
    if(!this.playing)return {ok:false,reason:'edit'};
    const player=this.b.player.position;
@@ -380,18 +425,7 @@
     (item,distance)=>this.canStrike(player,
      new THREE.Vector3(...item.position),distance));
    if(!result.ok)return result;
-   const render=this.rendered.get(result.id);
-   if(render){
-    if(result.killed){
-     render.hitHold=Infinity;
-     render.root.userData.phoenixDead=true;
-     render.animation?.setState('death',.1);
-    }else{
-     render.hitHold=.45;
-     render.animation?.setState('hit',.1);
-    }
-   }
-   return result;
+   return this.animateHit(result.id,result);
   }
   async createEntity(prefabId,position){
    const p=this.registry.get(prefabId);
