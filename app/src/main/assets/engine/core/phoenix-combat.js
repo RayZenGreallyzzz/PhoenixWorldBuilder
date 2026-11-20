@@ -68,6 +68,19 @@
    return {ok:true,attacker:attackerId,damage,hp:this.playerHp,
     maxHp:this.playerMaxHp,dead:this.playerDead,kills:this.kills};
   }
+  damageMob(id,amount){
+   bounded(amount,0,1000000,'player skill damage');
+   if(this.playerDead)return {ok:false,reason:'player-dead'};
+   const target=this.mobs.get(id);
+   if(!target||target.faction!=='enemy'||target.hp<=0)
+    return {ok:false,reason:'inactive'};
+   if(amount===0)return {ok:false,reason:'no-damage'};
+   target.hp=Math.max(0,target.hp-amount);
+   const killed=target.hp<=0;
+   if(killed)this.kills++;
+   return {ok:true,id:target.id,name:target.name,damage:amount,
+    hp:target.hp,maxHp:target.maxHp,killed};
+  }
   attack(origin,targets,time,canHit=()=>true){
    if(!validPoint(origin)||!Array.isArray(targets)||
       typeof canHit!=='function')throw new TypeError('Invalid combat target list');
@@ -90,10 +103,7 @@
     nearest=distance;target=mob;
    }
    if(!target)return {ok:false,reason:blocked?'blocked':'miss',remaining:this.cooldown};
-   target.hp=Math.max(0,target.hp-this.damage);
-   if(target.hp<=0)this.kills++;
-   return {ok:true,id:target.id,name:target.name,damage:this.damage,
-    hp:target.hp,maxHp:target.maxHp,killed:target.hp<=0,
+   return {...this.damageMob(target.id,this.damage),
     distance:nearest,remaining:this.cooldown};
   }
  }
