@@ -12,7 +12,7 @@
   idle:/idle|stand|rest|breath|покой|сто[ий]/i,
   walk:/walk|move|ходьб|шаг/i,
   run:/run|sprint|бег/i,
-  attack:/attack|strike|hit[a-z0-9]*|melee|удар|атак/i,
+  attack:/attack|strike|melee|удар|атак/i,
   hit:/hurt|damage|react|получен|боль/i,
   death:/death|die|dead|смерт|гибел/i,
   cast:/cast|spell|magic|заклин/i
