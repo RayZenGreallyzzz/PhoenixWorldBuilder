@@ -37,6 +37,7 @@
 <header class="topbar">
  <div class="brand">🔥 PHOENIX <b>BUILDER</b><small>СТУДИЯ 2.0</small></div>
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
+ <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
  <button id="btnShapeToolTop" class="quickOpening" title="Фигурная подрезка выбранного модуля: круг, шестиугольник, звезда или круглая выемка">✂ Фигуры</button>
  <button id="btnQuickOpening" class="quickOpening" title="Выбрать стену и вырезать дверь или проход">✂ Проём</button>
  <button id="btnFocusCamera" class="quickOpening" title="Переместить точку вращения: на выбранную деталь или касанием сцены">🎯 Камера</button>
@@ -569,6 +570,9 @@
  <progress id="projectLoadProgressBar" max="100" value="0"></progress>
 </div>
 <section id="hud" aria-live="polite"><span id="placementDot" class="dot neutral"></span><span id="status">Выбери деталь для строительства</span></section>
+<div id="phoenixPlayHud" hidden role="group" aria-label="Phoenix Engine игровой режим">
+ <span>🔥 PHOENIX · PLAY</span><button type="button" id="btnPhoenixEdit">⏹ EDIT</button>
+</div>
 <div id="charControls" hidden>
  <div class="joystickTitle">🕹 Движение</div>
  <div id="joystickPad" class="joystickPad" role="group"
@@ -629,5 +633,7 @@
  <script src="js/editor-history.js"></script>
  <script src="js/scene-manager.js"></script>
  <script src="js/project-load-stages.js"></script>
+<script src="engine/core/phoenix-core.js"></script>
+<script src="engine/builder/play-bridge.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
