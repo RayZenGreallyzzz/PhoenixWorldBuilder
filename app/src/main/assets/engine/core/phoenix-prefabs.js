@@ -32,14 +32,25 @@
   const stats=value.stats||{};
   const clips=value.animations||{};
   const animations={};
-  for(const name of ['idle','walk','attack']){
+  for(const name of ['idle','walk','run','attack','hit','death','cast']){
    const clip=clips[name]||'';
    if(typeof clip!=='string'||clip.length>120)
     throw new TypeError('Invalid animation '+name);
    animations[name]=clip;
   }
+  const ai=value.ai||{};
+  if(typeof ai!=='object'||Array.isArray(ai))throw new TypeError('Invalid AI settings');
+  const mode=ai.mode||'idle';
+  if(!['idle','patrol','chase'].includes(mode))throw new TypeError('Invalid AI mode');
+  const behavior={
+   mode,
+   patrolRadius:number(ai.patrolRadius??3,0,30,'patrolRadius'),
+   aggroRadius:number(ai.aggroRadius??7,0,50,'aggroRadius'),
+   attackRange:number(ai.attackRange??1.25,.3,8,'attackRange'),
+   attackCooldown:number(ai.attackCooldown??1.8,.35,30,'attackCooldown')
+  };
   return {
-   name:safeText(value.name),type,faction,assetId,
+   name:safeText(value.name),type,faction,assetId,ai:behavior,
    stats:{
     hp:number(stats.hp??100,1,1000000,'hp'),
     damage:number(stats.damage??10,0,1000000,'damage'),
