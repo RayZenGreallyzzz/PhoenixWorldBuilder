@@ -61,15 +61,18 @@
     playerRotation: b.player.rotation.clone(),
     previewRoot: b.preview && b.preview.root,
     previewVisible: b.preview && b.preview.root ? b.preview.root.visible : null,
+    previewOutline: b.previewOutline || null,
+    outlineVisible: b.previewOutline ? b.previewOutline.visible : null,
     controlsEnabled: b.controls.enabled
    };
    try {
     b.keys.clear();
     if (b.joystick) b.joystick.reset();
-    b.setMode('character'); // UV44 already handles camera, avatar and collision.
-    if (saved.previewRoot) saved.previewRoot.visible = false;
     this.saved = saved;
     this.active = true;
+    b.setMode('character'); // UV44 already handles camera, avatar and collision.
+    if (saved.previewRoot) saved.previewRoot.visible = false;
+    if (saved.previewOutline) saved.previewOutline.visible = false;
     this.document.body.classList.add('phoenixPlaying');
     this.hud.hidden = false;
     this.modeController.setMode('play');
@@ -94,6 +97,8 @@
    b.controls.enabled = saved.controlsEnabled;
    if (saved.previewRoot && b.preview && b.preview.root === saved.previewRoot)
     saved.previewRoot.visible = saved.previewVisible;
+   if (saved.previewOutline && b.previewOutline === saved.previewOutline)
+    saved.previewOutline.visible = saved.outlineVisible;
    b.controls.update();
    if (typeof b.setAvatarAnimation === 'function') b.setAvatarAnimation(false);
   }
