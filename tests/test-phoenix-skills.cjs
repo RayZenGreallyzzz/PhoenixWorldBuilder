@@ -10,7 +10,7 @@ assert.equal(power({...fire,level:3}),130);
 assert.equal(power({...fire,level:5}),180);
 assert.throws(()=>skill({...fire,level:6}),/level/);
 assert.throws(()=>skill({...fire,description:'x'.repeat(401)}),/description/);
-assert.throws(()=>skill({...fire,icon:'<script>'}),/icon/);
+assert.throws(()=>skill({...fire,icon:'LONGICONNAME'}),/icon/);
 assert.throws(()=>skill({...fire,manaCost:-2}),/manaCost/);
 const catalog=new Catalog();
 catalog.set('player','slot3',fire);
