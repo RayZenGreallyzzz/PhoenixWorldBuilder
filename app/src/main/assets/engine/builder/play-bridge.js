@@ -21,6 +21,8 @@
    this.active = false;
    this.saved = null;
    this.healReadyAt=0;
+   this.weapon=typeof PhoenixWeapon!=='undefined'?new PhoenixWeapon.Session():null;
+   this.ammoSignature='';
    const playButton = this.document.getElementById('btnPhoenixPlay');
    const editButton = this.document.getElementById('btnPhoenixEdit');
    this.hud = this.document.getElementById('phoenixPlayHud');
@@ -34,6 +36,11 @@
    this.killsLabel = this.document.getElementById('phoenixKills');
    this.deathNotice = this.document.getElementById('phoenixDeathNotice');
    this.respawnButton = this.document.getElementById('btnPhoenixRespawn');
+   this.ammoLine = this.document.getElementById('phoenixAmmoLine');
+   this.ammoText = this.document.getElementById('phoenixAmmoText');
+   this.crosshair = this.document.getElementById('phoenixCrosshair');
+   this.mpLine = this.document.getElementById('phoenixMpLine');
+   this.mpText = this.document.getElementById('phoenixMpText');
    if (!playButton || !editButton || !this.hud)
     throw new Error('Phoenix Engine PLAY/EDIT UI is missing');
    playButton.addEventListener('click', () => this.enter());
@@ -76,7 +83,8 @@
     previewVisible: b.preview && b.preview.root ? b.preview.root.visible : null,
     previewOutline: b.previewOutline || null,
     outlineVisible: b.previewOutline ? b.previewOutline.visible : null,
-    controlsEnabled: b.controls.enabled
+    controlsEnabled: b.controls.enabled,
+    cameraFov: Number.isFinite(b.camera.fov)?b.camera.fov:null
    };
    try {
     b.prefabEditor?.close();
@@ -92,9 +100,11 @@
     this.modeController.setMode('play');
     b.prefabEditor?.setPlaying(true);
     b.skillEditor?.setPlaying(true);
+    b.skillDefinitionEditor?.startPlay();
+    this.weapon?.reset();this.ammoSignature='';
     this.healReadyAt=0;
     if(this.combatHud)this.combatHud.hidden=false;
-    this.updatePlayerHud();
+    this.showGenreHud();this.updatePlayerHud();
     if(this.hpBar)this.hpBar.hidden=true;
     if(this.hpTarget)this.hpTarget.textContent='⚔ Ближайший враг';
     if(this.combatNotice)this.combatNotice.textContent='Касайся ⚔ или нажми F';
@@ -104,6 +114,7 @@
     this.active = false;
     b.prefabEditor?.setPlaying(false);
     b.skillEditor?.setPlaying(false);
+    b.skillDefinitionEditor?.stopPlay();
     this.document.body.classList.remove('phoenixPlaying');
     this.hud.hidden = true;
     if(this.combatHud)this.combatHud.hidden=true;
@@ -120,6 +131,13 @@
    b.camera.position.copy(saved.camera);
    b.controls.target.copy(saved.target);
    b.controls.enabled = saved.controlsEnabled;
+   if(saved.cameraFov!==null&&Number.isFinite(saved.cameraFov)){
+    b.camera.fov=saved.cameraFov;b.camera.updateProjectionMatrix?.();
+   }
+   this.weapon?.setAim(false);
+   if(this.crosshair)this.crosshair.hidden=true;
+   if(this.ammoLine)this.ammoLine.hidden=true;
+   if(this.mpLine)this.mpLine.hidden=true;
    if (saved.previewRoot && b.preview && b.preview.root === saved.previewRoot)
     saved.previewRoot.visible = saved.previewVisible;
    if (saved.previewOutline && b.previewOutline === saved.previewOutline)
@@ -137,6 +155,7 @@
    this.active = false;
    b.prefabEditor?.setPlaying(false);
    b.skillEditor?.setPlaying(false);
+   b.skillDefinitionEditor?.stopPlay();
    this.document.body.classList.remove('phoenixPlaying');
    this.hud.hidden = true;
    if(this.combatHud)this.combatHud.hidden=true;
@@ -195,12 +214,117 @@
    b.keys.clear();b.joystick?.reset();
    b.avatarAttackUntil=0;b.avatarState='';
    b.prefabEditor.setPlaying(true);
+   b.skillDefinitionEditor?.resetPlay();
+   this.weapon?.reset();this.ammoSignature='';
    this.healReadyAt=0;
    b.setAvatarAnimation?.(false);
    if(this.hpBar)this.hpBar.hidden=true;
    if(this.hpTarget)this.hpTarget.textContent='⚔ Ближайший враг';
    if(this.combatNotice)this.combatNotice.textContent='❤️ Возрождение · 100% HP';
-   this.updatePlayerHud();
+   this.updatePlayerHud();this.showGenreHud();
+   return true;
+  }
+
+  now(){return (typeof performance!=='undefined'?performance.now():Date.now())/1000;}
+  showGenreHud(){
+   const shooter=!!this.builder.skillEditor?.layout?.slots?.some(s=>s.id==='fire'&&s.enabled);
+   if(this.ammoLine)this.ammoLine.hidden=!shooter;
+   if(this.crosshair)this.crosshair.hidden=!shooter;
+   if(this.mpLine)this.mpLine.hidden=!(this.builder.skillDefinitionEditor?.runtime);
+   this.updateAmmoHud();
+   this.updateManaHud();
+  }
+  updateAmmoHud(){
+   if(!this.weapon||!this.ammoText)return;
+   const state=this.weapon.status(this.now());
+   const label=state.ammo+' / '+state.reserve+
+    (state.reloading?' · Перезарядка '+state.remaining.toFixed(1)+' с':'')+
+    (state.aiming?' · 🎯':'');
+   if(label!==this.ammoSignature){
+    this.ammoSignature=label;this.ammoText.textContent=label;
+   }
+  }
+  updateManaHud(){
+   const rt=this.builder.skillDefinitionEditor?.runtime;
+   if(this.mpText&&rt)this.mpText.textContent=rt.mp+' / '+rt.maxMp;
+  }
+  update(dt){
+   if(!this.active||!Number.isFinite(dt)||dt<=0)return;
+   if(this.ammoLine&&!this.ammoLine.hidden)this.updateAmmoHud();
+  }
+  fire(){
+   if(!this.active||!this.weapon||
+      this.builder.prefabEditor?.combat?.isPlayerDead())return false;
+   const attempt=this.weapon.fire(this.now());
+   if(!attempt.ok){
+    if(this.combatNotice)this.combatNotice.textContent=
+     attempt.reason==='empty'?'🔫 Нет патронов · нажми ПЕРЕЗАРЯД':
+     attempt.reason==='reloading'?'🔄 Перезарядка...':'⏳ Подожди';
+    return false;
+   }
+   const target=this.builder.prefabEditor?.findEnemy(attempt.range,{forward:true});
+   const result=target?this.builder.prefabEditor.damageEnemy(target.id,attempt.damage):null;
+   this.updateAmmoHud();
+   if(this.combatNotice)this.combatNotice.textContent=result?.ok?
+    result.killed?'🔫 Противник повержен':'🔫 Попадание: −'+result.damage+' HP':
+    '🔫 Промах';
+   if(result?.ok){
+    this.updatePlayerHud();
+    if(this.hpTarget)this.hpTarget.textContent=result.name+' · HP '+result.hp+'/'+result.maxHp;
+    if(this.hpBar){this.hpBar.max=result.maxHp;this.hpBar.value=result.hp;this.hpBar.hidden=false;}
+   }
+   return true;
+  }
+  reload(){
+   if(!this.active||!this.weapon||
+      this.builder.prefabEditor?.combat?.isPlayerDead())return false;
+   const result=this.weapon.reload(this.now());
+   this.updateAmmoHud();
+   if(this.combatNotice)this.combatNotice.textContent=result.ok?
+    '🔄 Перезарядка...':'🔫 '+(result.reason==='full'?'Магазин полный':
+     result.reason==='no-ammo'?'Патронов больше нет':'Уже перезаряжается');
+   return result.ok;
+  }
+  aim(){
+   if(!this.active||!this.weapon||
+      this.builder.prefabEditor?.combat?.isPlayerDead())return false;
+   const next=this.weapon.setAim(!this.weapon.aiming);
+   const camera=this.builder.camera;
+   if(this.saved?.cameraFov!==null&&Number.isFinite(this.saved?.cameraFov)){
+    camera.fov=next?Math.max(30,this.saved.cameraFov*.7):this.saved.cameraFov;
+    camera.updateProjectionMatrix?.();
+   }
+   this.updateAmmoHud();return next;
+  }
+  castSkill(slot){
+   const ed=this.builder.skillDefinitionEditor;
+   const combat=this.builder.prefabEditor?.combat;
+   if(!this.active||!ed?.runtime||combat?.isPlayerDead())return false;
+   const def=ed.catalog.get('player',slot);
+   if(!def){
+    if(this.combatNotice)this.combatNotice.textContent='🧙 Для слота ещё не создан навык.';
+    return false;
+   }
+   const target=def.type==='damage'?
+    this.builder.prefabEditor?.findEnemy(def.range):null;
+   const canApply=def.type==='heal'?
+    (()=>{const p=combat.getPlayer();return p.hp<p.maxHp;}):
+    (()=>!!target);
+   const result=ed.cast(slot,this.now(),canApply);
+   if(!result.ok){
+    if(this.combatNotice)this.combatNotice.textContent=
+     result.reason==='mana'?'🔵 Недостаточно MP':
+     result.reason==='cooldown'?'⏳ Навык на перезарядке':
+     result.reason==='no-target'?'🎯 Нет доступной цели':'🧙 Навык не назначен';
+    return false;
+   }
+   const effect=def.type==='heal'?combat.healPlayer(result.power):
+    this.builder.prefabEditor.damageEnemy(target.id,result.power);
+   this.updateManaHud();this.updatePlayerHud();
+   if(this.combatNotice)this.combatNotice.textContent=
+    result.skill.icon+' '+result.skill.name+': '+
+    (def.type==='heal'?'+'+effect.healed+' HP':'−'+effect.damage+' HP')+
+    ' · MP −'+def.manaCost;
    return true;
   }
 
