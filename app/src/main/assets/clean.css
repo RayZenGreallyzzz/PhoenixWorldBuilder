@@ -23,3 +23,520 @@ input:focus{outline:2px solid #36bdcf}input[type=checkbox]{accent-color:#38e6bf;
 body.uiHidden .panel{display:none}body.uiHidden #hud{bottom:75px}body.uiHidden .bottombar .hint{display:none}
 @media(max-width:1100px){.panel{width:186px}.right{width:229px}.brand{font-size:14px}.modes button{font-size:11px;padding:8px}.topRight button{padding:7px}.hint{display:none!important}#hud{bottom:62px;max-width:45%;min-width:0}}
 @media(max-width:700px){.panel{width:165px}.right{width:180px}.topbar{gap:5px}.brand small{display:none}.brand{font-size:12px}.modes{gap:2px}.modes button{padding:6px;font-size:10px}.topRight button{font-size:10px;padding:6px}.panelTitle{padding:8px}.scrollArea{padding:7px}.rowSection{padding:7px}.cols3{gap:3px}#hud{font-size:10px;padding:6px}.bottombar{gap:4px}.bottombar button{padding:4px 7px;min-height:34px}}
+
+/* Precision editing controls, adapted for touch screens. */
+.physicalSize{display:block;padding:8px;border:1px solid #398a9f;background:#113949;border-radius:8px;color:#8ff1dc;font-size:12px;line-height:1.5}
+.myCatalog{border-top:1px solid var(--line);padding:8px 10px;overflow:auto;max-height:35vh;flex-shrink:0}
+.myCatalog>b{font-size:12px;color:#8ff1dc}.myCatalog .parts{padding:6px 0}
+.movePad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.movePad button{min-height:42px;border-color:#3b9ca2;font-weight:700}
+
+/* Materials library, character scale, window/door editor and touch gizmos. */
+[hidden]{display:none!important}
+.libraryTabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px}
+.libraryTabs button{padding:6px 4px;min-height:35px;font-size:11px}
+.textureLibrary{display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;padding:12px}
+.textureLibrary>b{font-size:12px;color:#7cefe4}
+.textureCards{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.textureCards button{padding:7px 5px;font-size:12px;text-align:center;min-height:48px;white-space:normal;overflow-wrap:anywhere}
+.textureCards button.active{outline:1px solid #78efe3}
+.gizmoModes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding-top:10px}
+.gizmoModes button{font-size:10px;padding:7px 3px;min-height:43px}
+#textureInspector[open] label,#openingPanel[open] label{margin:8px 0}
+#textureTint{appearance:none;width:100%;height:36px;padding:2px;background:#0c2532;border:1px solid #4b7785;border-radius:7px}
+#avatarHeight{accent-color:#55e5e7;width:100%;height:22px}
+#avatarSizeLabel{color:#89e9d5}
+#openingPanel .tip{margin:9px 0}
+@media(max-width:1100px){.textureCards{grid-template-columns:1fr 1fr}.gizmoModes{grid-template-columns:1fr 1fr}.gizmoModes button{font-size:10px}}
+
+/* Compact architectural prefabs — groups rather than one giant 17-item list. */
+#catalogItems{overflow-y:auto;flex:1;min-height:0}
+.catalogGroup{display:block;border:1px solid #35566b;border-radius:9px;background:#112c3b;flex-shrink:0;overflow:hidden}
+.catalogGroup>summary{padding:10px 8px;cursor:pointer;font-weight:700;font-size:12px;line-height:1.2;list-style:revert;color:#d6ecf3}
+.catalogGroup[open]>summary{border-bottom:1px solid #35566b;color:#98eadc}
+.catalogRows{display:flex;flex-direction:column;gap:6px;padding:6px}
+.catalogRows button{min-height:46px;padding:6px 8px}
+.catalogRows button span{font-size:10px;color:#a8bec8}
+
+/* Android performance monitor: compact, readable, touch-safe. */
+.perfDiagnostic{margin-top:8px;padding:9px 8px;display:flex;flex-direction:column;gap:7px;background:#0b2936;border:1px solid #42778a;border-radius:8px}
+.perfDiagnostic>b{font-size:12px;color:#a0e9e7}
+.perfDiagnostic #performanceStats{font-size:11px;font-variant-numeric:tabular-nums;color:#cbe9f2;line-height:1.6;word-break:normal}
+.perfDiagnostic #btnPerfReport{font-size:11px;min-height:42px;white-space:normal}
+
+/* 2026-11-06: Library must stay accessible on a tablet (1280x800).
+ * Former flex distribution let a long GLB importer consume almost all
+ * available panel height, crushing the model library to a ~20px strip. */
+.left{overflow:hidden}
+.left>.panelTitle{flex:0 0 auto}
+#catalogQuick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;
+ padding:9px 10px 7px;flex:0 0 auto;border-bottom:1px solid var(--line)}
+#catalogQuick button{padding:6px 4px;font-size:12px;min-height:40px;font-weight:700;
+ white-space:normal}
+#catalogQuick button.active{background:#09667d;border-color:#48d6e8}
+#catalogItems{flex:1 1 auto;min-height:145px;max-height:none;overflow-y:auto;
+ overflow-x:hidden;overscroll-behavior:contain;padding:8px 10px}
+#catalogItems .catalogGroup{flex:0 0 auto;min-height:0}
+#catalogItems .catalogRows{padding:7px 5px;gap:6px}
+#catalogItems .catalogRows button{min-height:50px;text-align:left;width:100%}
+.left .myCatalog{flex:0 0 auto;max-height:110px;padding:7px 10px}
+.left .importZone{display:block;flex:0 0 auto;min-height:0;padding:0;overflow:auto;
+ max-height:52%;border-top:1px solid var(--line);background:#132b38}
+.left .importZone>summary{padding:12px 13px;min-height:44px;color:#8fe5ed;
+ cursor:pointer;font-size:12px;font-weight:700}
+.left .importZone[open]>summary{border-bottom:1px solid var(--line)}
+.left .importZoneBody{display:flex;flex-direction:column;gap:10px;padding:11px}
+@media(max-height:650px){
+ #catalogQuick{gap:4px;padding:5px 8px}
+ #catalogQuick button{min-height:32px;padding:4px;font-size:11px}
+ #catalogItems{min-height:105px}
+ .left .myCatalog{max-height:73px}
+ .left .importZone>summary{min-height:35px;padding:8px}
+}
+
+/* Camera focus is a navigation control, not a world-origin lock. Keep its
+   touch target visible without hiding Save/GLB on smaller Android screens. */
+#btnFocusCamera{white-space:nowrap;flex:0 0 auto}
+#btnFocusCamera.active{background:#085c70;border-color:#53dded}
+@media(max-width:1100px){#btnFocusCamera{font-size:11px;padding:7px 6px}.topbar{gap:6px}}
+@media(max-width:700px){
+ #btnFocusCamera{font-size:0;min-width:37px;width:37px;padding:5px}
+ #btnFocusCamera::before{content:'🎯';font-size:16px}
+}
+
+/* Mesh Workshop materials: usable on landscape Android without hiding catalog. */
+#textureInspector .materialSliders{display:flex;flex-direction:column;gap:9px;
+ margin:10px 0;border:1px solid #375b69;padding:8px;border-radius:9px;background:#102d3a}
+#textureInspector .materialSliders label{gap:5px;font-size:12px;color:#b8deda}
+#textureInspector input[type=range]{width:100%;height:27px;accent-color:#66dce7}
+#textureInspector output{display:inline;color:#86f2dc;font-weight:700}
+#textureInspector .cols2{gap:8px;margin:8px 0}
+#textureInspector #btnSurfaceAllWalls{width:100%;min-height:42px;white-space:normal}
+@media(max-width:700px){
+ #textureInspector .cols2{grid-template-columns:1fr 1fr}
+ #textureInspector label{font-size:11px}
+}
+
+/* ZIP Smart Library: 3D visual cards without stealing the editor viewport. */
+.smartLibrary{flex:0 0 auto;max-height:170px;overflow-y:auto;padding:8px 10px;
+ display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--line)}
+.smartLibrary label{font-size:11px;gap:3px}
+.smartLibrary select,.smartLibrary input[type=search]{min-height:30px;font-size:12px;
+ border-radius:7px;color:#eaf7fa;background:#0c2430;border:1px solid #497384;padding:6px}
+.smartLibrary .fileButton{padding:8px;font-size:11px;min-height:34px}
+#zipImportStatus{display:block;line-height:1.5;color:#8fe5c9;overflow-wrap:anywhere}
+#catalogQuick{grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:5px 8px}
+#catalogQuick button{min-height:31px;padding:4px 2px;font-size:10px;line-height:1.2}
+#catalogItems{flex:1 1 auto;min-height:145px;padding:7px}
+#catalogItems .smartGrid{display:grid;grid-template-columns:1fr;gap:7px}
+.moduleCard{border:1px solid #376279;background:#0d2835;border-radius:9px;padding:5px;
+ display:flex;flex-direction:column;gap:3px;min-width:0}
+#catalogItems .moduleCard .modulePick{display:flex;align-items:center;gap:7px;
+ width:100%;padding:4px;border:0;background:transparent;min-height:80px;text-align:left;
+ flex-wrap:wrap}
+.modulePick strong{display:block;flex:1 1 65px;overflow-wrap:anywhere;font-size:11px}
+.modulePick small{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;
+ white-space:nowrap;color:#9dbcc9;font-size:9px}
+.moduleImage{position:relative;width:88px;height:70px;flex:0 0 88px;border-radius:6px;
+ overflow:hidden;border:1px solid #376079;background:#354955;display:grid;place-items:center}
+.moduleIcon{font-size:32px;color:#a1cada}
+.catalogThumb{display:block;object-fit:contain;width:100%;height:100%;background:#354955}
+.moduleImage .catalogThumb{position:absolute;inset:0;width:100%;height:100%}
+.catalogThumb.unloaded:not([src]){visibility:hidden}
+.moduleCard .moduleFolderEdit{min-height:29px;font-size:10px;max-width:100%}
+#catalogItems .moduleCard .modulePick.active{outline:2px solid #55d7c8}
+.presetCard{display:flex;align-items:center;gap:5px;font-size:10px;padding:4px!important}
+.presetCard img{width:48px;height:47px;flex:0 0 48px;object-fit:contain}
+.presetCard strong{font-size:10px;overflow-wrap:anywhere}
+.presetCard span{font-size:9px}
+.textureVisualGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+ grid-column:1/-1}
+.textureVisualGrid .textureCard{display:flex;flex-direction:column;gap:4px;
+ padding:5px;align-items:center;min-width:0;border:1px solid #3b7084;
+ background:#133547}
+.textureCard img{width:100%;height:77px;object-fit:contain;border-radius:6px;
+ background:repeating-conic-gradient(#a1a8a9 0% 25%,#e7e7e7 0% 50%) 50% / 14px 14px}
+.textureCard strong{font-size:10px;overflow-wrap:anywhere}
+.textureCard small{font-size:9px;color:#aed4da}
+#textureSearch{width:100%;min-height:36px;border-radius:7px;background:#071722;
+ border:1px solid #466072;color:white;padding:6px}
+@media(max-width:1100px){
+ .smartLibrary{max-height:144px;padding:5px 7px}
+ #catalogQuick{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #catalogQuick button{font-size:9px;min-height:29px}
+ .moduleImage{width:70px;height:65px;flex-basis:70px}
+ .modulePick strong{font-size:10px}
+ .left .myCatalog{max-height:85px}
+}
+
+/* Analogue thumbstick: full-range, clear camera gestures, Android landscape. */
+#charControls{z-index:6;left:clamp(10px,3vw,30px);bottom:72px;text-align:center;
+ pointer-events:auto;touch-action:none}
+#charControls .joystickTitle{font-size:12px;font-weight:700;color:#eaffff;
+ text-shadow:0 2px 4px #000;background:#092331cc;padding:3px 8px;
+ margin:0 auto 6px;width:max-content;border-radius:9px}
+.joystickPad{width:152px;height:152px;border-radius:50%;position:relative;
+ touch-action:none;overscroll-behavior:contain;user-select:none;-webkit-user-select:none;
+ border:3px solid #79d6f0;background:radial-gradient(circle,#204b6599 0%,#112d47e8 80%);
+ box-shadow:inset 0 2px 15px #0009,0 4px 16px #0008}
+.joystickPad:before,.joystickPad:after{content:'';position:absolute;
+ background:#94e7f655;pointer-events:none}
+.joystickPad:before{left:50%;height:74%;top:13%;width:1px}
+.joystickPad:after{top:50%;width:74%;left:13%;height:1px}
+.joystickKnob{position:absolute;left:50%;top:50%;width:60px;height:60px;
+ transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;
+ border:3px solid #c3faff;background:radial-gradient(circle at 35% 30%,#69d1e9,#1f718f);
+ box-shadow:0 3px 14px #000b,inset 0 0 9px #d8ffff77}
+@media(max-width:700px),(max-height:520px){
+ .joystickPad{width:124px;height:124px}
+ .joystickKnob{width:50px;height:50px}
+ #charControls{left:8px;bottom:62px}
+ .joystickTitle{font-size:10px}
+}
+.rotationFields label{min-width:0}
+
+/* Touch-sized texture placement: floor and wall, UV arrows with fine steps. */
+.textureAlignPanel{display:flex;flex-direction:column;gap:7px;padding:9px 8px;
+ margin:10px 0;background:#0a2e3c;border:1px solid #367a86;border-radius:9px}
+.textureAlignPanel>b{font-size:12px;color:#9bf8e8}
+.textureAlignPanel .tip{margin:0;color:#c1d9e5}
+.textureAlignPanel label{font-size:12px}
+.textureArrowPad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:5px;margin:2px 0;align-items:stretch}
+.textureArrowPad button{display:flex;align-items:center;justify-content:center;
+ flex-direction:column;gap:1px;min-width:0;min-height:49px;
+ touch-action:manipulation;font-size:19px;font-weight:800;
+ border:1px solid #4aafc3;background:#16465b}
+.textureArrowPad button span{font-size:10px;font-weight:500}
+#textureShiftUp{grid-column:2;grid-row:1}
+#textureShiftLeft{grid-column:1;grid-row:2}
+#textureShiftReset{grid-column:2;grid-row:2;background:#245a59}
+#textureShiftRight{grid-column:3;grid-row:2}
+#textureShiftDown{grid-column:2;grid-row:3}
+.textureArrowPad button:active{background:#0a8590}
+
+/* Front / back material painting for solid walls and stone slabs. */
+.textureFaceEditor{display:flex;flex-direction:column;gap:8px;padding:10px;
+ margin:8px 0;border:1px solid #5894a0;border-radius:10px;background:#113647}
+.textureFaceEditor>b{font-size:13px;color:#9ef5df}
+.textureFaceEditor label{font-size:12px;color:#cee4eb}
+.textureFaceEditor select,.textureFaceEditor button{min-height:43px;width:100%}
+.textureFaceEditor .tip{font-size:11px;line-height:1.45}
+#btnPickTextureFace.active{background:#117a79;border-color:#91f9c5}
+
+/* Building flow: touch sized controls for instant room generation. */
+#roomBuilderPanel{border:1px solid #45887d;border-radius:8px;
+ background:#102e39;padding:10px 7px}
+#roomBuilderPanel summary{font-weight:750;color:#b5fff1}
+#roomBuilderPanel input[type="number"]{max-width:100%;width:100%;box-sizing:border-box}
+#roomBuilderPanel .cols2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+#roomBuilderPanel button{min-height:43px;white-space:normal}
+#roomBuilderPanel .tip{line-height:1.4}
+.editHistoryPanel button{min-height:45px}
+.editHistoryPanel button:disabled{opacity:.42;filter:grayscale(1)}
+
+/* Video-style professional CAD gizmo. Labels are visual only and don't steal
+   Android touches from the WebGL canvas or interfere with orbit gestures. */
+.gizmoCadOverlay{position:fixed;inset:0;pointer-events:none;z-index:5}
+.gizmoMeasure{position:absolute;transform:translate(-50%,-50%);padding:3px 7px;
+ background:rgba(19,29,34,.84);border:1px solid #9dd5d3;
+ border-radius:3px;color:#effffa;font:700 12px/1.3 system-ui,sans-serif;
+ white-space:nowrap;box-shadow:0 1px 4px #0008}
+#gizmoMeasureHeight{background:rgba(24,83,107,.89);border-color:#80edff}
+#gizmoMeasureDepth{border-color:#64c6fa}
+.gizmoQuickbar{position:fixed;z-index:7;left:50%;bottom:115px;
+ transform:translateX(-50%);width:max-content;max-width:94vw;
+ display:flex;flex-direction:column;align-items:center;gap:5px;
+ padding:6px;border:1px solid #6d7b83;border-radius:11px;
+ background:rgba(14,24,33,.92);box-shadow:0 5px 18px #000b;
+ backdrop-filter:blur(6px)}
+.gizmoQuickbar[hidden],.gizmoCadOverlay[hidden],.gizmoMeasure[hidden]{display:none!important}
+.gizmoQuickModes{display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
+.gizmoQuickViews{display:flex;gap:4px;justify-content:center}
+.gizmoQuickbar button{min-width:54px;min-height:43px;padding:5px 8px;
+ border:1px solid #4d626d;border-radius:5px;font-size:12px;
+ background:#243946;color:#eaf7f8;touch-action:manipulation}
+.gizmoQuickbar .active{background:#126a8f;border-color:#70ccfc;color:white}
+.gizmoQuickViews button{min-height:33px;font-size:11px}
+@media(max-width:700px){
+ .gizmoQuickbar{bottom:92px;max-width:96vw;padding:4px;gap:3px}
+ .gizmoQuickbar button{min-height:40px;padding:4px 5px;font-size:11px}
+ .gizmoMeasure{font-size:11px;padding:2px 4px}
+}
+
+/* The CAD dimensions in the video are editable, not merely decorative. */
+.gizmoCadSizePanel{display:flex;align-items:end;justify-content:center;gap:5px;
+ flex-wrap:wrap;padding:7px 5px 4px;border-top:1px solid #526979;width:100%;
+ box-sizing:border-box}
+.gizmoCadSizePanel[hidden]{display:none!important}
+.gizmoCadSizePanel label{font-size:10px;color:#d9f9f8;display:flex;
+ flex-direction:column;gap:3px;min-width:70px;flex:1 1 65px}
+.gizmoCadSizePanel input[type=number]{font-size:13px;min-height:34px;
+ padding:3px 5px;width:100%;box-sizing:border-box;background:#122c38;
+ color:#d4f9fa;border:1px solid #5d9caa;border-radius:4px}
+.gizmoCadSizePanel button{min-height:35px!important;flex:1 1 78px}
+@media(max-width:650px){.gizmoCadSizePanel label{min-width:58px}}
+
+/* Lightweight outliner: consistent 42px mobile targets with no WebGL overlays. */
+.sceneManagerPanel{background:rgba(16,43,53,.83);border:1px solid #437681;
+ border-radius:8px;padding:8px 5px;margin:8px 0}
+.sceneManagerPanel summary{font-weight:750;color:#c9f8e9}
+.sceneManagerPanel label{font-size:11px;line-height:1.4}
+.sceneManagerPanel input,.sceneManagerPanel select{width:100%;max-width:100%;
+ box-sizing:border-box;min-height:37px}
+.sceneManagerList{max-height:255px;overflow:auto;overscroll-behavior:contain;
+ background:#102735;border:1px solid #365b66;border-radius:7px}
+.sceneManagerStorey{position:sticky;top:0;background:#244557;
+ color:#d5fcf4;font-size:11px;font-weight:750;padding:5px 7px;
+ z-index:1;border-bottom:1px solid #3d7b85}
+.sceneManagerRow{display:flex;align-items:stretch;gap:3px;padding:3px;
+ border-bottom:1px solid #2f4952;min-width:0}
+.sceneManagerRow.selected{background:#245e62;box-shadow:inset 3px 0 #6cf7d3}
+.sceneManagerRow.locked{border-left:2px solid #dfa552}
+.sceneManagerRow.hiddenScene{opacity:.73}
+.sceneManagerPick{flex:1;min-width:0;text-align:left;
+ display:flex;flex-direction:column;gap:2px;justify-content:center;
+ background:transparent!important;border:0!important;
+ min-height:43px;padding:5px!important;color:#e2f8fb!important}
+.sceneManagerPick strong{font-size:12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.sceneManagerPick small{font-size:10px;color:#a9c7d0}
+.sceneManagerToggle{flex:none;min-width:37px;min-height:43px;
+ padding:5px!important;font-size:16px!important;background:#183946!important;
+ border:1px solid #43717e!important;border-radius:5px}
+.sceneManagerRename{display:flex;flex-direction:column;gap:4px;margin-top:9px}
+.sceneManagerRename button{min-height:43px}
+@media(max-width:700px){
+ .sceneManagerList{max-height:220px}
+ .sceneManagerRow{gap:2px}
+ .sceneManagerToggle{min-width:35px}
+}
+
+/* Stable three-tab import library. The entire RIGHT inspector is untouched.
+   Drawers stay within the original 235px left panel, never covering the 3D view. */
+#catalog .libraryTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+#catalog .libraryTabs button{font-size:10px;min-width:0;min-height:43px;
+ padding:7px 2px;line-height:1.15;white-space:normal}
+#catalog .panelTitle{flex:0 0 auto}
+#catalog .libraryDrawer{flex:1 1 auto;min-height:0;min-width:0;
+ display:flex;flex-direction:column;gap:5px;overflow-y:auto;
+ overscroll-behavior:contain;padding-bottom:9px}
+#catalog .libraryDrawer[hidden]{display:none!important}
+#catalog .libraryDrawer>.drawerFold{flex:0 0 auto}
+#catalog .drawerFold{margin:6px 7px;border:1px solid #396673;
+ border-radius:8px;background:#102e3c;overflow:hidden}
+#catalog .drawerFold>summary{list-style:revert;display:list-item;
+ padding:11px 6px;min-height:42px;font-size:12px;color:#c1f2e9;
+ font-weight:750;cursor:pointer;touch-action:manipulation}
+#catalog .drawerFold[open]>summary{border-bottom:1px solid #396673}
+#catalog .drawerFoldBody{display:flex;flex-direction:column;gap:7px;padding:8px}
+#catalog .drawerFold .fileButton{min-height:42px;padding:10px 4px;font-size:11px}
+#catalog .drawerFold select{font-size:11px}
+#libraryModuleDrawer #catalogQuick{flex:0 0 auto}
+#libraryModuleDrawer .smartLibrary{flex:0 0 auto}
+#libraryModuleDrawer #catalogItems{flex:1 0 160px;max-height:none;min-height:160px;
+ overflow-y:auto}
+#libraryModuleDrawer .myCatalog{flex:0 0 auto}
+#libraryModuleDrawer .importZone{display:block;overflow:visible;
+ padding:0;margin:6px 7px;border:1px solid #396673;border-radius:8px}
+#libraryModuleDrawer .importZone>summary{min-height:42px;padding:11px 8px}
+#libraryModuleDrawer .importZoneBody{display:flex;flex-direction:column;gap:7px;
+ padding:8px}
+#textureLibrary{flex:1 1 auto;min-height:0;padding:8px 7px;overflow-y:auto}
+.textureQuickFaces{display:flex;flex-direction:column;gap:6px;
+ border:1px solid #488d7d;background:#103b3b;border-radius:8px;padding:9px 6px}
+.textureQuickFaces b{font-size:12px;color:#a7ffe9}
+.faceQuickChoices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+.faceQuickChoices button{font-size:10px;padding:7px 2px;min-width:0;
+ min-height:43px;line-height:1.1}
+.textureQuickFaces button{min-height:43px}
+.textureQuickFaces button:disabled{opacity:.55}
+#textureLibrary .textureVisualGrid{min-height:0}
+#libraryCharacterDrawer .drawerFoldBody .check{flex-direction:row}
+#libraryCharacterDrawer .drawerFoldBody label{font-size:11px}
+@media(max-width:1100px){
+ #catalog .libraryTabs button{min-height:40px;font-size:9px;padding:5px 1px}
+ #catalog .drawerFold{margin:5px 4px}
+ #textureLibrary{padding:6px 4px}
+ .faceQuickChoices button{font-size:9px}
+}
+
+/* Android import UI (Nov 2026): make the two critical import actions always
+ * visible. Keep left tab header and entire RIGHT inspector in original place.
+ * Use ONE scroll container per left tab to avoid nested overflow overlap. */
+#catalog{overflow:hidden}
+#catalog>.panelTitle{flex:0 0 auto;min-height:0}
+#catalog #libraryModuleDrawer{display:block;flex:1 1 auto;min-height:0;
+ overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+#catalog #libraryModuleDrawer[hidden]{display:none!important}
+#catalog #textureLibrary{display:block;flex:1 1 auto;min-height:0;
+ overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+#catalog #textureLibrary[hidden]{display:none!important}
+#catalog #libraryCharacterDrawer{display:block;flex:1 1 auto;min-height:0;
+ overflow-y:auto;overflow-x:hidden}
+#catalog #libraryCharacterDrawer[hidden]{display:none!important}
+#libraryModuleDrawer #catalogImport{display:block;position:static;overflow:hidden;
+ flex:none;max-height:none;min-height:0;contain:layout;
+ margin:5px 7px;border:1px solid #427585;border-radius:8px;background:#102e3b}
+#libraryModuleDrawer #catalogImport>summary{display:list-item;
+ padding:11px 8px;min-height:42px;cursor:pointer;color:#aeecf6}
+#libraryModuleDrawer #catalogImport>.importZoneBody{position:static;display:flex;
+ flex-direction:column;gap:8px;padding:8px;max-width:100%;overflow:visible}
+#libraryModuleDrawer #catalogQuick{position:static;clear:both;
+ padding:7px 5px;min-height:0}
+#libraryModuleDrawer .smartLibrary{position:static;clear:both;
+ max-height:none;overflow:visible;display:flex}
+#libraryModuleDrawer #catalogItems{flex:none;min-height:140px;max-height:280px;
+ overflow-y:auto;clear:both}
+#libraryModuleDrawer .myCatalog{max-height:160px}
+#catalog .stickyImportBar{position:sticky;top:0;z-index:3;
+ background:rgba(12,39,51,.98);border:1px solid #379fb2;
+ border-radius:8px;box-shadow:0 3px 9px #001a26b5;
+ padding:7px;margin:5px 6px 7px;display:flex;flex-direction:column;gap:5px}
+#catalog .stickyImportBar button{display:block;width:100%;min-width:0;
+ min-height:45px;padding:7px 5px;border-color:#67c4d9;
+ background:#12657b;color:#fff;font-weight:700;font-size:12px;
+ line-height:1.25;touch-action:manipulation;white-space:normal}
+#catalog .stickyImportBar button:active{background:#1289a6}
+#catalog .stickyImportBar .tip{color:#b8dcda;font-size:10px;
+ line-height:1.3;overflow-wrap:anywhere}
+#textureLibrary .cols2{margin:8px 0}
+#textureLibrary #textureUploadFold{margin:5px 0 9px}
+#textureLibrary .textureQuickFaces{margin:6px 0 10px}
+#textureQuickImport{margin:0 0 8px!important;top:0}
+@media(max-width:1100px){
+ #catalog .stickyImportBar{padding:5px;margin:4px 3px}
+ #catalog .stickyImportBar button{min-height:43px;font-size:11px}
+ #libraryModuleDrawer #catalogItems{max-height:240px}
+}
+
+/* UV9 non-destructive multi-selection and module baking. */
+.bakeModulePanel{display:flex;flex-direction:column;gap:7px;margin-top:9px;
+ padding:9px 6px;background:#143b49;border:1px solid #4c8d86;border-radius:8px}
+.bakeModulePanel>b{font-size:13px;color:#b8ffe5}
+.bakeModulePanel .tip{line-height:1.5}
+.bakeModulePanel input[type=text]{width:100%;min-height:39px}
+.bakeModulePanel .check{display:flex;gap:8px;align-items:flex-start}
+.bakeModulePanel .check input{width:auto;min-height:unset;flex:none;margin-top:3px}
+.bakeModulePanel button{min-height:43px}
+.sceneManagerRow.bakeSelected{border-left:3px solid #f6d27b;background:#294b4f}
+.bakeModuleCheck{width:21px!important;height:21px!important;min-height:21px!important;
+ flex:none;align-self:center;accent-color:#f6d27b;cursor:pointer}
+
+/* UV10: keep new export quality selectors touch-friendly on tablets. */
+.bakeModulePanel select,#backupPanel select{width:100%;min-height:42px;}
+#bakeFileInfo,#exportGlbInfo{display:block;color:#b8ffe5;overflow-wrap:anywhere;}
+
+/* UV20: compact upload drawer. The whole module catalog remains scrollable. */
+#libraryModuleDrawer #moduleQuickImportFold{
+ position:sticky;top:0;z-index:8;display:block;overflow:visible;
+ margin:4px 6px 5px;background:#0d2b38;border:1px solid #368ca0;border-radius:9px;
+ box-shadow:0 2px 7px #00192399;flex:0 0 auto;
+}
+#libraryModuleDrawer #moduleQuickImportFold>summary{
+ display:list-item;list-style:disclosure-closed inside;padding:9px 10px;min-height:39px;
+ color:#b6f3ec;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;
+}
+#libraryModuleDrawer #moduleQuickImportFold[open]>summary{
+ list-style:disclosure-open inside;border-bottom:1px solid #368ca0;
+}
+#libraryModuleDrawer #moduleQuickImportFold #moduleQuickImport{
+ position:static;top:auto;margin:0;border:0;border-radius:0;
+ box-shadow:none;padding:6px;background:transparent;max-height:43vh;overflow-y:auto;
+}
+#libraryModuleDrawer #moduleQuickImportFold:not([open]) #moduleQuickImport{display:none}
+
+/* UV21: small opt-in transform toolbar, never auto-expands after selecting. */
+#gizmoQuickbar.gizmoQuickbar{bottom:60px;padding:3px 5px;max-height:calc(100vh - 125px)}
+#gizmoQuickToggle{min-height:33px;min-width:128px;font-size:12px;padding:3px 12px}
+#gizmoQuickContent{display:flex;flex-direction:column;align-items:center;gap:5px;max-height:calc(100vh - 170px);overflow:auto}
+#gizmoQuickContent[hidden]{display:none!important}
+#catalogItems .moduleRemoveImport{font-size:10px;min-height:31px;width:100%;margin-top:3px;
+ border:1px solid #925d63;color:#ffdfe0;background:#3b2730;border-radius:5px}
+#catalogItems .moduleRemoveImport:active{background:#66404c}
+@media(max-width:700px){#gizmoQuickbar.gizmoQuickbar{bottom:57px}}
+
+
+/* UV25: project-load settings styles in the actual linked stylesheet. */
+#btnProjectLoadSettings{font-size:19px;min-width:40px;min-height:38px;padding:5px 9px;touch-action:manipulation}
+#btnProjectLoadSettings[aria-expanded="true"]{background:#246658;border-color:#77ead0}
+#projectLoadSettingsPanel.projectLoadSettings{position:fixed;top:62px;right:10px;z-index:1100;width:min(365px,calc(100vw - 20px));max-height:calc(100vh - 72px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;pointer-events:auto;box-sizing:border-box;padding:12px;border:1px solid #65c1a7;border-radius:12px;background:#132b38;box-shadow:0 10px 34px #000c;color:#e8f9f2}
+#projectLoadSettingsPanel[hidden],#projectLoadProgress[hidden]{display:none!important}
+#projectLoadSettingsPanel .projectLoadTitle{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+#projectLoadSettingsPanel .projectLoadTitle b{font-size:15px}
+#projectLoadSettingsPanel .projectLoadTitle button{min-width:40px;min-height:36px}
+#projectLoadSettingsPanel label{display:block;margin:10px 0;color:#d8eee8;font-size:12px}
+#projectLoadSettingsPanel select{display:block;width:100%;min-height:42px;margin-top:6px;padding:7px;background:#1b3e4b;border:1px solid #5a9d90;color:#fff;border-radius:8px;touch-action:manipulation}
+#projectLoadSettingsPanel small{display:block;font-size:11px;color:#aad0c6;line-height:1.45}
+#projectLoadProgress.projectLoadProgress{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:1080;width:min(450px,90vw);padding:8px 11px;box-sizing:border-box;background:#17333f;border:1px solid #539f8c;border-radius:9px;box-shadow:0 5px 18px #0009;color:#e5f7f1;font-size:12px;pointer-events:auto}
+#projectLoadProgress .projectLoadProgressRow{display:flex;align-items:center;gap:8px;justify-content:space-between}
+#projectLoadProgressText{line-height:1.3;flex:1;min-width:0}
+#projectLoadPause{min-height:36px;padding:6px 9px;font-size:11px}
+#projectLoadProgressBar{height:8px;display:block;width:100%;margin-top:7px;accent-color:#65e3bf}
+@media(max-height:560px){#projectLoadSettingsPanel.projectLoadSettings{top:50px;max-height:calc(100vh - 55px)}#projectLoadProgress.projectLoadProgress{top:50px}}
+
+/* UV28 shape workshop: separate compact floating editor below the top bar. */
+.shapeToolPanel[hidden]{display:none!important}
+.shapeToolPanel{position:fixed;z-index:1200;right:12px;top:74px;width:min(330px,calc(100vw - 24px));
+ max-height:calc(100vh - 90px);overflow:auto;box-sizing:border-box;color:#f4f9ff;
+ background:#101a29f7;border:1px solid #3787ff;border-radius:15px;padding:14px;
+ box-shadow:0 12px 30px #000a;font:14px/1.4 system-ui,sans-serif}
+.shapeToolPanel .shapeToolTitle{display:flex;align-items:center;justify-content:space-between;
+ font-size:17px;margin-bottom:8px}.shapeToolPanel .shapeToolTitle button{flex:0 0 auto;width:35px}
+.shapeToolPanel small{display:block;color:#bdd0eb;font-size:12px;line-height:1.35;margin:6px 0 10px}
+.shapeToolPanel label{display:block;margin:8px 0;color:#edf2ff;font-size:13px}
+.shapeToolPanel select,.shapeToolPanel input{box-sizing:border-box;display:block;width:100%;min-height:39px;
+ margin-top:4px;padding:5px 8px;border-radius:8px;background:#1a2940;color:white;border:1px solid #4c6788;
+ font:14px system-ui,sans-serif}
+.shapeToolPanel .shapeCols{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.shapeToolPanel button{min-height:40px;border-radius:8px}
+#btnShapeToolTop.active{border-color:#4d9fff;background:#173965;color:white}
+@media(max-width:600px){.shapeToolPanel{top:63px;max-height:calc(100vh - 72px)}}
+/* Keep the new toolbar action from pushing Save/GLB/settings off screen. */
+#btnShapeToolTop{flex:0 0 auto;white-space:nowrap}
+@media(max-width:1350px){
+ #btnShapeToolTop{font-size:0;width:42px;min-width:42px;padding:6px 4px}
+ #btnShapeToolTop::before{content:'⬡';font-size:21px}
+ .topbar{gap:6px}
+}
+
+/* UV32: keep the image library visible while the import tools are folded. */
+#catalog details.textureImportFold{display:block;flex:0 0 auto;position:relative!important;
+ top:auto!important;margin:4px 2px 8px!important;padding:0!important;overflow:visible}
+#catalog details.textureImportFold>summary{cursor:pointer;list-style:none;
+ display:block;min-height:42px;line-height:1.3;padding:12px 9px;
+ background:#0e667b;color:#e5fbff;font-weight:700;font-size:12px;
+ border-radius:7px;touch-action:manipulation}
+#catalog details.textureImportFold>summary::-webkit-details-marker{display:none}
+#catalog details.textureImportFold[open]>summary{border-radius:7px 7px 0 0;background:#137790}
+#catalog details.textureImportFold>.textureImportBody{padding:7px;display:flex;
+ flex-direction:column;gap:6px}
+#catalog details.textureImportFold>.textureImportBody>button{min-height:40px}
+#textureLibrary .textureCardWrap{min-width:0;position:relative;
+ display:flex;flex-direction:column;gap:4px}
+#textureLibrary .textureCardWrap>.textureCard{width:100%;flex:1 1 auto}
+#textureLibrary .textureDelete{position:relative;min-height:32px;padding:5px 4px;
+ font-size:11px;color:#ffd7d2;border-color:#8a4e4e;background:#4b292e}
+#textureLibrary .textureLoadMore{width:100%;min-height:43px;margin:9px 0;
+ background:#12657b;color:white;font-weight:700}
+#textureLibrary .textureGalleryProgress{font-size:11px;color:#caeaeb;display:block;margin:5px 0}
+#catalog details.textureImportFold:not([open])>.textureImportBody{display:none!important}
+
+/* UV37: controls live INSIDE the existing top ✂ Фигуры panel. */
+.shapeModeTabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:9px 0}
+.shapeModeTabs button{background:#19283c;color:#e9f4ff;border:1px solid #406384}
+.shapeModeTabs button.active{background:#17556a;border-color:#45d8f9;color:white}
+.shapeToolPanel .shapeWide{width:100%;background:#184561;color:#f4fcff;border:1px solid #398ac7}
+.shapeToolPanel [hidden]{display:none!important}
+#shapePreviewInfo{color:#9fecfc!important}
+
+/* UV40 — only the display labels are translucent: CAD labels cannot intercept a finger. */
+#gizmoCadOverlay,#gizmoCadOverlay *{pointer-events:none!important}
+.gizmoMeasure{background:rgba(19,29,34,.35);border-color:rgba(157,213,211,.65);
+ color:#f4ffff;text-shadow:0 1px 2px #000;box-shadow:0 1px 3px #0006}
+#gizmoMeasureHeight{background:rgba(24,83,107,.36);border-color:rgba(128,237,255,.65)}
+#gizmoMeasureDepth{border-color:rgba(100,198,250,.65)}
+.seamlessScaleBox{margin:8px 0;padding:9px;border-radius:8px;
+ background:rgba(33,88,95,.24);border:1px solid rgba(100,184,189,.45)}
+.seamlessScaleBox[hidden]{display:none!important}
+.seamlessScaleBox label{display:flex;justify-content:space-between;gap:8px}
+.seamlessScaleBox input[type=range]{width:100%;min-height:34px;accent-color:#69cbd1}

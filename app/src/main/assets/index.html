@@ -3,25 +3,365 @@
 <title>Phoenix Builder — Чистая студия</title><link rel="stylesheet" href="clean.css"></head>
 <body>
 <canvas id="view" aria-label="Строительная 3D-сцена"></canvas>
+<div id="gizmoCadOverlay" class="gizmoCadOverlay" hidden aria-hidden="true">
+ <span id="gizmoMeasureWidth" class="gizmoMeasure" hidden>Ш: —</span>
+ <span id="gizmoMeasureHeight" class="gizmoMeasure" hidden>В: —</span>
+ <span id="gizmoMeasureDepth" class="gizmoMeasure" hidden>Г: —</span>
+</div>
+<div id="gizmoQuickbar" class="gizmoQuickbar" role="toolbar"
+ aria-label="Инструменты выделенной детали" hidden>
+ <button id="gizmoQuickToggle" type="button" aria-expanded="false" title="Открыть или скрыть инструменты выделенной детали">🎛 Инструменты ▴</button>
+ <div id="gizmoQuickContent" class="gizmoQuickContent" hidden>
+ <div class="gizmoQuickModes">
+  <button id="quickGizmoUniversal" type="button" title="Двигать, вращать и масштабировать одновременно">✥ Всё</button>
+  <button id="quickGizmoRotate" type="button" title="Цветные оси и свободное вращение">⟳ Вращать</button>
+  <button id="quickGizmoMove" type="button" title="Двигать объект по X/Y/Z">↔ Сдвигать</button>
+  <button id="quickGizmoScale" type="button" title="Изменить размеры объекта">◇ Масштаб</button>
+  <button id="quickMirrorDuplicate" type="button" title="Создать рядом копию, отражённую слева направо">↔ Зеркальная копия</button>
+  <button id="quickGizmoCad" type="button" class="active" title="Показать точные размеры в метрах и изменить их">▣ Размеры CAD</button>
+  <button id="quickGizmoFocus" type="button" title="Приблизить камеру к детали">⌖ К объекту</button>
+ </div>
+ <div id="gizmoCadSizePanel" class="gizmoCadSizePanel" hidden>
+  <label>Ширина, м<input id="gizmoWidthMeters" type="number" min=".05" max="100" step=".01" inputmode="decimal" value="2"></label>
+  <label>Высота, м<input id="gizmoHeightMeters" type="number" min=".05" max="100" step=".01" inputmode="decimal" value="2.6"></label>
+  <label>Глубина, м<input id="gizmoDepthMeters" type="number" min=".05" max="100" step=".01" inputmode="decimal" value=".22"></label>
+  <button id="btnGizmoApplyDimensions" class="primary" type="button">✓ Размеры</button>
+ </div>
+ <div class="gizmoQuickViews" role="group" aria-label="Вид на объект">
+  <button id="quickViewFront" type="button">Спереди</button>
+  <button id="quickViewSide" type="button">Сбоку</button>
+  <button id="quickViewTop" type="button">Сверху</button>
+ </div>
+</div>
+</div>
 <header class="topbar">
  <div class="brand">🔥 PHOENIX <b>BUILDER</b><small>СТУДИЯ 2.0</small></div>
  <nav class="modes"><button id="modeBuild" class="active">🧱 Строительство</button><button id="modeCharacter">🧍 Персонаж</button><button id="modeDrone">🚁 Дрон</button></nav>
- <div class="topRight"><button id="btnSave">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
+ <button id="btnShapeToolTop" class="quickOpening" title="Фигурная подрезка выбранного модуля: круг, шестиугольник, звезда или круглая выемка">✂ Фигуры</button>
+ <button id="btnQuickOpening" class="quickOpening" title="Выбрать стену и вырезать дверь или проход">✂ Проём</button>
+ <button id="btnFocusCamera" class="quickOpening" title="Переместить точку вращения: на выбранную деталь или касанием сцены">🎯 Камера</button>
+ <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnQuickProjectJson" title="Скачать редактируемый дом с текстурами в .phoenix.json">💾 JSON</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnProjectLoadSettings" title="Настройки загрузки дома" aria-label="Настройки загрузки проекта" aria-expanded="false">⚙️</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
-<section id="catalog" class="panel left"><div class="panelTitle"><b>Детали</b><small>Нажми и установи на сцену</small></div><div id="catalogItems" class="parts"></div>
- <div class="importZone">
- <label for="importCategory">Импорт GLB как</label>
- <select id="importCategory"><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select>
- <label class="fileButton">＋ Загрузить свой GLB<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
- <label class="fileButton ghostButton">🧍 Загрузить персонажа GLB<input id="importAvatar" type="file" accept=".glb,model/gltf-binary" hidden></label>
+<section id="shapeToolPanel" class="shapeToolPanel" hidden aria-label="Фигурная подрезка модуля">
+ <div class="shapeToolTitle"><b>✂ Фигурная подрезка</b><button id="btnShapeClose" type="button" aria-label="Закрыть">✕</button></div>
+ <small id="shapeToolInfo">Выдели установленный модуль. Работает с полом, крышей, стеной или статическим GLB.</small>
+ <div class="shapeModeTabs" role="group" aria-label="Позиционирование фигурной подрезки">
+  <button id="shapeModeManual" type="button" class="active">👆 Вручную</button>
+  <button id="shapeModeObject" type="button">🎯 Под объект</button>
+ </div>
+ <label>Форма<select id="shapeCutType"><option value="circle">◯ Круг / эллипс</option><option value="rectangle">▭ Прямоугольник</option><option value="hex">⬡ Шестиугольник</option><option value="star">☆ Звезда</option></select></label>
+ <label>Операция<select id="shapeCutMode"><option value="keep">Оставить внутри формы</option><option value="remove">Вырезать форму (выемка / отверстие)</option></select></label>
+ <div class="shapeCols"><label>Ширина, м<input id="shapeCutWidth" type="number" min=".15" max="100" step=".1" value="2"></label>
+ <label>Глубина, м<input id="shapeCutDepth" type="number" min=".15" max="100" step=".1" value="2"></label></div>
+ <div class="shapeCols"><label>Центр X, м<input id="shapeCutX" type="number" step=".1" value="0"></label>
+ <label>Центр Z, м<input id="shapeCutZ" type="number" step=".1" value="0"></label></div>
+ <label>Поворот контура, °<input id="shapeCutAngle" type="number" min="-360" max="360" step="5" value="0"></label>
+ <div id="shapeManualControls">
+  <button id="btnShapePlace" type="button" class="shapeWide">👆 Поставить / передвинуть контур пальцем</button>
+  <small>После нажатия передвигай контур пальцем по крыше или детали. Камера временно блокируется. Повторное нажатие кнопки — отмена.</small>
+ </div>
+ <div id="shapeObjectControls" hidden>
+  <label>Зазор по краям, см<input id="shapeCutMargin" type="number" min="0" max="100" step="1" value="5" inputmode="decimal"></label>
+  <button id="btnShapeChooseObject" type="button" class="shapeWide">🎯 Указать башню / другую деталь</button>
+  <small>Сначала выдели крышу или деталь для подрезки. После кнопки коснись башни: крыша останется выбранной. Зазор указан в сантиметрах.</small>
+ </div>
+ <small id="shapePreviewInfo">Полупрозрачный контур — только примерка. Пока не нажата кнопка «Подрезать», геометрия не изменяется.</small>
+ <small>Фигурная подрезка действует по вертикальной проекции X/Z на выбранную деталь. Звезда пока поддерживает только «Оставить внутри формы».</small>
+ <div class="shapeCols"><button id="btnShapeApply" class="primary" type="button">✓ Применить вырез</button><button id="btnShapeReset" type="button">↩ Вернуть форму</button></div>
+ <small>Большие и анимированные модели защищены от опасной операции. Сначала сохрани резервную копию.</small>
+ </section>
+<section id="catalog" class="panel left"><div class="panelTitle"><b>Библиотека</b><div class="libraryTabs"><button id="tabParts" class="active" type="button">📦 Модули</button><button id="tabTextures" type="button">🎨 Текстуры</button><button id="tabCharacter" type="button">🧍 Персонаж</button></div><small>Нажми вкладку → раскрой нужную папку</small></div><div id="libraryModuleDrawer" class="libraryDrawer">
+<details id="moduleQuickImportFold" class="moduleQuickImportFold"><summary>📂 Загрузка и сохранение</summary>
+<div id="moduleQuickImport" class="stickyImportBar" role="group" aria-label="Быстрый импорт модулей">
+ <button type="button" id="btnDirectModuleZip">📦 Загрузить ZIP</button>
+ <button type="button" id="btnDirectProjectLoad" title="Открыть дом с материалами из .phoenix.json или ZIP с резервной копией">🏠 Загрузить проект</button>
+ <button type="button" id="btnDirectSaveProject" title="Скачать текущий редактируемый дом со всеми текстурами">💾 Сохранить проект (.phoenix.json)</button>
+ <button type="button" id="btnDirectModuleFile">📐 Загрузить 3D-файл</button>
+ <input id="importUniversalModel" type="file" hidden>
+ <input id="importZip" type="file" hidden>
+ <small id="zipQuickStatus" class="tip" aria-live="polite">ZIP — модели. «Сохранить проект» выгружает редактируемый .phoenix.json с текстурами; «Загрузить проект» восстанавливает дом.</small>
+</div>
+</details>
+<details id="catalogImport" class="importZone"><summary>📥 Файлы моделей и оптимизация</summary><div class="importZoneBody">
+ <label for="importCategory">Импортировать модель как</label>
+ <select id="importCategory"><option value="auto" selected>Авто: по имени → Разные</option><option value="wall">Стена / угол / дуга</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option><option value="misc">Разные / деревья / предметы</option></select>
+ <label class="fileButton">＋ Загрузить GLB / GLB Meshopt / Draco / KTX2<input id="importModel" type="file" accept=".glb,model/gltf-binary" hidden></label>
+  <label class="fileButton">📐 FBX / OBJ / VOX / STL / PLY / glTF
+   <input id="importOtherModel" type="file" accept=".fbx,.obj,.vox,.stl,.ply,.gltf" hidden></label>
+  <small class="tip">Офлайн-импорт моделей: исходные GLB сохраняются без изменений. Другие форматы преобразуются в статические GLB для библиотеки. Для персонажей с анимацией используй отдельную вкладку «Персонаж».</small>
+  <button id="btnZipFromMore" type="button" class="fileButton">📦 Загрузить ZIP с моделями и текстурами</button>
+  <details id="importOptimizer"><summary>⚡ Оптимизация для Android</summary>
+   <label>Качество текстур при импорте<select id="optimizationQuality">
+    <option value="balanced" selected>Баланс: максимум 2048 px</option>
+    <option value="battery">Экономия: максимум 1024 px</option>
+    <option value="original">Исходное: без уменьшения</option>
+   </select></label>
+   <label class="check"><input id="optimizationLOD" type="checkbox" checked>
+    <span>Автоматический LOD для статических GLB вдали</span></label>
+   <small class="tip">Анимация, кости, петли и материалы останутся целыми. Исходный GLB сохраняется без перезаписи. Все декодеры работают без интернета.</small>
+   <small id="optimizationStats" class="tip">Оптимизация применяется к следующему импорту.</small>
+   <label class="check"><input id="optimizationAutoResolution" type="checkbox">
+    <span>Авторазрешение при просадках FPS (выключено по умолчанию)</span></label>
+   <div class="perfDiagnostic"><b>📊 Проверка скорости</b>
+    <small id="performanceStats" class="tip" aria-live="off">FPS: собирается · Draw calls: — · Треугольники: —</small>
+    <button id="btnPerfReport" class="alt">📋 Скопировать отчёт о производительности</button>
+    <small class="tip">FPS, вызовы рисования и счётчики Three.js — это не измерение GPU-памяти. Авторазрешение не меняет 3D-модели.</small>
+   </div>
+  </details>
  <p class="tip">Выбери правильный тип: декор свободно ставится на пол, а настенный декор закрепляется на поверхности стены.</p><p class="tip">GLB сохраняются в памяти устройства. У сложной импортной кривой можно задать торцевые точки вручную.</p>
+ </div></details>
+
+<div id="catalogQuick" class="catalogQuick" role="group" aria-label="Разделы библиотеки">
+   <button type="button" data-catalog-group="structure" class="active">🧱 Каркас</button>
+   <button type="button" data-catalog-group="doors">🚪 Двери</button>
+   <button type="button" data-catalog-group="frames">▯ Рамы</button>
+   <button type="button" data-catalog-group="roofs">🏠 Крыши</button>
+   <button type="button" id="btnQuickImportGLB" class="alt">📥 Импорт GLB</button>
+   <button type="button" data-catalog-group="imports" id="catalogImportsShortcut" hidden>📦 Прочее</button>
+  </div><div class="smartLibrary">
+ <label>📂 Папка библиотеки<select id="smartCategoryFilter">
+  <option value="all">Все модули по папкам</option>
+  <option value="walls">🧱 Стены</option><option value="corners">📐 Углы и дуги</option>
+  <option value="floors">▦ Пол</option><option value="ceilings">▤ Потолок</option>
+  <option value="stairs">🪜 Лестницы</option><option value="roofs">🏠 Крыши</option>
+  <option value="doors">🚪 Двери</option><option value="windows">🪟 Окна</option>
+  <option value="frames">▯ Рамы</option><option value="decor">🌿 Декор</option>
+  <option value="balconies">🏛 Балконы</option>
+  <option value="bridges">🌉 Садовые мостики</option>
+  <option value="garden-arches">🌿 Садовые арки</option>
+  <option value="columns">🏛 Колонны</option>
+  <option value="gates">🚧 Ворота</option>
+  <option value="fences">▤ Заборы</option>
+  <option value="outdoor">🌳 Уличные объекты</option>
+  <option value="pools">🏊 Бассейны</option>
+  <option value="dormers">🏠 Мансардные надстройки</option>
+  <option value="shapes">🔷 Формы</option>
+  <option value="my-modules">📦 Мои модули</option>
+  <option value="misc">📦 Прочее</option>
+ </select></label>
+ <input id="smartCatalogSearch" type="search" autocomplete="off"
+  placeholder="🔍 Поиск по имени и папке">
+ <small id="bundledCatalogStatus" class="tip" hidden></small>
+ 
+ <label>Сортировка ZIP<select id="zipFolderOverride">
+  <option value="auto">🤖 Авто: учитывать имеющиеся папки и названия</option>
+  <option value="walls">Стены</option><option value="corners">Углы</option>
+  <option value="floors">Пол</option><option value="ceilings">Потолок</option>
+  <option value="stairs">Лестницы</option><option value="roofs">Крыши</option>
+  <option value="doors">Двери</option><option value="windows">Окна</option>
+  <option value="frames">Рамы</option><option value="decor">Декор</option>
+  <option value="balconies">Балконы</option>
+  <option value="bridges">Садовые мостики</option>
+  <option value="garden-arches">Садовые арки</option>
+  <option value="columns">Колонны</option>
+  <option value="gates">Ворота</option>
+  <option value="fences">Заборы</option>
+  <option value="outdoor">Уличные объекты</option>
+  <option value="pools">Бассейны</option>
+  <option value="dormers">Мансардные надстройки</option>
+  <option value="shapes">Формы</option>
+  <option value="my-modules">Мои модули</option>
+  <option value="misc">Прочее</option>
+ </select></label>
+ <small id="zipImportStatus" class="tip" aria-live="polite">ZIP: GLB, FBX, OBJ, VOX, STL, PLY и PNG/JPEG/WebP/BMP/GIF; папки сохраняются.</small>
+</div>
+<div id="catalogItems" class="parts smartGallery" aria-label="Доступные 3D-модули"></div><div class="myCatalog"><b>⭐ Мои детали</b><div id="myCatalogItems" class="parts"></div></div>
+ </div>
+<div id="textureLibrary" class="textureLibrary" hidden>
+ <details id="textureQuickImport" class="stickyImportBar textureImportFold" aria-label="Загрузка текстур">
+  <summary>📥 Загрузка PNG, текстур и граффити ▾</summary>
+  <div class="textureImportBody">
+  <button id="btnDirectImage" type="button">🎨 Загрузить текстуры (можно сразу несколько)</button>
+  <button id="btnDirectDecals" type="button" class="alt">🖼 Загрузить прозрачное граффити (несколько PNG)</button>
+  <button id="btnDirectTextureZip" type="button">📦 Загрузить ZIP с текстурами</button>
+  <details class="drawerFold"><summary>📦 ZIP с прозрачными граффити (много PNG)</summary>
+    <button id="btnDirectDecalZip" type="button" class="alt">🖼 Импортировать ZIP в папку «Прозрачное граффити»</button>
+  </details>
+  <input id="importTexture" type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.bmp,.gif" multiple hidden>
+  <input id="importTextureZIP" type="file" accept=".zip,application/zip" hidden>
+  <input id="importDecalZIP" type="file" accept=".zip,application/zip" hidden>
+  <small class="tip">📱 Для нескольких PNG открой «Файлы / Обзор», удерживай первый файл, затем отметь остальные и нажми «Открыть». Галерея может выбирать лишь один.</small>
+  <small id="textureImportStatus" class="tip" aria-live="polite">Можно загрузить несколько картинок или ZIP сразу.</small>
+  </div>
+ </details>
+ <b>Текстуры и граффити — выбери папку</b>
+ <div class="cols2"><label>Папка<select id="textureCategoryFilter">
+ <option value="all">Все обычные текстуры</option><option value="textures">🎨 Текстуры</option>
+ <option value="my-textures">🖼 Мои текстуры</option>
+ <option value="transparent-graffiti">🖼 Прозрачное граффити</option></select></label>
+ <label>Поиск<input id="textureSearch" type="search" placeholder="Имя текстуры"></label></div>
+ <details id="textureUploadFold" class="drawerFold"><summary>⚙ Качество загружаемых текстур</summary>
+ <div class="drawerFoldBody">
+  <label>Качество при загрузке
+   <select id="textureImportQuality"><option value="lossless">Максимальное: PNG без нового сжатия с потерями</option>
+   <option value="balanced">Экономия памяти: WebP высокого качества</option></select>
+  </label>
+  <small class="tip">PNG, JPG, JPEG, WebP, BMP и первый кадр GIF. Очень большие изображения подгоняются под возможности Android, сохраняя пропорции.</small>
+ </div></details>
+ <div id="textureQuickFaces" class="textureQuickFaces">
+  <b>🎨 Как красить стену или пол</b>
+  <small id="faceQuickTarget" class="tip">Выбери текстуру; обычный режим наносит её на весь модуль.</small>
+  <div class="faceQuickChoices" role="group" aria-label="Режим нанесения материала">
+   <button id="faceQuickAll" class="active" type="button">🧱 Весь модуль</button>
+   <button id="faceQuickPick" type="button">👆 Красить касанием: выкл.</button>
+  </div>
+  <button id="faceQuickSettings" type="button" class="alt">⚙ Подробные настройки материала справа</button>
+  <small class="tip">В режиме «Красить касанием» сначала выбери материал, затем касайся видимой поверхности. Соседняя сторона стены не изменится. Повторные касания красят другие стены.</small>
+ </div>
+ <div id="textureCards" class="textureCards"></div><small class="tip">Большие изображения подгоняются под размеры GPU и сохраняются в библиотеке; максимальное качество можно выбрать выше. Для переноса на другое устройство используй резервную копию проекта с текстурами.</small>
+ <small id="textureLibraryStatus" class="tip">Выбери установленную деталь, затем текстуру.</small></div><div id="libraryCharacterDrawer" class="libraryDrawer" hidden>
+ <details id="characterImportFold" class="drawerFold" open>
+ <summary>🧍 Загрузить и настроить персонажа</summary>
+ <div class="drawerFoldBody"><label class="fileButton ghostButton">🧍 GLB или FBX (со скелетом)<input id="importAvatar" type="file" accept=".glb,.fbx,model/gltf-binary" hidden></label>
+   <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
+   <button id="btnResetCharacterView" type="button" class="alt">📷 Нормальный вид персонажа (сбросить приближение)</button>
+   <button id="btnGroundAvatar" type="button" class="alt">🦶 Поставить ноги на пол</button>
+   <small class="tip">Если после приближения кажется, что персонаж огромный — эта кнопка отдалит камеру, не меняя размер модели. При импорте скелетного GLB рост теперь считается по видимой анимационной позе. Ступни автоматически подстраиваются к поверхности при ходьбе, без изменения роста.</small>
+   <label class="check"><input id="avatarInBuild" type="checkbox"><span>Показывать персонажа в режиме строительства</span></label>
+ <label class="check"><input id="enableCollisions" type="checkbox" checked><span>🛡 Коллизии персонажа: стены, двери, окна, пол и модули</span></label>
+ <small class="tip">Персонаж не проходит сквозь настоящую стену или закрытую дверь, но проходит через вырезанный проём. Пол и лестницы поддерживают высоту; при необходимости коллизии можно выключить.</small>
+   <small class="tip">Модель автоматически подгоняется под рост и ширину. Анимация не изменяет внешний масштаб.</small>
+ 
+ <small class="tip">Персонаж отдельно от строительных модулей. GLB и FBX со встроенными анимациями; внешние текстуры FBX могут потребовать подготовки в Blender.</small>
+ </div></details>
  </div>
 </section>
 <section id="inspector" class="panel right">
  <div class="panelTitle"><b id="currentLabel">Выбери деталь</b><small id="currentHint">Установка или точная подгонка</small></div>
  <div class="scrollArea">
-  <div class="modeTools"><button id="btnPick" class="alt">☝ Выделить</button><button id="btnPlace" class="active">＋ Поставить</button></div>
-  <div class="rowSection"><label class="check"><input type="checkbox" id="magnet" checked><span>🧲 Магнит по настоящим торцам</span></label><small class="tip">Зелёный — есть точное соединение, жёлтый — свободная установка. Для дуг используются касательные к торцам, а не углы прямоугольника.</small></div>
+  <div class="modeTools"><button id="btnPick" class="alt">☝ Выделить</button><button id="btnPlace" class="active">＋ Поставить</button>
+   <button id="btnOpeningTool" class="primary">✂ Вырезать проём в стене</button></div>
+  <div class="rowSection editHistoryPanel">
+   <b>↶ История строительства</b>
+   <div class="cols2"><button id="btnUndo" type="button" disabled>↶ Отменить</button>
+    <button id="btnRedo" type="button" disabled>↷ Повторить</button></div>
+   <small class="tip">До 20 последних изменений в этой сессии. Ctrl+Z / Ctrl+Y с клавиатуры.</small>
+  </div>
+  <details id="sceneManagerPanel" class="rowSection sceneManagerPanel" open>
+   <summary>🗂 Объекты сцены — поиск и защита</summary>
+   <label class="sceneSearchLabel">Поиск по названию, типу или номеру
+    <input id="sceneSearch" type="search" placeholder="Стена, дверь, #..." autocomplete="off">
+   </label>
+   <label>Показывать этаж
+    <select id="sceneFloorFilter"><option value="all">Все этажи</option>
+     <option value="current">Текущий этаж</option></select>
+   </label>
+   <small class="tip" id="sceneManagerStatus" aria-live="polite">Пока нет установленных деталей.</small>
+   <div id="sceneRows" class="sceneManagerList" role="list"
+    aria-label="Объекты здания по этажам"></div>
+   <div class="bakeModulePanel">
+    <b>🧩 Запечь конструкцию в «Мои модули»</b>
+    <small class="tip">Отметь галочками минимум 2 детали в списке выше. Можно добавлять выделенную деталь из 3D. Открытые стены, текстуры и прозрачность стекла будут включены в составной GLB.</small>
+    <small id="bakeStatus" class="tip" aria-live="polite">Выбрано для запекания: 0</small>
+    <div class="cols2"><button id="btnBakeAddCurrent" type="button" class="alt">＋ Текущую</button>
+     <button id="btnBakeClear" type="button" class="alt">Очистить выбор</button></div>
+    <label>Название конструкции<input id="bakeName" type="text" maxlength="64" value="Моя конструкция" autocomplete="off"></label>
+    <label>Качество текстур в готовом GLB
+     <select id="bakeTextureQuality"><option value="2048" selected>2048 px — баланс качества и размера</option>
+      <option value="1024">1024 px — компактный модуль</option>
+      <option value="original">Оригинал — без уменьшения, большой файл</option></select></label>
+    <small class="tip">Одинаковые изображения автоматически записываются в GLB один раз, даже если использованы в разных материалах. Исходные текстуры остаются без изменений.</small>
+    <label class="check"><input id="bakeReplace" type="checkbox"><span>Заменить выбранные детали одним модулем (можно отменить)</span></label>
+    <button id="btnBakeModule" class="primary" type="button" disabled>🧩 Запечь и сохранить в «Мои модули»</button>
+    <small id="bakeFileInfo" class="tip" aria-live="polite">Перед сохранением покажем точный размер GLB, число текстур и запросим подтверждение.</small>
+    <button id="btnBakeBackup" class="alt" type="button">💾 Резервная копия перед запеканием</button>
+    <small class="tip">По умолчанию оригиналы остаются нетронутыми. В готовой конструкции — общий центр, перемещение, поворот, копирование и масштаб X/Y/Z. Для резервной копии используй «📁 Файлы проекта».</small>
+   </div>
+   <div class="sceneManagerRename">
+    <label>Название выделенного объекта
+     <input id="sceneName" type="text" maxlength="64"
+      placeholder="Например: Кухня — наружная стена" autocomplete="off">
+    </label>
+    <button id="btnSceneRename" type="button">✎ Переименовать</button>
+   </div>
+   <small class="tip">Нажми название, чтобы выделить деталь в 3D. 👁 Скрыть/показать, 🔒 Заблокировать от случайного редактирования. Скрытые объекты не попадают в игровой GLB и JSON, но сохраняются в проекте.</small>
+  </details>
+  <details id="roomBuilderPanel" class="rowSection" open>
+   <summary>🏗 Быстро построить комнату / этаж</summary>
+   <small class="tip">Комната из настоящих стен по 2 м, плит пола и отдельного потолка. Высота этажа — 2,6 м. Можно вырезать двери/окна в стенах и изменять каждый модуль.</small>
+   <div class="cols2">
+    <label>Ширина комнаты, м<input id="roomWidth" type="number" min="2" max="24" step="2" value="6"></label>
+    <label>Длина комнаты, м<input id="roomDepth" type="number" min="2" max="24" step="2" value="6"></label>
+    <label>Центр X, м<input id="roomX" type="number" step=".5" value="0"></label>
+    <label>Центр Z, м<input id="roomZ" type="number" step=".5" value="0"></label>
+   </div>
+   <label class="check"><input id="roomIncludeFloor" type="checkbox" checked><span>Создать пол</span></label>
+   <label class="check"><input id="roomIncludeCeiling" type="checkbox"><span>Создать отдельный потолок</span></label>
+   <button id="btnBuildRoom" class="primary" type="button">🏠 Создать комнату на текущем этаже</button>
+   <div class="cols2">
+    <button id="btnCopyRoom" type="button">▣ Копировать комнату</button>
+    <button id="btnCopyStorey" type="button">⬆ Копировать этаж выше</button>
+   </div>
+   <small class="tip">Чтобы скопировать комнату, выдели любую её стену или пол. Копия появится на 4 м правее. Для лестницы открой папку «🪜 Лестницы». Потолки нового этажа добавляются только по выбору, чтобы не удваивать перекрытия.</small>
+  </details>
+  <details id="backupPanel" class="rowSection"><summary>📁 Файлы проекта и текстуры</summary>
+   <label>Качество текстур для игрового GLB (кнопка 📦 GLB наверху)
+    <select id="exportTextureQuality"><option value="2048" selected>2048 px — для большинства зданий</option>
+     <option value="1024">1024 px — лёгкая версия для игры</option>
+     <option value="original">Оригинал — максимальное качество</option></select></label>
+   <small id="exportGlbInfo" class="tip" aria-live="polite">После экспорта проверим геометрию, материалы, прозрачность и текстуры GLB.</small>
+   <button id="btnBackupProject" class="primary">📥 Резервная копия с текстурами (.phoenix.json)</button>
+   <button id="btnImportBackup" class="alt">📤 Открыть резервную копию проекта</button>
+   <button id="btnExportGameManifest" class="alt" type="button">🎮 Экспорт данных для игрового движка (.json)</button>
+   <small class="tip">Экспортируй GLB отдельно. Этот JSON описывает стены, этажи, двери и рекомендуемые коллизии; игровые коллайдеры всё равно создаются в Unity/Godot/Unreal.</small>
+   <small class="tip">«💾 Сохранить» — редактируемый проект на этом устройстве. «📦 GLB» наверху — готовая 3D-сцена для игр. Резервная копия хранит редактируемые детали, текстуры и импортированные GLB вместе, чтобы перенести на другое устройство.</small>
+  </details>
+   <details class="rowSection" id="openingPanel"><summary>✂ Проём в стене: размер и место</summary>
+    <p class="tip">Выбери готовую стену: прямую, угол, четверть круга или полукруг. Задай точный размер отверстия. Можно вырезать пустой проход без двери, вставить створку или окно.</p>
+    <label>Что вырезать<select id="openingType">
+     <option value="passage">🚶 Пустой проём — без двери и рамы</option>
+     <option value="door" selected>🚪 Проём + дверь на петлях</option>
+     <option value="window">🪟 Проём + окно со стеклом</option>
+    </select></label>
+   <label>Размер по готовой двери<select id="openingSizePreset">
+     <option value="">Свои размеры (см)</option>
+     <option value="85:205">Обычная — 85 × 205 см</option>
+     <option value="90:212">Классическая / арочная — 90 × 212 см</option>
+     <option value="100:220">Широкая арочная — 100 × 220 см</option>
+     <option value="155:212">Двустворчатая — 155 × 212 см</option>
+     <option value="120:110:window">Окно — 120 × 110 см</option>
+    </select></label>
+   <label>Расположение центра проёма<select id="openingPositionPreset">
+     <option value="manual">Точное смещение ниже (см)</option>
+     <option value="center">Центр стены / дуги</option>
+     <option value="start">Начальный стык двух стен</option>
+     <option value="end">Конечный стык двух стен</option>
+     <option value="corner">Внутренний угол Г-образной стены</option>
+    </select></label>
+   <button id="btnPickOpeningPoint" class="alt">🎯 Указать место пальцем на стене</button>
+   <label class="check"><input type="checkbox" id="openingSnapCentre" checked><span>🧲 Привязывать касание к центру стены / соединённому стыку (до 14–22 см)</span></label>
+   <small id="openingPositionInfo" class="tip">Отступ считается вдоль стены или дуги, а не по прямой между краями.</small>
+    <div class="cols2"><label>Смещение центра вдоль стены / дуги, см<input id="openingX" type="number" step=".1" value="0" inputmode="decimal"></label><label>Низ от пола, см<input id="openingBottom" type="number" min="0" max="245" step=".1" value="0" inputmode="decimal"></label></div>
+    <div class="cols2"><label>Ширина отверстия, см<input id="openingWidth" type="number" min="10" max="400" step=".1" value="85" inputmode="decimal"></label><label>Высота отверстия, см<input id="openingHeight" type="number" min="30" max="250" step=".1" value="205" inputmode="decimal"></label></div>
+    <label>Соседняя стена на стыке<select id="openingNeighbor"><option value="">Авто (ближайшая)</option></select></label>
+    <small class="tip">Ширина в настоящих сантиметрах даже при изменённом масштабе стены. На дуге измеряется вдоль изгиба. Если проём пересекает стык, вырезается в обеих соединённых стенах.</small>
+    <label>Форма выреза в стене<select id="openingShape">
+      <option value="auto" selected>Авто: как у выбранной двери / рамы</option>
+      <option value="rectangle">▭ Прямоугольное отверстие</option>
+      <option value="round">◠ Настоящая круглая арка</option>
+      <option value="gothic">⌂ Готическая / стрельчатая арка</option>
+      <option value="segmental">⌢ Пологая арка (настоящий вырез)</option>
+      <option value="oval">◯ Круглое / овальное окно (при равной ширине и высоте — круг)</option>
+      <option value="diamond">◇ Ромбовидное окно</option>
+      <option value="hexagon">⬡ Шестиугольное окно</option>
+    </select></label>
+    <small class="tip">Арочный проём вырезается прямо в геометрии стены. Работает и для пустого прохода без двери — над аркой остаётся настоящая стена.</small>
+    <small class="tip">Фигурные круги, овалы, ромбы и шестиугольники — для окон. При пустом проходе и двери выбери прямоугольник или одну из арок. Стена действительно вырезается насквозь.</small>
+    <label>Вид двери<select id="openingDoorStyle"><option value="classic">Обычная филёнчатая</option><option value="round">С округлым верхом</option><option value="gothic">Стрельчатая / готика</option><option value="rune">Фэнтези с рунами</option><option value="double">Двустворчатая</option></select></label>
+    <label>Вид рамы<select id="openingFrameStyle"><option value="classic">Обычная прямая</option><option value="round">Круглая арка</option><option value="gothic">Готическая арка</option><option value="portal">Фэнтези-портал</option></select></label>
+    <label>Петли<select id="openingHinge"><option value="left">Слева</option><option value="right">Справа</option></select></label>
+    <button id="btnAddOpening" class="primary">✂ Вырезать отверстие по размеру</button>
+    <button id="btnChangeOpeningStyle" class="alt">🎨 Поменять стиль готовой двери или рамы</button>
+    <label>Готовые проёмы<select id="openingSelect"></select></label>
+    <label>Открыть дверь, °<input id="doorSwing" type="range" min="-110" max="110" value="0"></label>
+    <button id="btnRemoveOpening" class="alt">Удалить выбранный проём</button>
+   </details>
+
+  <div class="rowSection"><label class="check"><input type="checkbox" id="magnet" checked><span>🧲 Магнит по настоящим торцам</span></label>
+    <label class="check"><input type="checkbox" id="gridSnap"><span>▦ Привязка к сетке (независимо от магнита)</span></label>
+    <small class="tip">🧱 Стены при включённом магните: после первой установки следующая подсвечивается на свободном торце. Просто нажимай «Установить», чтобы продолжить. Коснись другой стороны цепочки — призрак перенесётся туда. Коснись свободного места — начнёшь строить в новой точке. Без дополнительных галочек. Пол работает как в UV38.</small>
+    <label>Шаг сетки<select id="gridStep"><option value="0.001">1 мм</option><option value="0.005">5 мм</option><option value="0.01">1 см</option><option value="0.05">5 см</option><option value="0.25" selected>25 см</option><option value="1">1 м</option></select></label>
+    <small class="tip">Сетка по умолчанию выключена. С выключенным магнитом и сеткой модули ставятся свободно, без скачков по 25 см. Магнит притягивает только настоящие торцы.</small></div>
   <div class="rowSection"><label>Назначение детали (можно исправить после загрузки GLB)<select id="moduleCategory"><option value="wall">Стена / угол</option><option value="floor">Пол</option><option value="roof">Крыша</option><option value="prop">Декор на полу</option><option value="decor">Декор на стене</option></select></label></div>
   <div class="rowSection"><b>Масштаб модели</b><label>Общий, %<input id="scaleAll" type="number" min="10" max="1000" step="5" value="100"></label></div>
   <div class="rowSection"><b>Независимые размеры</b>
@@ -30,15 +370,173 @@
     <label>Длина Z, %<input id="sizeZ" type="number" min="10" max="1000" step="5" value="100"></label></div>
     <label>Толщина стены, см<input id="thickness" type="number" min="2.5" max="80" step=".5" value="22"></label>
     <small id="thicknessHint" class="tip">Толщина отдельно от общего масштаба. Для полукруга радиус не изменяется.</small>
+    <strong id="physicalDimensions" class="physicalSize" aria-live="polite">Габариты: —</strong>
+    <button id="btnSaveModule" class="primary">💾 Сохранить деталь в «Мои»</button>
+  </div>
+  <div class="rowSection" id="quickRoomTrim" style="display:none">
+   <b>✂ Пол по внутреннему контуру</b>
+   <button id="btnQuickRoomTrim" type="button" class="primary">🏠 Обрезать по стенам комнаты</button>
+   <small class="tip">Работает для стандартной плиты 2×2 м внутри замкнутых прямых или закруглённых стен. Если контур не замкнут — плита останется нетронутой. Для отмены нажми Undo.</small>
   </div>
   <div class="rowSection"><b>Положение объекта в метрах</b>
-   <div class="cols3"><label>X<input id="posX" type="number" step=".05"></label><label>Y<input id="posY" type="number" step=".05"></label><label>Z<input id="posZ" type="number" step=".05"></label></div>
-   <label>Поворот по Y, °<input id="rotY" type="number" step="5" value="0"></label>
+   <div class="cols3"><label>X<input id="posX" type="number" step=".001" inputmode="decimal"></label><label>Y<input id="posY" type="number" step=".001" inputmode="decimal"></label><label>Z<input id="posZ" type="number" step=".001" inputmode="decimal"></label></div>
+   <small class="tip">Можно ввести позицию до 0,001 м = 1 мм. Координаты сохраняются с точностью до миллиметра.</small>
+   <div class="cols3 rotationFields">
+    <label>Поворот X, °<input id="rotX" type="number" step="1" value="0"></label>
+    <label>Поворот Y, °<input id="rotY" type="number" step="1" value="0"></label>
+    <label>Поворот Z, °<input id="rotZ" type="number" step="1" value="0"></label>
+   </div>
    <div class="cols2"><button id="btnRotate">⟳ Повернуть 90°</button><button id="btnDuplicate">▣ Копия</button></div>
+   <button id="btnMirrorDuplicate" type="button" class="alt">↔ Зеркальная копия</button>
    <button id="btnDelete" class="danger">✕ Удалить выбранное</button>
   </div>
+  <div class="rowSection"><b>↔ Перемещение готовой детали</b>
+    <label>Шаг кнопок точной подгонки<select id="moveStep"><option value="0.001" selected>1 мм</option><option value="0.005">5 мм</option><option value="0.01">1 см</option><option value="0.05">5 см</option><option value="0.25">25 см</option><option value="1">1 м</option></select></label>
+    <div class="movePad"><button id="moveForward">Z−</button><button id="moveLeft">X−</button><button id="moveRight">X+</button><button id="moveBack">Z+</button><button id="moveDown">Y−</button><button id="moveUp">Y+</button></div>
+    <small class="tip">Без сетки перетаскивай деталь плавно; кнопки сдвигают точно на выбранное число миллиметров по X, Y или Z. Для идеального примыкания колонны к стене приблизь пальцем, затем доведи шагом 1 мм.</small>
+   </div>
+   <details class="rowSection" id="gizmoPanel" open><summary>🎛 Гизмо — 3D управление</summary>
+    <div class="gizmoModes"><button id="gizmoMove">↔ Двигать</button><button id="gizmoRotate">⟳ Крутить</button><button id="gizmoScale">◇ Масштаб</button><button id="gizmoUniversal">✥ Универсальный</button></div>
+    <small class="tip">Как на видео: красное X, зелёное Y и синее Z — вращение по осям; большое золотое кольцо — свободный поворот вокруг взгляда камеры. Подсказки Ш/В/Г показывают реальные размеры объекта. Снизу сцены — быстрый выбор действий и видов. Shift — поворот по 15°.</small>
+   </details>
+   <details class="rowSection" id="textureInspector"><summary>🎨 Материалы и текстуры</summary>
+     <div class="textureFaceEditor">
+      <b>🧱 Нанесение материала</b>
+      <label>Сторона материала
+       <select id="textureFaceScope">
+        <option value="all">Весь модуль</option>
+        <option value="front">Лицевая сторона детали</option>
+        <option value="back">Обратная сторона детали</option>
+       </select>
+      </label>
+      <small class="tip">При выборе «Лицевая»/«Обратная» загружаются сохранённые настройки этой стороны. После изменения масштаба нажми «Применить». «Красить касанием» включается только вручную, как в UV38.</small>
+      <button id="btnPickTextureFace" type="button" class="alt">👆 Красить только сторону касанием: выкл.</button>
+      <small class="tip" id="textureFaceStatus">Обычный режим наносит материал на весь модуль. Включи «Красить касанием», выбери материал и коснись нужной стороны стены или пола.</small>
+     </div>
+    <label>Покрытие<select id="textureStyle"><option value="none">Исходный материал</option><option value="paint">Однотонная краска</option><option value="brick">Кирпич</option><option value="stone">Камень</option><option value="wood">Дерево</option><option value="tile">Плитка</option><option value="concrete">Бетон</option><option value="metal">Металл</option><option value="custom">Моё изображение</option></select></label>
+    <small class="tip">Настройки нанесения сохраняются при смене детали, стороны и картинки.</small>
+    <button id="btnReadSurface" type="button" class="alt">Взять настройки выбранной детали</button>
+    <label>Оттенок / цвет<input id="textureTint" type="color" value="#ffffff"></label>
+    <label>Повтор рисунка<input id="textureRepeat" type="number" min=".2" max="12" step=".2" value="1"></label>
+    <label>Укладка текстуры<select id="textureMapping">
+      <option value="auto">Авто: исходные UV GLB / стены по метрам</option>
+      <option value="repeat">Повтор по метрам — одинаковый кирпич</option>
+      <option value="tile">Заполнить с обрезкой, сохранив пропорции</option>
+      <option value="module">Одна картинка целиком на грань</option>
+      <option value="joined">Одна картинка на соединённые плиты пола</option>
+      <option value="seamless">Бесшовно по миру — соседние стены, пол и крыши</option>
+      <option value="source">Исходная UV-развёртка GLB</option>
+     </select></label>
+     <button id="btnWorldSeamless" type="button" class="alt">🌍 Бесшовно по миру — выбрать режим одним нажатием</button>
+     <div class="cols2">
+      <label>Метров на рисунок<input id="textureTileMeters" type="number" min=".05" max="100" step=".05" value="1"></label>
+      <label>Масштаб кадра<input id="textureImageScale" type="number" min=".1" max="10" step=".1" value="1"></label>
+      <label>Поворот, °<input id="textureRotation" type="number" min="-360" max="360" step="1" value="0"></label>
+      <label>Сдвиг U<input id="textureOffsetU" type="number" min="-1000" max="1000" step=".01" value="0"></label>
+      <label>Сдвиг V<input id="textureOffsetV" type="number" min="-1000" max="1000" step=".01" value="0"></label>
+     </div>
+     <div id="seamlessScaleBox" class="seamlessScaleBox" hidden>
+      <label for="textureSeamlessSize">🪨 Размер кладки / узора: <b id="textureSeamlessSizeText">1,00 м</b></label>
+      <input type="range" id="textureSeamlessSize" min="0.25" max="10" step="0.05" value="1">
+      <small class="tip">Меняет размер повторения всей картинки по миру. Чем больше число, тем крупнее камни. Точный размер — в поле «Метров на рисунок» выше.</small>
+     </div>
+     <div class="textureAlignPanel" id="textureAlignPanel">
+      <b>↔ Расположение рисунка на полу или стене</b>
+      <small id="texturePlacementTarget" class="tip">Выдели пол или стену, затем выбери текстуру.</small>
+      <label>Шаг сдвига текстуры
+       <select id="textureAlignStep">
+        <option value="0.01">1% рисунка — точно</option>
+        <option value="0.05" selected>5% рисунка</option>
+        <option value="0.1">10% рисунка</option>
+        <option value="0.25">25% рисунка</option>
+       </select>
+      </label>
+      <div class="textureArrowPad" role="group" aria-label="Перемещение рисунка по поверхности">
+       <button id="textureShiftUp" type="button" title="Сдвинуть текстуру вверх">↑<span>Вверх</span></button>
+       <button id="textureShiftLeft" type="button" title="Сдвинуть текстуру влево">←<span>Влево</span></button>
+       <button id="textureShiftReset" type="button" title="Вернуть рисунок в центр">◎<span>Центр</span></button>
+       <button id="textureShiftRight" type="button" title="Сдвинуть текстуру вправо">→<span>Вправо</span></button>
+       <button id="textureShiftDown" type="button" title="Сдвинуть текстуру вниз">↓<span>Вниз</span></button>
+      </div>
+      <small class="tip">Для сдвига целой картинки внутри грани уменьши масштаб кадра ниже 1. В этом режиме края изображения остаются внутри грани.</small>
+     </div>
+     <div class="materialSliders">
+      <label>Шероховатость — матовый/глянцевый <output id="textureRoughnessValue">0.92</output>
+       <input id="textureRoughness" type="range" min="0" max="1" step=".01" value=".92"></label>
+      <label>Металличность <output id="textureMetalnessValue">0.00</output>
+       <input id="textureMetalness" type="range" min="0" max="1" step=".01" value="0"></label>
+      <label>Рельеф текстуры <output id="textureReliefValue">0.00</output>
+       <input id="textureRelief" type="range" min="0" max="2" step=".05" value="0"></label>
+     </div>
+     <label class="check"><input id="textureApplyFrames" type="checkbox">
+      <span>Покрыть оконные и дверные рамы (стекло оставить прозрачным)</span></label>
+    <details class="rowSection" id="decalPanel">
+      <summary>🖼 Прозрачное граффити поверх текстуры (PNG)</summary>
+      <small class="tip">Самостоятельный прозрачный слой на стену, пол или наклонную крышу. Не перекрашивает исходный камень/дерево и не закрывает настоящие проёмы. PNG должен содержать прозрачность.</small>
+      <input id="decalImageInput" type="file" accept=".png,.webp,image/png,image/webp" multiple hidden>
+      <button id="btnDecalImage" type="button" class="alt">🖼 Загрузить несколько PNG / WebP с прозрачностью</button>
+      <button id="btnOpenDecalLibrary" type="button" class="alt">📂 Папка «Прозрачное граффити»</button>
+      <button id="btnDecalZIP" type="button" class="alt">📦 Загрузить ZIP с несколькими PNG-граффити</button>
+      <small id="decalImageStatus" class="tip">Для нескольких файлов используй долгое нажатие в приложении «Файлы», либо ZIP. Рисунки добавляются отдельным слоем.</small>
+      <b>📏 Размер наклейки — задаёшь сам</b>
+      <div class="cols2">
+       <label>Ширина, м<input id="decalWidth" type="number" min=".01" step=".1" value="2"></label>
+       <label>Высота, м<input id="decalHeight" type="number" min=".01" step=".1" value="1.5"></label>
+      </div>
+      <button id="btnPlaceDecal" type="button" class="primary">👆 Приклеить по месту касания</button>
+      <small class="tip">Выбери PNG слева, впиши ширину и высоту, коснись стены. Размер не сбрасывается при выборе другого PNG и не подгоняется под стену. На дугах рисунок повторяет поверхность.</small>
+      <details class="rowSection" id="decalExtraPanel"><summary>⚙ Дополнительно: поворот, старые режимы, правка рисунка</summary>
+       <label>Способ размещения<select id="decalFit">
+        <option value="manual" selected>👆 Свободно на прямой стене, стыке или дуге</option>
+        <option value="corner">🌐 Отдельный режим через угол 90° (UV33)</option>
+        <option value="face">Вписать на всю грань (старый режим)</option>
+        <option value="wall">Одно панно на соединённые стены (старый режим)</option>
+       </select></label>
+       <label class="check"><input id="decalLockAspect" type="checkbox"><span>🔒 Менять второй размер вместе с первым (по пропорциям PNG)</span></label>
+       <div class="cols2">
+        <label>Поворот, °<input id="decalRotation" type="number" min="-360" max="360" step="5" value="0"></label>
+        <label>Прозрачность слоя<input id="decalOpacity" type="range" min=".05" max="1" step=".05" value="1"></label>
+       </div>
+       <label class="check"><input id="decalWholeRoom" type="checkbox"><span>Один рисунок на все соединённые плиты пола комнаты (старый режим)</span></label>
+       <label>Размещённые наклейки<select id="decalSelect"><option value="">Нет наклеек</option></select></label>
+       <div class="cols2"><button id="btnUpdateDecal" type="button" class="alt">↔ Применить размеры</button><button id="btnDeleteDecal" type="button" class="alt">🗑 Удалить рисунок</button></div>
+       <button id="btnMoveDecal" type="button" class="alt">👆 Передвинуть выбранное граффити касанием</button>
+       <small class="tip">Каждое касание создаёт отдельную наклейку. Дополнительные режимы UV33 оставлены для старых проектов. PNG не меняет текстуру самой стены.</small>
+      </details>
+    </details>
+    <div class="cols2"><button id="btnApplyTexture" class="primary">Нанести на весь модуль</button><button id="btnClearTexture" class="alt">Сбросить весь модуль</button></div>
+    <button id="btnSurfaceAllWalls" class="alt">🧱 Нанести этот материал на стены / плиты этажа</button>
+    <small class="tip">Повтор по метрам даёт одинаковый размер узора на прямых, угловых и круглых стенах. «Общая разметка» растягивает одно изображение по соединённым плитам пола при применении ко всей группе. UV и рельеф переносятся в GLB. Скульптурные изгибы GLB остаются нетронутыми.</small>
+    <small id="textureSelection" class="tip">Можно выбрать узор слева во вкладке «Текстуры».</small>
+   </details>
+   <details class="rowSection" id="prefabDoorPanel"><summary>🚪 Петли готовой двери</summary>
+    <label>Угол открытия дверной створки, °<input type="range" id="prefabDoorSwing" min="-110" max="110" value="0" step="5"></label>
+    <small class="tip">Двери из библиотеки имеют собственные петли; у двустворчатых створки открываются в противоположные стороны. Угол сохраняется в проекте.</small>
+     <button id="btnCutForPrefabDoor" class="primary">✂ Подготовить отверстие под размер этой двери</button>
+   </details>
+   <details class="rowSection" id="autoCutPanel"><summary>🏠 Точная подрезка по контуру комнаты</summary>
+    <p class="tip">Стандартные плиты 2×2 м обрезаются по ВНУТРЕННЕМУ контуру замкнутой комнаты: прямые стены, углы и встроенные дуги 90°/180°, в том числе вогнутые. Открытые и неоднозначные контуры не режем, чтобы не испортить дом. Импортированные GLB-полы пока используют прежнюю безопасную подрезку по плоскостям.</p>
+    <div class="cols2"><button id="btnAutoTrim" class="primary">✂ По контуру комнаты</button><button id="btnResetAutoTrim" class="alt">Снять автосрез</button></div>
+    <div class="cols2"><button id="btnBulkTrim" class="primary">✂ Все плиты (по стенам)</button><button id="btnBulkTrimReset" class="alt">Вернуть все плиты</button></div>
+    <small class="tip">«Все плиты» обрабатывает стандартные полы на всех этажах по замкнутым комнатам; у импортированных GLB остаётся прежняя подрезка по плоскостям. Раскрой не применяется автоматически при открытии проекта; можно отменить через Undo или вернуть исходные плиты. Извилистые импортированные стены пока не определяются.</small>
+    <small class="tip">Перед массовой обработкой сохрани проект. Результат можно сохранить в «Мои детали».</small>
+   </details>
+  <details class="rowSection" id="floorCutPanel"><summary>✂ Подрезка края плиты / плитки</summary>
+    <p class="tip">Выдели стандартную плиту пола. Линия разреза проходит под заданным углом по X/Z; толщина плиты сохраняется, срез закрывается. Для внешнего края подгони угол и смещение.</p>
+    <label>Направление нормали среза, °<input id="floorCutAngle" type="number" min="-180" max="180" step="5" value="0"></label>
+    <label>Смещение от центра исходной плиты, м<input id="floorCutOffset" type="number" min="-2.8" max="2.8" step=".05" value="0"></label>
+    <label>Оставить сторону<select id="floorCutSide"><option value="less">Со стороны − нормали</option><option value="greater">Со стороны + нормали</option></select></label>
+    <div class="cols2"><button id="btnApplyFloorCut">✂ Подрезать</button><button id="btnResetFloorCut" class="alt">Сбросить срез</button></div>
+   </details>
+  <details class="rowSection" id="glbCutPanel"><summary>✂ Точный наклонный срез GLB</summary>
+    <p class="tip">Для статических импортированных GLB: режет геометрию по прямой под любым углом (плоскость вертикальна). UV сохраняются. Замкнутые статические GLB получают закрытый торец, исходные материалы и UV сохраняются; открытые/повреждённые сетки не закрываются автоматически. Оригинал GLB не изменяется.</p>
+    <label>Угол нормали, °<input id="glbCutAngle" type="number" min="-180" max="180" step="1" value="0"></label>
+    <label>Положение плоскости от центра модели, м<input id="glbCutOffset" type="number" step=".01" value="0"></label>
+    <label>Оставить сторону<select id="glbCutSide"><option value="less">− нормали</option><option value="greater">+ нормали</option></select></label>
+    <div class="cols2"><button id="btnApplyGlbCut">✂ Подрезать GLB</button><button id="btnResetGlbCut" class="alt">Снять этот срез</button></div>
+   </details>
   <details class="rowSection" id="meshPanel"><summary>✂ Правка своего GLB: обрезать / согнуть</summary>
-    <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. Обрезка по плоскости оставляет открытый край; скелетные модели не деформируем.</p>
+    <p class="tip">Меняется только выбранная копия модели, оригинальный GLB в библиотеке остаётся целым. После среза замкнутые статические сетки закрываются. У открытых GLB торец останется открытым; скелетные модели не деформируем.</p>
     <label>Ось обрезки<select id="trimAxis"><option value="x">X — ширина</option><option value="y">Y — высота</option><option value="z">Z — длина</option></select></label>
     <div class="cols2"><label>Срезать с начала, %<input id="trimStart" type="number" min="0" max="90" step="1" value="0"></label>
     <label>Срезать с конца, %<input id="trimEnd" type="number" min="0" max="90" step="1" value="0"></label></div>
@@ -56,15 +554,80 @@
   </details>
  </div>
 </section>
+<section id="projectLoadSettingsPanel" class="projectLoadSettings" hidden role="region" aria-label="Настройки загрузки проектов">
+ <div class="projectLoadTitle"><b>⚙️ Загрузка проекта</b><button type="button" id="btnProjectLoadSettingsClose" aria-label="Закрыть настройки">✕</button></div>
+ <label>Способ восстановления дома
+  <select id="projectLoadMode"><option value="careful">🍃 Бережная — сначала дом, потом текстуры порциями</option><option value="fast">🚀 Быстрая — обычное открытие</option></select>
+ </label>
+ <label>Качество текстур в памяти планшета
+  <select id="projectLoadQuality"><option value="original">Оригинал</option><option value="2048">2048 px</option><option value="1024">1024 px</option></select>
+ </label>
+ <small>Настройки применяются при следующем открытии. Оригинальные текстуры в JSON, IndexedDB и GLB не изменяются.</small>
+</section>
+<div id="projectLoadProgress" class="projectLoadProgress" hidden aria-live="polite">
+ <div class="projectLoadProgressRow"><span id="projectLoadProgressText">Подготовка проекта…</span><button type="button" id="projectLoadPause">⏸ Пауза</button></div>
+ <progress id="projectLoadProgressBar" max="100" value="0"></progress>
+</div>
 <section id="hud" aria-live="polite"><span id="placementDot" class="dot neutral"></span><span id="status">Выбери деталь для строительства</span></section>
-<div id="charControls" hidden><button id="charUp">▲</button><div><button id="charLeft">◀</button><button id="charDown">▼</button><button id="charRight">▶</button></div></div>
+<div id="charControls" hidden>
+ <div class="joystickTitle">🕹 Движение</div>
+ <div id="joystickPad" class="joystickPad" role="group"
+  aria-label="Аналоговый джойстик персонажа: удерживайте и тяните в направлении движения">
+  <div class="joystickCrosshair"></div>
+  <div class="joystickKnob"></div>
+ </div>
+ <div hidden><button id="charUp">▲</button><button id="charLeft">◀</button>
+  <button id="charDown">▼</button><button id="charRight">▶</button></div>
+</div>
 <footer class="bottombar"><button id="btnLevelDown">−</button><span>Этаж <strong id="levelLabel">1</strong></span><button id="btnLevelUp">＋</button><button id="btnConfirm" class="primary">✓ Установить</button><button id="btnCancel">Отмена</button><span class="hint">Пальцем — камера · Колёсико / два пальца — приближение</span></footer>
 <input id="openProject" type="file" accept=".json" hidden>
+<input id="importProjectBackup" type="file" hidden>
 <script src="js/three.min.js"></script>
 <script src="js/OrbitControls.js"></script>
-<script src="js/GLTFLoader.js"></script>
+<script src="js/fflate.min.js"></script>
+<script src="js/NURBSUtils.js"></script>
+<script src="js/NURBSCurve.js"></script>
+<script src="js/FBXLoader.js"></script>
+<script src="js/OBJLoader.js"></script>
+<script src="js/VOXLoader.js"></script>
+<script src="js/STLLoader.js"></script>
+<script src="js/PLYLoader.js"></script>
+<script src="js/WorkerPool.js"></script>
+ <script src="js/DRACOLoader.js"></script>
+ <script src="js/KTX2Loader.js"></script>
+ <script src="js/meshopt_decoder.js"></script>
+ <script src="js/meshopt_simplifier.js"></script>
+ <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>
 <script src="js/glb-loader.js"></script>
-<script src="js/clean-geometry.js"></script><script src="js/clean-mesh-edit.js"></script>
+<script src="js/model-formats.js"></script>
+<script src="js/export-glb.js"></script>
+<script src="js/phoenix-files.js"></script>
+<script src="js/pako_inflate.min.js"></script>
+<script src="js/zip-helper.js"></script>
+<script src="js/project-open.js"></script>
+<script src="js/smart-catalog.js"></script>
+<script src="js/bundled-catalog.js"></script>
+<script src="js/catalog-preview.js"></script>
+<script src="js/character-collision.js"></script>
+ <script src="js/android-asset-opt.js"></script>
+ <script src="js/android-lod.js"></script>
+ <script src="js/android-performance.js"></script>
+<script src="js/architecture-kit.js"></script>
+ <script src="js/clean-geometry.js"></script><script src="js/mesh-caps.js"></script><script src="js/shape-crop.js"></script><script src="js/clean-mesh-edit.js"></script><script src="js/floor-clip.js"></script><script src="js/edge-auto-trim.js"></script><script src="js/room-floor-trim.js"></script><script src="js/bulk-floor-trim.js"></script>
+<script src="js/avatar-fit.js"></script>
+ <script src="js/surface-workshop.js"></script>
+ <script src="js/surface-materials.js"></script>
+ <script src="js/surface-decals.js"></script>
+ <script src="js/wall-openings.js"></script>
+ <script src="js/precision-placement.js"></script>
+ <script src="js/free-camera.js"></script>
+ <script src="js/builder-gizmo.js"></script>
+ <script src="js/touch-joystick.js"></script>
+ <script src="js/texture-placement.js"></script>
+ <script src="js/building-workflow.js"></script>
+ <script src="js/editor-history.js"></script>
+ <script src="js/scene-manager.js"></script>
+ <script src="js/project-load-stages.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
