@@ -62,6 +62,21 @@
  <label>Idle<input id="phoenixPrefabIdle" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
  <label>Walk<input id="phoenixPrefabWalk" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
  <label>Attack<input id="phoenixPrefabAttack" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
+ <div class="phoenixPrefabRow">
+ <label>Run<input id="phoenixPrefabRun" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Run"></label>
+ <label>Hit<input id="phoenixPrefabHit" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Hit"></label></div>
+ <div class="phoenixPrefabRow">
+ <label>Death<input id="phoenixPrefabDeath" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Death"></label>
+ <label>Cast<input id="phoenixPrefabCast" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Cast"></label></div>
+ <b>🤖 Поведение моба (PLAY)</b>
+ <label>Поведение<select id="phoenixPrefabAI"><option value="idle">Стоять на месте</option><option value="patrol">Патрулировать вокруг точки</option><option value="chase">Преследовать игрока и атаковать (анимация)</option></select></label>
+ <div class="phoenixPrefabRow">
+ <label>Радиус патруля, м<input id="phoenixPrefabPatrolRadius" type="number" min="0" max="30" step=".5" value="3"></label>
+ <label>Радиус агро, м<input id="phoenixPrefabAggroRadius" type="number" min="0" max="50" step=".5" value="7"></label></div>
+ <div class="phoenixPrefabRow">
+ <label>Дистанция атаки, м<input id="phoenixPrefabAttackRange" type="number" min=".3" max="8" step=".1" value="1.25"></label>
+ <label>Перезарядка, сек<input id="phoenixPrefabCooldown" type="number" min=".35" max="30" step=".1" value="1.8"></label></div>
+ <small>Базовый ИИ обходит стены через проверку столкновений Builder, но пока без поиска пути и урона. Позиция в EDIT не меняется.</small>
  <small id="phoenixPrefabClips">Выбери GLB, чтобы увидеть доступные анимации.</small>
  <div class="phoenixPrefabRow"><button id="btnPrefabSave" type="button" class="primary">💾 Сохранить шаблон</button><button id="btnPrefabPlace" type="button">👆 Поставить моба</button></div>
  <button type="button" id="btnPrefabCancelPlace">✖ Отменить размещение</button>
@@ -663,7 +678,9 @@
  <script src="js/scene-manager.js"></script>
  <script src="js/project-load-stages.js"></script>
 <script src="engine/core/phoenix-core.js"></script>
+<script src="engine/core/phoenix-ai.js"></script>
 <script src="engine/core/phoenix-prefabs.js"></script>
+<script src="engine/runtime/phoenix-animations.js"></script>
 <script src="engine/builder/play-bridge.js"></script>
 <script src="engine/builder/prefab-editor.js"></script>
 <script src="js/clean-app.js"></script>
