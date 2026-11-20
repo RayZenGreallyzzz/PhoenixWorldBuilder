@@ -41,12 +41,15 @@
    });
    for(const id of ['slot3','slot4','slot5','ultimate','slot6','slot7','fire','aim','reload','jump','crouch']){
     this.buttons[id].addEventListener('click',()=>{
-     if(this.playing&&!this.editing){
-      const msg=this.get('phoenixCombatNotice');
-      if(msg)msg.textContent=['fire','aim','reload','jump','crouch'].includes(id)
-       ?'🎮 Это кнопка раскладки шутера. Механика пока не добавлена.'
-       :'✨ Это слот оформления. Способность пока не назначена.';
-     }
+     if(!this.playing||this.editing)return;
+     const bridge=this.builder.playBridge;
+     if(id==='fire')return bridge?.fire?.();
+     if(id==='aim')return bridge?.aim?.();
+     if(id==='reload')return bridge?.reload?.();
+     if(['slot3','slot4','slot5','slot6','slot7','ultimate'].includes(id))
+      return bridge?.castSkill?.(id);
+     const msg=this.get('phoenixCombatNotice');
+     if(msg)msg.textContent='🎮 Прыжок и приседание пока в разработке.';
     });
    }
    this.get('btnPhoenixSkills')?.addEventListener('click',()=>this.toggle());
@@ -124,7 +127,7 @@
   }
   open(){
    if(this.builder.playBridge?.active)return false;
-   this.builder.prefabEditor?.close();
+   this.builder.prefabEditor?.close();this.builder.skillDefinitionEditor?.close();
    this.editing=true;this.panel.hidden=false;
    this.doc.body.classList.add('phoenixSkillEditing');
    this.layer.hidden=false;
