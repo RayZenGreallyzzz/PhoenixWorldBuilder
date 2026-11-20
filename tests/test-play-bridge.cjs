@@ -29,7 +29,7 @@ const builder = {
  shapeDragPointer:null,shapeSourceMode:false,shapePlaceMode:false,
  controls:{target:new V(10,1,5),enabled:true,update(){this.updates=(this.updates||0)+1}},
  camera:{position:new V(10,5,8)},player:{position:new V(1,0,1),rotation:new V(0,2,0)},
- preview:{root:{visible:true}},keys:new Set(['w']),
+ preview:{root:{visible:true}},previewOutline:{visible:true},keys:new Set(['w']),
  joystick:{reset(){this.resets=(this.resets||0)+1}},
  setMode(m){this.mode=m;modeChanges.push(m);if(m==='character') {
   this.camera.position.copy(new V(1,3,7));
@@ -50,6 +50,7 @@ assert.equal(bridge.active,true);
 assert.equal(builder.mode,'character');
 assert.equal(bridge.modeController.mode,'play');
 assert.equal(builder.preview.root.visible,false);
+assert.equal(builder.previewOutline.visible,false);
 assert.equal(dom.phoenixPlayHud.hidden,false);
 assert.equal(classes.has('phoenixPlaying'),true);
 assert.equal(builder.keys.size,0);
@@ -71,6 +72,7 @@ assert.deepEqual(builder.controls.target,originalTarget);
 assert.deepEqual(builder.player.position,originalPosition);
 assert.deepEqual(builder.player.rotation,originalRotation);
 assert.equal(builder.preview.root.visible,true);
+assert.equal(builder.previewOutline.visible,true);
 assert.equal(builder.entries,entries);
 assert.equal(classes.has('phoenixPlaying'),false);
 assert.equal(dom.phoenixPlayHud.hidden,true);
