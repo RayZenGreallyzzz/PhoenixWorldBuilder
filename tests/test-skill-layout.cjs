@@ -24,7 +24,7 @@ assert.throws(()=>S.update(defaultLayout,'attack',{x:100}),/Invalid x/);
 assert.throws(()=>S.update(defaultLayout,'attack',{size:180}),/Invalid size/);
 assert.throws(()=>S.update(defaultLayout,'attack',{opacity:0}),/Invalid opacity/);
 assert.throws(()=>S.update(defaultLayout,'attack',{color:'red'}),/Invalid skill color/);
-assert.throws(()=>S.update(defaultLayout,'attack',{icon:'<img>',label:'attack'}),/Invalid skill icon/);
+assert.throws(()=>S.update(defaultLayout,'attack',{icon:'ABCDEFGHIJK',label:'attack'}),/Invalid skill icon/);
 assert.throws(()=>S.validate({version:999,slots:[]}),/Invalid Phoenix/);
 const invalid=S.defaultLayout();invalid.slots[1].id='attack';
 assert.throws(()=>S.validate(invalid),/duplicate/);
