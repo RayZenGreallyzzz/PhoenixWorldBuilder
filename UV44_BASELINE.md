@@ -20,7 +20,7 @@ The branch currently inherits the repository's previous `main` tree. The provide
 ## How to restore the APK web assets
 
 1. Make a working copy of this branch.
-2. Use `python3 tools/import_uv44_assets.py /path/to/Phoenix_Builder_UV44_Install\(3\).apk` to copy bundled `assets/` into `app/src/main/assets/`.
+2. Use `python3 tools/import_uv44_assets.py '/path/to/Phoenix_Builder_UV44_Install(3).apk' --clean` to copy HTML/CSS/JavaScript files into `app/src/main/assets/`. Add `--include-models` only when you intend to commit the bundled GLB library and have redistribution rights.
 3. Carefully review changes, especially third-party dependencies and `assets/pwb/` GLB redistribution rights, before committing to this public repository.
 4. Verify the Android-side bridge matches the APK's expected JavaScript interface. Original Java/Kotlin source is not embedded in an APK.
 5. Test loading/saving JSON, GLB export, building and player locomotion on an Android device.
