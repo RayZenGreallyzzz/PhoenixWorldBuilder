@@ -20,6 +20,23 @@ for(const id of ['btnPhoenixPlay','btnPhoenixPrefabs','btnPhoenixSkills','phoeni
  const matches=html.match(new RegExp('id="'+id+'"','g'))||[];
  assert.equal(matches.length,1,'UI element must have a unique ID: '+id);
 }
+for(const id of ['phoenixMobCard','phoenixMobCardName','phoenixMobCardRole',
+ 'phoenixMobCardHP','phoenixMobCardHPText','phoenixMobCardStats',
+ 'phoenixMobCardSkills','phoenixMobCardRespawn','btnPhoenixMobCardClose',
+ 'phoenixEntityNickname','btnPrefabApplyNickname','phoenixPrefabLevel',
+ 'phoenixPrefabDefense','phoenixPrefabRespawnEnabled','phoenixPrefabRespawnDelay',
+ 'phoenixPrefabAttackEffect','skillDefFxPreset','skillDefFxColor',
+ 'skillDefFxSize','skillDefFxDuration','phoenixPlayerAttackEffect']){
+ assert(html.includes('id="'+id+'"'),'Missing 2.0 mobile mob/skill control: '+id);
+}
+const featuresScript=html.indexOf('engine/core/phoenix-mob-features.js');
+const vfxScript=html.indexOf('engine/runtime/phoenix-vfx.js');
+const prefabScript=html.indexOf('engine/builder/prefab-editor.js');
+const skillDefScript=html.indexOf('engine/builder/skill-definition-editor.js');
+assert(featuresScript>0&&vfxScript>0&&featuresScript<prefabScript&&vfxScript<skillDefScript,
+ 'NPC data and VFX modules must load before frontend editors');
+assert(css.includes('#phoenixMobCard{position:fixed'),
+ 'Selected NPC profile must be visible on phone in PLAY mode');
 assert(css.includes('#phoenixEngineDock{position:fixed'),
  'Game controls must be independent of oversized UV44 topbar');
 assert(css.includes('body.phoenixPlaying #phoenixEngineDock{display:none!important}'),
