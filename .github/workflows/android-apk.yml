@@ -100,6 +100,8 @@ jobs:
             node tests/test-phoenix-skills.cjs
             node tests/test-skill-definition-editor.cjs
             node tests/test-play-weapon-skills.cjs
+            node tests/test-phoenix-player-combat.cjs
+            node tests/test-editor-mode-isolation.cjs
           fi
 
       - name: Configure Java 17
