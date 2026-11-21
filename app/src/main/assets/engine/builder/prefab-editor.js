@@ -609,7 +609,9 @@
    const stats=this.combat.get(id);
    const nickname=this.world.getComponent(id,'character')?.nickname||'';
    const skills=this.b.skillDefinitionEditor?.catalog?.entries(prefabId)||{};
-   return {...Features.profile(prefab,stats,skills,nickname),
+   const instanceStats=this.world.getComponent(id,'stats')||{};
+   const authored={...prefab,stats:{...prefab.stats,...instanceStats}};
+   return {...Features.profile(authored,stats,skills,nickname),
     id,prefabId,respawn:Features.respawn(prefab.respawn),
     respawnLeft:this.respawner.remaining(id)};
   }
@@ -644,6 +646,15 @@
     this.b.camera.getWorldDirection(facing);facing.y=0;
     if(facing.lengthSq()<.01)return null;
     facing.normalize();
+   }
+   const selectedId=!forward&&this.b.playBridge?.selectedMobId;
+   const selected=selectedId&&this.rendered.get(selectedId);
+   if(selected){
+    const mob=this.combat.get(selectedId),pos=selected.root.position;
+    const dist=Math.hypot(pos.x-origin.x,pos.z-origin.z);
+    if(mob&&!mob.dead&&mob.faction==='enemy'&&dist<=range&&
+       Math.abs(pos.y-origin.y)<=1.8&&this.canStrike(origin,pos,dist))
+     return {id:selectedId,distance:dist,position:pos.clone()};
    }
    let best=null,nearest=Infinity;
    for(const [id,render] of this.rendered){
