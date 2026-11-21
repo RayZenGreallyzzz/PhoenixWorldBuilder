@@ -63,4 +63,27 @@ const points=[[1,0,0]];
 const safeAI=AI.normalize({mode:'patrol-aggro',waypoints:points});
 points[0][0]=100;
 assert.equal(safeAI.waypoints[0][0],1,'Each route must own independent waypoint data');
-console.log('PASS: per-NPC waypoint routes, patrol+attack, guards, combat clip timing, cooldown and factions');
+// Named appearance is independent from intent: white defensive patrol does not aggro.
+const defensive=AI.normalize({mode:'patrol',engagement:'defensive',aggroRadius:7});
+let peaceful=AI.tick(AI.initial([0,0,0]),[0,0,0],[.5,0,0],
+ defensive,{speed:2},.1,'enemy');
+assert.equal(peaceful.attack,false,'White defensive patroller must not attack first');
+assert.equal(peaceful.animation,'walk','Defensive NPC still patrols');
+const retaliate=AI.tick(AI.provoke(peaceful.state,12),[0,0,0],[.5,0,0],
+ defensive,{speed:2},.1,'enemy');
+assert.equal(retaliate.attack,true,'Defensive NPC must retaliate after being hit');
+assert.equal(retaliate.engaged,true);
+const proactive=AI.tick(AI.initial([0,0,0]),[0,0,0],[.5,0,0],
+ {...defensive,engagement:'aggressive'}, {speed:2},.1,'enemy');
+assert.equal(proactive.attack,true,'Red preset automatically attacks in aggro range');
+const outside=AI.tick(AI.initial([0,0,0]),[0,0,0],[5,0,0],
+ {...defensive,engagement:'aggressive',aggroRadius:2},{speed:2},.1,'enemy');
+assert.equal(outside.attack,false,'Per-mob aggro radius must be respected');
+const trulyPassive=AI.tick(AI.provoke(AI.initial([0,0,0])),[0,0,0],[.5,0,0],
+ {...defensive,engagement:'passive'}, {speed:2},.1,'enemy');
+assert.equal(trulyPassive.attack,false);
+const friend=AI.tick(AI.provoke(AI.initial([0,0,0])),[0,0,0],[.5,0,0],
+ {...defensive,engagement:'aggressive'}, {speed:2},.1,'ally');
+assert.equal(friend.attack,false,'Allied mob never attacks the player');
+assert.throws(()=>AI.normalize({engagement:'unknown'}),/engagement/);
+console.log('PASS: per-NPC waypoint routes, patrol+attack, guards, combat clip timing, cooldown and factions + defensive/aggressive presets');
