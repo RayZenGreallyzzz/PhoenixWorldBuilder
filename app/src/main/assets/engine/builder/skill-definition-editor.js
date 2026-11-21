@@ -162,8 +162,9 @@
     }
     this.write(validated);
     this.b.markProjectDirty?.();
-    this.status('✅ Навык сохранён: '+validated.name+
-     '. Сила: '+PhoenixSkills.power(validated));
+    this.status('✅ Навык настроен: '+validated.name+
+     '. Сила: '+PhoenixSkills.power(validated)+
+     '. Для записи проекта нажми верхнюю 💾 Сохранить.');
     return true;
    }catch(err){this.status('Ошибка навыка: '+err.message);return false;}
   }
