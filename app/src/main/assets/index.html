@@ -49,6 +49,7 @@
  <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 МОБЫ / NPC</button>
  <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить расположение игровых кнопок">🎮 HUD</button>
  <button id="btnPhoenixSkillDefs" type="button" class="phoenixHudEntry" aria-label="Создать способности и настроить уровни персонажей">🧙 НАВЫКИ</button>
+ <button id="btnPhoenixProgression" type="button" class="phoenixHudEntry" aria-label="Математический баланс и уровни персонажей">📈 УРОВНИ</button>
  <button id="btnPhoenixWorld" type="button" class="phoenixHudEntry" aria-label="Настройки общего мира и ландшафта">🌍 МИР</button>
  <button id="btnWorldGrid" type="button" class="phoenixGridEntry" aria-pressed="false" aria-label="Показать или скрыть сетку секторов">▦ СЕТКА: ВЫКЛ</button>
 </div>
@@ -210,6 +211,31 @@
   <option value="magic">🪄 Магия</option><option value="heal">💚 Свет лечения</option>
  </select></label>
  <small id="skillDefMessage" aria-live="polite">Игрок и мобы используют сохранённые навыки, откаты, MP и визуальные эффекты в PLAY.</small>
+</section>
+<section id="phoenixProgressionEditor" class="phoenixSkillEditor" hidden role="region" aria-label="Лаборатория RPG и MMO прогрессии">
+ <div class="phoenixSkillTitle"><b>📈 Лаборатория баланса · уровни 1–150</b><button id="btnProgressionClose" type="button">✕</button></div>
+ <small>Настраивай героя и сохранённые шаблоны мобов отдельно. Архетип — только набор начальных чисел: навыки, анимации, GLB и жанры свободно сочетаются.</small>
+ <label>Кого настроить<select id="progressionTarget"><option value="player">🧍 Игрок / герой</option></select></label>
+ <div class="phoenixSkillRow"><label>Архетип<select id="progressionArchetype">
+ <option value="warrior">⚔ Воин</option><option value="archer">🏹 Лучник</option>
+ <option value="assassin">🗡 Ассасин</option><option value="mage">🔮 Маг</option>
+ <option value="gunslinger">🔫 Стрелок</option><option value="hybrid">⚡ Гибрид</option>
+ </select></label>
+ <label>Жанры (через запятую)<input id="progressionTags" maxlength="90" value="fantasy" placeholder="fantasy,cyberpunk,shooter,mmorpg,hybrid"></label></div>
+ <div class="phoenixSkillRow"><label>Уровень персонажа<input id="progressionLevel" type="number" min="1" max="150" step="1" value="1"></label>
+ <label>Максимальный уровень<input id="progressionMaxLevel" type="number" min="1" max="150" step="1" value="150"></label>
+ <label>Множитель XP<input id="progressionXpMultiplier" type="number" min=".1" max="100" step=".1" value="1"></label></div>
+ <div class="phoenixPrefabRow"><button type="button" id="btnProgressionPreset">✨ Заполнить числа архетипа</button>
+ <button type="button" id="btnProgressionPreview">🧮 Рассчитать уровни</button></div>
+ <small>Формула каждой характеристики: <strong>база + прирост × (уровень − 1) + ускорение × (уровень − 1)²</strong>. Крит и шанс уклонения — доли (0.15 = 15%). Предпросмотр не меняет проект.</small>
+ <div id="progressionStatsFields" class="phoenixProgressionFields" role="group" aria-label="Базовые характеристики и рост"></div>
+ <label>Враг для расчёта урона<select id="progressionDefender"><option value="same">Равный по уровню</option><option value="fixed">Фиксированный враг (защита 50)</option></select></label>
+ <label>Тип атаки для расчёта<select id="progressionDamageType">
+ <option value="physical">⚔ Физическая</option><option value="magical">🔮 Магическая</option><option value="true">⚡ Чистый урон</option></select></label>
+ <div id="progressionPreview" class="phoenixProgressionResults" aria-live="polite">Выбери профиль и нажми «Рассчитать уровни».</div>
+ <div class="phoenixPrefabRow"><button id="btnProgressionSave" type="button" class="primary">✅ Применить формулу к персонажу</button>
+ <button id="btnProgressionClear" type="button">↺ Вернуть фиксированные характеристики</button></div>
+ <small id="progressionStatus" aria-live="polite">Профиль работает отдельно от GLB, анимаций и навыков. Чтобы записать проект на устройство, нажми верхнюю 💾 Сохранить.</small>
 </section>
 <section id="phoenixSkillEditor" class="phoenixSkillEditor" hidden role="region" aria-label="Редактор игровых кнопок">
  <div class="phoenixSkillTitle"><b>🎮 Редактор скиллов · HUD</b><button id="btnSkillClose" type="button" aria-label="Закрыть настройку HUD">✕</button></div>
@@ -1022,6 +1048,7 @@
 <script src="engine/core/phoenix-patrol-path.js"></script>
 <script src="engine/core/phoenix-ai.js"></script>
 <script src="engine/core/phoenix-combat.js"></script>
+<script src="engine/core/phoenix-progression.js"></script>
 <script src="engine/core/phoenix-player-combat.js"></script>
 <script src="engine/core/phoenix-weapon.js"></script>
 <script src="engine/core/phoenix-skill-images.js"></script>
@@ -1036,5 +1063,6 @@
 <script src="engine/builder/phoenix-world-editor.js"></script>
 <script src="engine/builder/skill-hud-editor.js"></script>
 <script src="engine/builder/skill-definition-editor.js"></script>
+<script src="engine/builder/phoenix-progression-editor.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
