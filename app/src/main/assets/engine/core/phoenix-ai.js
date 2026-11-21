@@ -8,6 +8,7 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
  const BEHAVIORS=Object.freeze(['idle','patrol','chase','patrol-aggro','guard']);
+ const ENGAGEMENTS=Object.freeze(['auto','passive','defensive','aggressive']);
  function number(v,min,max,name){
   if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)
    throw new TypeError('Invalid '+name);
@@ -18,6 +19,8 @@
   if(typeof value!=='object'||Array.isArray(value))throw new TypeError('Invalid AI profile');
   const mode=value.mode||'idle';
   if(!BEHAVIORS.includes(mode))throw new TypeError('Invalid AI mode');
+  const engagement=value.engagement??'auto';
+  if(!ENGAGEMENTS.includes(engagement))throw new TypeError('Invalid AI engagement');
   const patrolRadius=number(value.patrolRadius??3,0,30,'patrolRadius');
   const aggroRadius=number(value.aggroRadius??7,0,50,'aggroRadius');
   const attackRange=number(value.attackRange??1.25,.3,8,'attackRange');
@@ -30,7 +33,7 @@
     throw new TypeError('Invalid AI waypoint '+i);
    return point.slice();
   });
-  return {mode,patrolRadius,aggroRadius,attackRange,attackCooldown,
+  return {mode,engagement,patrolRadius,aggroRadius,attackRange,attackCooldown,
    attackDuration,waypoints};
  }
  function finite3(p){
@@ -45,7 +48,12 @@
  }
  function initial(position){
   if(!finite3(position))throw new TypeError('Invalid NPC position');
-  return {home:[...position],point:0,mode:'idle',cooldown:0,attackHold:0};
+  return {home:[...position],point:0,mode:'idle',cooldown:0,attackHold:0,provoked:0};
+ }
+ function provoke(state,seconds=12){
+  const duration=number(seconds,0,120,'provoke duration');
+  if(!state||!finite3(state.home))throw new TypeError('Invalid NPC state');
+  return {...state,provoked:Math.max(state.provoked||0,duration)};
  }
  function tick(npc,position,player,settings,stats,dt,faction='enemy'){
   if(!finite3(position)||!finite3(player))throw new TypeError('Invalid position');
@@ -55,12 +63,16 @@
   const next={home:[...previous.home],point:previous.point|0,
    mode:previous.mode||'idle',
    cooldown:Math.max(0,(previous.cooldown||0)-dt),
-   attackHold:Math.max(0,(previous.attackHold||0)-dt)};
+   attackHold:Math.max(0,(previous.attackHold||0)-dt),
+   provoked:Math.max(0,(previous.provoked||0)-dt)};
   let mode='idle',move={dx:0,dz:0},attack=false,rotate=null;
   const enemy=faction==='enemy',playerDist=Math.hypot(player[0]-position[0],player[2]-position[2]);
+  const engaged=enemy&&(profile.engagement==='aggressive'||
+   (profile.engagement==='defensive'&&next.provoked>0)||
+   (profile.engagement==='auto'&&['chase','patrol-aggro','guard'].includes(profile.mode)));
+  // Nickname colors never control AI. Explicit engagement overrides legacy mode.
   if(next.attackHold>0)mode='attack';
-  else if(['chase','patrol-aggro','guard'].includes(profile.mode)&&
-   enemy&&playerDist<=profile.aggroRadius){
+  else if(engaged&&playerDist<=profile.aggroRadius){
    if(playerDist<=profile.attackRange){
     mode='idle';
     rotate=Math.atan2(player[0]-position[0],player[2]-position[2]);
@@ -94,7 +106,8 @@
   if(Math.hypot(move.dx,move.dz)>1e-6)
    rotate=Math.atan2(move.dx,move.dz);
   next.mode=mode;
-  return {state:next,animation:mode,move:[move.dx,0,move.dz],yaw:rotate,attack};
+  return {state:next,animation:mode,move:[move.dx,0,move.dz],yaw:rotate,attack,
+   engaged:engaged&&playerDist<=profile.aggroRadius};
  }
- return Object.freeze({BEHAVIORS,normalize,initial,tick});
+ return Object.freeze({BEHAVIORS,ENGAGEMENTS,normalize,initial,provoke,tick});
 });
