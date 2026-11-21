@@ -1023,6 +1023,199 @@
    this.pendingWaypointId=id;this.panel.hidden=true;
    this.status('👆 Коснись сцены для новой точки маршрута');
   }
+  // Only the mob editor owns freehand gesture capture. No Builder entries.
+  routeMessage(message){
+   const label=this.el('phoenixRouteStatus');
+   if(label)label.textContent=message;
+  }
+  startRouteDrawing(mode='draw'){
+   const id=this.selectedEntity();
+   if(this.playing||this.b.playBridge?.active)return false;
+   if(!id)return this.status('Сначала выбери установленного моба'),false;
+   if(!['draw','stops'].includes(mode))return false;
+   const char=this.world.getComponent(id,'character');
+   const ai=PhoenixAI.normalize(char?.ai);
+   if(mode==='stops'&&!ai.waypoints.length)
+    return this.status('Сначала добавь точки или нарисуй маршрут пальцем'),false;
+   this.cancelRouteDrawing();
+   this.cancelPlacement();
+   this.b.worldEditor?.stopPainting?.();
+   if(this.b.tool==='place')this.b.setTool('pick');
+   const canvas=this.b.canvas;
+   const draft={id,mode,tool:mode==='draw'?'draw':'stop',
+    raw:[],points:mode==='stops'?ai.waypoints.map(p=>p.slice()):[],
+    markers:mode==='stops'?(ai.stops||[]).map(s=>({
+     position:ai.waypoints[s.index].slice(),seconds:s.seconds,
+     animation:s.animation})):[],
+    pointerId:null,
+    previousEnabled:this.b.controls.enabled,
+    previousTouchAction:canvas?.style?.touchAction||''};
+   this.routeDraft=draft;
+   this.b.controls.enabled=false;
+   if(canvas?.style)canvas.style.touchAction='none';
+   this.panel.hidden=true;
+   const dock=this.el('phoenixRouteDock');if(dock)dock.hidden=false;
+   this.refreshRouteAnimationChoices(id);
+   this.setRouteTool(draft.tool);
+   this.routeMessage(mode==='draw'?
+    'Камера закреплена. Веди одним пальцем по земле: изгибы станут маршрутом.':
+    'Камера закреплена. Коснись пути, чтобы назначить Idle или GLB-анимацию.');
+   this.drawRoute(id);return true;
+  }
+  refreshRouteAnimationChoices(id){
+   const list=this.el('phoenixRouteAnimation');
+   if(!list)return;
+   list.replaceChildren();
+   for(const [value,name] of [['idle','Idle'],['walk','Walk'],
+    ['run','Run'],['cast','Cast']])
+    list.appendChild(this.option(value,name));
+   const prefab=this.registry.get(this.world.getComponent(id,'prefab')?.id);
+   const assetId=this.world.getComponent(id,'character')?.assetId||prefab?.assetId;
+   const clips=this.b.assets.get(assetId)?.animations||[];
+   for(const clip of clips){
+    const name=clip?.name;
+    if(typeof name==='string'&&name.trim()&&name.length<=120)
+     list.appendChild(this.option('clip:'+name,'🎞 '+name));
+   }
+   list.value='idle';
+  }
+  setRouteTool(tool){
+   const draft=this.routeDraft;
+   if(!draft||!['draw','stop'].includes(tool))return false;
+   if(tool==='draw'&&draft.mode==='stops')
+    return this.routeMessage('Для изменения линии выбери «Рисовать пальцем» в редакторе моба'),false;
+   const pts=draft.mode==='draw'?Path.fromStroke(draft.raw):draft.points;
+   if(tool==='stop'&&!pts.length)
+    return this.routeMessage('Сначала нарисуй линию маршрута пальцем'),false;
+   draft.tool=tool;
+   this.el('btnPhoenixRouteDrawTool')?.classList?.toggle('active',tool==='draw');
+   this.el('btnPhoenixRouteStopTool')?.classList?.toggle('active',tool==='stop');
+   const help=this.el('phoenixRouteHelp');
+   if(help)help.textContent=tool==='draw'?
+    'Камера закреплена. Веди пальцем по земле, затем выбери ⏸ Остановка.':
+    'Камера закреплена. Выбери длительность, анимацию и коснись линии маршрута.';
+   return true;
+  }
+  routePointer(type,event){
+   const draft=this.routeDraft;
+   if(!draft||!this.b.canvas||event.target!==this.b.canvas||
+      this.playing)return false;
+   event.preventDefault?.();event.stopImmediatePropagation?.();
+   if(event.isPrimary===false)return true;
+   if(type==='pointerdown'){
+    if(draft.pointerId!==null)return true;
+    draft.pointerId=event.pointerId;
+    if(draft.tool==='draw')this.routeStrokePoint(event,true);
+    this.b.canvas.setPointerCapture?.(event.pointerId);
+    return true;
+   }
+   if(draft.pointerId!==event.pointerId)return true;
+   if(type==='pointermove'){
+    if(draft.tool==='draw')this.routeStrokePoint(event);
+    return true;
+   }
+   if(type==='pointerup'&&draft.tool==='stop'){
+    const p=this.findPoint(event);
+    if(p)this.addDraftStop([p.x,p.y,p.z]);
+    else this.routeMessage('Коснись земли рядом с нарисованной линией');
+   }else if(type==='pointerup'&&draft.tool==='draw')
+    this.routeStrokePoint(event);
+   if(this.b.canvas.hasPointerCapture?.(event.pointerId))
+    this.b.canvas.releasePointerCapture?.(event.pointerId);
+   draft.pointerId=null;return true;
+  }
+  routeStrokePoint(event,first=false){
+   const draft=this.routeDraft;
+   if(!draft||draft.tool!=='draw')return false;
+   const p=this.findPoint(event);
+   if(!p)return false;
+   const xyz=[p.x,p.y,p.z];
+   const last=draft.raw[draft.raw.length-1];
+   if(last&&Path.distance(last,xyz)<.30)return false;
+   if(draft.raw.length>=Path.MAX_RAW){
+    this.routeMessage('Достигнут лимит длины рисунка. Сохрани маршрут.');return false;
+   }
+   draft.raw.push(xyz);
+   // Throttle preview rebuilds on Android; the path remains in raw data.
+   if(first||draft.raw.length%3===0)this.drawRoute(draft.id);
+   this.routeMessage('✍ Линия: '+draft.raw.length+
+    ' исходных точек · после сохранения до '+Path.MAX_POINTS+
+    ' точек. Для паузы нажми ⏸ Остановка.');
+   return true;
+  }
+  addDraftStop(position){
+   const draft=this.routeDraft;
+   if(!draft)return false;
+   const points=draft.mode==='draw'?Path.fromStroke(draft.raw):draft.points;
+   const index=Path.nearest(points,position);
+   if(index<0||Path.distance(points[index],position)>4.5){
+    this.routeMessage('Коснись ближе к линии (не дальше 4.5 м)');return false;
+   }
+   const seconds=Number(this.el('phoenixRoutePause')?.value);
+   const animation=this.el('phoenixRouteAnimation')?.value||'idle';
+   const markers=draft.markers.filter(marker=>
+    Path.nearest(points,marker.position)!==index);
+   const candidate=[...markers,{position:points[index].slice(),seconds,animation}];
+   try{
+    Path.stopsFromMarkers(points,candidate);
+    draft.markers=candidate;
+    this.drawRoute(draft.id);
+    this.routeMessage('⏸ Остановка '+(index+1)+': '+seconds+
+     ' сек, '+animation+'. Добавь другие или сохрани маршрут.');
+    return true;
+   }catch(err){
+    this.routeMessage('Ошибка остановки: '+err.message);return false;
+   }
+  }
+  clearRouteDrawing(){
+   const draft=this.routeDraft;if(!draft)return false;
+   if(draft.mode==='draw')draft.raw=[];
+   draft.markers=[];
+   draft.pointerId=null;
+   draft.tool=draft.mode==='draw'?'draw':'stop';
+   this.setRouteTool(draft.tool);this.drawRoute(draft.id);
+   this.routeMessage(draft.mode==='draw'?'Рисунок очищен. Нарисуй новый маршрут.':
+    'Все остановки сняты; старые точки маршрута остались.');
+   return true;
+  }
+  saveRouteDrawing(){
+   const draft=this.routeDraft;if(!draft)return false;
+   let points,stops;
+   try{
+    points=draft.mode==='draw'?Path.fromStroke(draft.raw):draft.points;
+    if(points.length<2)throw Error('Нужно нарисовать минимум две точки');
+    stops=Path.stopsFromMarkers(points,draft.markers);
+   }catch(err){this.routeMessage(err.message);return false}
+   const ok=this.editEntity(draft.id,({character})=>{
+    const ai=PhoenixAI.normalize(character.ai);
+    const mode=['patrol','patrol-aggro'].includes(ai.mode)?ai.mode:'patrol';
+    return {character:{...character,ai:{
+     ...ai,mode,waypoints:points,stops,
+     routeMode:draft.mode==='draw'?'drawn':(ai.routeMode||'points')}}};
+   });
+   if(!ok){
+    this.routeMessage('Не удалось сохранить маршрут. Попробуй ещё раз.');
+    return false;
+   }
+   this.cancelRouteDrawing();
+   this.status('✅ Маршрут: '+points.length+' точек, '+stops.length+
+    ' остановок. Камера свободна. Для записи проекта нажми верхнюю 💾 Сохранить.');
+   return true;
+  }
+  cancelRouteDrawing(){
+   const draft=this.routeDraft;
+   if(!draft)return false;
+   this.routeDraft=null;
+   if(draft.pointerId!==null&&this.b.canvas?.hasPointerCapture?.(draft.pointerId))
+    this.b.canvas.releasePointerCapture?.(draft.pointerId);
+   this.b.controls.enabled=draft.previousEnabled;
+   if(this.b.canvas?.style)
+    this.b.canvas.style.touchAction=draft.previousTouchAction;
+   const dock=this.el('phoenixRouteDock');if(dock)dock.hidden=true;
+   this.panel.hidden=false;
+   this.drawRoute(draft.id);
+   return true;
+  }
   drawRoute(id){
    for(const child of [...this.routeHelper.children]){
     child.geometry?.dispose();child.material?.dispose();
