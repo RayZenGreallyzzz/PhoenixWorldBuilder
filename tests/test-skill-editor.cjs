@@ -31,6 +31,8 @@ const ids=['phoenixSkillLayer','phoenixSkillEditor','phoenixSkillSelect',
  'btnPhoenixReload','btnPhoenixJump','btnPhoenixCrouch',
  'btnPhoenixSkills','btnSkillClose','btnSkillSave','btnSkillReset',
  'phoenixSkillPreset','btnSkillApplyPreset',
+ 'phoenixSkillImageFile','phoenixSkillImagePreview',
+ 'btnSkillImagePick','btnSkillImageRemove',
  'phoenixCombatNotice'];
 const elements=Object.fromEntries(ids.map(id=>[id,new E(id)]));
 const doc={body:new E('body'),getElementById:id=>elements[id]||null,
@@ -88,12 +90,12 @@ restored.loadFromProject(alternate);
 assert.equal(restored.serialize().slots[1].x,50);
 restored.loadFromProject({version:999,slots:[]});
 assert.deepEqual(restored.serialize(),stored,'Invalid project UI must preserve device preference');
-elements.phoenixSkillPreset.value='wild-rift';
+elements.phoenixSkillPreset.value='moba';
 elements.btnSkillApplyPreset.listeners.click();
 assert.equal(restored.serialize().version,3);
 assert.equal(restored.serialize().slots.length,13);
-assert.equal(restored.serialize().slots[2].label,'Q');
-assert.equal(restored.serialize().slots[5].label,'R · УЛЬТА');
+assert.equal(restored.serialize().slots[2].label,'УМЕНИЕ 1');
+assert.equal(restored.serialize().slots[5].label,'УЛЬТА');
 assert.equal(restored.serialize().slots[5].enabled,true);
 assert.equal(elements.phoenixSkillLayer.hidden,true,'Outside EDIT/PLAY, HUD layer must remain hidden');
 restored.open();
@@ -102,7 +104,7 @@ restored.save();
 restored.close();
 restored.setPlaying(true);
 assert.equal(elements.btnPhoenixUltimate.hidden,false,'Enabled MOBA ultimate must show in PLAY');
-assert.equal(elements.btnPhoenixSlot5.hidden,false,'Wild Rift third skill must show in PLAY');
+assert.equal(elements.btnPhoenixSlot5.hidden,false,'MOBA third skill must show in PLAY');
 restored.setPlaying(false);
 // Switching genres must not replace the scene, just the authored HUD.
 restored.applyPreset('mmorpg');
@@ -122,7 +124,7 @@ elements.btnPhoenixFire.listeners.click();
 assert.equal(builder.playBridge.shots,1,'Shooter fire must dispatch real weapon input');
 assert.equal(elements.btnPhoenixSlot7.hidden,true,'MMO actions hidden in shooter PLAY');
 restored.setPlaying(false);
-const earlier={version:2,slots:schema.presetLayout('wild-rift').slots.slice(0,6)};
+const earlier={version:2,slots:schema.presetLayout('moba').slots.slice(0,6)};
 earlier.slots[0]={...earlier.slots[0],x:71};
 settings.set('phoenix-engine-skill-hud-v1',JSON.stringify(earlier));
 const migratedEditor=new Editor(builder,doc);
@@ -130,4 +132,18 @@ assert.equal(migratedEditor.serialize().version,3);
 assert.equal(migratedEditor.serialize().slots[0].x,71,
  'Old 0.8 HUD position must migrate without resetting custom values');
 assert.equal(migratedEditor.serialize().slots.length,13);
-console.log('PASS: MOBA/MMO/Shooter HUD finger-drag, display, placeholders and safe 0.8 migration');
+const validPng='data:image/png;base64,'+
+ Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]).toString('base64');
+migratedEditor.layout=schema.update(migratedEditor.layout,'attack',{image:validPng});
+migratedEditor.loadForm();migratedEditor.render();
+assert.equal(elements.phoenixSkillImagePreview.src,validPng);
+assert.equal(elements.phoenixSkillImagePreview.hidden,false);
+assert.equal(elements.btnPhoenixAttack.children[0].src,validPng,
+ 'Rendered HUD button must show embedded PNG instead of emoji');
+migratedEditor.save();
+assert.equal(JSON.parse(settings.get('phoenix-engine-skill-hud-v1')).slots[0].image,
+ validPng,'Device saved HUD must persist embedded image');
+migratedEditor.removeImage();
+assert.equal(migratedEditor.layout.slots[0].image,'');
+assert.equal(elements.phoenixSkillImagePreview.hidden,true);
+console.log('PASS: MOBA/MMO/Shooter + PNG HUD finger-drag, display, placeholders and safe 0.8 migration');
