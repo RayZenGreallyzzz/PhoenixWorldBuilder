@@ -1,4 +1,4 @@
-/* Phoenix Skill HUD Editor 0.9 — configurable mobile UI for MOBA/MMO/Shooter.
+/* Phoenix Skill HUD Editor 1.1 — MOBA-style visual control layout and PNG/WebP picker.
  * Independent of 3D objects and renderer; project JSON + local preferences.
  */
 (function(root,factory){
@@ -26,6 +26,7 @@
    if(!this.layer||!this.panel||!this.select)
     throw new Error('Missing Skill HUD editor UI');
    this.buttons={};this.drag=null;this.editing=false;this.playing=false;
+   this.imageRequestToken=0;
    this.layout=this.restoreLocal();
    for(const id of this.schema.IDS){
     const btn=this.get(BUTTONS[id]);
@@ -56,6 +57,14 @@
    this.get('btnSkillClose')?.addEventListener('click',()=>this.close());
    this.get('btnSkillSave')?.addEventListener('click',()=>this.save());
    this.get('btnSkillReset')?.addEventListener('click',()=>this.reset());
+   const imageInput=this.get('phoenixSkillImageFile');
+   this.get('btnSkillImagePick')?.addEventListener('click',()=>{
+    if(imageInput){imageInput.value='';imageInput.click();}
+   });
+   imageInput?.addEventListener('change',()=>{
+    if(imageInput.files?.[0])this.importImage(imageInput.files[0]);
+   });
+   this.get('btnSkillImageRemove')?.addEventListener('click',()=>this.removeImage());
    this.get('btnSkillApplyPreset')?.addEventListener('click',()=>this.applyPreset(
     this.get('phoenixSkillPreset').value));
    this.select.addEventListener('change',()=>this.loadForm());
@@ -86,6 +95,8 @@
    };
    for(const [key,value] of Object.entries(values))this.get(key).value=value;
    this.get('phoenixSkillEnabled').checked=s.enabled;
+   const preview=this.get('phoenixSkillImagePreview');
+   if(preview){preview.hidden=!s.image;preview.src=s.image||'';}
    this.describe();
   }
   describe(message){
@@ -108,6 +119,23 @@
     crouch:'🧎 Присесть — пока кнопка интерфейса, без действия.'
    };
    node.textContent=message||'Перетаскивай кнопку пальцем. '+functionality[id];
+  }
+  async importImage(file){
+   const slot=this.current().id,token=++this.imageRequestToken;
+   try{
+    const image=await globalThis.PhoenixSkillImages.fromFile(file,this.doc);
+    if(token!==this.imageRequestToken||slot!==this.current().id)return false;
+    this.layout=this.schema.update(this.layout,slot,{image,enabled:true});
+    this.loadForm();this.render();
+    this.describe('🖼 Картинка загружена. Нажми «Сохранить раскладку».');
+    return true;
+   }catch(error){this.describe('Не удалось загрузить PNG/WebP: '+error.message);return false;}
+  }
+  removeImage(){
+   this.imageRequestToken++;
+   this.layout=this.schema.update(this.layout,this.current().id,{image:''});
+   this.loadForm();this.render();
+   this.describe('Картинка удалена. Нажми «Сохранить раскладку».');
   }
   updateFromForm(){
    const id=this.current().id;
@@ -184,8 +212,15 @@
     button.classList.toggle('phoenixSkillDisabled',!s.enabled);
     button.classList.toggle('phoenixSkillSelected',this.editing&&this.select.value===s.id);
     button.setAttribute('aria-label',s.label+' — '+s.id);
-    const icon=this.doc.createElement('span');
-    icon.className='phoenixSkillIcon';icon.textContent=s.icon;
+    const icon=this.doc.createElement(s.image?'img':'span');
+    if(s.image){
+     icon.className='phoenixSkillPicture';
+     icon.src=s.image;
+     icon.alt='';
+     icon.draggable=false;
+    }else{
+     icon.className='phoenixSkillIcon';icon.textContent=s.icon;
+    }
     const label=this.doc.createElement('small');
     label.className='phoenixSkillCaption';label.textContent=s.label;
     button.replaceChildren(icon,label);
@@ -213,11 +248,16 @@
   }
   applyPreset(name){
    // Only changes the HUD layout; saving remains explicit and user-controlled.
+   // Layout preset changes button positions but never destroys imported icons.
+   const existingImages=new Map(this.layout.slots.map(s=>[s.id,s.image]));
    this.layout=this.schema.presetLayout(name);
+   this.layout.slots=this.layout.slots.map(s=>({
+    ...s,image:existingImages.get(s.id)||''
+   }));
    this.loadForm();this.render();
    this.describe('✅ Раскладка '+(
-    name==='mobile-legends'?'Mobile Legends':name==='wild-rift'?'Wild Rift':
-    name==='mmorpg'?'MMORPG':name==='shooter'?'Шутер':'Классическая'
+    name==='moba'?'MOBA':name==='mmorpg'?'MMORPG':
+    name==='shooter'?'Шутер':'Классическая'
    )+' применена. Подстрой пальцем и нажми «Сохранить раскладку».');
    return this.serialize();
   }
