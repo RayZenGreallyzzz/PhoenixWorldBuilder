@@ -775,3 +775,7 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
  max-height:45dvh;font-size:11px;padding:8px;gap:4px}#phoenixMobCard .phoenixMobCardTitle strong{font-size:13px}}
 #phoenixPrefabPanel #phoenixPrefabRespawnEnabled{align-self:flex-start}
 #phoenixPrefabPanel #phoenixEntityNickname{width:100%}
+
+/* Manual-save workflow: lightweight unsaved marker, no background writes. */
+#btnSave.phoenixUnsaved{border-color:#ffc56a;box-shadow:inset 0 0 0 1px #ffc56a}
+#btnSave.phoenixUnsaved::after{content:' ●';color:#ffc56a;font-size:13px}
