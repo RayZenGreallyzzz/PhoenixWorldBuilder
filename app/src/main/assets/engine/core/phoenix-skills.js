@@ -1,4 +1,4 @@
-/* Phoenix Engine 1.0: safe per-character MMO skill definitions + MP runtime.
+/* Phoenix Engine 1.1: per-character skills with bounded PNG/WebP icons + MP runtime.
  * No dynamic code execution, Three.js, UI or timers. Snapshots survive JSON export.
  */
 (function(root,factory){
@@ -28,6 +28,10 @@
    raw.description.trim():'';
   if([...description].length>400)throw new TypeError('Invalid description');
   const icon=text(raw.icon||'✨',8,'icon');
+  const imageHelper=(typeof globalThis!=='undefined'&&globalThis.PhoenixSkillImages)||
+   (typeof require==='function'?require('./phoenix-skill-images.js'):null);
+  if(!imageHelper)throw new Error('Phoenix Skill Images module required');
+  const iconImage=imageHelper.validate(raw.iconImage);
   const type=raw.type||'damage';
   if(!['damage','heal'].includes(type))throw new TypeError('Invalid effect type');
   const maxLevel=number(raw.maxLevel??5,1,20,'maxLevel');
@@ -37,7 +41,7 @@
   const animation=raw.animation||'cast';
   if(typeof animation!=='string'||[...animation].length>80)
    throw new TypeError('Invalid animation');
-  return {name,description,icon,type,level,maxLevel,
+  return {name,description,icon,iconImage,type,level,maxLevel,
    basePower:number(raw.basePower??30,0,1000000,'basePower'),
    growth:number(raw.growth??10,0,1000000,'growth'),
    manaCost:number(raw.manaCost??15,0,10000,'manaCost'),
@@ -46,6 +50,12 @@
  }
  function power(def){const valid=skill(def);return valid.basePower+(valid.level-1)*valid.growth;}
  function json(v){return JSON.parse(JSON.stringify(v));}
+ function totalImageSize(entries){
+  let total=0;
+  for(const row of entries.values())
+   for(const ability of Object.values(row))total+=(ability.iconImage||'').length;
+  return total;
+ }
  class Catalog{
   constructor(){this._entries=new Map();}
   get(character,slot){
@@ -58,7 +68,9 @@
     throw new TypeError('Invalid character or skill slot');
    const validated=skill(definition);
    const row={...(this._entries.get(character)||{}),[slot]:validated};
-   this._entries.set(character,row);return validated;
+   const next=new Map(this._entries);next.set(character,row);
+   if(totalImageSize(next)>4000000)throw new RangeError('Too many embedded skill images');
+   this._entries=next;return validated;
   }
   remove(character,slot){
    const row=this._entries.get(character);if(!row||!SLOTS.includes(slot))return false;
@@ -83,6 +95,7 @@
     }
     next.set(entry.id,row);
    }
+   if(totalImageSize(next)>4000000)throw new RangeError('Too many embedded skill images');
    this._entries=next;
   }
  }
