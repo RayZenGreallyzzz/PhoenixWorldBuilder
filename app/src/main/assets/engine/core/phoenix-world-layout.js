@@ -85,16 +85,19 @@
    (typeof require==='function'?require('./phoenix-terrain-splat.js'):null);
   if(!painter)throw new Error('Terrain splat module missing');
   painter.checkEntries(paintMasks,s);
-  return {version:VERSION,...s,tiles,heights,paintMasks:paintMasks.map(v=>({
+  const textureScale=d.textureScale===undefined?4:Number(d.textureScale);
+  if(!Number.isFinite(textureScale)||textureScale<1||textureScale>32)
+   throw new TypeError('Размер повторения текстуры от 1 до 32 м');
+  return {version:VERSION,...s,textureScale,tiles,heights,paintMasks:paintMasks.map(v=>({
    col:v.col,row:v.row,imageId:v.imageId,mask:v.mask
   }))};
  }
  function plain(){
-  return {version:VERSION,width:500,depth:500,tileSize:50,tiles:[],heights:[],paintMasks:[]};
+  return {version:VERSION,width:500,depth:500,tileSize:50,textureScale:4,tiles:[],heights:[],paintMasks:[]};
  }
  function legacy(){
   // Old UV44 projects have an exactly 128×128 metre ground.
-  return {version:VERSION,width:128,depth:128,tileSize:50,tiles:[],heights:[],paintMasks:[]};
+  return {version:VERSION,width:128,depth:128,tileSize:50,textureScale:4,tiles:[],heights:[],paintMasks:[]};
  }
  function paint(raw,x,z,style){
   const state=validate(raw);
