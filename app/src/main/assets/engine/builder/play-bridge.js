@@ -174,13 +174,17 @@
     this.createMobTags();this.selectMob('');
     b.skillEditor?.setPlaying(true);
     b.skillDefinitionEditor?.startPlay();
-    if(this.weapon&&typeof PhoenixWeapon!=='undefined')
-     this.weapon=new PhoenixWeapon.Session({
+    if(this.weapon&&typeof PhoenixWeapon!=='undefined'){
+     // Preserve older shooter-HUD weapon stats for existing projects.
+     // The new profile configures the gun only when ranged style is selected.
+     this.weapon=new PhoenixWeapon.Session(this.playerCombat.mode==='ranged'?{
       magazineSize:this.playerCombat.magazineSize,
       reserveCapacity:this.playerCombat.reserveCapacity,
       damage:this.playerCombat.damage,range:this.playerCombat.range,
       fireInterval:this.playerCombat.cooldown,
-      reloadDuration:this.playerCombat.reloadDuration});
+      reloadDuration:this.playerCombat.reloadDuration
+     }:{});
+    }
     this.ammoSignature='';
     this.healReadyAt=0;
     if(this.combatHud)this.combatHud.hidden=false;
