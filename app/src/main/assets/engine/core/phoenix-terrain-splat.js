@@ -11,12 +11,34 @@
  if(root)root.PhoenixTerrainSplat=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const PATCH=50,RES=64,COUNT=RES*RES;
+ const PATCH=50,RES=64,DETAIL_RES=512,COUNT=RES*RES;
+ // Legacy masks stay 64px. Micro-brush (<1m) promotes ONLY touched
+ // patches to 512px (~9.8cm/pixel), not the full 5x5km landscape.
  const ID=/^texture:[a-zA-Z0-9._:-]{1,120}$/;
  const has=(object,key)=>Object.prototype.hasOwnProperty.call(object,key);
+ function validResolution(res){
+  if(res!==RES&&res!==DETAIL_RES)
+   throw new TypeError('Invalid terrain paint mask resolution');
+  return res;
+ }
+ function resolutionOf(bytes){
+  if(!(bytes instanceof Uint8Array))throw new TypeError('Invalid terrain paint mask');
+  const res=Math.sqrt(bytes.length);
+  return validResolution(res);
+ }
+ function promote(bytes){
+  if(resolutionOf(bytes)===DETAIL_RES)return bytes;
+  const out=new Uint8Array(DETAIL_RES*DETAIL_RES);
+  const factor=DETAIL_RES/RES;
+  for(let y=0;y<DETAIL_RES;y++){
+   const fromY=Math.floor(y/factor)*RES, toY=y*DETAIL_RES;
+   for(let x=0;x<DETAIL_RES;x++)
+    out[toY+x]=bytes[fromY+Math.floor(x/factor)];
+  }
+  return out;
+ }
  function encode(bytes){
-  if(!(bytes instanceof Uint8Array)||bytes.length!==COUNT)
-   throw new TypeError('Invalid terrain paint mask');
+  resolutionOf(bytes);
   const output=[];
   for(let i=0;i<bytes.length;){
    const val=bytes[i];let repeat=1;
@@ -28,20 +50,22 @@
    result+=String.fromCharCode(...output.slice(i,i+8192));
   return btoa(result);
  }
- function decode(text){
+ function decode(text,res=RES){
+  validResolution(res);
+  const size=res*res;
   if(typeof text!=='string'||!text.length||
-     text.length>COUNT*4||!/^[a-zA-Z0-9+/]+={0,2}$/.test(text))
+     text.length>size*4||!/^[a-zA-Z0-9+/]+={0,2}$/.test(text))
    throw new TypeError('Invalid terrain paint mask encoding');
   const packed=atob(text);
-  if(packed.length<2||packed.length%2!==0||packed.length>COUNT*2)
+  if(packed.length<2||packed.length%2!==0||packed.length>size*2)
    throw new TypeError('Invalid terrain paint mask runs');
-  const bytes=new Uint8Array(COUNT);let written=0;
+  const bytes=new Uint8Array(size);let written=0;
   for(let i=0;i<packed.length;i+=2){
    const n=packed.charCodeAt(i),v=packed.charCodeAt(i+1);
-   if(!n||written+n>COUNT)throw new TypeError('Invalid terrain paint mask length');
+   if(!n||written+n>size)throw new TypeError('Invalid terrain paint mask length');
    bytes.fill(v,written,written+n);written+=n;
   }
-  if(written!==COUNT)throw new TypeError('Incomplete terrain paint mask');
+  if(written!==size)throw new TypeError('Incomplete terrain paint mask');
   return bytes;
  }
  function validId(id){
@@ -67,7 +91,8 @@
    const id=validId(item.imageId),key=item.col+':'+item.row+':'+id;
    if(seen.has(key))throw new TypeError('Duplicate terrain paint mask');
    seen.add(key);
-   decode(item.mask);
+   validResolution(item.resolution===undefined?RES:item.resolution);
+   decode(item.mask,item.resolution??RES);
   }
   return entries;
  }
@@ -86,7 +111,8 @@
    for(const entry of entries){
     const key=entry.col+':'+entry.row;
     if(!this.patches.has(key))this.patches.set(key,new Map());
-    this.patches.get(key).set(entry.imageId,decode(entry.mask));
+    this.patches.get(key).set(entry.imageId,
+     decode(entry.mask,entry.resolution??RES));
    }
   }
   serialize(){
@@ -94,7 +120,11 @@
    for(const [key,layers] of this.patches){
     const [col,row]=key.split(':').map(Number);
     for(const [imageId,mask] of layers){
-     if(mask.some(v=>v!==0))result.push({col,row,imageId,mask:encode(mask)});
+     if(mask.some(v=>v!==0)){
+      const resolution=resolutionOf(mask);
+      result.push({col,row,imageId,mask:encode(mask),
+       ...(resolution!==RES?{resolution}:{})});
+     }
     }
    }
    return result.sort((a,b)=>a.row-b.row||a.col-b.col||
@@ -110,7 +140,7 @@
   paint(x,z,radius,imageId,opacity=1,erase=false,softness=.65){
    if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(radius)||
       !Number.isFinite(opacity)||!Number.isFinite(softness)||
-      softness<0||softness>1||radius<.3||radius>250||opacity<=0||opacity>1)
+      softness<0||softness>1||radius<.2||radius>50||opacity<=0||opacity>1)
     throw new TypeError('Invalid round texture brush settings');
    if(!erase)validId(imageId);
    if(x<-this.world.width/2-radius||x>this.world.width/2+radius||
@@ -124,26 +154,35 @@
    const changed=new Set();
    for(let row=minRow;row<=maxRow;row++)for(let col=minCol;col<=maxCol;col++){
     const rect=bounds(this.world,col,row),key=rect.key;
-    const nx=Math.max(0,Math.floor((x-radius-rect.x)/rect.width*RES));
-    const xx=Math.min(RES-1,Math.ceil((x+radius-rect.x)/rect.width*RES));
-    const nz=Math.max(0,Math.floor((z-radius-rect.z)/rect.depth*RES));
-    const zz=Math.min(RES-1,Math.ceil((z+radius-rect.z)/rect.depth*RES));
-    if(nx>xx||nz>zz)continue;
     let layers=this.patches.get(key);
     if(!layers){
      if(erase)continue;
      layers=new Map();this.patches.set(key,layers);
     }
+    // Raise mask detail only where user actually paints below 1m.
+    // A 20cm radius gets a few pixels across, while large-area masks
+    // remain low-resolution and economical on Android.
+    const wanted=radius<1?DETAIL_RES:RES;
+    const current=Math.max(RES,...[...layers.values()].map(resolutionOf));
+    const resolution=Math.max(wanted,current);
+    if(current<resolution){
+     for(const [id,mask] of layers)layers.set(id,promote(mask));
+    }
+    const nx=Math.max(0,Math.floor((x-radius-rect.x)/rect.width*resolution));
+    const xx=Math.min(resolution-1,Math.ceil((x+radius-rect.x)/rect.width*resolution));
+    const nz=Math.max(0,Math.floor((z-radius-rect.z)/rect.depth*resolution));
+    const zz=Math.min(resolution-1,Math.ceil((z+radius-rect.z)/rect.depth*resolution));
+    if(nx>xx||nz>zz)continue;
     let target;
     if(!erase){
      target=layers.get(imageId);
-     if(!target){target=new Uint8Array(COUNT);layers.set(imageId,target)}
+     if(!target){target=new Uint8Array(resolution*resolution);layers.set(imageId,target)}
     }
     let isChanged=false;
     for(let py=nz;py<=zz;py++){
-     const worldZ=rect.z+(py+.5)*rect.depth/RES;
+     const worldZ=rect.z+(py+.5)*rect.depth/resolution;
      for(let px=nx;px<=xx;px++){
-      const worldX=rect.x+(px+.5)*rect.width/RES;
+      const worldX=rect.x+(px+.5)*rect.width/resolution;
       const norm2=((worldX-x)**2+(worldZ-z)**2)/(radius*radius);
       if(norm2>=1)continue;
       // Feathered circular pencil/marker edge, not a painted square.
@@ -151,7 +190,7 @@
       const falloff=dist<=inner?1:
        Math.max(0,(1-dist)/Math.max(.001,softness));
       const alpha=Math.min(1,falloff*falloff*(3-2*falloff)*opacity);
-      const index=py*RES+px;
+      const index=py*resolution+px;
       for(const [layerId,mask] of layers){
        const old=mask[index];
        const value=layerId===imageId&&!erase?
@@ -168,6 +207,6 @@
    return [...changed];
   }
  }
- return Object.freeze({PATCH,RES,COUNT,encode,decode,validId,
+ return Object.freeze({PATCH,RES,DETAIL_RES,COUNT,encode,decode,validResolution,resolutionOf,validId,
   bounds,intersects,checkEntries,Painter});
 });
