@@ -105,6 +105,7 @@ jobs:
             node tests/test-phoenix-player-combat.cjs
             node tests/test-editor-mode-isolation.cjs
           node --test server/tests/room.test.mjs
+          node tests/test-phoenix-network.cjs
           fi
 
       - name: Configure Java 17
