@@ -231,6 +231,7 @@ class CleanBuilder{
   this.camera.aspect=b.width/b.height;this.camera.updateProjectionMatrix();
  }
  setDefaultAvatar(){
+  this.avatarAssetId='';this.avatarFileName='';
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarRoot=null;this.avatarGroundY=0;this.avatarGroundTimer=0;
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
@@ -260,10 +261,11 @@ class CleanBuilder{
   this.player.updateMatrixWorld(true);
   return fit;
  }
- async importAvatar(file){
-  if(!file)return;
+ async importAvatar(file,{storedId='',restore=false}={}){
+  if(!file)return false;
   try{
-   const scene=ModelFormats.ext(file.name)==='glb'?
+   const sourceType=ModelFormats.ext(file.name);
+   const scene=sourceType==='glb'?
     await GLB.load(file):await ModelFormats.parse(file);
    AndroidAssetOpt.optimize(scene.root,this.optimizationQuality);
    const root=THREE.SkeletonUtils?.clone?
@@ -291,10 +293,51 @@ class CleanBuilder{
    // may follow the current sole position to prevent floating.
    this.refreshAvatarFeet(true);
    this.player.updateWorldMatrix(true,true);
-   notify('Персонаж подогнан: '+safeName(file.name)+
-    ' — высота '+Math.round(metrics.size.y*fit.uniform*100)+
-    ' см (с учётом скелета и анимации)','success');
-  }catch(err){console.error(err);this.setDefaultAvatar();notify('Ошибка персонажа: '+err.message,'error')}
+   if(restore){
+    this.avatarAssetId=storedId;this.avatarFileName=safeName(file.name);
+   }else if(sourceType==='glb'){
+    // The avatar was previously only an in-memory scene root. Cache the
+    // original unmodified GLB once and save its reference in project JSON.
+    const id='glb:avatar:'+Date.now().toString(36)+'-'+
+     Math.random().toString(36).slice(2,9);
+    try{
+     await putAsset(id,await file.arrayBuffer());
+     this.avatarAssetId=id;this.avatarFileName=safeName(file.name);
+     if(!this.save())throw Error('Не удалось сохранить проект');
+    }catch(error){
+     this.avatarAssetId='';this.avatarFileName='';
+     notify('⚠ Персонаж загружен, но НЕ сохранён: '+error.message,'warn');
+     return false;
+    }
+   }else{
+    this.avatarAssetId='';this.avatarFileName='';
+    notify('⚠ FBX работает в памяти. Для постоянного сохранения импортируй GLB.','warn');
+    return false;
+   }
+   notify('✅ Персонаж '+safeName(file.name)+' сохранён в проекте'+
+    ' · '+Math.round(metrics.size.y*fit.uniform*100)+' см','success');
+   return true;
+  }catch(err){
+   console.error(err);this.setDefaultAvatar();
+   notify('Ошибка персонажа: '+err.message,'error');return false;
+  }
+ }
+ async restoreAvatarFromProject(doc){
+  if(!doc?.assetId){
+   if(this.avatarAssetId)this.setDefaultAvatar();
+   return true;
+  }
+  if(typeof doc.assetId!=='string'||!/^glb:avatar:[a-zA-Z0-9._-]{1,140}$/.test(doc.assetId))
+   throw Error('Некорректная ссылка на GLB персонажа');
+  this.applyAvatarHeight(doc.heightCm??175);
+  if(this.avatarAssetId===doc.assetId&&this.avatarRoot)return true;
+  const buffer=await getAsset(doc.assetId);
+  if(!buffer)throw Error('Не найден сохранённый GLB персонажа '+doc.assetId+
+   '. Открой переносимую резервную копию с моделями.');
+  const name=String(doc.fileName||'Player.glb').replace(/[^a-zA-Zа-яА-Я0-9._-]/g,'_');
+  const file=new File([buffer],/\.glb$/i.test(name)?name:name+'.glb',
+   {type:'model/gltf-binary'});
+  return this.importAvatar(file,{storedId:doc.assetId,restore:true});
  }
 
  // The physics solver keeps the PLAYER on actual floors/steps while
@@ -4217,6 +4260,10 @@ class CleanBuilder{
     const item=this.encode(obj);item.rot=obj.root.rotation.y;return item;
    }),floor:this.floor,nextId:this.nextId,
     phoenixGame:this.prefabEditor?.serialize()||null,
+    avatar:this.avatarAssetId?{
+     assetId:this.avatarAssetId,fileName:this.avatarFileName||'Player.glb',
+     heightCm:this.avatarHeightCm
+    }:null,
     worldCanvas:this.worldEditor?.serialize()||null,
     decals:SurfaceDecals.normalize(this.decals),
     textureLibrary:this.textureFiles.map(t=>({
@@ -4269,14 +4316,18 @@ class CleanBuilder{
    notify('Ошибка GLB: '+(err?.message||err),'error')}
  }
  async exportBackup(){
-  if(!this.entries.length&&!this.textureFiles.length&&!this.prefabEditor?.hasContent())
+  if(!this.entries.length&&!this.textureFiles.length&&
+     !this.prefabEditor?.hasContent()&&!this.avatarAssetId)
    return notify('В проекте ещё нет модулей, текстур или игровых объектов','warn');
   try{
    notify('📁 Собираю редактируемый проект вместе с изображениями и GLB...','neutral');
     const installed=[...this.assets.keys(),...this.catalogMeta.keys()]
      .filter(id=>!bundledModules.has(id));
+    const usedMobs=this.prefabEditor?.registry.list()
+     .map(p=>p.assetId).filter(Boolean)||[];
     await PhoenixFiles.savePortableProject(this.project(),this.textureFiles,
-     [...new Set([...this.entries.map(o=>o.kind),...installed])],
+     [...new Set([...this.entries.map(o=>o.kind),...installed,
+      ...usedMobs,...(this.avatarAssetId?[this.avatarAssetId]:[])])],
     id=>getAsset(id),'PhoenixBuilder_Project.phoenix.json');
    notify('📁 Резервная копия готова: выбери папку. Внутри текстуры и импортированные модели','success');
   }catch(err){console.error('Project backup',err);
@@ -4530,6 +4581,12 @@ class CleanBuilder{
     notify('Дом открыт, но игровые объекты в JSON повреждены: '+err.message,'warn');
    }
   }
+  try{await this.restoreAvatarFromProject(doc.avatar||null)}
+  catch(err){
+   console.warn('Avatar GLB recovery failed:',err);
+   this.setDefaultAvatar();
+   notify('⚠ Персонаж не восстановлен: '+err.message,'warn');
+  }
   // World and brush edits use the SAME Builder project history as
   // construction; legacy UV44 JSON stays on its original 128m canvas.
   this.worldEditor?.loadFromProject(doc.worldCanvas||null,{preserveUI});
@@ -4731,6 +4788,7 @@ class CleanBuilder{
     'success');
   };
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
+  $('avatarHeight').onchange=()=>{if(this.avatarAssetId)this.save()};
   $('enableCollisions').onchange=e=>{
    this.collisionsEnabled=e.target.checked;
    localStorage.setItem('phoenix-builder-collisions',this.collisionsEnabled?'on':'off');
@@ -5086,7 +5144,9 @@ class CleanBuilder{
    if(!start||e.pointerId!==start.pointerId||e.isPrimary===false)return;
    this.pointerStart=null;
    if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)return;
-   if(this.prefabEditor?.pendingPlace){this.prefabEditor.placeFromEvent(e);return}
+   if(this.prefabEditor?.pendingPlace||this.prefabEditor?.pendingWaypointId){
+    this.prefabEditor.placeFromEvent(e);return;
+   }
    if(this.shapeSourceMode){this.shapeSourceAt(e);return}
    if(this.decalPickMode){this.placeDecalAt(e);return}
    if(this.surfaceSidePick&&this.libraryTab==='textures'){
