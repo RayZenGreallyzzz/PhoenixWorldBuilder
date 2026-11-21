@@ -243,6 +243,7 @@
  <label>Idle<input id="phoenixPrefabIdle" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
  <label>Walk<input id="phoenixPrefabWalk" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
  <label>Attack<input id="phoenixPrefabAttack" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
+ <label>⚔ Выбрать Attack из анимаций GLB (без ввода имени)<select id="phoenixPrefabAttackClip"><option value="">Автоматически по имени клипа</option></select></label>
  <div class="phoenixPrefabRow">
  <label>Run<input id="phoenixPrefabRun" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Run"></label>
  <label>Hit<input id="phoenixPrefabHit" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Hit"></label></div>
@@ -464,6 +465,8 @@
  <summary>🧍 Загрузить и настроить персонажа</summary>
  <div class="drawerFoldBody"><label class="fileButton ghostButton">🧍 GLB или FBX (со скелетом)<input id="importAvatar" type="file" accept=".glb,.fbx,model/gltf-binary" hidden></label>
    <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
+   <label>⚔ Анимация атаки персонажа<select id="avatarAttackClip"><option value="">Автоматически из GLB</option></select></label>
+   <small class="tip">После импорта GLB выбери точную Attack-анимацию из списка. Выбор сохраняется вместе с персонажем в проекте.</small>
    <button id="btnResetCharacterView" type="button" class="alt">📷 Нормальный вид персонажа (сбросить приближение)</button>
    <button id="btnGroundAvatar" type="button" class="alt">🦶 Поставить ноги на пол</button>
    <small class="tip">Если после приближения кажется, что персонаж огромный — эта кнопка отдалит камеру, не меняя размер модели. При импорте скелетного GLB рост теперь считается по видимой анимационной позе. Ступни автоматически подстраиваются к поверхности при ходьбе, без изменения роста.</small>
