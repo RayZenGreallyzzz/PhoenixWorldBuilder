@@ -80,14 +80,21 @@
    if(Math.abs(h)>=.005)heights.push([i,j,Math.round(h*100)/100]);
   }
   heights.sort((a,b)=>a[1]-b[1]||a[0]-b[0]);
-  return {version:VERSION,...s,tiles,heights};
+  const paintMasks=d.paintMasks??[];
+  const painter=(typeof globalThis!=='undefined'&&globalThis.PhoenixTerrainSplat)||
+   (typeof require==='function'?require('./phoenix-terrain-splat.js'):null);
+  if(!painter)throw new Error('Terrain splat module missing');
+  painter.checkEntries(paintMasks,s);
+  return {version:VERSION,...s,tiles,heights,paintMasks:paintMasks.map(v=>({
+   col:v.col,row:v.row,imageId:v.imageId,mask:v.mask
+  }))};
  }
  function plain(){
-  return {version:VERSION,width:500,depth:500,tileSize:50,tiles:[],heights:[]};
+  return {version:VERSION,width:500,depth:500,tileSize:50,tiles:[],heights:[],paintMasks:[]};
  }
  function legacy(){
   // Old UV44 projects have an exactly 128×128 metre ground.
-  return {version:VERSION,width:128,depth:128,tileSize:50,tiles:[],heights:[]};
+  return {version:VERSION,width:128,depth:128,tileSize:50,tiles:[],heights:[],paintMasks:[]};
  }
  function paint(raw,x,z,style){
   const state=validate(raw);
@@ -111,11 +118,12 @@
  }
  function resize(raw,changes){
   const before=validate(raw),after=settings({...before,...changes});
-  if((before.tiles.length||before.heights.length)&&(
+  if((before.tiles.length||before.heights.length||before.paintMasks.length)&&(
     before.width!==after.width||before.depth!==after.depth||
     before.tileSize!==after.tileSize))
    throw new Error('Сначала очисти ландшафт и рельеф или сохрани копию проекта');
-  return validate({version:VERSION,...after,tiles:before.tiles,heights:before.heights});
+  return validate({version:VERSION,...after,tiles:before.tiles,heights:before.heights,
+   paintMasks:before.paintMasks});
  }
  // Sparse editable height lattice: 5m spacing; only non-zero nodes saved.
  function heightAt(raw,x,z,lookup=null){
