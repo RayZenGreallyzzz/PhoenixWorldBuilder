@@ -457,7 +457,7 @@ class CleanBuilder{
   wrapper.add(root);
   const meta=this.catalogMeta?.get(id);
   this.assets.set(id,{template:wrapper,name:meta?.name||safeName(name),
-   category:meta?.category||category,folder:meta?.folder,
+   category:meta?.category||category,folder:meta?.folder,role:meta?.role||'',
    animations:parsed.animations||[],glbInfo:parsed.info||null,textureStats});
   const used=(parsed.info?.extensions||[]).filter(e=>
    ['EXT_meshopt_compression','KHR_draco_mesh_compression','KHR_texture_basisu'].includes(e));
@@ -533,35 +533,47 @@ class CleanBuilder{
    if(summary.attached)console.info('Phoenix LOD:',obj.kind,summary);
   }).catch(err=>console.warn('LOD skipped for '+obj.kind,err));
  }
- async importGLB(file){
-  if(!file)return;
+ async importGLB(file,options={}){
+  if(!file)return null;
+  const forMob=options?.forMob===true;
   const id='glb:'+Date.now().toString(36)+'-'+file.name.replace(/[^a-zA-Zа-яА-Я0-9._-]/g,'_');
   try{
    const buf=await file.arrayBuffer();
    // Quick import must never silently classify a tree as a wall.
-   const choice=$('importCategory').value;
+   const choice=forMob?'misc':$('importCategory').value;
    const guess=SmartCatalog.classify(file.name);
-   const folder=choice==='auto'?(guess?.folder||'misc'):
+   const folder=forMob?'misc':choice==='auto'?(guess?.folder||'misc'):
     choice==='wall'?'walls':choice==='floor'?'floors':
     choice==='roof'?'roofs':choice==='decor'?'decor':'misc';
-   const category=choice==='auto'?SmartCatalog.category(folder):
+   const category=forMob?'prop':choice==='auto'?SmartCatalog.category(folder):
     choice==='misc'?'prop':choice;
    this.catalogMeta.set(id,{id,name:safeName(file.name),
-    folder,category,path:file.name,source:'GLB',bytes:buf.byteLength});
+    folder,category,path:file.name,source:'GLB',bytes:buf.byteLength,
+    ...(forMob?{role:'mob'}:{})});
    await this.cacheModel(id,buf,category,file.name);
    this.saveCatalogMeta();
-   // Reveal the imported file immediately rather than leaving the user
-   // looking at the Walls folder while the GLB is stored under Decor/Misc.
-   this.smartCatalogFolder=folder;
-   localStorage.setItem('phoenix-builder-catalog-folder-v2',folder);
-   this.renderCatalog();
-   this.selectKind(id);
-   this.prefabEditor?.refreshModels(id);
-   notify('GLB импортирован в «'+SmartCatalog.labels[folder]+'»: '+safeName(file.name)+' · '+
-    $('optimizationStats').textContent+'. Оригинальный файл сохранён.','success');
+   if(forMob){
+    // NPC imports are model assets, never selectable construction previews.
+    // The monster becomes a game entity ONLY via the prefab placement flow.
+    this.prefabEditor?.refreshModels(id);
+    this.prefabEditor?.status('✅ GLB выбран для моба. Настрой параметры, нажми «Сохранить шаблон», затем «Поставить моба».');
+    notify('🧬 GLB загружен для моба: '+safeName(file.name)+
+     '. Строительная установка не включалась.','success');
+   }else{
+    // Legacy construction import still selects the model as a building part.
+    this.smartCatalogFolder=folder;
+    localStorage.setItem('phoenix-builder-catalog-folder-v2',folder);
+    this.renderCatalog();
+    this.selectKind(id);
+    this.prefabEditor?.refreshModels();
+    notify('GLB импортирован в «'+SmartCatalog.labels[folder]+'»: '+safeName(file.name)+' · '+
+     $('optimizationStats').textContent+'. Оригинальный файл сохранён.','success');
+   }
+   return id;
   }catch(err){
    this.catalogMeta.delete(id);this.saveCatalogMeta();
-   console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error')
+   console.error(err);notify('Не удалось импортировать GLB: '+err.message,'error');
+   return null;
   }
  }
  async importOtherModel(file){
@@ -1799,7 +1811,7 @@ class CleanBuilder{
    bundledModules.size.toLocaleString('ru')+' моделей офлайн';
   $('smartCategoryFilter').value=folder;
   $('catalogImportsShortcut').hidden=![...this.catalogMeta.values()].some(
-   meta=>meta.folder==='misc'&&!bundledModules.has(meta.id));
+   meta=>meta.role!=='mob'&&meta.folder==='misc'&&!bundledModules.has(meta.id));
   const shortcuts={structure:'walls',doors:'doors',frames:'frames',
    roofs:'roofs',imports:'misc'};
   for(const button of document.querySelectorAll('#catalogQuick [data-catalog-group]'))
@@ -1818,6 +1830,7 @@ class CleanBuilder{
     folder:builtinFolder,category:base.category,path:base.name,builtin:true});
   }
   for(const [id,asset] of this.assets){
+   if(asset.role==='mob'||this.catalogMeta.get(id)?.role==='mob')continue;
    const guessed=SmartCatalog.classify(asset.name+'.glb');
    models.set(id,{id,kind:id,name:asset.name,category:asset.category,
     folder:asset.folder||guessed?.folder||'my-modules',
@@ -1826,7 +1839,7 @@ class CleanBuilder{
   for(const [id,meta] of bundledModules)
    models.set(id,{...meta,kind:id,builtin:false});
   for(const [id,meta] of this.catalogMeta)
-   models.set(id,{...meta,id,kind:id,builtin:false});
+   if(meta.role!=='mob')models.set(id,{...meta,id,kind:id,builtin:false});
   const entries=[...models.values()];
   const folders=folder==='all'?SmartCatalog.order:[folder];
   for(const category of folders){
@@ -4320,7 +4333,8 @@ class CleanBuilder{
     })),
      catalogLibrary:[...this.catalogMeta.values()].concat(bundledInScene).map(m=>({
      id:m.id,name:m.name,category:m.category,folder:m.folder,
-     path:m.path||'',source:m.source||'ZIP',bytes:m.bytes||0
+     path:m.path||'',source:m.source||'ZIP',bytes:m.bytes||0,
+     ...(m.role==='mob'?{role:'mob'}:{})
     })),created:new Date().toISOString()};
  }
  async exportGLB(){
@@ -4583,7 +4597,8 @@ class CleanBuilder{
      id:meta.id,name:safeName(meta.name),folder:meta.folder,
      category:SmartCatalog.category(meta.folder),
      path:String(meta.path||'').slice(0,260),
-      source:meta.source==='PWB'?'PWB':meta.source==='BAKED'?'BAKED':'ZIP',bytes:Number(meta.bytes)||0
+      source:meta.source==='PWB'?'PWB':meta.source==='BAKED'?'BAKED':'ZIP',bytes:Number(meta.bytes)||0,
+      ...(meta.role==='mob'?{role:'mob'}:{})
     });
     const loaded=this.assets.get(meta.id);
     if(loaded){loaded.name=safeName(meta.name);
