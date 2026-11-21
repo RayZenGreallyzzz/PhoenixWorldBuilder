@@ -6,8 +6,8 @@ android {
         applicationId 'com.phoenix.worldbuilder'
         minSdk 26
         targetSdk 35
-        versionCode 18
-        versionName '1.8.0'
+        versionCode 19
+        versionName '1.9.0'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes {
@@ -16,8 +16,8 @@ android {
         // Initial v0.6 install is separate from older experimental package IDs.
         debug {
             applicationIdSuffix '.engine.stable'
-            versionNameSuffix '-micro-texture-brush'
-            manifestPlaceholders = [appLabel: 'Phoenix Engine 1.8']
+            versionNameSuffix '-npc-save-ai-routes'
+            manifestPlaceholders = [appLabel: 'Phoenix Engine 1.9']
         }
         release {
             minifyEnabled false
