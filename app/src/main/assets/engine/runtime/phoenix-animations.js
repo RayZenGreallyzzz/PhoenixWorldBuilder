@@ -26,6 +26,15 @@
    this.actions=new Map();this.state='';this.action=null;
    this.T=T;
   }
+  available(){
+   // Every original GLB clip is exposed, including clips not automatically
+   // mapped to one of the seven gameplay states.
+   return this.clips.map((clip,index)=>({
+    index,name:clip.name||('Clip '+(index+1)),
+    duration:Number.isFinite(clip.duration)?clip.duration:0,
+    tracks:clip.tracks?.length||0
+   }));
+  }
   resolve(state){
    if(!STATES.includes(state))throw new TypeError('Invalid animation '+state);
    const assigned=this.bindings[state];
@@ -43,25 +52,39 @@
    if(state==='idle')return this.clips[0]||null;
    return null;
   }
+  playClip(name,options={}){
+   if(!this.mixer)return false;
+   const clip=typeof name==='number'?this.clips[name]:
+    this.clips.find(item=>item.name===name);
+   if(!clip)return false;
+   const oneShot=options.once!==false;
+   const fade=Math.max(0,Math.min(.5,Number(options.fade??.12)||0));
+   let action=this.actions.get(clip.uuid);
+   if(!action){action=this.mixer.clipAction(clip);this.actions.set(clip.uuid,action)}
+   const previous=this.action;
+   if(previous&&previous!==action)previous.fadeOut(fade);
+   action.stopFading?.();
+   action.reset();action.enabled=true;action.paused=false;
+   action.setEffectiveWeight?.(1);
+   action.clampWhenFinished=oneShot;
+   action.setLoop(oneShot?this.T.LoopOnce:this.T.LoopRepeat,oneShot?1:Infinity);
+   if(previous&&previous!==action&&fade)action.fadeIn(fade);
+   action.play();
+   this.action=action;
+   this.state=options.state||'custom';
+   return true;
+  }
   setState(state,fade=.18){
    if(this.state===state)return false;
    const clip=this.resolve(state);
    const previous=this.action;
-   this.state=state;
-   if(!this.mixer||!clip){
+   if(!clip||!this.mixer){
+    this.state=state;
     previous?.fadeOut?.(fade);this.action=null;return false;
    }
-   let action=this.actions.get(clip.name);
-   if(!action){action=this.mixer.clipAction(clip);this.actions.set(clip.name,action)}
-   if(previous&&previous!==action)previous.fadeOut(fade);
-   const oneShot=['attack','hit','death','cast'].includes(state);
-   action.reset();
-   action.enabled=true;
-   action.clampWhenFinished=oneShot;
-   action.setLoop(oneShot?this.T.LoopOnce:this.T.LoopRepeat,oneShot?1:Infinity);
-   if(previous&&previous!==action)action.fadeIn(fade);
-   action.play();
-   this.action=action;return true;
+   return this.playClip(this.clips.indexOf(clip),{
+    state,once:['attack','hit','death','cast'].includes(state),fade
+   });
   }
   update(dt){if(this.mixer&&dt>0)this.mixer.update(Math.min(dt,.15))}
   stop(){
