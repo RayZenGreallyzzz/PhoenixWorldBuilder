@@ -424,6 +424,62 @@
    if(this.collider&&this.b.worldEditor)
     this.collider.groundY=(x,z)=>this.b.worldEditor.heightAt(x,z);
   }
+  faceMob(render,point,dt){
+   const yaw=Features.face(render.root.position,point);
+   if(yaw!==null)render.facingYaw=yaw;
+   if(Number.isFinite(render.facingYaw))
+    render.root.rotation.y=Features.turn(render.root.rotation.y,
+     render.facingYaw,dt,8);
+  }
+  reappear(id){
+   const render=this.rendered.get(id);
+   if(!render||!this.combat.respawnMob(id))return false;
+   const initial=this.world.getComponent(id,'transform');
+   if(initial){
+    render.root.position.fromArray(initial.position);
+    render.root.rotation.y=initial.yaw||0;
+   }
+   render.aiState=PhoenixAI.initial(render.root.position.toArray());
+   render.animation?.stop();render.animation=null;
+   render.accum=0;render.hitHold=0;render.deadElapsed=0;
+   render.root.userData.phoenixDead=false;
+   render.hiddenDead=false;render.root.visible=true;render.facingYaw=null;
+   render.skillRuntime=this.b.skillDefinitionEditor?.catalog?
+    new PhoenixSkills.Runtime(this.b.skillDefinitionEditor.catalog,
+     this.world.getComponent(id,'prefab')?.id||'player',100):null;
+   this.startAnimation(id,render);
+   this.groundVisual(render,0,true);
+   this.b.playBridge?.refreshMobCard?.();
+   return true;
+  }
+  tryNpcSkill(id,render,p,player,distance){
+   const runtime=render.skillRuntime;
+   if(!runtime||!p)return false;
+   for(const slot of Object.keys(runtime.skills)){
+    const def=runtime.skills[slot];
+    if(!def)continue;
+    const healing=def.type==='heal';
+    const hp=this.combat.get(id);
+    const allowed=healing?(hp&&!hp.dead&&hp.hp<hp.maxHp):
+     (p.faction==='enemy'&&!this.combat.isPlayerDead()&&
+      distance<=def.range&&this.canStrike(render.root.position,player,distance));
+    if(!allowed)continue;
+    const used=runtime.cast(slot,this.aiTime,()=>true);
+    if(!used.ok)continue;
+    const result=healing?this.combat.healMob(id,used.power):
+     this.combat.damagePlayer(id,used.power);
+    if(!result?.ok)continue;
+    if(!healing)this.b.playBridge?.onPlayerHit(result,
+     this.world.getComponent(id,'character')?.nickname||p.name);
+    render.animation?.setState('cast',.15);
+    render.hitHold=Math.max(render.hitHold||0,.4);
+    this.faceMob(render,player,.06);
+    this.b.playBridge?.effects?.spawn(def.effect,
+     healing?render.root.position:player,def.type);
+    return true;
+   }
+   return false;
+  }
   update(dt){
    if(!Number.isFinite(dt)||dt<=0)return;
    if(!this.playing){
