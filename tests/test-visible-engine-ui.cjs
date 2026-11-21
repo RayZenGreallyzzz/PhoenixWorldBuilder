@@ -26,6 +26,31 @@ assert(css.includes('body.phoenixPlaying #phoenixEngineDock{display:none!importa
  'Editor controls must disappear during PLAY');
 assert(html.includes('<title>Phoenix Engine 1.4 — Общий мир и ландшафт</title>'));
 assert(html.includes('id="phoenixSkillEditor"'));
+for(const id of ['btnPhoenixWorld','btnWorldGrid','phoenixWorldPanel',
+ 'worldCanvasPreset','worldCanvasWidth','worldCanvasDepth',
+ 'worldTilePreset','worldTileCustom','btnWorldApply','btnWorldPaint',
+ 'btnWorldRaise','btnWorldLower','btnWorldSmooth','btnWorldClearHeights',
+ 'worldBrushRadius','worldBrushPower','btnCatalogLandscape']){
+ assert(html.includes('id="'+id+'"'),'Missing 1.4 world/terrain control '+id);
+}
+assert(html.includes('value="5000"'),'Missing 5km canvas preset');
+for(const name of ['50 × 50 м','100 × 100 м','250 × 250 м',
+ '500 × 500 м','1000 × 1000 м','Свой размер'])
+ assert(html.includes(name),'Missing requested world size '+name);
+const builderSource=fs.readFileSync(path.join(base,'js/clean-app.js'),'utf8');
+const worldCore=html.indexOf('src="engine/core/phoenix-world-layout.js"');
+const worldUI=html.indexOf('src="engine/builder/phoenix-world-editor.js"');
+const appScript=html.indexOf('src="js/clean-app.js"');
+assert(worldCore>0&&worldUI>worldCore&&appScript>worldUI,
+ 'World layout/editor scripts must load before Builder starts');
+assert(builderSource.includes('new PhoenixWorldEditor(this)'));
+assert(builderSource.includes('worldCanvas:this.worldEditor?.serialize()'));
+assert(builderSource.includes('this.worldEditor?.loadFromProject(doc.worldCanvas||null,{preserveUI})'));
+assert(!builderSource.includes('new THREE.GridHelper('),
+ 'Grid must not be always-on; only user button toggles sector grid');
+assert(css.includes('#phoenixWorldPanel{position:fixed'),
+ 'Mobile world editor must have an actual visible panel');
+
 for(const id of ['phoenixSkillImageFile','phoenixSkillImagePreview',
  'btnSkillImagePick','btnSkillImageRemove','skillDefImageFile',
  'skillDefImagePreview','btnSkillDefImagePick','btnSkillDefImageRemove']){
