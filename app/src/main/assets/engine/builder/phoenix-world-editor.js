@@ -27,6 +27,13 @@
      color:meta.color,roughness:1,side:THREE.DoubleSide
     })]));
    this.instanced=new Map();this.grid=null;
+   this.patchSize=50;this.patchSegments=10;
+   this.flatPatches=new Map();this.sculptPatches=new Map();
+   this.materials.set('_default',new THREE.MeshStandardMaterial({
+    color:0x657e64,roughness:1,side:THREE.DoubleSide
+   }));
+   this.heightLookup=new Map();
+   this.stroke=null;this.strokeChanged=false;this.lastPointerAt=0;
    this.bind();this.applyScene();this.renderForm();this.updateStatus();
   }
   el(id){return this.doc.getElementById(id)}
@@ -46,6 +53,27 @@
    on('btnWorldStopPaint',()=>this.stopPainting());
    on('btnWorldClear',()=>this.clear());
    on('btnWorldFill',()=>this.fill());
+   on('btnWorldRaise',()=>this.startSculpt('raise'));
+   on('btnWorldLower',()=>this.startSculpt('lower'));
+   on('btnWorldSmooth',()=>this.startSculpt('smooth'));
+   on('btnWorldClearHeights',()=>this.clearHeights());
+   const catalog=this.el('btnCatalogLandscape');
+   if(catalog)catalog.onclick=event=>{
+    event?.preventDefault?.();this.open();return false;
+   };
+   const folder=this.el('smartCategoryFilter'),oldFolder=folder?.onchange;
+   if(folder)folder.onchange=e=>{
+    if(folder.value==='landscape'){
+     folder.value=this.b.smartCatalogFolder||'all';
+     this.open();return;
+    }
+    oldFolder?.call(folder,e);
+   };
+   const w=typeof window!=='undefined'?window:null;
+   if(w){
+    for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])
+     w.addEventListener(type,e=>this.handleBrushPointer(type,e),true);
+   }
    this.el('worldCanvasPreset')?.addEventListener('change',()=>this.chooseCanvasPreset());
    this.el('worldTilePreset')?.addEventListener('change',()=>this.chooseTilePreset());
    this.el('worldTileStyle')?.addEventListener('change',e=>{
@@ -86,6 +114,10 @@
     grid.setAttribute('aria-pressed',String(this.gridVisible));
     grid.classList.toggle('active',this.gridVisible);
    }
+   const radius=this.el('worldBrushRadius');
+   const power=this.el('worldBrushPower');
+   if(radius)this.el('worldBrushRadiusValue').textContent=radius.value+' м';
+   if(power)this.el('worldBrushPowerValue').textContent=power.value+' м/с';
    this.updateStatus();
   }
   chooseCanvasPreset(){
@@ -176,31 +208,133 @@
    this.grid.name='phoenix:opt-in-sector-grid';
    this.grid.renderOrder=2;this.terrainRoot.add(this.grid);
   }
+  patchRect(col,row){
+   const x0=-this.state.width/2+col*this.patchSize;
+   const z0=-this.state.depth/2+row*this.patchSize;
+   const width=Math.min(this.patchSize,this.state.width/2-x0);
+   const depth=Math.min(this.patchSize,this.state.depth/2-z0);
+   return {x:x0+width/2,z:z0+depth/2,minX:x0,minZ:z0,width,depth,col,row,
+    key:col+':'+row};
+  }
+  refreshHeightLookup(){
+   this.heightLookup=new Map(this.state.heights.map(([i,j,h])=>[i+':'+j,h]));
+  }
+  heightAt(x,z){
+   return this.schema.heightAt(this.state,x,z,this.heightLookup);
+  }
+  hasElevations(){return this.state.heights.length>0}
+  flatMatrix(rect,visible=true){
+   const obj=new THREE.Object3D();
+   obj.position.set(rect.x,-.009,rect.z);
+   obj.scale.set(visible?rect.width:0,1,visible?rect.depth:0);
+   obj.updateMatrix();return obj.matrix;
+  }
+  setFlatVisibility(key,visible){
+   const ref=this.flatPatches.get(key);
+   if(!ref)return;
+   ref.mesh.setMatrixAt(ref.index,this.flatMatrix(ref.rect,visible));
+   ref.mesh.instanceMatrix.needsUpdate=true;
+  }
   rebuildTerrain(){
    for(const mesh of this.instanced.values())this.terrainRoot.remove(mesh);
-   this.instanced.clear();
-   const grouped=new Map();
-   for(const tile of this.state.tiles){
-    const list=grouped.get(tile.style)||[];
-    list.push(tile);grouped.set(tile.style,list);
+   for(const mesh of this.sculptPatches.values()){
+    this.terrainRoot.remove(mesh);mesh.geometry.dispose();
    }
-   const matrixObj=new THREE.Object3D();
-   for(const [style,items] of grouped){
+   this.instanced.clear();this.flatPatches.clear();this.sculptPatches.clear();
+   this.refreshHeightLookup();
+   // The old single 128m floor would cover underground valleys.
+   // Draw one instanced world surface, with local height-mesh patches
+   // replacing only altered sectors. 5km canvas = <=10,000 lightweight
+   // plane instances (1-7 draw calls); never build 25km² of triangles.
+   this.b.ground.visible=false;
+   const groups=new Map(),styles=new Map();
+   for(const tile of this.state.tiles)styles.set(tile.col+':'+tile.row,tile.style);
+   const countX=Math.ceil(this.state.width/this.patchSize);
+   const countZ=Math.ceil(this.state.depth/this.patchSize);
+   for(let row=0;row<countZ;row++)for(let col=0;col<countX;col++){
+    const rect=this.patchRect(col,row);
+    const at=this.schema.cellAt(this.state,rect.x,rect.z);
+    const style=styles.get(at?.key)||'_default';
+    if(!groups.has(style))groups.set(style,[]);
+    groups.get(style).push(rect);
+   }
+   for(const [style,patches] of groups){
+    if(!patches.length)continue;
     const mesh=new THREE.InstancedMesh(
-     this.tileGeometry,this.materials.get(style),items.length);
-    mesh.name='phoenix:landscape:'+style;
+     this.tileGeometry,this.materials.get(style),patches.length);
+    mesh.name='phoenix:landscape:flat:'+style;
     mesh.frustumCulled=false;
-    for(let i=0;i<items.length;i++){
-     const p=this.schema.rect(this.state,items[i].col,items[i].row);
-     matrixObj.position.set(p.x,.009,p.z);
-     matrixObj.rotation.set(0,0,0);
-     matrixObj.scale.set(p.width,1,p.depth);
-     matrixObj.updateMatrix();
-     mesh.setMatrixAt(i,matrixObj.matrix);
-    }
+    patches.forEach((rect,index)=>{
+     mesh.setMatrixAt(index,this.flatMatrix(rect));
+     this.flatPatches.set(rect.key,{mesh,index,rect});
+    });
     mesh.instanceMatrix.needsUpdate=true;
     this.terrainRoot.add(mesh);this.instanced.set(style,mesh);
    }
+   if(this.state.heights.length){
+    // Sparse nodes influence only a small number of 50m mesh patches.
+    // Include neighbour patches when a node is near a shared border.
+    const dirty=new Set(),step=this.schema.HEIGHT_STEP;
+    for(const [i,j] of this.state.heights){
+     const x=i*step,z=j*step;
+     const cols=[Math.floor((x-step)/this.patchSize),
+       Math.floor((x+step)/this.patchSize)];
+     const rows=[Math.floor((z-step)/this.patchSize),
+       Math.floor((z+step)/this.patchSize)];
+     for(let a=Math.max(0,cols[0]);a<=Math.min(countX-1,cols[1]);a++)
+      for(let b=Math.max(0,rows[0]);b<=Math.min(countZ-1,rows[1]);b++)
+       dirty.add(a+':'+b);
+    }
+    for(const key of dirty)this.refreshSculptPatch(key);
+   }
+  }
+  refreshSculptPatch(key){
+   const flat=this.flatPatches.get(key);
+   if(!flat)return;
+   const rect=flat.rect,segments=this.patchSegments;
+   let mesh=this.sculptPatches.get(key);
+   let geometry=mesh?.geometry;
+   if(!geometry){
+    geometry=new THREE.PlaneGeometry(rect.width,rect.depth,segments,segments);
+    geometry.rotateX(-Math.PI/2);
+   }
+   const attr=geometry.getAttribute('position');
+   let modified=false;
+   for(let i=0;i<attr.count;i++){
+    const h=this.heightAt(rect.x+attr.getX(i),rect.z+attr.getZ(i));
+    if(Math.abs(h)>.004)modified=true;
+    attr.setY(i,h+.004);
+   }
+   if(!modified){
+    if(mesh){this.terrainRoot.remove(mesh);mesh.geometry.dispose();
+     this.sculptPatches.delete(key);}
+    else geometry.dispose();
+    this.setFlatVisibility(key,true);return;
+   }
+   attr.needsUpdate=true;
+   geometry.computeVertexNormals();
+   if(!mesh){
+    // The flat chunk is now replaced by a deformable local mesh.
+    const at=this.schema.cellAt(this.state,rect.x,rect.z);
+    const style=this.state.tiles.find(t=>t.col===at?.col&&t.row===at?.row)?.style||'_default';
+    mesh=new THREE.Mesh(geometry,this.materials.get(style));
+    mesh.position.set(rect.x,0,rect.z);
+    mesh.name='phoenix:sculpt:'+key;
+    this.terrainRoot.add(mesh);this.sculptPatches.set(key,mesh);
+    this.setFlatVisibility(key,false);
+   }
+  }
+  refreshSculptArea(x,z,radius){
+   this.refreshHeightLookup();
+   const pad=this.schema.HEIGHT_STEP;
+   const loC=Math.max(0,Math.floor((x-radius-pad+this.state.width/2)/this.patchSize));
+   const hiC=Math.min(Math.ceil(this.state.width/this.patchSize)-1,
+    Math.floor((x+radius+pad+this.state.width/2)/this.patchSize));
+   const loR=Math.max(0,Math.floor((z-radius-pad+this.state.depth/2)/this.patchSize));
+   const hiR=Math.min(Math.ceil(this.state.depth/this.patchSize)-1,
+    Math.floor((z+radius+pad+this.state.depth/2)/this.patchSize));
+   for(let row=loR;row<=hiR;row++)for(let col=loC;col<=hiC;col++)
+    this.refreshSculptPatch(col+':'+row);
   }
   updateStatus(){
    const text=this.el('worldCanvasInfo');
