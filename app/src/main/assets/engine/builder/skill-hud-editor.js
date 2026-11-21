@@ -212,18 +212,26 @@
     button.classList.toggle('phoenixSkillDisabled',!s.enabled);
     button.classList.toggle('phoenixSkillSelected',this.editing&&this.select.value===s.id);
     button.setAttribute('aria-label',s.label+' — '+s.id);
-    const icon=this.doc.createElement(s.image?'img':'span');
-    if(s.image){
-     icon.className='phoenixSkillPicture';
-     icon.src=s.image;
-     icon.alt='';
-     icon.draggable=false;
-    }else{
-     icon.className='phoenixSkillIcon';icon.textContent=s.icon;
+    // Drag moves only styles. Do NOT recreate PNG/WebP DOM nodes on every
+    // pointermove; otherwise Android WebView may repeatedly decode images.
+    if(button._phoenixImage!==s.image||button._phoenixIcon!==s.icon||
+       button._phoenixLabel!==s.label){
+     const icon=this.doc.createElement(s.image?'img':'span');
+     if(s.image){
+      icon.className='phoenixSkillPicture';
+      icon.src=s.image;
+      icon.alt='';
+      icon.draggable=false;
+     }else{
+      icon.className='phoenixSkillIcon';icon.textContent=s.icon;
+     }
+     const label=this.doc.createElement('small');
+     label.className='phoenixSkillCaption';label.textContent=s.label;
+     button.replaceChildren(icon,label);
+     button._phoenixImage=s.image;
+     button._phoenixIcon=s.icon;
+     button._phoenixLabel=s.label;
     }
-    const label=this.doc.createElement('small');
-    label.className='phoenixSkillCaption';label.textContent=s.label;
-    button.replaceChildren(icon,label);
    }
   }
   serialize(){return this.schema.validate(this.layout)}
