@@ -747,3 +747,12 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
 #textureCards .textureCard.active{outline:2px solid #65f4a9;outline-offset:1px}
 #btnDirectLandscapeImage{background:#1c7058;border-color:#72ddb1;
  color:#eafff5}
+
+/* Phoenix texture brush radius: large thumb on Android and quick size picks */
+#phoenixWorldPanel #worldTextureRadius{width:100%;height:24px;accent-color:#48efd4;touch-action:pan-x}
+#phoenixWorldPanel #worldTextureRadiusValue{color:#88ffe9;font-size:12px}
+#phoenixWorldPanel .phoenixTextureBrushSizes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+#phoenixWorldPanel .phoenixTextureBrushSizes button{min-height:36px;padding:6px 3px;
+ font-size:11px;background:#174658;border:1px solid #689faf}
+#phoenixWorldPanel .phoenixTextureBrushSizes button.active{background:#117e76;
+ color:#f3fffd;border-color:#76fbe1}
