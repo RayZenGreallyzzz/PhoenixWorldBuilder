@@ -30,6 +30,23 @@ for(const id of ['btnPhoenixPrefabs','phoenixPrefabPanel','btnPrefabSave',
  'phoenixCombatHud','btnPhoenixAttack','phoenixCombatHP','phoenixCombatTarget','phoenixCombatNotice','phoenixPlayerHP','phoenixPlayerHPText','phoenixKills','phoenixDeathNotice','btnPhoenixRespawn']){
  assert(html.includes('id="'+id+'"'),'Prefab UI field missing '+id);
 }
+// Regression: opened NPC editor must not turn "Установить" into a static
+// model placement. Test the actual early-return guard extracted from place().
+const placeGuard=js.match(/\n place\(\)\{\n([\s\S]*?)\n  if\(!this\.preview\)return;/);
+assert(placeGuard,'Missing construction placement safety guard');
+const warnings=[];
+const safePlace=new Function('notify',
+ 'return function(){'+placeGuard[1]+'\n return true; }')(
+ message=>warnings.push(message));
+const app={prefabEditor:{panel:{hidden:false},pendingPlace:'',pendingWaypointId:''}};
+assert.equal(safePlace.call(app),false,'Open NPC editor must block static GLB placement');
+app.prefabEditor.panel.hidden=true;app.prefabEditor.pendingPlace='prefab-1';
+assert.equal(safePlace.call(app),false,'Placing an NPC must block static GLB');
+app.prefabEditor.pendingPlace='';app.prefabEditor.pendingWaypointId='entity-1';
+assert.equal(safePlace.call(app),false,'Placing waypoint must block static GLB');
+app.prefabEditor.pendingWaypointId='';
+assert.equal(safePlace.call(app),true,'Ordinary construction must remain possible');
+assert.equal(warnings.length,3);
 assert(js.includes('this.prefabEditor=new PhoenixPrefabEditor(this)'));
 assert(js.includes('this.prefabEditor?.update(dt)'), 'Must reuse UV44 frame loop');
 assert(js.includes('phoenixGame:this.prefabEditor?.serialize()'), 'Project JSON must save game');
