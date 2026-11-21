@@ -208,6 +208,10 @@ const mockShader={uniforms:{},
 overlay.mesh.material.onBeforeCompile(mockShader);
 assert(mockShader.fragmentShader.includes('worldPaintUV'),
  'Terrain material must repeat real source image without stretching across a hill');
+assert(!mockShader.fragmentShader.includes('\\n'),
+ 'Generated GLSL shader must contain newlines, not literal escaped backslash-n tokens');
+assert(mockShader.fragmentShader.includes('\nuniform vec2 terrainRepeat;'),
+ 'Texture-splatting shader must declare working GLSL uniforms');
 assert(mockShader.fragmentShader.includes('terrainRepeat'),
  'Tile repeat uniform must use metres independently of alpha mask UV');
 const importedImageOnce=builder.textureFiles.length;
