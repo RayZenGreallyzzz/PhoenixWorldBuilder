@@ -50,9 +50,30 @@
  <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить расположение игровых кнопок">🎮 HUD</button>
  <button id="btnPhoenixSkillDefs" type="button" class="phoenixHudEntry" aria-label="Создать способности и настроить уровни персонажей">🧙 НАВЫКИ</button>
  <button id="btnPhoenixProgression" type="button" class="phoenixHudEntry" aria-label="Математический баланс и уровни персонажей">📈 УРОВНИ</button>
+ <button id="btnPhoenixServer" type="button" class="phoenixHudEntry" aria-label="Управление собственными игровыми серверами">🌐 СЕРВЕРЫ</button>
  <button id="btnPhoenixWorld" type="button" class="phoenixHudEntry" aria-label="Настройки общего мира и ландшафта">🌍 МИР</button>
  <button id="btnWorldGrid" type="button" class="phoenixGridEntry" aria-pressed="false" aria-label="Показать или скрыть сетку секторов">▦ СЕТКА: ВЫКЛ</button>
 </div>
+<section id="phoenixServerPanel" hidden role="region" aria-label="Собственный сервер Phoenix Engine">
+ <div class="phoenixSkillTitle"><b>🌐 Phoenix Server · свой сервер, свой мир</b><button type="button" id="btnPhoenixServerClose">✕</button></div>
+ <small>Сервер можно разместить на компьютере, VPS или в Cloudflare. При смене сервера не нужно менять карту и GLB. Серверные секреты не хранятся в приложении.</small>
+ <label>Сохранённые подключения<select id="phoenixServerProfiles"><option value="">— Новое подключение —</option></select></label>
+ <label>Название подключения<input id="phoenixServerTitle" maxlength="50" value="Мой сервер"></label>
+ <label>Адрес сервера (ws/wss)<input id="phoenixServerUrl" type="url" spellcheck="false" autocapitalize="off" placeholder="wss://game.example.com" value="ws://127.0.0.1:8787"></label>
+ <small>Для интернета используй wss://. Для локальной сети подойдёт ws://192.168.x.x:8787. На Android адрес 127.0.0.1 означает телефон, а не твой компьютер.</small>
+ <div class="phoenixSkillRow"><label>ID игрового мира<input id="phoenixServerWorldId" maxlength="40" value="main" pattern="[a-z][a-z0-9-]*"></label>
+ <label>Твой ник<input id="phoenixServerNickname" maxlength="32" value="Разработчик"></label></div>
+ <label class="phoenixSkillCheck"><input id="phoenixServerAutoConnect" type="checkbox"> 🌐 Подключаться к выбранному серверу при нажатии PLAY</label>
+ <div class="phoenixServerActions"><button id="btnPhoenixServerSave" type="button">💾 Сохранить подключение</button>
+ <button id="btnPhoenixServerDelete" type="button">🗑 Удалить</button>
+ <button id="btnPhoenixServerTest" type="button">🧪 Проверить сервер</button></div>
+ <div class="phoenixSkillRow"><label>Название публикуемого мира<input id="phoenixServerWorldName" maxlength="80" value="Phoenix World"></label>
+ <label>Ревизия карты<input id="phoenixServerRevision" type="number" min="1" max="100000000" value="1"></label></div>
+ <button id="btnPhoenixServerExport" type="button" class="primary">📦 Экспортировать мир для сервера (.json)</button>
+ <small>Экспорт содержит геометрию размещения, NPC, характеристики и навыки, но НЕ GLB-файлы и текстуры. Их публикуют вместе с игровым клиентом. Для импорта на сервер нужен административный ключ, который задаётся только на сервере.</small>
+ <small id="phoenixServerStatus" aria-live="polite">🟡 Гостевой тестовый протокол. Регистрацию аккаунтов и постоянный прогресс добавим следующим этапом.</small>
+ <small id="phoenixServerPlayers" aria-live="polite">Игроков в комнате: —</small>
+</section>
 <!-- Phoenix Engine 1.4: one continuous plane, on-demand sector grid and landscape tiles. -->
 <section id="phoenixWorldPanel" class="phoenixWorldPanel" hidden role="region" aria-label="Общий холст и ландшафт">
  <div class="phoenixWorldTitle"><b>🌍 Общий мир и ландшафт</b><button id="btnWorldClose" type="button" aria-label="Закрыть">✕</button></div>
@@ -1049,6 +1070,7 @@
 <script src="engine/core/phoenix-ai.js"></script>
 <script src="engine/core/phoenix-combat.js"></script>
 <script src="engine/core/phoenix-progression.js"></script>
+<script src="engine/core/phoenix-server-export.js"></script>
 <script src="engine/core/phoenix-player-combat.js"></script>
 <script src="engine/core/phoenix-weapon.js"></script>
 <script src="engine/core/phoenix-skill-images.js"></script>
@@ -1064,5 +1086,6 @@
 <script src="engine/builder/skill-hud-editor.js"></script>
 <script src="engine/builder/skill-definition-editor.js"></script>
 <script src="engine/builder/phoenix-progression-editor.js"></script>
+<script src="engine/builder/phoenix-network-editor.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
