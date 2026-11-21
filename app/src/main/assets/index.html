@@ -259,7 +259,10 @@
  <label>Дистанция атаки, м<input id="phoenixPrefabAttackRange" type="number" min=".3" max="8" step=".1" value="1.25"></label>
  <label>Перезарядка, сек<input id="phoenixPrefabCooldown" type="number" min=".35" max="30" step=".1" value="1.8"></label></div>
  <small>⚔ Attack — анимационное действие, а не отдельный маршрут. Для атак используй «Преследовать», «Патруль + агро» или «Охрана». Точный клип Attack указывается выше. Столкновения проверяются; полноценный NavMesh для обхода сложных препятствий пока не включён.</small>
- <button id="btnPrefabPreviewAttack" type="button">▶ Проверить анимацию атаки выбранного моба</button>
+ <button id="btnPrefabPreviewAttack" type="button">⚔ Проверить анимацию атаки</button>
+ <div class="phoenixPrefabRow"><button id="btnPrefabAutoBind" type="button">✨ Автоназначить Idle/Walk/Attack и др.</button><button id="btnPrefabPreviewClip" type="button">▶ Любой клип GLB</button></div>
+ <label>Все анимации загруженного моба<select id="phoenixPrefabPreviewClip"><option value="">— Сначала загрузи GLB —</option></select></label>
+ <small>Все клипы из исходного GLB доступны для просмотра, даже если не подходят под стандартные 7 игровых состояний. Кнопка автоназначения подбирает имена; при необходимости можно вписать точное имя вручную.</small>
  <small id="phoenixPrefabClips">Выбери GLB, чтобы увидеть доступные анимации.</small>
  <div class="phoenixPrefabRow"><button id="btnPrefabSave" type="button" class="primary">💾 Сохранить шаблон</button><button id="btnPrefabPlace" type="button">👆 Поставить моба</button></div>
  <button type="button" id="btnPrefabCancelPlace">✖ Отменить размещение</button>
@@ -465,8 +468,22 @@
  <summary>🧍 Загрузить и настроить персонажа</summary>
  <div class="drawerFoldBody"><label class="fileButton ghostButton">🧍 GLB или FBX (со скелетом)<input id="importAvatar" type="file" accept=".glb,.fbx,model/gltf-binary" hidden></label>
    <label>Рост персонажа <strong id="avatarSizeLabel">175 см</strong><input id="avatarHeight" type="range" min="100" max="210" step="5" value="175"></label>
-   <label>⚔ Анимация атаки персонажа<select id="avatarAttackClip"><option value="">Автоматически из GLB</option></select></label>
-   <small class="tip">После импорта GLB выбери точную Attack-анимацию из списка. Выбор сохраняется вместе с персонажем в проекте.</small>
+   <b>🎞 Анимации персонажа из GLB</b>
+   <label>Проверить любой клип<select id="avatarPreviewClip"><option value="">— Загрузи GLB —</option></select></label>
+   <button id="btnAvatarPreviewClip" type="button" class="alt">▶ Проиграть выбранный клип</button>
+   <small class="tip" id="avatarClipStatus">Список показывает все клипы исходного GLB. Неназванные действия можно просматривать вручную и назначать на игровые состояния.</small>
+   <div class="phoenixAvatarBindings">
+   <label>Idle · ожидание<select data-avatar-animation-state="idle"><option value="">Автоматически</option></select></label>
+   <label>Walk · ходьба<select data-avatar-animation-state="walk"><option value="">Автоматически</option></select></label>
+   <label>Run · бег<select data-avatar-animation-state="run"><option value="">Автоматически</option></select></label>
+   <label>Attack · удар<select data-avatar-animation-state="attack"><option value="">Автоматически</option></select></label>
+   <label>Hit · получение урона<select data-avatar-animation-state="hit"><option value="">Автоматически</option></select></label>
+   <label>Death · смерть<select data-avatar-animation-state="death"><option value="">Автоматически</option></select></label>
+   <label>Cast · способность<select data-avatar-animation-state="cast"><option value="">Автоматически</option></select></label>
+   </div>
+   <button id="btnAvatarAutoAnimations" type="button" class="alt">✨ Автоназначить анимации</button>
+   <label hidden>Совместимость Attack<select id="avatarAttackClip"><option value="">Автоматически из GLB</option></select></label>
+   <small class="tip">Назначения сохраняются вместе с персонажем в проекте и восстанавливаются из резервной копии.</small>
    <button id="btnResetCharacterView" type="button" class="alt">📷 Нормальный вид персонажа (сбросить приближение)</button>
    <button id="btnGroundAvatar" type="button" class="alt">🦶 Поставить ноги на пол</button>
    <small class="tip">Если после приближения кажется, что персонаж огромный — эта кнопка отдалит камеру, не меняя размер модели. При импорте скелетного GLB рост теперь считается по видимой анимационной позе. Ступни автоматически подстраиваются к поверхности при ходьбе, без изменения роста.</small>
