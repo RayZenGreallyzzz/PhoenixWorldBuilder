@@ -118,14 +118,14 @@
   return validate({version:VERSION,...after,tiles:before.tiles,heights:before.heights});
  }
  // Sparse editable height lattice: 5m spacing; only non-zero nodes saved.
- function heightAt(raw,x,z){
+ function heightAt(raw,x,z,lookup=null){
   const s=raw;
   const nx=(x+s.width/2)/HEIGHT_STEP,nz=(z+s.depth/2)/HEIGHT_STEP;
   if(!Number.isFinite(nx)||!Number.isFinite(nz)||
      nx<0||nz<0||nx>s.width/HEIGHT_STEP||nz>s.depth/HEIGHT_STEP)
    return 0;
   const i=Math.floor(nx),j=Math.floor(nz),tx=nx-i,tz=nz-j;
-  const map=new Map(s.heights.map(([a,b,h])=>[a+':'+b,h]));
+  const map=lookup||new Map(s.heights.map(([a,b,h])=>[a+':'+b,h]));
   const get=(a,b)=>map.get(a+':'+b)||0;
   return (1-tx)*(1-tz)*get(i,j)+tx*(1-tz)*get(i+1,j)+
    (1-tx)*tz*get(i,j+1)+tx*tz*get(i+1,j+1);
