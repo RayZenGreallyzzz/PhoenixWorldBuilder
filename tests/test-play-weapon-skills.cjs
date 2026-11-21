@@ -16,7 +16,13 @@ const ids=['btnPhoenixPlay','btnPhoenixEdit','phoenixPlayHud','phoenixCombatHud'
  'btnPhoenixAttack','phoenixCombatHP','phoenixCombatTarget','phoenixCombatNotice',
  'phoenixPlayerHP','phoenixPlayerHPText','phoenixKills','phoenixDeathNotice',
  'btnPhoenixRespawn','phoenixAmmoLine','phoenixAmmoText','phoenixCrosshair',
- 'phoenixMpLine','phoenixMpText','status','placementDot'];
+ 'phoenixMpLine','phoenixMpText','status','placementDot',
+ 'phoenixRangedControls','btnPhoenixRangedAim','btnPhoenixRangedReload',
+ 'btnPlayerCombatApply','btnPlayerCombatPreset','phoenixPlayerCombatStatus',
+ 'phoenixPlayerCombatMode','phoenixPlayerCombatHP','phoenixPlayerCombatDamage',
+ 'phoenixPlayerCombatRange','phoenixPlayerCombatCooldown',
+ 'phoenixPlayerCombatMagazineSize','phoenixPlayerCombatReserveCapacity',
+ 'phoenixPlayerCombatReloadDuration'];
 const els=Object.fromEntries(ids.map(id=>[id,{
  id,hidden:true,disabled:false,textContent:'',listeners:{},
  addEventListener(n,handler){this.listeners[n]=handler;}}]));
@@ -32,7 +38,7 @@ const ed={catalog:skills,runtime:null,
  resetPlay(){this.startPlay()},
  cast(slot,now,allow){return this.runtime.cast(slot,now,allow)},
  close(){}};
-let saves=0,projections=0;
+let saves=0,projections=0,unsaved=0;
 const editor={
  combat,close(){},setPlaying(on){
   combat.reset(on?[{id:'enemy-1',name:'Медведь',maxHp:160,faction:'enemy'}]:[]);
@@ -50,7 +56,7 @@ const b={
  skillEditor:{layout:{slots:[{id:'fire',enabled:true}]},setPlaying(){},close(){}},
  setMode(mode){this.mode=mode},
  setAvatarAnimation(){},
- save(){saves++}
+ save(){saves++},markProjectDirty(){unsaved++}
 };
 const bridge=new Bridge(b,Core,doc);b.playBridge=bridge;
 assert.equal(bridge.enter(),true);
@@ -77,4 +83,34 @@ assert(projections>=2);
 assert.equal(ed.runtime,null);
 assert.equal(b.mode,'build');
 assert.equal(saves,0,'PLAY must not mutate saved Builder project');
-console.log('PASS: shooter fire/ADS/reload, real MMO 105 damage, MP and EDIT camera restoration');
+// Ranged hero is a real gameplay setting rather than a cosmetic class label.
+const Profiles=require('../app/src/main/assets/engine/core/phoenix-player-combat.js');
+bridge.showPlayerCombatForm({...Profiles.preset('ranged'),hp:240,damage:33,
+ range:45,magazineSize:5,reserveCapacity:10,reloadDuration:2,cooldown:.8});
+assert.equal(bridge.applyPlayerCombatForm(),true);
+assert.equal(unsaved,1,'Changing hero style marks project dirty only');
+assert.equal(saves,0,'Hero settings never force full autosave');
+assert.equal(bridge.playerCombat.mode,'ranged');
+assert.equal(bridge.enter(),true);
+assert.equal(els.phoenixRangedControls.hidden,false,'Ranged controls visible in PLAY');
+assert.equal(bridge.weapon.damage,33);
+assert.equal(bridge.weapon.range,45);
+assert.equal(bridge.weapon.magazineSize,5);
+assert.equal(bridge.weapon.reserve,10);
+assert.equal(bridge.attack(),true,'Main Attack button must shoot in ranged style');
+assert.equal(combat.get('enemy-1').hp,127,'Ranged attack must use configured 33 damage');
+assert.equal(bridge.weapon.ammo,4);
+assert.equal(bridge.aim(),true,'Ranged hero can aim');
+assert.equal(bridge.reload(),true,'Ranged hero can reload');
+assert.equal(bridge.exit(),true);
+assert.equal(els.phoenixRangedControls.hidden,true,'Ranged controls hidden after PLAY');
+// Melee still uses existing combat targeting; old skill HUD shots unchanged.
+bridge.showPlayerCombatForm({...Profiles.preset('melee'),damage:55,range:3.5,hp:150});
+assert.equal(bridge.applyPlayerCombatForm(),true);
+assert.equal(bridge.enter(),true);
+assert.equal(els.phoenixRangedControls.hidden,true);
+assert.equal(bridge.attack(),true,'Main Attack button uses melee targeting');
+assert.equal(combat.get('enemy-1').hp,135,'Melee legacy mock keeps its authored hit');
+assert.equal(bridge.exit(),true);
+assert.equal(saves,0);
+console.log('PASS: shooter legacy compatibility, configurable ranged combat, aim/reload, melee targeting, and no autosaves');
