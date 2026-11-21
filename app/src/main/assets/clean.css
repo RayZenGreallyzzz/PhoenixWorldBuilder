@@ -724,3 +724,26 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
  #phoenixWorldPanel button{font-size:10px;min-height:35px}
  #phoenixWorldPanel small{font-size:10px}
 }
+
+/* Phoenix Engine 1.5 — imported, once-stored landscape images / round splat pencil. */
+#landscapeLibraryHint{margin:8px 0;padding:10px;border:1px solid #6cc99b;
+ background:#0b4539;border-radius:9px;color:#d3ffdf;font-size:12px;line-height:1.45}
+#landscapeLibraryHint[hidden],#textureQuickFaces[hidden]{display:none!important}
+#worldTextureChosen{border-radius:9px;border:1px solid #6fc5a4;
+ padding:9px;background:#153f3e;font-size:12px;color:#d8ffe9;
+ overflow-wrap:anywhere}
+#phoenixWorldPanel #btnWorldTexturePaint{background:#0e7a62;border-color:#69e7c0;
+ color:#effff7;font-weight:900}
+#phoenixWorldPanel #btnWorldTextureErase{background:#7c4d31;border-color:#dbab84}
+#phoenixWorldPanel #btnWorldOpenTextures{background:#285980;border-color:#7bb5de}
+#phoenixWorldPanel #btnWorldImportTexture{background:#2b734e;border-color:#7be4b1}
+#phoenixWorldPanel #worldOldColors{border:1px solid #547b85;border-radius:8px;
+ padding:7px;background:#123442}
+#phoenixWorldPanel #worldOldColors summary{cursor:pointer;font-size:11px;
+ color:#c2d8e2}
+#phoenixWorldPanel #worldOldColors[open]{display:flex;flex-direction:column;gap:8px}
+#phoenixWorldPanel #worldTextureOpacity,#phoenixWorldPanel #worldTextureSoftness,
+#phoenixWorldPanel #worldTextureScale{accent-color:#65e1a5}
+#textureCards .textureCard.active{outline:2px solid #65f4a9;outline-offset:1px}
+#btnDirectLandscapeImage{background:#1c7058;border-color:#72ddb1;
+ color:#eafff5}
