@@ -170,7 +170,7 @@
      total+=map.get(a+':'+b)||0;count++;
     }
     const average=count?total/count:current;
-    height+=Math.min(1,step*.25)*weight*(average-current);
+    height+=Math.min(.5,step*.15)*weight*(average-current);
    }
    height=Math.max(-MAX_ELEVATION,Math.min(MAX_ELEVATION,height));
    height=Math.round(height*100)/100;
