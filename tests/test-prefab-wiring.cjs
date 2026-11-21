@@ -91,6 +91,12 @@ assert(editor.includes('this.combat.damagePlayer('),
 assert(css.includes('#phoenixPlayerHP'),'Player HP should be visible');
 assert(editor.includes('this.world.setComponent(id,\'character\''),
  'Each placed mob must store independent AI/waypoints and persist changes');
-assert(editor.includes("this.b.save()"),
- 'NPC position and route edits must be saved with the project');
+assert(!editor.includes('this.b.save()'),
+ 'Mob editing must not write the full project after every action');
+assert(editor.includes('this.b.markProjectDirty?.()'),
+ 'Mob edits must mark the project as unsaved until manual save');
+assert(js.includes("this.markProjectSaved();"),
+ 'Successful manual save must reset unsaved marker');
+assert(js.includes("$('btnSave').onclick=()=>this.save()"),
+ 'Top save button must continue to save whole project');
 console.log('PASS: Player GLB persistence, per-instance NPC routes, touch waypoints and single-loop Prefab Editor');
