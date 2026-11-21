@@ -205,6 +205,7 @@ class CleanBuilder{
   this.skillEditor=new PhoenixSkillEditor(this);
   this.skillDefinitionEditor=new PhoenixSkillDefinitionEditor(this);
   this.worldEditor=new PhoenixWorldEditor(this);
+  this.progressionEditor=new PhoenixProgressionEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
@@ -4850,7 +4851,11 @@ class CleanBuilder{
    if(rise){const v=V(0,rise,0);this.controls.target.add(v);this.camera.position.add(v)}
   }
   if(raw.lengthSq()<.0025){if(this.tool==='place'&&this.mode==='drone')this.aimPlacement();return}
-  raw.clampLength(0,1).multiplyScalar(dt*(this.mode==='drone'?10:3));
+  // Only characters with an authored RPG profile use level-scaled speed.
+  // Unconfigured legacy heroes keep their original 3 m/s movement.
+  const levelSpeed=this.playBridge?.active&&this.playBridge?.playerRuntimeStats?.speed;
+  raw.clampLength(0,1).multiplyScalar(dt*(this.mode==='drone'?10:
+   Number.isFinite(levelSpeed)?levelSpeed:3));
   const facing=V();this.camera.getWorldDirection(facing);facing.y=0;facing.normalize();
   const side=V(-facing.z,0,facing.x);
   const step=side.multiplyScalar(raw.x).addScaledVector(facing,-raw.z);
