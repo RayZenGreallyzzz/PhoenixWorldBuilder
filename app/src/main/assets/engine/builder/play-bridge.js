@@ -209,17 +209,29 @@
    }
   }
 
-  restore(saved) {
+  restore(saved,{keepLocation=false}={}) {
    const b = this.builder;
+   // Normal PLAY -> EDIT keeps the hero exactly where gameplay ended.
+   // Enter failure instead rolls back the original position and camera.
+   const lastPosition=keepLocation?b.player.position.clone():null;
+   const lastRotation=keepLocation?b.player.rotation.clone():null;
+   const travelled=keepLocation?
+    lastPosition.clone().sub(saved.playerPosition):null;
    b.setMode(saved.mode);
    // Restore a consciously selected construction tool after leaving PLAY;
    // character editor never inherits a wall placement tool.
    if(saved.mode==='build'&&typeof b.setTool==='function'&&saved.tool)
     b.setTool(saved.tool);
-   b.player.position.copy(saved.playerPosition);
-   b.player.rotation.copy(saved.playerRotation);
+   b.player.position.copy(lastPosition||saved.playerPosition);
+   b.player.rotation.copy(lastRotation||saved.playerRotation);
    b.camera.position.copy(saved.camera);
    b.controls.target.copy(saved.target);
+   // Move the EDIT camera by the same travelled distance, keeping its angle
+   // and zoom relative to the hero instead of jumping to the starting house.
+   if(travelled){
+    b.camera.position.add(travelled);
+    b.controls.target.add(travelled);
+   }
    b.controls.enabled = saved.controlsEnabled;
    if(saved.cameraFov!==null&&Number.isFinite(saved.cameraFov)){
     b.camera.fov=saved.cameraFov;b.camera.updateProjectionMatrix?.();
@@ -255,11 +267,11 @@
    const saved = this.saved;
    this.saved = null;
    try {
-    this.restore(saved);
+    this.restore(saved,{keepLocation:true});
    } finally {
     this.modeController.setMode('edit');
    }
-   this.message('⏹ Режим EDIT: строительство восстановлено', 'success');
+   this.message('⏹ EDIT: герой остался на последнем месте', 'success');
    return true;
   }
 
