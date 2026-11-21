@@ -45,10 +45,11 @@ const waiting=AI.tick(frozen.state,[0,0,0],[30,0,30],
  profile,{speed:2},.5);
 assert.equal(waiting.state.point,0);
 assert.deepEqual(waiting.move,[0,0,0]);
-const resumed=AI.tick(waiting.state,[0,0,0],[30,0,30],
- profile,{speed:2},1.5);
-assert.equal(resumed.state.point,1);
-const walked=AI.tick(resumed.state,[0,0,0],[30,0,30],
+let current=waiting;
+for(let i=0;i<3;i++)current=AI.tick(current.state,[0,0,0],[30,0,30],
+ profile,{speed:2},.5);
+assert.equal(current.state.point,1);
+const walked=AI.tick(current.state,[0,0,0],[30,0,30],
  profile,{speed:2},.1);
 assert(walked.move[0]>0,'After the stop the mob walks to next waypoint');
 const saved=Prefabs.normalize({name:'Asura',ai:profile});
