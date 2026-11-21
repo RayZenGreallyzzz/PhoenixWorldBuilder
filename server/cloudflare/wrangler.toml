@@ -1,0 +1,14 @@
+name = "phoenix-server"
+main = "./worker.mjs"
+compatibility_date = "2026-11-18"
+
+[vars]
+PHOENIX_MAX_PLAYERS = "16"
+
+[[durable_objects.bindings]]
+name = "PHOENIX_ROOMS"
+class_name = "PhoenixRoomObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PhoenixRoomObject"]
