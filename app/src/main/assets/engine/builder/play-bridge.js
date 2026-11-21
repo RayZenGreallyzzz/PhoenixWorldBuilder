@@ -125,7 +125,8 @@
     this.hud.hidden = false;
     this.modeController.setMode('play');
     b.prefabEditor?.setPlaying(true);
-    if(typeof PhoenixVFX!=='undefined')this.effects=new PhoenixVFX.SceneFX(b.scene,THREE);
+    if(typeof PhoenixVFX!=='undefined'&&typeof THREE!=='undefined'&&b.scene)
+     this.effects=new PhoenixVFX.SceneFX(b.scene,THREE);
     this.createMobTags();this.selectMob('');
     b.skillEditor?.setPlaying(true);
     b.skillDefinitionEditor?.startPlay();
