@@ -20,6 +20,7 @@ on:
       - 'tests/test-prefab-core.cjs'
       - 'tests/test-prefab-editor.cjs'
       - 'tests/test-mob-features.cjs'
+      - 'tests/test-phoenix-mob-nametags.cjs'
       - 'app/src/main/assets/engine/core/phoenix-mob-features.js'
       - 'app/src/main/assets/engine/runtime/phoenix-vfx.js'
       - 'tests/test-character-mob-save.cjs'
@@ -95,6 +96,7 @@ jobs:
           node tests/test-prefab-core.cjs
           node tests/test-prefab-editor.cjs
           node tests/test-mob-features.cjs
+          node tests/test-phoenix-mob-nametags.cjs
           node tests/test-character-mob-save.cjs
           node tests/test-prefab-wiring.cjs
           node tests/test-phoenix-ai.cjs
