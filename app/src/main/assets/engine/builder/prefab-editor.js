@@ -41,6 +41,8 @@
   open(){
    if(this.b.playBridge.active)return;
    this.b.skillEditor?.close();this.b.skillDefinitionEditor?.close();
+   // Opening the character editor deactivates any previously selected wall.
+   if(this.b.tool==='place')this.b.setTool('pick');
    this.refreshModels();this.panel.hidden=false;
    this.drawRoute(this.selectedEntity());
   }
