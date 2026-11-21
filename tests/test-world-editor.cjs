@@ -63,6 +63,7 @@ const builder={
  recordEdit(snapshot){return this.history.record(snapshot||this.project())},
  save(){this.saved++;return true}
 };
+(async()=>{
 const editor=builder.worldEditor=new WorldEditor(builder,doc);
 assert.equal(editor.state.width,500);
 assert.equal(editor.state.heights.length,0);
@@ -171,3 +172,4 @@ assert.equal(editor.state.depth,128);
 assert.equal(editor.state.heights.length,0);
 assert.equal(editor.grid,null);
 console.log('PASS: 5km world, sparse hills/valleys, touch brush, shared Builder Undo/Redo, JSON, collision and opt-in grid');
+})().catch(error=>{console.error(error);process.exitCode=1});
