@@ -194,6 +194,114 @@
    return true;
   }
 
+  selectMobAt(event){
+   if(!this.active)return null;
+   const found=this.builder.prefabEditor?.pickMobAt(event)||'';
+   this.selectMob(found);
+   return found;
+  }
+  selectMob(id){
+   const editor=this.builder.prefabEditor;
+   const valid=!!id&&!!editor?.mobProfile(id);
+   this.selectedMobId=valid?id:'';
+   if(this.mobCard)this.mobCard.hidden=!valid||!this.active;
+   this.refreshMobCard();
+   this.refreshMobTags();
+   return this.selectedMobId;
+  }
+  refreshMobCard(){
+   if(!this.selectedMobId||!this.active){
+    if(this.mobCard)this.mobCard.hidden=true;
+    return;
+   }
+   const profile=this.builder.prefabEditor?.mobProfile(this.selectedMobId);
+   if(!profile){this.selectMob('');return}
+   const el=id=>this.document.getElementById(id);
+   if(this.mobCard)this.mobCard.hidden=false;
+   if(el('phoenixMobCardName'))el('phoenixMobCardName').textContent=
+    (profile.type==='npc'?'🧑 ':'🐺 ')+profile.name;
+   const faction={enemy:'🔴 Враг',neutral:'⚪ Нейтрал',ally:'🟢 Союзник'};
+   if(el('phoenixMobCardRole'))el('phoenixMobCardRole').textContent=
+    (faction[profile.faction]||profile.faction)+' · Уровень '+profile.level;
+   const health=el('phoenixMobCardHP');
+   if(health){health.max=profile.maxHp;health.value=profile.hp;}
+   if(el('phoenixMobCardHPText'))el('phoenixMobCardHPText').textContent=
+    profile.hp+' / '+profile.maxHp+' HP'+(profile.dead?' · ☠ Погиб':'');
+   if(el('phoenixMobCardStats'))el('phoenixMobCardStats').textContent=
+    '⚔ Урон: '+profile.damage+' · 🛡 Защита: '+profile.defense+
+    ' · 🏃 Скорость: '+profile.speed;
+   if(el('phoenixMobCardSkills'))el('phoenixMobCardSkills').textContent=
+    profile.skills.length?'✨ Навыки: '+profile.skills.map(v=>
+     v.name+' (ур. '+v.level+', откат '+v.cooldown+'с)').join(' · '):
+    '✨ Навыки не назначены';
+   if(el('phoenixMobCardRespawn'))el('phoenixMobCardRespawn').textContent=
+    profile.dead&&profile.respawnLeft!==null?
+     '🔁 Возрождение через '+Math.ceil(profile.respawnLeft)+' сек':
+    profile.respawn.enabled?'🔁 Респаун: '+profile.respawn.delay+' сек':
+    'Респаун выключен';
+   if(this.hpTarget)this.hpTarget.textContent='🎯 '+profile.name;
+   if(this.hpBar){this.hpBar.max=profile.maxHp;this.hpBar.value=profile.hp;
+    this.hpBar.hidden=false;}
+  }
+  createMobTags(){
+   this.clearMobTags();
+   if(!this.document.createElement||typeof THREE==='undefined')return;
+   const rendered=this.builder.prefabEditor?.rendered;
+   if(!rendered)return;
+   for(const [id,render] of rendered){
+    const profile=this.builder.prefabEditor.mobProfile(id);
+    if(!profile)continue;
+    let texture=this.mobTagTextures.get(profile.name);
+    if(!texture){
+     const canvas=this.document.createElement('canvas');
+     canvas.width=256;canvas.height=64;
+     const ctx=canvas.getContext?.('2d');
+     if(!ctx)continue;
+     ctx.fillStyle='rgba(5,31,45,.85)';
+     ctx.fillRect(0,8,256,48);
+     ctx.strokeStyle='#80f1d5';ctx.lineWidth=2;ctx.strokeRect(1,9,254,46);
+     ctx.textAlign='center';ctx.textBaseline='middle';
+     ctx.font='bold 22px sans-serif';ctx.fillStyle='#f3fffc';
+     const name=profile.name.length>23?profile.name.slice(0,22)+'…':profile.name;
+     ctx.fillText(name,128,33,240);
+     texture=new THREE.CanvasTexture(canvas);
+     texture.minFilter=THREE.LinearFilter;
+     texture.generateMipmaps=false;
+     this.mobTagTextures.set(profile.name,texture);
+    }
+    const material=new THREE.SpriteMaterial({map:texture,transparent:true,
+     depthWrite:false,depthTest:false});
+    const tag=new THREE.Sprite(material);tag.name='phoenix:mob:nametag';
+    tag.scale.set(2.4,.6,1);
+    const bounds=new THREE.Box3().setFromObject(render.visual||render.root);
+    const top=Number.isFinite(bounds.max.y)?
+     bounds.max.y-render.root.position.y+.35:2.3;
+    tag.position.y=Math.max(1.6,Math.min(12,top));
+    render.root.add(tag);this.mobTags.set(id,tag);tag.visible=false;
+   }
+   this.refreshMobTags();
+  }
+  refreshMobTags(){
+   if(!this.active)return;
+   const player=this.builder.player?.position;
+   if(!player)return;
+   for(const [id,tag] of this.mobTags){
+    const render=this.builder.prefabEditor?.rendered.get(id);
+    if(!render)continue;
+    const near=player.distanceToSquared(render.root.position)<=28*28;
+    tag.visible=near&&render.root.visible&&
+     !this.builder.prefabEditor?.combat.isDead(id);
+    tag.material.color.setHex(id===this.selectedMobId?0xffdd77:0xffffff);
+   }
+  }
+  clearMobTags(){
+   for(const tag of this.mobTags.values()){
+    tag.removeFromParent();tag.material?.dispose?.();
+   }
+   this.mobTags.clear();
+   for(const texture of this.mobTagTextures.values())texture.dispose?.();
+   this.mobTagTextures.clear();
+  }
   updatePlayerHud(){
    const player=this.builder.prefabEditor?.combat?.getPlayer();
    if(!player)return;
