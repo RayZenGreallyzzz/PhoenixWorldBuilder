@@ -25,6 +25,8 @@
    this.currentStyle='grass';this.selectedCell='';
    this.terrainRoot=new THREE.Group();this.terrainRoot.name='phoenix:landscape';
    builder.scene.add(this.terrainRoot);
+   this.brushIndicator=this.createBrushIndicator();
+   this.indicatorPoint=null;
    this.tileGeometry=new THREE.PlaneGeometry(1,1);
    this.tileGeometry.rotateX(-Math.PI/2);
    this.materials=new Map(Object.entries(this.schema.STYLES).map(([name,meta])=>
@@ -46,6 +48,81 @@
    this.bind();this.applyScene();this.renderForm();this.updateStatus();
   }
   el(id){return this.doc.getElementById(id)}
+  textureBrushRadius(){
+   const radius=Number(this.el('worldTextureRadius')?.value||10);
+   return Number.isFinite(radius)?Math.max(1,Math.min(150,radius)):10;
+  }
+  currentBrushRadius(){
+   return this.paintMode==='texture'||this.paintMode==='texture-erase'?
+    this.textureBrushRadius():Number(this.el('worldBrushRadius')?.value||25);
+  }
+  setTextureBrushRadius(radius,persist=true){
+   const number=Number(radius);
+   if(!Number.isFinite(number))return false;
+   const value=Math.round(Math.max(1,Math.min(150,number)));
+   const input=this.el('worldTextureRadius');
+   if(input)input.value=String(value);
+   const label=this.el('worldTextureRadiusValue');
+   if(label)label.textContent=value+' м радиус · '+(value*2)+' м диаметр';
+   for(const button of this.doc.querySelectorAll?.('[data-texture-brush-radius]')||[]){
+    const active=Number(button.getAttribute?.('data-texture-brush-radius'))===value;
+    button.classList?.toggle('active',active);
+    button.setAttribute?.('aria-pressed',String(active));
+   }
+   if(persist&&typeof localStorage!=='undefined'){
+    try{localStorage.setItem('phoenix-terrain-texture-radius',String(value))}
+    catch(error){/* browser storage may be disabled */}
+   }
+   if(this.brushIndicator?.visible&&this.indicatorPoint)
+    this.showBrushIndicator(this.indicatorPoint.x,this.indicatorPoint.z);
+   return value;
+  }
+  createBrushIndicator(){
+   // A tiny, reusable 64-segment outline. It follows heightfield vertices,
+   // uses no new textures and does not interfere with touch raycasting.
+   const geometry=new THREE.BufferGeometry();
+   const attribute=new THREE.BufferAttribute(new Float32Array(64*6*3),3);
+   attribute.setUsage?.(THREE.DynamicDrawUsage);
+   geometry.setAttribute('position',attribute);
+   const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({
+    color:0x5bffdc,transparent:true,opacity:.86,
+    depthTest:false,depthWrite:false,side:THREE.DoubleSide
+   }));
+   mesh.name='phoenix:terrain:brush-outline';
+   mesh.renderOrder=1200;mesh.frustumCulled=false;mesh.visible=false;
+   this.terrainRoot.add(mesh);
+   return mesh;
+  }
+  showBrushIndicator(x,z){
+   if(!this.painting||!Number.isFinite(x)||!Number.isFinite(z))return false;
+   const radius=Math.max(.3,this.currentBrushRadius());
+   const thickness=Math.max(.13,Math.min(2.5,radius*.024));
+   const inner=Math.max(.08,radius-thickness*.5);
+   const outer=radius+thickness*.5;
+   const attr=this.brushIndicator.geometry.getAttribute('position');
+   const points=[];
+   for(let i=0;i<64;i++){
+    const angle=i*Math.PI/32,next=(i+1)*Math.PI/32;
+    const point=(r,a)=>{
+     const xx=x+Math.cos(a)*r,zz=z+Math.sin(a)*r;
+     return [xx,this.heightAt(xx,zz)+.075,zz];
+    };
+    const a=point(inner,angle),b=point(outer,angle),
+     c=point(inner,next),d=point(outer,next);
+    points.push(a,b,c,c,b,d);
+   }
+   let offset=0;
+   for(const p of points){attr.setXYZ(offset++,p[0],p[1],p[2]);}
+   attr.needsUpdate=true;
+   this.brushIndicator.geometry.computeBoundingSphere();
+   this.brushIndicator.visible=true;
+   this.indicatorPoint={x,z};
+   return true;
+  }
+  hideBrushIndicator(){
+   if(this.brushIndicator)this.brushIndicator.visible=false;
+   this.indicatorPoint=null;
+  }
   notify(message,type='neutral'){
    const status=this.el('worldCanvasStatus');if(status)status.textContent=message;
    const main=this.el('status');if(main)main.textContent=message;
@@ -92,6 +169,20 @@
    this.el('worldTileStyle')?.addEventListener('change',e=>{
     this.currentStyle=e.target.value;
    });
+   const radiusInput=this.el('worldTextureRadius');
+   radiusInput?.addEventListener('input',e=>
+    this.setTextureBrushRadius(Number(e.target.value)));
+   for(const button of this.doc.querySelectorAll?.('[data-texture-brush-radius]')||[]){
+    button.addEventListener('click',()=>this.setTextureBrushRadius(
+     Number(button.getAttribute('data-texture-brush-radius'))));
+   }
+   let savedRadius=NaN;
+   if(typeof localStorage!=='undefined'){
+    try{savedRadius=Number(localStorage.getItem('phoenix-terrain-texture-radius'))}
+    catch(error){/* browser storage may be disabled */}
+   }
+   if(Number.isFinite(savedRadius)&&savedRadius>=1&&savedRadius<=150)
+    this.setTextureBrushRadius(savedRadius,false);
    this.el('worldTextureScale')?.addEventListener('change',e=>{
     const next=Number(e.target.value);
     if(!Number.isFinite(next)||next<1||next>32||
@@ -127,7 +218,8 @@
    return true;
   }
   close(){
-   this.stopPainting();this.panel.hidden=true;return true;
+   this.stopPainting();this.hideBrushIndicator();
+   this.panel.hidden=true;return true;
   }
   renderForm(){
    const s=this.state;
@@ -155,6 +247,10 @@
    const power=this.el('worldBrushPower');
    if(radius)this.el('worldBrushRadiusValue').textContent=radius.value+' м';
    if(power)this.el('worldBrushPowerValue').textContent=power.value+' м/с';
+   const textureRadius=this.textureBrushRadius();
+   const sizeLabel=this.el('worldTextureRadiusValue');
+   if(sizeLabel)sizeLabel.textContent=textureRadius+
+    ' м радиус · '+(textureRadius*2)+' м диаметр';
    for(const [id,display,suffix] of [['worldTextureSoftness','worldTextureSoftnessValue','%'],
     ['worldTextureOpacity','worldTextureOpacityValue','%'],
     ['worldTextureScale','worldTextureScaleValue',' м']]){
