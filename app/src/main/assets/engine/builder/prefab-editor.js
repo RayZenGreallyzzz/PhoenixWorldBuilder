@@ -20,6 +20,7 @@
    this.rendered=new Map();this.selectedId='';this.pendingPlace='';
    this.playing=false;this.loadGeneration=0;this.clipGeneration=0;this.previewBefore=null;
    this.aiCursor=0;this.collider=null;this.pendingWaypointId='';
+   this.respawner=new PhoenixMobFeatures.Respawner();this.aiTime=0;
    this.previewAttackTime=0;this.previewAttackEntity='';
    this.routeHelper=new THREE.Group();this.routeHelper.name='phoenix:edit:route';
    builder.scene.add(this.routeHelper);
@@ -59,6 +60,7 @@
    on('phoenixPrefabEntities','change',()=>this.selectEntity());
    on('btnPrefabApplyTransform','click',()=>this.applyEntityTransform());
    on('btnPrefabSnapGround','click',()=>this.snapEntityToGround());
+   on('btnPrefabApplyNickname','click',()=>this.applyEntityNickname());
    on('phoenixEntityAI','change',()=>this.applyEntityAI());
    on('btnPrefabWaypointAdd','click',()=>this.addWaypoint());
    on('btnPrefabWaypointTap','click',()=>this.beginWaypointPlacement());
@@ -125,6 +127,11 @@
    this.el('phoenixPrefabHP').value='100';
    this.el('phoenixPrefabDamage').value='10';
    this.el('phoenixPrefabSpeed').value='2';
+   this.el('phoenixPrefabLevel').value='1';
+   this.el('phoenixPrefabDefense').value='0';
+   this.el('phoenixPrefabRespawnEnabled').checked=false;
+   this.el('phoenixPrefabRespawnDelay').value='30';
+   this.el('phoenixPrefabAttackEffect').value='impact';
    for(const a of ['Idle','Walk','Run','Attack','Hit','Death','Cast'])
     this.el('phoenixPrefab'+a).value='';
    this.el('phoenixPrefabAI').value='idle';
@@ -143,7 +150,12 @@
     assetId:this.el('phoenixPrefabAsset').value,
     stats:{hp:Number(this.el('phoenixPrefabHP').value),
      damage:Number(this.el('phoenixPrefabDamage').value),
-     speed:Number(this.el('phoenixPrefabSpeed').value)},
+     speed:Number(this.el('phoenixPrefabSpeed').value),
+     level:Number(this.el('phoenixPrefabLevel').value),
+     defense:Number(this.el('phoenixPrefabDefense').value)},
+    respawn:{enabled:this.el('phoenixPrefabRespawnEnabled').checked,
+     delay:Number(this.el('phoenixPrefabRespawnDelay').value)},
+    attackEffect:this.el('phoenixPrefabAttackEffect').value,
     animations:Object.fromEntries(
      ['idle','walk','run','attack','hit','death','cast'].map(name=>[
       name,this.el('phoenixPrefab'+name[0].toUpperCase()+name.slice(1)).value.trim()
@@ -165,6 +177,11 @@
    this.el('phoenixPrefabHP').value=String(p.stats.hp);
    this.el('phoenixPrefabDamage').value=String(p.stats.damage);
    this.el('phoenixPrefabSpeed').value=String(p.stats.speed);
+   this.el('phoenixPrefabLevel').value=String(p.stats.level??1);
+   this.el('phoenixPrefabDefense').value=String(p.stats.defense??0);
+   this.el('phoenixPrefabRespawnEnabled').checked=!!p.respawn?.enabled;
+   this.el('phoenixPrefabRespawnDelay').value=String(p.respawn?.delay??30);
+   this.el('phoenixPrefabAttackEffect').value=p.attackEffect||'impact';
    for(const a of ['idle','walk','run','attack','hit','death','cast'])
     this.el('phoenixPrefab'+a[0].toUpperCase()+a.slice(1)).value=p.animations[a]||'';
    this.el('phoenixPrefabAI').value=p.ai?.mode||'idle';
@@ -187,7 +204,8 @@
     const prefab=this.world.getComponent(id,'prefab'),tr=this.world.getComponent(id,'transform');
     if(!prefab||!tr)continue;
     const p=this.registry.get(prefab.id);
-    placed.appendChild(this.option(id,(p?.name||prefab.id)+' · '+
+    placed.appendChild(this.option(id,(
+     this.world.getComponent(id,'character')?.nickname||p?.name||prefab.id)+' · '+
      tr.position.map(n=>Number(n).toFixed(1)).join(', ')));
    }
    placed.value=[...placed.options].some(o=>o.value===previous)?previous:'';
@@ -373,7 +391,7 @@
   setPlaying(yes){
    if(yes)this.cancelPlacement();
    this.previewAttackTime=0;this.previewAttackEntity='';
-   this.playing=!!yes;
+   this.playing=!!yes;this.respawner.clear();this.aiTime=0;
    this.routeHelper.visible=!this.playing&& !this.panel.hidden;
    for(const [id,render] of this.rendered){
     render.animation?.stop();render.animation=null;
@@ -384,6 +402,10 @@
      render.aiState=PhoenixAI.initial(saved.position);
     }
     render.accum=0;render.hitHold=0;
+    render.skillRuntime=this.playing&&this.b.skillDefinitionEditor?.catalog?
+     new PhoenixSkills.Runtime(this.b.skillDefinitionEditor.catalog,
+      this.world.getComponent(id,'prefab')?.id||'player',100):null;
+    render.hiddenDead=false;render.root.visible=true;
     render.root.userData.phoenixDead=false;
     if(this.playing)this.startAnimation(id,render);
     this.groundVisual(render,0,true);
@@ -567,7 +589,7 @@
     this.world.setComponent(id,'transform',{position:position.slice(),yaw:0});
     this.world.setComponent(id,'stats',p.stats);
     this.world.setComponent(id,'character',{type:p.type,faction:p.faction,
-     assetId:p.assetId,animations:p.animations,ai:p.ai});
+     assetId:p.assetId,animations:p.animations,ai:p.ai,nickname:''});
     this.attach(id,render,{position,yaw:0});
    }catch(err){
     render.root.removeFromParent();
@@ -614,6 +636,8 @@
    }
    if(this.el('phoenixEntityYaw'))
     this.el('phoenixEntityYaw').value=tr?String(Number(((tr.yaw||0)*180/Math.PI).toFixed(1))):'0';
+   if(this.el('phoenixEntityNickname'))
+    this.el('phoenixEntityNickname').value=c?.nickname||'';
    if(this.el('phoenixEntityAI'))
     this.el('phoenixEntityAI').value=c?.ai?.mode||'idle';
    const list=this.el('phoenixEntityWaypoints');
@@ -647,6 +671,17 @@
     this.b.save();
     return true;
    }catch(error){this.status('Не удалось изменить моба: '+error.message);return false;}
+  }
+  applyEntityNickname(){
+   const id=this.selectedEntity();
+   if(!id)return this.status('Сначала выбери размещённого моба');
+   const nickname=this.el('phoenixEntityNickname')?.value?.trim()||'';
+   if([...nickname].length>80)return this.status('Ник слишком длинный (макс. 80)');
+   const ok=this.editEntity(id,({character})=>({
+    character:{...character,nickname}
+   }));
+   if(ok)this.status('✅ Ник сохранён. В PLAY он показывается при касании моба.');
+   return ok;
   }
   applyEntityTransform(){
    const id=this.selectedEntity();if(!id)return this.status('Выбери моба на сцене');
