@@ -335,7 +335,20 @@
  <label>Точки маршрута<select id="phoenixEntityWaypoints" size="3" aria-label="Точки патруля"></select></label>
  <div class="phoenixPrefabRow"><label>X<input id="phoenixWaypointX" type="number" step=".01" value="0"></label><label>Y<input id="phoenixWaypointY" type="number" step=".01" value="0"></label><label>Z<input id="phoenixWaypointZ" type="number" step=".01" value="0"></label></div>
  <div class="phoenixPrefabRow"><button id="btnPrefabWaypointTap" type="button">👆 Точка касанием сцены</button><button id="btnPrefabWaypointAdd" type="button">＋ Добавить XYZ</button><button id="btnPrefabWaypointRemove" type="button">− Удалить</button></div>
- <small>Маршрут показывается линией в EDIT. Действия Idle, Walk и Attack переключаются автоматически по состоянию ИИ. В PLAY изменения положения не сохраняются.</small>
+ <b>✍ Маршрут от руки / остановки</b>
+ <div class="phoenixPrefabRow"><button id="btnPhoenixRouteDraw" type="button">✍ Рисовать пальцем</button><button id="btnPhoenixRouteStops" type="button">⏸ Стопы на маршруте</button></div>
+ <small>Старые точки XYZ остаются. Для плавного маршрута нажми «Рисовать пальцем»: камера зафиксируется, а линия будет следовать пальцу. Указывай остановки с анимациями и сохраняй маршрут конкретного моба. После сохранения камера снова управляется как раньше.</small>
+ </details>
+ <div id="phoenixRouteDock" class="phoenixRouteDock" hidden role="group" aria-label="Рисование маршрута моба">
+  <strong>✍ Маршрут выбранного моба</strong>
+  <span id="phoenixRouteHelp">Камера закреплена. Веди пальцем по земле, чтобы нарисовать путь.</span>
+  <div class="phoenixPrefabRow"><button id="btnPhoenixRouteDrawTool" type="button">✍ Линия</button><button id="btnPhoenixRouteStopTool" type="button">⏸ Остановка</button></div>
+  <div class="phoenixPrefabRow"><label>Пауза, сек<input id="phoenixRoutePause" type="number" min=".2" max="120" step=".5" value="3"></label>
+  <label>Анимация<select id="phoenixRouteAnimation"><option value="idle">Idle</option><option value="walk">Walk</option><option value="run">Run</option><option value="cast">Cast</option></select></label></div>
+  <small id="phoenixRouteStatus" aria-live="polite">Нарисуй путь или выбери место для остановки.</small>
+  <div class="phoenixPrefabRow"><button id="btnPhoenixRouteClear" type="button">↺ Очистить рисунок</button><button id="btnPhoenixRouteCancel" type="button">✕ Отмена</button><button id="btnPhoenixRouteSave" type="button" class="primary">💾 Сохранить маршрут</button></div>
+ </div>
+ <small>Маршрут показывается линией в EDIT. Остановки выполняются в PLAY без строительства стен. Для сохранения проекта на устройстве нажми верхнюю 💾 Сохранить.</small>
  </details>
  <button type="button" id="btnPrefabRemoveEntity">🗑 Удалить со сцены</button>
  <small id="phoenixPrefabStatus" aria-live="polite">Создай шаблон, затем коснись места на сцене.</small>
@@ -1006,6 +1019,7 @@
 <script src="engine/core/phoenix-core.js"></script>
 <script src="engine/core/phoenix-events.js"></script>
 <script src="engine/core/phoenix-quests.js"></script>
+<script src="engine/core/phoenix-patrol-path.js"></script>
 <script src="engine/core/phoenix-ai.js"></script>
 <script src="engine/core/phoenix-combat.js"></script>
 <script src="engine/core/phoenix-player-combat.js"></script>
