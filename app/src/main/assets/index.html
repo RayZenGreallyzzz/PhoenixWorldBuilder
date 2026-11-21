@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
-<title>Phoenix Engine 1.0 — FPS + RPG Skills</title><link rel="stylesheet" href="clean.css"></head>
+<title>Phoenix Engine 1.1 — MOBA HUD + PNG/WebP icons</title><link rel="stylesheet" href="clean.css"></head>
 <body>
 <canvas id="view" aria-label="Строительная 3D-сцена"></canvas>
 <div id="gizmoCadOverlay" class="gizmoCadOverlay" hidden aria-hidden="true">
@@ -43,15 +43,15 @@
  <div class="topRight"><button id="btnSave" title="Сохранить редактируемый проект в приложении">💾 Сохранить</button><button id="btnLoad">📂 Открыть</button><button id="btnQuickProjectJson" title="Скачать редактируемый дом с текстурами в .phoenix.json">💾 JSON</button><button id="btnExportGLB" class="primary" title="Выгрузить построенную сцену в GLB">📦 GLB</button><button id="btnProjectLoadSettings" title="Настройки загрузки дома" aria-label="Настройки загрузки проекта" aria-expanded="false">⚙️</button><button id="btnHideUi" title="Убрать панели">◩</button></div>
 </header>
 <!-- Separate always-visible Engine toolbar: never put PLAY inside UV44's crowded header. -->
-<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 1.0 — игровые инструменты">
- <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 1.0">🔥 ENGINE <strong>v1.0</strong><small>UV44</small></span>
+<div id="phoenixEngineDock" class="phoenixEngineDock" role="toolbar" aria-label="Phoenix Engine 1.1 — игровые инструменты">
+ <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 1.1">🔥 ENGINE <strong>v1.1</strong><small>UV44</small></span>
  <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
  <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 МОБЫ / NPC</button>
  <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить расположение игровых кнопок">🎮 HUD</button>
  <button id="btnPhoenixSkillDefs" type="button" class="phoenixHudEntry" aria-label="Создать способности и настроить уровни персонажей">🧙 НАВЫКИ</button>
 </div>
 <section id="phoenixSkillDefinitions" class="phoenixSkillEditor" hidden role="region" aria-label="Редактор способностей персонажей">
- <div class="phoenixSkillTitle"><b>🧙 Character Skill Editor 1.0</b><button id="btnSkillDefClose" type="button">✕</button></div>
+ <div class="phoenixSkillTitle"><b>🧙 Редактор навыков персонажей</b><button id="btnSkillDefClose" type="button">✕</button></div>
  <small>Редактируй способности игрока или любого сохранённого моба/NPC. Характеристики сохраняются в JSON проекта.</small>
  <label>Персонаж<select id="skillDefCharacter"><option value="player">🧍 Игрок / мой герой</option></select></label>
  <label>Игровая кнопка / слот<select id="skillDefSlot">
@@ -59,8 +59,15 @@
   <option value="slot5">🌟 Умение 3</option><option value="slot6">💠 Умение 4 (MMO)</option>
   <option value="slot7">🌙 Умение 5 (MMO)</option><option value="ultimate">🔥 Ульта</option>
  </select></label>
- <div class="phoenixSkillRow"><label>Иконка<input id="skillDefIcon" value="✨" maxlength="16"></label>
+ <div class="phoenixSkillRow"><label>Иконка / эмодзи<input id="skillDefIcon" value="✨" maxlength="16"></label>
  <label>Тип<select id="skillDefType"><option value="damage">⚔ Урон по врагу</option><option value="heal">💚 Лечение игрока</option></select></label></div>
+ <div class="phoenixSkillImageRow">
+ <button id="btnSkillDefImagePick" type="button">🖼 Картинка навыка (PNG/WebP)</button>
+ <button id="btnSkillDefImageRemove" type="button">✕ Убрать</button>
+ <img id="skillDefImagePreview" class="phoenixIconPreview" alt="Картинка способности" hidden>
+ </div>
+ <input id="skillDefImageFile" type="file" accept="image/png,image/webp,.png,.webp" hidden>
+ <small>Для каждого персонажа можно выбрать свою картинку навыка из памяти Android. После сохранения навыка игрока она появится на его кнопке в PLAY.</small>
  <label>Название<input id="skillDefName" value="Новый навык" maxlength="80"></label>
  <label>Описание<textarea id="skillDefDescription" rows="2" maxlength="400" placeholder="Что делает навык?"></textarea></label>
  <div class="phoenixSkillRow"><label>Уровень<input id="skillDefLevel" type="number" min="1" max="20" value="1"></label>
@@ -80,14 +87,13 @@
  <div class="phoenixSkillTitle"><b>🎮 Редактор скиллов · HUD</b><button id="btnSkillClose" type="button" aria-label="Закрыть настройку HUD">✕</button></div>
  <small>В EDIT перетащи любую кнопку пальцем. Настрой внешний вид и сохрани расположение для PLAY.</small>
  <label>Жанр и готовая раскладка<select id="phoenixSkillPreset">
-  <option value="mobile-legends">Mobile Legends — большой удар и дуга скиллов</option>
-  <option value="wild-rift">Wild Rift — Q / W / E / R</option>
+  <option value="moba">MOBA — атака и навыки дугой</option>
   <option value="mmorpg">MMORPG — панель навыков и лечение</option>
   <option value="shooter">Шутер — огонь, прицел, перезарядка, прыжок</option>
   <option value="classic">Классическая — от Phoenix 0.7</option>
  </select></label>
  <button id="btnSkillApplyPreset" type="button">🎮 Применить раскладку</button>
- <small>Это отдельные раскладки для MOBA, MMO и шутеров. В шутере ОГОНЬ/ПРИЦЕЛ/ПЕРЕЗАРЯДКА/ПРЫЖОК/ПРИСЕСТЬ пока только кнопки — действия добавим с системой оружия и FPS-управления. Работают прежние ближняя атака и лечение.</small>
+ <small>Выбери MOBA, MMO или Шутер. В настройке HUD все кнопки можно таскать пальцем прямо по экрану. Отдельные боевые действия задаются в разделе «НАВЫКИ».</small>
  <label>Кнопка<select id="phoenixSkillSelect">
   <option value="attack">⚔ Атака — работает</option>
   <option value="heal">💚 Лечение — работает</option>
@@ -105,6 +111,13 @@
  </select></label>
  <div class="phoenixSkillRow"><label>Иконка / эмодзи<input id="phoenixSkillIcon" maxlength="24" value="⚔" autocomplete="off"></label>
  <label>Подпись<input id="phoenixSkillLabel" maxlength="16" value="АТАКА" autocomplete="off"></label></div>
+ <div class="phoenixSkillImageRow">
+ <button id="btnSkillImagePick" type="button">🖼 Выбрать PNG/WebP</button>
+ <button id="btnSkillImageRemove" type="button">✕ Убрать картинку</button>
+ <img id="phoenixSkillImagePreview" class="phoenixIconPreview" alt="Предпросмотр иконки на кнопке" hidden>
+ </div>
+ <input id="phoenixSkillImageFile" type="file" accept="image/png,image/webp,.png,.webp" hidden>
+ <small>Выбери картинку из памяти Android: она появится внутри круглой кнопки. Изображение уменьшается перед сохранением, чтобы JSON оставался компактным.</small>
  <div class="phoenixSkillRow"><label>Цвет<input id="phoenixSkillColor" type="color" value="#a63929"></label>
  <label>Форма<select id="phoenixSkillShape"><option value="circle">Круг</option><option value="rounded">Скруглённый квадрат</option></select></label></div>
  <div class="phoenixSkillRow"><label>Размер (48–120)<input id="phoenixSkillSize" type="range" min="48" max="120" step="2" value="82"></label>
@@ -781,6 +794,7 @@
 <script src="engine/core/phoenix-ai.js"></script>
 <script src="engine/core/phoenix-combat.js"></script>
 <script src="engine/core/phoenix-weapon.js"></script>
+<script src="engine/core/phoenix-skill-images.js"></script>
 <script src="engine/core/phoenix-skills.js"></script>
 <script src="engine/core/phoenix-skill-layout.js"></script>
 <script src="engine/core/phoenix-prefabs.js"></script>
