@@ -68,6 +68,20 @@
    return {ok:true,attacker:attackerId,damage,hp:this.playerHp,
     maxHp:this.playerMaxHp,dead:this.playerDead,kills:this.kills};
   }
+  healMob(id,amount){
+   bounded(amount,0,1000000,'mob heal');
+   const mob=this.mobs.get(id);
+   if(!mob||mob.hp<=0)return {ok:false,reason:'inactive'};
+   const old=mob.hp;mob.hp=Math.min(mob.maxHp,mob.hp+amount);
+   return {ok:mob.hp>old,id,hp:mob.hp,maxHp:mob.maxHp,healed:mob.hp-old};
+  }
+  respawnMob(id){
+   const mob=this.mobs.get(id);
+   if(!mob||mob.hp>0)return false;
+   mob.hp=mob.maxHp;
+   // Keep historical player kill count; revive is temporary runtime only.
+   return true;
+  }
   damageMob(id,amount){
    bounded(amount,0,1000000,'player skill damage');
    if(this.playerDead)return {ok:false,reason:'player-dead'};
