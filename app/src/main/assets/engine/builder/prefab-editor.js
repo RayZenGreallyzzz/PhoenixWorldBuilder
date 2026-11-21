@@ -352,6 +352,8 @@
    }):[]);
    if(this.playing&&!this.collider&&typeof CharacterCollision!=='undefined')
     this.collider=new CharacterCollision.Solver({radius:.27,height:1.6});
+   if(this.collider&&this.b.worldEditor)
+    this.collider.groundY=(x,z)=>this.b.worldEditor.heightAt(x,z);
   }
   update(dt){
    if(!this.playing||!Number.isFinite(dt)||dt<=0)return;
@@ -394,7 +396,8 @@
     if(Math.hypot(decision.move[0],decision.move[2])>.0001){
      const before=render.root.position.clone();
      const delta=new THREE.Vector3(...decision.move);
-     if(this.collider&&this.b.collisionsEnabled&&this.b.entries.length){
+     if(this.collider&&this.b.collisionsEnabled&&
+        (this.b.entries.length||this.b.worldEditor?.hasElevations())){
       const result=this.collider.move(before,delta,this.b.entries);
       render.root.position.copy(result.position);
       if(result.blocked&&result.displacement.lengthSq()<.00001)
@@ -519,7 +522,9 @@
    // One tap places one mob. Await async GLB loads outside the input handler.
    this.cancelPlacement();
    try{
-    await this.createEntity(id,[hit.x,hit.y,hit.z]);
+    const elevation=this.b.worldEditor?.heightAt(hit.x,hit.z);
+    await this.createEntity(id,[hit.x,Number.isFinite(elevation)?
+     Math.max(elevation,hit.y):hit.y,hit.z]);
     this.status('✅ Моб установлен. Нажми ▶ PLAY для просмотра анимации Idle.');
    }catch(err){this.status('Не удалось установить моба: '+err.message)}
    return true;
