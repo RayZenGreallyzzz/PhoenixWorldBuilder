@@ -63,7 +63,9 @@
    on('btnPrefabApplyTransform','click',()=>this.applyEntityTransform());
    on('btnPrefabSnapGround','click',()=>this.snapEntityToGround());
    on('btnPrefabApplyNickname','click',()=>this.applyEntityNickname());
+   on('btnPrefabApplyPreset','click',()=>this.applyEntityPreset());
    on('phoenixEntityAI','change',()=>this.applyEntityAI());
+   on('phoenixEntityEngagement','change',()=>this.applyEntityAI());
    on('btnPrefabWaypointAdd','click',()=>this.addWaypoint());
    on('btnPrefabWaypointTap','click',()=>this.beginWaypointPlacement());
    on('btnPrefabWaypointRemove','click',()=>this.removeWaypoint());
@@ -125,6 +127,8 @@
    this.el('phoenixPrefabName').value='Новый моб';
    this.el('phoenixPrefabType').value='mob';
    this.el('phoenixPrefabFaction').value='enemy';
+   if(this.el('phoenixPrefabNameColor'))this.el('phoenixPrefabNameColor').value='#ffffff';
+   if(this.el('phoenixPrefabEngagement'))this.el('phoenixPrefabEngagement').value='auto';
    this.el('phoenixPrefabAsset').value='';
    this.el('phoenixPrefabHP').value='100';
    this.el('phoenixPrefabDamage').value='10';
@@ -149,6 +153,7 @@
     name:this.el('phoenixPrefabName').value,
     type:this.el('phoenixPrefabType').value,
     faction:this.el('phoenixPrefabFaction').value,
+    nameColor:this.el('phoenixPrefabNameColor')?.value||'#ffffff',
     assetId:this.el('phoenixPrefabAsset').value,
     stats:{hp:Number(this.el('phoenixPrefabHP').value),
      damage:Number(this.el('phoenixPrefabDamage').value),
@@ -163,6 +168,7 @@
       name,this.el('phoenixPrefab'+name[0].toUpperCase()+name.slice(1)).value.trim()
      ])),
     ai:{mode:this.el('phoenixPrefabAI').value,
+     engagement:this.el('phoenixPrefabEngagement')?.value||'auto',
      patrolRadius:Number(this.el('phoenixPrefabPatrolRadius').value),
      aggroRadius:Number(this.el('phoenixPrefabAggroRadius').value),
      attackRange:Number(this.el('phoenixPrefabAttackRange').value),
@@ -175,6 +181,8 @@
    this.el('phoenixPrefabName').value=p.name;
    this.el('phoenixPrefabType').value=p.type;
    this.el('phoenixPrefabFaction').value=p.faction;
+   if(this.el('phoenixPrefabNameColor'))this.el('phoenixPrefabNameColor').value=p.nameColor||'#ffffff';
+   if(this.el('phoenixPrefabEngagement'))this.el('phoenixPrefabEngagement').value=p.ai?.engagement||'auto';
    this.refreshModels(p.assetId);
    this.el('phoenixPrefabHP').value=String(p.stats.hp);
    this.el('phoenixPrefabDamage').value=String(p.stats.damage);
@@ -452,7 +460,7 @@
    this.b.playBridge?.refreshMobCard?.();
    return true;
   }
-  tryNpcSkill(id,render,p,player,distance){
+  tryNpcSkill(id,render,p,player,distance,allowAttack=true){
    const runtime=render.skillRuntime;
    if(!runtime||!p)return false;
    for(const slot of Object.keys(runtime.skills)){
@@ -464,7 +472,8 @@
     const healing=def.type==='heal';
     const hp=this.combat.get(id);
     const allowed=healing?(hp&&!hp.dead&&hp.hp<hp.maxHp):
-     (p.faction==='enemy'&&!this.combat.isPlayerDead()&&
+     ((this.world.getComponent(id,'character')?.faction||p.faction)==='enemy'&&allowAttack&&
+      !this.combat.isPlayerDead()&&
       distance<=def.range&&this.canStrike(render.root.position,player,distance));
     if(!allowed)continue;
     const used=runtime.cast(slot,this.aiTime,()=>true);
@@ -550,7 +559,8 @@
     const behavior={...ownAI,
      attackDuration:Math.max(.15,Math.min(8,duration))};
     const decision=PhoenixAI.tick(render.aiState,render.root.position.toArray(),
-     player.toArray(),behavior,p.stats,dtStep,p.faction);
+     player.toArray(),behavior,p.stats,dtStep,
+     this.world.getComponent(id,'character')?.faction||p.faction);
     render.aiState=decision.state;
     if(Math.hypot(decision.move[0],decision.move[2])>.0001){
      const before=render.root.position.clone();
@@ -571,10 +581,11 @@
     render.animation?.setState(decision.animation);
     if(this.tryNpcSkill(id,render,p,player,
       Math.hypot(render.root.position.x-player.x,
-       render.root.position.z-player.z)))continue;
+       render.root.position.z-player.z),decision.engaged))continue;
     // Only the AI's cooled-down attack intent can damage the player.
     // Check actual Builder wall triangles before applying any HP change.
-    if(decision.attack&&p.faction==='enemy'&&!this.combat.isPlayerDead()&&
+    if(decision.attack&&(this.world.getComponent(id,'character')?.faction||p.faction)==='enemy'&&
+       !this.combat.isPlayerDead()&&
        this.canStrike(render.root.position,player,
         Math.hypot(render.root.position.x-player.x,
          render.root.position.z-player.z))){
@@ -615,6 +626,8 @@
    const instanceStats=this.world.getComponent(id,'stats')||{};
    const authored={...prefab,stats:{...prefab.stats,...instanceStats}};
    return {...Features.profile(authored,stats,skills,nickname),
+    faction:this.world.getComponent(id,'character')?.faction||prefab.faction,
+    nameColor:this.world.getComponent(id,'character')?.nameColor||prefab.nameColor||'#ffffff',
     id,prefabId,respawn:Features.respawn(prefab.respawn),
     respawnLeft:this.respawner.remaining(id)};
   }
@@ -689,6 +702,9 @@
     this.respawner.mark(id,prefab?.respawn);
     render.animation?.setState('death',.1);
    }else{
+    // A non-aggressive, defensive mob retaliates only after an actual hit.
+    render.aiState=PhoenixAI.provoke(render.aiState||
+     PhoenixAI.initial(render.root.position.toArray()),12);
     render.hitHold=.45;
     this.faceMob(render,this.b.player.position,.15);
     render.animation?.setState('hit',.1);
@@ -738,7 +754,8 @@
     this.world.setComponent(id,'transform',{position:position.slice(),yaw:0});
     this.world.setComponent(id,'stats',p.stats);
     this.world.setComponent(id,'character',{type:p.type,faction:p.faction,
-     assetId:p.assetId,animations:p.animations,ai:p.ai,nickname:''});
+     assetId:p.assetId,animations:p.animations,ai:p.ai,
+     nameColor:p.nameColor||'#ffffff',nickname:''});
     this.attach(id,render,{position,yaw:0});
    }catch(err){
     render.root.removeFromParent();
@@ -787,6 +804,11 @@
     this.el('phoenixEntityYaw').value=tr?String(Number(((tr.yaw||0)*180/Math.PI).toFixed(1))):'0';
    if(this.el('phoenixEntityNickname'))
     this.el('phoenixEntityNickname').value=c?.nickname||'';
+   const prefab=id?this.registry.get(this.world.getComponent(id,'prefab')?.id):null;
+   if(this.el('phoenixEntityNameColor'))
+    this.el('phoenixEntityNameColor').value=c?.nameColor||prefab?.nameColor||'#ffffff';
+   if(this.el('phoenixEntityEngagement'))
+    this.el('phoenixEntityEngagement').value=c?.ai?.engagement||prefab?.ai?.engagement||'auto';
    if(this.el('phoenixEntityAI'))
     this.el('phoenixEntityAI').value=c?.ai?.mode||'idle';
    const list=this.el('phoenixEntityWaypoints');
@@ -825,11 +847,31 @@
    const id=this.selectedEntity();
    if(!id)return this.status('Сначала выбери размещённого моба');
    const nickname=this.el('phoenixEntityNickname')?.value?.trim()||'';
+   const nameColor=this.el('phoenixEntityNameColor')?.value||'#ffffff';
    if([...nickname].length>80)return this.status('Ник слишком длинный (макс. 80)');
+   if(!/^#[0-9a-fA-F]{6}$/.test(nameColor))return this.status('Некорректный цвет имени');
    const ok=this.editEntity(id,({character})=>({
-    character:{...character,nickname}
+    character:{...character,nickname,nameColor}
    }));
-   if(ok)this.status('✅ Ник сохранён. В PLAY он показывается при касании моба.');
+   if(ok)this.status('✅ Имя и выбранный цвет сохранены. В PLAY ник виден постоянно.');
+   return ok;
+  }
+  applyEntityPreset(){
+   const id=this.selectedEntity(),preset=this.el('phoenixEntityPreset')?.value;
+   if(!id)return this.status('Сначала выбери моба на сцене'),false;
+   const presets={
+    'white-defensive':{nameColor:'#ffffff',engagement:'defensive',mode:'patrol',faction:'enemy'},
+    'red-aggressive':{nameColor:'#ff4444',engagement:'aggressive',mode:'patrol-aggro',faction:'enemy'},
+    'green-friendly':{nameColor:'#55ff88',engagement:'passive',mode:'patrol',faction:'ally'},
+    'yellow-guard':{nameColor:'#ffd65c',engagement:'defensive',mode:'guard',faction:'enemy'}
+   };
+   const selected=presets[preset];
+   if(!selected)return this.status('Выбери готовый шаблон поведения'),false;
+   const ok=this.editEntity(id,({character})=>({character:{...character,
+    nameColor:selected.nameColor,faction:selected.faction,
+    ai:{...character.ai,engagement:selected.engagement,mode:selected.mode}}
+   }));
+   if(ok)this.status('✅ Шаблон применён. Цвет и поведение теперь можно менять отдельно.');
    return ok;
   }
   applyEntityTransform(){
@@ -859,11 +901,13 @@
   }
   applyEntityAI(){
    const id=this.selectedEntity(),mode=this.el('phoenixEntityAI')?.value;
-   if(!id||!PhoenixAI.BEHAVIORS.includes(mode))return false;
+   const engagement=this.el('phoenixEntityEngagement')?.value||'auto';
+   if(!id||!PhoenixAI.BEHAVIORS.includes(mode)||
+      !PhoenixAI.ENGAGEMENTS.includes(engagement))return false;
    const ok=this.editEntity(id,({character})=>({
-    character:{...character,ai:{...character.ai,mode}}
+    character:{...character,ai:{...character.ai,mode,engagement}}
    }));
-   if(ok)this.status('🤖 Поведение этого моба: '+mode);
+   if(ok)this.status('🤖 Маршрут: '+mode+' · реакция: '+engagement);
    return ok;
   }
   addWaypointToEntity(id,position){
