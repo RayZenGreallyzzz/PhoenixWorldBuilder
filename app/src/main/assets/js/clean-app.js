@@ -5325,18 +5325,18 @@ class CleanBuilder{
   };
   for(const type of ['pointerup','pointercancel'])
    this.canvas.addEventListener(type,finishGizmo,true);
-  this.canvas.addEventListener('pointerdown',e=>{if(!this.playBridge?.active)this.beginObjectDrag(e)},true);
-  this.canvas.addEventListener('pointermove',e=>{if(!this.playBridge?.active)this.continueObjectDrag(e)},true);
+  this.canvas.addEventListener('pointerdown',e=>{if(!this.playBridge?.active&&!this.prefabEditor?.routeDraft)this.beginObjectDrag(e)},true);
+  this.canvas.addEventListener('pointermove',e=>{if(!this.playBridge?.active&&!this.prefabEditor?.routeDraft)this.continueObjectDrag(e)},true);
   for(const type of ['pointerup','pointercancel'])
-   this.canvas.addEventListener(type,e=>{if(!this.playBridge?.active)this.finishObjectDrag(e)},true);
+   this.canvas.addEventListener(type,e=>{if(!this.playBridge?.active&&!this.prefabEditor?.routeDraft)this.finishObjectDrag(e)},true);
   this.canvas.addEventListener('pointerdown',e=>{
-   if(this.playBridge?.active)return;
+   if(this.playBridge?.active||this.prefabEditor?.routeDraft)return;
    // A second finger must not generate a click/placement at the end of pan.
    if(e.isPrimary===false){this.pointerStart=null;return}
    this.pointerStart={pointerId:e.pointerId,x:e.clientX,y:e.clientY,time:performance.now()};
   });
   this.canvas.addEventListener('pointerup',e=>{
-   if(this.playBridge?.active)return;
+   if(this.playBridge?.active||this.prefabEditor?.routeDraft)return;
    const start=this.pointerStart;
    if(!start||e.pointerId!==start.pointerId||e.isPrimary===false)return;
    this.pointerStart=null;
@@ -5364,7 +5364,7 @@ class CleanBuilder{
   });
   this.canvas.addEventListener('pointercancel',()=>{this.pointerStart=null});
   this.canvas.addEventListener('pointermove',e=>{
-   if(this.playBridge?.active||this.mode!=='build'||this.worldEditor?.painting||
+   if(this.playBridge?.active||this.prefabEditor?.routeDraft||this.mode!=='build'||this.worldEditor?.painting||
       this.prefabEditor?.pendingPlace||this.prefabEditor?.pendingWaypointId)return;
    if(e.buttons||this.cameraFocusPick||this.tool!=='place')return;
    const point=this.floor===0&&this.worldEditor?.hasElevations()?
