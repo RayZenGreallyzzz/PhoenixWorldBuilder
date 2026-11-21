@@ -756,3 +756,22 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
  font-size:11px;background:#174658;border:1px solid #689faf}
 #phoenixWorldPanel .phoenixTextureBrushSizes button.active{background:#117e76;
  color:#f3fffd;border-color:#76fbe1}
+
+/* Phoenix 2.0: touch-selected mob / NPC stats card in PLAY. */
+#phoenixMobCard{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(141px,env(safe-area-inset-top));z-index:66;
+ width:min(274px,calc(100vw - 25px));max-height:48dvh;overflow:auto;overscroll-behavior:contain;
+ background:#0a2435f5;border:1px solid #6bd5b9;border-radius:13px;padding:11px;
+ display:flex;flex-direction:column;gap:7px;box-shadow:0 8px 24px #000a;
+ font-size:12px;color:#e9fff6;pointer-events:auto}
+#phoenixMobCard[hidden]{display:none!important}
+#phoenixMobCard .phoenixMobCardTitle{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#phoenixMobCard .phoenixMobCardTitle strong{font-size:16px;color:#83f7d7;overflow-wrap:anywhere}
+#phoenixMobCard button{min-height:30px;padding:3px 8px}
+#phoenixMobCard progress{width:100%;height:13px;accent-color:#5bf2a4}
+#phoenixMobCard small{font-size:10px;color:#b5dcdf;line-height:1.4}
+#phoenixMobCardStats{line-height:1.65;padding:5px 6px;border-radius:6px;background:#123647}
+#phoenixMobCardSkills{color:#ffd98c;line-height:1.45}
+@media(max-width:760px){#phoenixMobCard{top:max(102px,env(safe-area-inset-top));right:5px;width:min(236px,58vw);
+ max-height:45dvh;font-size:11px;padding:8px;gap:4px}#phoenixMobCard .phoenixMobCardTitle strong{font-size:13px}}
+#phoenixPrefabPanel #phoenixPrefabRespawnEnabled{align-self:flex-start}
+#phoenixPrefabPanel #phoenixEntityNickname{width:100%}
