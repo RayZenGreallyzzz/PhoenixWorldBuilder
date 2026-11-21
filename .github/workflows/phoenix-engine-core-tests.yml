@@ -19,6 +19,7 @@ on:
       - 'tests/test-play-wiring.cjs'
       - 'tests/test-prefab-core.cjs'
       - 'tests/test-prefab-editor.cjs'
+      - 'tests/test-phoenix-mob-import.cjs'
       - 'tests/test-mob-features.cjs'
       - 'tests/test-phoenix-mob-nametags.cjs'
       - 'app/src/main/assets/engine/core/phoenix-mob-features.js'
@@ -96,6 +97,7 @@ jobs:
           node tests/test-play-wiring.cjs
           node tests/test-prefab-core.cjs
           node tests/test-prefab-editor.cjs
+          node tests/test-phoenix-mob-import.cjs
           node tests/test-mob-features.cjs
           node tests/test-phoenix-mob-nametags.cjs
           node tests/test-character-mob-save.cjs
