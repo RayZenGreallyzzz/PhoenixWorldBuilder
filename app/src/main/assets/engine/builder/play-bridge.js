@@ -42,6 +42,14 @@
     this.mobCard=this.document.getElementById('phoenixMobCard');
     this.selectedMobId='';this.mobTags=new Map();this.mobTagTextures=new Map();
     this.effects=null;this.mobCardElapsed=0;this.mobPointer=null;
+    this.playerAttackEffect='impact';
+    const playerFx=this.document.getElementById('phoenixPlayerAttackEffect');
+    playerFx?.addEventListener('change',()=>{
+     const selected=playerFx.value;
+     if(PhoenixVFX.PRESETS.includes(selected)){
+      this.playerAttackEffect=selected;this.builder.save?.();
+     }
+    });
     const canvas=builder.canvas;
     canvas?.addEventListener('pointerdown',e=>{
      if(this.active&&e.isPrimary!==false&&e.target===canvas)
@@ -508,7 +516,7 @@
    this.builder.playAttackAnimation?.();
    if(result.ok){
     const mob=this.builder.prefabEditor?.rendered.get(result.id);
-    this.effects?.spawn({preset:'impact'},mob?.root.position);
+    this.effects?.spawn({preset:this.playerAttackEffect},mob?.root.position);
     this.updatePlayerHud();this.refreshMobCard();
     if(this.hpTarget)this.hpTarget.textContent=
      result.name+' · HP '+result.hp+'/'+result.maxHp;
