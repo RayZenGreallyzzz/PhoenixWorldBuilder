@@ -398,6 +398,226 @@
    this.open();this.startPainting(false);
    return true;
   }
+  openTextureFolder(){
+   this.b.setTextureTab?.('textures');
+   const folder=this.el('textureCategoryFilter');
+   if(folder)folder.value='landscape-tiles';
+   this.b.renderTextureLibrary?.();
+   return this.open();
+  }
+  updateTextureChosen(){
+   const label=this.el('worldTextureChosen');
+   if(!label)return;
+   const info=this.b.textureFiles?.find(t=>t.id===this.textureId);
+   label.textContent=info?'🖼 Выбран материал: '+info.name+
+    ' · одно изображение, круглые мазки':'🎨 Выбери картинку слева: Текстуры → Ландшафт';
+  }
+  selectTexture(id){
+   const info=this.b.textureFiles?.find(t=>t.id===id&&
+    t.folder==='landscape-tiles');
+   if(!info)return this.notify('Сначала добавь PNG/WebP в папку «Ландшафт»'),false;
+   this.textureId=id;
+   this.open();
+   this.startTexturePaint(false);
+   this.updateTextureChosen();
+   this.ensureTexture(id).catch(error=>this.notify(
+    '⚠ Не удалось прочитать тайл «'+info.name+'»: '+error.message));
+   return true;
+  }
+  startTexturePaint(erase=false){
+   if(this.b.playBridge?.active)return false;
+   if(!erase&&!this.textureId)return this.notify(
+    'Сначала выбери материал в папке «Ландшафт» слева'),false;
+   this.finishStroke();
+   this.painting=true;this.paintMode=erase?'texture-erase':'texture';
+   this.b.prefabEditor?.cancelPlacement?.();
+   this.b.surfaceSidePick=false;
+   this.b.decalPickMode=false;
+   this.updateStatus();
+   return true;
+  }
+  usesTexture(id){
+   return this.painter.materials().includes(id);
+  }
+  releaseTexture(id){
+   if(this.usesTexture(id))return false;
+   const cached=this.textureMaps.get(id);
+   if(cached){cached.dispose?.();this.textureMaps.delete(id);}
+   this.texturePromises.delete(id);
+   return true;
+  }
+  async ensureTexture(id){
+   if(this.textureMaps.has(id))return this.textureMaps.get(id);
+   if(this.texturePromises.has(id))return this.texturePromises.get(id);
+   const token=this.textureGeneration;
+   const request=Promise.resolve().then(()=>this.b.textureAsset(id))
+    .then(raw=>{
+     // Three.js Texture.clone() shares the decoded image, not a new copy
+     // of the imported PNG/WebP bytes. Builder keeps the master asset once.
+     const tex=raw.clone();
+     tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+     tex.offset.set(0,0);tex.repeat.set(1,1);
+     tex.needsUpdate=true;
+     this.textureMaps.set(id,tex);
+     this.texturePromises.delete(id);
+     if(token===this.textureGeneration){
+      for(const [key,layers] of this.painter.patches)
+       if(layers.has(id))this.refreshTexturePatch(key);
+     }
+     return tex;
+    }).catch(error=>{this.texturePromises.delete(id);throw error});
+   this.texturePromises.set(id,request);
+   return request;
+  }
+  setTextureScale(n){
+   if(!Number.isFinite(n)||n<1||n>32)return false;
+   for(const patches of this.textureMeshes.values())
+    for(const overlay of patches.values()){
+     const rect=overlay.rect,uniforms=overlay.mesh.material.userData;
+     uniforms.terrainRepeat.set(rect.width/n,rect.depth/n);
+     uniforms.terrainOffset.set(rect.minX/n,-(rect.minZ+rect.depth)/n);
+    }
+   return true;
+  }
+  removeTextureMeshes(){
+   for(const layers of this.textureMeshes.values())
+    for(const value of layers.values())this.disposeTextureOverlay(value);
+   this.textureMeshes.clear();
+  }
+  disposeTextureOverlay(value){
+   this.terrainRoot.remove(value.mesh);
+   value.mesh.geometry?.dispose?.();
+   value.mesh.material?.alphaMap?.dispose?.();
+   value.mesh.material?.dispose?.();
+  }
+  geometryForTexture(rect){
+   const geo=new THREE.PlaneGeometry(rect.width,rect.depth,
+    this.patchSegments,this.patchSegments);
+   geo.rotateX(-Math.PI/2);
+   const points=geo.getAttribute('position');
+   for(let i=0;i<points.count;i++)
+    points.setY(i,this.heightAt(rect.x+points.getX(i),
+     rect.z+points.getZ(i))+.042);
+   points.needsUpdate=true;
+   geo.computeVertexNormals();
+   return geo;
+  }
+  materialForTexture(id,rect,maskTexture){
+   const tileMetres=Number(this.el('worldTextureScale')?.value||4);
+   const texture=this.textureMaps.get(id);
+   const material=new THREE.MeshBasicMaterial({
+    map:texture,alphaMap:maskTexture,
+    transparent:true,depthWrite:false,alphaTest:.004,
+    side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1
+   });
+   material.userData.terrainRepeat=new THREE.Vector2(
+    rect.width/tileMetres,rect.depth/tileMetres);
+   material.userData.terrainOffset=new THREE.Vector2(
+    rect.minX/tileMetres,-(rect.minZ+rect.depth)/tileMetres);
+   // Three r140 normally uses the SAME UV for map and alphaMap.
+   // The mask needs local 0..1 UV while terrain imagery must tile by
+   // metres across patch boundaries. Custom map sampling fixes both.
+   material.onBeforeCompile=shader=>{
+    shader.uniforms.terrainRepeat={
+     value:material.userData.terrainRepeat
+    };
+    shader.uniforms.terrainOffset={
+     value:material.userData.terrainOffset
+    };
+    shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
+     '#include <common>\\nuniform vec2 terrainRepeat;\\nuniform vec2 terrainOffset;');
+    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',
+     '#ifdef USE_MAP\\n'+
+     ' vec2 worldPaintUV = vUv * terrainRepeat + terrainOffset;\\n'+
+     ' vec4 sampledDiffuseColor = texture2D(map,worldPaintUV);\\n'+
+     ' diffuseColor *= sampledDiffuseColor;\\n#endif');
+   };
+   material.customProgramCacheKey=()=> 'phoenix-terrain-splat-uv-v1';
+   return material;
+  }
+  refreshTexturePatch(key,refreshGeometry=false){
+   const flat=this.flatPatches.get(key),existing=this.textureMeshes.get(key);
+   if(!flat){
+    if(existing){for(const overlay of existing.values())
+     this.disposeTextureOverlay(overlay);
+     this.textureMeshes.delete(key);}
+    return;
+   }
+   const rect=flat.rect,layers=this.painter.layersFor(key);
+   const overlays=existing||new Map();
+   if(!existing)this.textureMeshes.set(key,overlays);
+   for(const [id,overlay] of overlays)
+    if(!layers.has(id)||!layers.get(id).some(v=>v)){
+     this.disposeTextureOverlay(overlay);overlays.delete(id);
+    }
+   for(const [id,mask] of layers){
+    if(!mask.some(v=>v))continue;
+    if(!this.textureMaps.has(id)){
+     if(this.b.textureAsset&&!this.texturePromises.has(id))
+      this.ensureTexture(id).catch(e=>this.notify('Ошибка текстуры ландшафта: '+e.message));
+     continue;
+    }
+    let overlay=overlays.get(id);
+    if(!overlay){
+     const canvas=this.doc.createElement('canvas');
+     canvas.width=canvas.height=this.splat.RES;
+     const context=canvas.getContext('2d',{willReadFrequently:true});
+     if(!context)continue;
+     const maskTexture=new THREE.CanvasTexture(canvas);
+     maskTexture.magFilter=THREE.LinearFilter;
+     maskTexture.minFilter=THREE.LinearFilter;
+     maskTexture.generateMipmaps=false;
+     const geometry=this.geometryForTexture(rect);
+     const mesh=new THREE.Mesh(geometry,
+      this.materialForTexture(id,rect,maskTexture));
+     mesh.name='phoenix:terrain:paint:'+key;
+     mesh.position.set(rect.x,0,rect.z);
+     mesh.frustumCulled=false;
+     mesh.renderOrder=4;
+     this.terrainRoot.add(mesh);
+     overlay={mesh,rect,canvas,context};
+     overlays.set(id,overlay);
+    }else if(refreshGeometry){
+     const geo=this.geometryForTexture(rect);
+     overlay.mesh.geometry.dispose();
+     overlay.mesh.geometry=geo;
+    }
+    const pixels=overlay.context.createImageData(this.splat.RES,this.splat.RES);
+    for(let i=0;i<mask.length;i++){
+     const off=i*4,v=mask[i];
+     pixels.data[off]=v;pixels.data[off+1]=v;
+     pixels.data[off+2]=v;pixels.data[off+3]=255;
+    }
+    overlay.context.putImageData(pixels,0,0);
+    overlay.mesh.material.alphaMap.needsUpdate=true;
+   }
+   if(!overlays.size)this.textureMeshes.delete(key);
+  }
+  refreshAllTexturePatches(){
+   this.removeTextureMeshes();
+   this.textureGeneration++;
+   for(const key of this.painter.patches.keys())this.refreshTexturePatch(key);
+  }
+  paintTextureAt(x,z,erase=false,seconds=.09){
+   if(!erase&&!this.textureId)return false;
+   const radius=Number(this.el('worldBrushRadius')?.value||25);
+   const opacity=Number(this.el('worldTextureOpacity')?.value||100)/100;
+   const softness=Number(this.el('worldTextureSoftness')?.value||65)/100;
+   const oldState=!this.stroke?this.b.project?.():null;
+   const changed=this.painter.paint(x,z,radius,
+    this.textureId,opacity,erase,softness);
+   if(!changed.length)return false;
+   // History uses the exact same Builder snapshots as walls/doors/modules.
+   this.b.recordEdit?.(this.stroke?.snapshot||oldState);
+   if(this.stroke){this.stroke.recorded=true;this.stroke.changed=true;}
+   for(const key of changed)this.refreshTexturePatch(key);
+   if(!this.stroke){
+    this.state.paintMasks=this.painter.serialize();
+    this.b.save?.();
+   }
+   this.updateStatus();
+   return true;
+  }
   startPainting(erase=false){
    if(this.b.playBridge?.active)return false;
    this.finishStroke();
