@@ -56,6 +56,7 @@ on:
       - 'app/src/main/assets/engine/core/phoenix-server-export.js'
       - 'app/src/main/assets/engine/builder/phoenix-network-editor.js'
       - 'app/src/main/AndroidManifest.xml'
+      - 'tests/test-phoenix-network.cjs'
       - 'app/src/main/assets/engine/core/phoenix-player-combat.js'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
@@ -142,3 +143,4 @@ jobs:
           node tests/test-phoenix-player-combat.cjs
           node tests/test-editor-mode-isolation.cjs
           node --test server/tests/room.test.mjs
+          node tests/test-phoenix-network.cjs
