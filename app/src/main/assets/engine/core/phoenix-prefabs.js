@@ -26,6 +26,9 @@
   if(!TYPES.includes(type))throw new TypeError('Invalid prefab type');
   const faction=value.faction||'enemy';
   if(!FACTIONS.includes(faction))throw new TypeError('Invalid faction');
+  const nameColor=value.nameColor??'#ffffff';
+  if(typeof nameColor!=='string'||!/^#[0-9a-fA-F]{6}$/.test(nameColor))
+   throw new TypeError('Invalid nickname color');
   const assetId=value.assetId||'';
   if(typeof assetId!=='string'||assetId.length>160||
      (assetId&&!assetId.startsWith('glb:')))throw new TypeError('Invalid GLB asset ID');
@@ -43,13 +46,16 @@
   const mode=ai.mode||'idle';
   if(!['idle','patrol','chase','patrol-aggro','guard'].includes(mode))
    throw new TypeError('Invalid AI mode');
+  const engagement=ai.engagement??'auto';
+  if(!['auto','passive','defensive','aggressive'].includes(engagement))
+   throw new TypeError('Invalid AI engagement');
   const points=ai.waypoints??[];
   if(!Array.isArray(points)||points.length>32||
      points.some(p=>!Array.isArray(p)||p.length!==3||
       p.some(v=>typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>100000)))
    throw new TypeError('Invalid AI waypoints');
   const behavior={
-   mode,
+   mode,engagement,
    patrolRadius:number(ai.patrolRadius??3,0,30,'patrolRadius'),
    aggroRadius:number(ai.aggroRadius??7,0,50,'aggroRadius'),
    attackRange:number(ai.attackRange??1.25,.3,8,'attackRange'),
@@ -58,7 +64,7 @@
    waypoints:points.map(p=>p.slice())
   };
   return {
-   name:safeText(value.name),type,faction,assetId,ai:behavior,
+   name:safeText(value.name),type,faction,nameColor,assetId,ai:behavior,
    respawn:(typeof globalThis!=='undefined'&&globalThis.PhoenixMobFeatures?
     globalThis.PhoenixMobFeatures.respawn(value.respawn):
     require('./phoenix-mob-features.js').respawn(value.respawn)),
