@@ -89,7 +89,8 @@
   if(!Number.isFinite(textureScale)||textureScale<1||textureScale>32)
    throw new TypeError('Размер повторения текстуры от 1 до 32 м');
   return {version:VERSION,...s,textureScale,tiles,heights,paintMasks:paintMasks.map(v=>({
-   col:v.col,row:v.row,imageId:v.imageId,mask:v.mask
+   col:v.col,row:v.row,imageId:v.imageId,mask:v.mask,
+   ...(v.resolution===undefined?{}:{resolution:v.resolution})
   }))};
  }
  function plain(){
