@@ -30,6 +30,7 @@
    this.routeHelper=new THREE.Group();this.routeHelper.name='phoenix:edit:route';
    builder.scene.add(this.routeHelper);
    this.combat=new PhoenixCombat.Session({damage:25,range:2.7,cooldown:.65});
+   this.playStats=new Map();
    this.panel=document.getElementById('phoenixPrefabPanel');
    if(!this.panel)throw Error('Prefab Editor UI is missing');
    this.bind();this.refreshModels();this.refresh();
@@ -263,7 +264,8 @@
     const value=this.collect();
     if(this.selectedId)this.registry.update(this.selectedId,value);
     else this.selectedId=this.registry.create(value);
-    this.refresh();this.b.skillDefinitionEditor?.refreshCharacters();this.b.markProjectDirty?.();
+    this.refresh();this.b.skillDefinitionEditor?.refreshCharacters();
+    this.b.progressionEditor?.refreshTargets?.();this.b.markProjectDirty?.();
     this.status('✅ Шаблон применён к редактору. Для записи проекта нажми верхнюю 💾 Сохранить.');
    }catch(err){this.status('Ошибка шаблона: '+err.message)}
   }
@@ -274,7 +276,8 @@
    if(used)return this.status('Сначала удали экземпляры этого шаблона со сцены.');
    this.b.skillDefinitionEditor?.catalog.removeCharacter(this.selectedId);
    this.registry.remove(this.selectedId);this.newDraft();this.refresh();
-   this.b.skillDefinitionEditor?.refreshCharacters();this.b.markProjectDirty?.();
+   this.b.skillDefinitionEditor?.refreshCharacters();
+   this.b.progressionEditor?.refreshTargets?.();this.b.markProjectDirty?.();
    this.status('Шаблон удалён. Для записи проекта нажми верхнюю 💾 Сохранить.');
   }
   beginPlacement(){
@@ -433,6 +436,18 @@
     render.clips||[],p?.animations||{},THREE);
    render.animation.setState('idle');
   }
+  calculatedStats(id,prefab){
+   const p=prefab||this.registry.get(this.world.getComponent(id,'prefab')?.id);
+   const authored=this.world.getComponent(id,'stats')||{};
+   const fixed={...(p?.stats||{}),...authored};
+   if(!p?.progression)return fixed;
+   // Keep per-instance level as an editable choice. Never overwrite world JSON
+   // with PLAY-only level calculations, even for very high-level monsters.
+   const level=Math.max(1,Math.min(p.progression.maxLevel,
+    Number.isFinite(fixed.level)?Math.round(fixed.level):p.progression.level));
+   const scaled=PhoenixProgression.atLevel(p.progression,level);
+   return {...fixed,...scaled,level,hp:Math.round(scaled.hp)};
+  }
   setPlaying(yes){
    if(yes)this.cancelPlacement();
    this.previewAttackTime=0;this.previewAttackEntity='';
@@ -464,8 +479,11 @@
      this.combat.playerMaxHp=hero.hp;
     }
    }
+   this.playStats=new Map();
+   if(this.playing)for(const id of this.rendered.keys())
+    this.playStats.set(id,this.calculatedStats(id));
    this.combat.reset(this.playing?[...this.rendered.keys()].map(id=>{
-    const stats=this.world.getComponent(id,'stats')||{hp:100};
+    const stats=this.playStats.get(id)||this.world.getComponent(id,'stats')||{hp:100};
     const char=this.world.getComponent(id,'character')||{};
     const name=this.registry.get(this.world.getComponent(id,'prefab')?.id)?.name||id;
     return {id,maxHp:stats.hp,faction:char.faction||'enemy',
@@ -607,7 +625,7 @@
     const behavior={...ownAI,
      attackDuration:Math.max(.15,Math.min(8,duration))};
     const decision=PhoenixAI.tick(render.aiState,render.root.position.toArray(),
-     player.toArray(),behavior,p.stats,dtStep,
+     player.toArray(),behavior,this.playStats.get(id)||p.stats,dtStep,
      this.world.getComponent(id,'character')?.faction||p.faction);
     render.aiState=decision.state;
     if(Math.hypot(decision.move[0],decision.move[2])>.0001){
@@ -642,7 +660,13 @@
        this.canStrike(render.root.position,player,
         Math.hypot(render.root.position.x-player.x,
          render.root.position.z-player.z))){
-     const hit=this.combat.damagePlayer(id,p.stats.damage);
+     const scaled=this.playStats.get(id)||p.stats;
+     const heroStats=this.b.playBridge?.playerRuntimeStats;
+     const heroDefense=heroStats?.defense||0;
+     // Formula-based heroes mitigate hits; old projects keep raw damage.
+     const actual=heroStats?Math.max(0,Math.round(scaled.damage*100/
+      (100+heroDefense))):scaled.damage;
+     const hit=this.combat.damagePlayer(id,actual);
      if(hit.ok){
       this.b.playBridge?.onPlayerHit(hit,
        this.world.getComponent(id,'character')?.nickname||p.name);
@@ -676,7 +700,7 @@
    const stats=this.combat.get(id);
    const nickname=this.world.getComponent(id,'character')?.nickname||'';
    const skills=this.b.skillDefinitionEditor?.catalog?.entries(prefabId)||{};
-   const instanceStats=this.world.getComponent(id,'stats')||{};
+   const instanceStats=this.playStats.get(id)||this.calculatedStats(id,prefab);
    const authored={...prefab,stats:{...prefab.stats,...instanceStats}};
    return {...Features.profile(authored,stats,skills,nickname),
     faction:this.world.getComponent(id,'character')?.faction||prefab.faction,
@@ -767,7 +791,7 @@
   damageEnemy(id,amount){
    if(!this.playing)return {ok:false,reason:'edit'};
    const prefab=this.registry.get(this.world.getComponent(id,'prefab')?.id);
-   const defense=Math.max(0,prefab?.stats?.defense||0);
+   const defense=Math.max(0,(this.playStats.get(id)||prefab?.stats)?.defense||0);
    const reduced=Math.max(0,Math.round(amount*100/(100+defense)));
    return this.animateHit(id,this.combat.damageMob(id,reduced));
   }
@@ -788,7 +812,15 @@
    }
    const result=this.combat.attack(player.toArray(),targets,now,
     (item,distance)=>this.canStrike(player,
-     new THREE.Vector3(...item.position),distance));
+     new THREE.Vector3(...item.position),distance),
+    (target,rawDamage)=>{
+     // Armor is resolved BEFORE HP subtraction, not retroactively healed.
+     // Only opt-in progression changes melee damage for existing projects.
+     const prefab=this.registry.get(this.world.getComponent(target.id,'prefab')?.id);
+     if(!prefab?.progression)return rawDamage;
+     const defense=this.playStats.get(target.id)?.defense||0;
+     return Math.max(0,Math.round(rawDamage*100/(100+defense)));
+    });
    if(!result.ok)return result;
    return this.animateHit(result.id,result);
   }
@@ -1292,6 +1324,7 @@
   serialize(){
    return {version:1,catalog:this.registry.serialize(),world:this.world.serialize(),
     hudLayout:this.b.skillEditor?.serialize()||null,
+    playerProgression:this.b.progressionEditor?.serializePlayer()||null,
      playerAttackEffect:this.b.playBridge?.playerAttackEffect||'impact',
      playerCombat:this.b.playBridge?.playerCombat||null,
     skills:this.b.skillDefinitionEditor?.serialize()||null};
@@ -1316,6 +1349,11 @@
    const token=++this.loadGeneration;
    for(const id of [...this.rendered.keys()])this.removeRender(id);
    this.registry=registry;this.world=world;this.b.playBridge.gameWorld=world;
+   try{this.b.progressionEditor?.loadPlayer?.(doc?.playerProgression||null)}
+   catch(error){
+    console.warn('Invalid RPG growth profile ignored:',error);
+    this.b.progressionEditor?.loadPlayer?.(null);
+   }
    // Old projects without a hero profile keep the original melee defaults.
    try{
     const Profiles=(typeof globalThis!=='undefined'&&globalThis.PhoenixPlayerCombat)||
