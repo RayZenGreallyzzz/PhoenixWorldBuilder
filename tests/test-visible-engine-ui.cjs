@@ -14,7 +14,7 @@ assert(!header[0].includes('id="btnPhoenixPrefabs"'),'Prefab button must not be 
 assert(dock[0].includes('id="btnPhoenixPlay"'));
 assert(dock[0].includes('id="btnPhoenixPrefabs"'));
 assert(dock[0].includes('ENGINE'));
-assert(dock[0].includes('v1.5'));
+assert(dock[0].includes('v1.6'));
 assert(dock[0].includes('id="btnPhoenixSkills"'), 'Skill editor must be visible beside PLAY');
 for(const id of ['btnPhoenixPlay','btnPhoenixPrefabs','btnPhoenixSkills','phoenixEngineDock']){
  const matches=html.match(new RegExp('id="'+id+'"','g'))||[];
@@ -24,7 +24,7 @@ assert(css.includes('#phoenixEngineDock{position:fixed'),
  'Game controls must be independent of oversized UV44 topbar');
 assert(css.includes('body.phoenixPlaying #phoenixEngineDock{display:none!important}'),
  'Editor controls must disappear during PLAY');
-assert(html.includes('<title>Phoenix Engine 1.5 — Кисть настоящих текстур</title>'));
+assert(html.includes('<title>Phoenix Engine 1.6 — Исправление предпросмотра</title>'));
 assert(html.includes('id="phoenixSkillEditor"'));
 for(const id of ['btnPhoenixWorld','btnWorldGrid','phoenixWorldPanel',
  'worldCanvasPreset','worldCanvasWidth','worldCanvasDepth',
@@ -91,7 +91,7 @@ assert(css.includes('#phoenixSkillLayer{position:fixed'));
 assert(css.includes('#phoenixSkillEditor{position:fixed'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"),
  'Permanent Android ID must not vary between new engine versions');
-assert(gradle.includes('versionCode 15'));
+assert(gradle.includes('versionCode 16'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"));
-assert(gradle.includes("appLabel: 'Phoenix Engine 1.5'"));
-console.log('PASS: distinct Phoenix Engine 1.5 badge, visible PLAY/Prefabs/Skills dock and stable package ID');
+assert(gradle.includes("appLabel: 'Phoenix Engine 1.6'"));
+console.log('PASS: distinct Phoenix Engine 1.6 badge, visible PLAY/Prefabs/Skills dock and stable package ID');
