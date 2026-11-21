@@ -59,8 +59,16 @@
   };
   return {
    name:safeText(value.name),type,faction,assetId,ai:behavior,
+   respawn:(typeof globalThis!=='undefined'&&globalThis.PhoenixMobFeatures?
+    globalThis.PhoenixMobFeatures.respawn(value.respawn):
+    require('./phoenix-mob-features.js').respawn(value.respawn)),
+   attackEffect:typeof value.attackEffect==='string'&&
+    ['none','impact','ring','spark','magic','heal'].includes(value.attackEffect)?
+    value.attackEffect:'impact',
    stats:{
     hp:number(stats.hp??100,1,1000000,'hp'),
+    level:number(stats.level??1,1,1000,'level'),
+    defense:number(stats.defense??0,0,1000000,'defense'),
     damage:number(stats.damage??10,0,1000000,'damage'),
     speed:number(stats.speed??2,0,100,'speed')
    },
