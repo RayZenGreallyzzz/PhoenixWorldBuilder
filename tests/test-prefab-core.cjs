@@ -15,6 +15,17 @@ catalog.update(id,{name:'Волк вожак',stats:{hp:500,damage:50,speed:4}})
 assert.equal(catalog.get(id).stats.hp,500);
 assert.equal(catalog.get(id).assetId,'');
 assert.equal(catalog.get(id).faction,'enemy');
+assert.equal(normalize({name:'Старый моб'}).nameColor,'#ffffff',
+ 'Legacy prefabs keep a plain white name');
+assert.equal(normalize({name:'Старый моб'}).ai.engagement,'auto',
+ 'Legacy AI behavior remains unchanged');
+const skin=normalize({name:'Асура',nameColor:'#EA2D2D',
+ ai:{mode:'patrol',engagement:'defensive',aggroRadius:14}});
+assert.equal(skin.nameColor,'#EA2D2D');
+assert.equal(skin.ai.engagement,'defensive');
+assert.equal(skin.ai.aggroRadius,14);
+assert.throws(()=>normalize({name:'bad',nameColor:'red'}),/nickname color/);
+assert.throws(()=>normalize({name:'bad',ai:{engagement:'run-away'}}),/engagement/);
 const exported=JSON.parse(JSON.stringify(catalog.serialize()));
 const other=new PhoenixPrefabCatalog();other.load(exported);
 assert.deepEqual(other.serialize(),exported);
