@@ -9,6 +9,8 @@
  'use strict';
  const BEHAVIORS=Object.freeze(['idle','patrol','chase','patrol-aggro','guard']);
  const ENGAGEMENTS=Object.freeze(['auto','passive','defensive','aggressive']);
+ const Path=(typeof globalThis!=='undefined'&&globalThis.PhoenixPatrolPath)||
+  (typeof require==='function'?require('./phoenix-patrol-path.js'):null);
  function number(v,min,max,name){
   if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)
    throw new TypeError('Invalid '+name);
@@ -26,15 +28,12 @@
   const attackRange=number(value.attackRange??1.25,.3,8,'attackRange');
   const attackCooldown=number(value.attackCooldown??1.8,.35,30,'attackCooldown');
   const attackDuration=number(value.attackDuration??.5,.15,8,'attackDuration');
-  const points=value.waypoints??[];
-  if(!Array.isArray(points)||points.length>32)throw new TypeError('Invalid AI waypoints');
-  const waypoints=points.map((point,i)=>{
-   if(!finite3(point)||point.some(n=>Math.abs(n)>100000))
-    throw new TypeError('Invalid AI waypoint '+i);
-   return point.slice();
-  });
+  const waypoints=Path.validatePoints(value.waypoints??[]);
+  const routeMode=value.routeMode??'points';
+  if(!Path.MODES.includes(routeMode))throw new TypeError('Invalid AI route mode');
+  const stops=Path.normalizeStops(waypoints,value.stops??[]);
   return {mode,engagement,patrolRadius,aggroRadius,attackRange,attackCooldown,
-   attackDuration,waypoints};
+   attackDuration,waypoints,routeMode,stops};
  }
  function finite3(p){
   return Array.isArray(p)&&p.length===3&&p.every(n=>typeof n==='number'&&Number.isFinite(n));
@@ -48,7 +47,8 @@
  }
  function initial(position){
   if(!finite3(position))throw new TypeError('Invalid NPC position');
-  return {home:[...position],point:0,mode:'idle',cooldown:0,attackHold:0,provoked:0};
+  return {home:[...position],point:0,mode:'idle',cooldown:0,attackHold:0,provoked:0,
+   stopLeft:0,stopAnimation:'idle'};
  }
  function provoke(state,seconds=12){
   const duration=number(seconds,0,120,'provoke duration');
@@ -64,15 +64,19 @@
    mode:previous.mode||'idle',
    cooldown:Math.max(0,(previous.cooldown||0)-dt),
    attackHold:Math.max(0,(previous.attackHold||0)-dt),
-   provoked:Math.max(0,(previous.provoked||0)-dt)};
-  let mode='idle',move={dx:0,dz:0},attack=false,rotate=null;
+   provoked:Math.max(0,(previous.provoked||0)-dt),
+   stopLeft:Math.max(0,previous.stopLeft||0),
+   stopAnimation:previous.stopAnimation||'idle'};
+  let mode='idle',move={dx:0,dz:0},attack=false,rotate=null,routeClip='';
   const enemy=faction==='enemy',playerDist=Math.hypot(player[0]-position[0],player[2]-position[2]);
   const engaged=enemy&&(profile.engagement==='aggressive'||
    (profile.engagement==='defensive'&&next.provoked>0)||
    (profile.engagement==='auto'&&['chase','patrol-aggro','guard'].includes(profile.mode)));
   // Nickname colors never control AI. Explicit engagement overrides legacy mode.
   if(next.attackHold>0)mode='attack';
-  else if(engaged&&playerDist<=profile.aggroRadius){
+  else if(engaged&&playerDist<=profile.aggroRadius){ 
+   // Combat interrupts scripted pauses; patrol resumes when the threat leaves.
+   next.stopLeft=0;
    if(playerDist<=profile.attackRange){
     mode='idle';
     rotate=Math.atan2(player[0]-position[0],player[2]-position[2]);
@@ -94,19 +98,43 @@
     const points=profile.waypoints.length?profile.waypoints:
      [[h[0]+r,h[1],h[2]],[h[0]+r,h[1],h[2]+r],
       [h[0]-r,h[1],h[2]+r],[h[0]-r,h[1],h[2]-r]];
-    const goal=profile.mode==='chase'?h:points[((next.point%points.length)+points.length)%points.length];
-    move=toward(position,goal,speed,dt,.25);
-    if(move.dist<.28&&profile.mode!=='chase'){
-     next.point=(next.point+1)%points.length;
-     move=toward(position,points[next.point],speed,dt,.25);
+    if(profile.mode!=='chase'&&next.stopLeft>0){
+     // An explicit stop owns the current waypoint until its timer expires.
+     // Do not advance to the next point while Idle / custom GLB clip plays.
+     next.stopLeft=Math.max(0,next.stopLeft-dt);
+     if(next.stopLeft>0){
+      mode=next.stopAnimation.startsWith('clip:')?'idle':next.stopAnimation;
+      if(next.stopAnimation.startsWith('clip:'))
+       routeClip=next.stopAnimation.slice(5);
+     }else{
+      next.point=(next.point+1)%points.length;
+      next.stopAnimation='idle';
+     }
+    }else{
+     const goal=profile.mode==='chase'?h:
+      points[((next.point%points.length)+points.length)%points.length];
+     move=toward(position,goal,speed,dt,.25);
+     if(move.dist<.28&&profile.mode!=='chase'){
+      const pause=profile.stops.find(s=>s.index===next.point);
+      if(pause){
+       next.stopLeft=pause.seconds;
+       next.stopAnimation=pause.animation;
+       move={dx:0,dz:0};
+       mode=pause.animation.startsWith('clip:')?'idle':pause.animation;
+       if(pause.animation.startsWith('clip:'))routeClip=pause.animation.slice(5);
+      }else{
+       next.point=(next.point+1)%points.length;
+       move=toward(position,points[next.point],speed,dt,.25);
+      }
+     }
+     if(Math.hypot(move.dx,move.dz)>1e-6)mode='walk';
     }
-    if(Math.hypot(move.dx,move.dz)>1e-6)mode='walk';
    }
   }
   if(Math.hypot(move.dx,move.dz)>1e-6)
    rotate=Math.atan2(move.dx,move.dz);
   next.mode=mode;
-  return {state:next,animation:mode,move:[move.dx,0,move.dz],yaw:rotate,attack,
+  return {state:next,animation:mode,routeClip,move:[move.dx,0,move.dz],yaw:rotate,attack,
    engaged:engaged&&playerDist<=profile.aggroRadius};
  }
  return Object.freeze({BEHAVIORS,ENGAGEMENTS,normalize,initial,provoke,tick});
