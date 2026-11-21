@@ -103,7 +103,12 @@ const CharacterCollision=(()=>{
    const start=position.clone().add(V(0,cap+.16,0));
    const hits=this.hits(new THREE.Ray(start,V(0,-1,0)),meshes,0,
     cap+.16+.65);
-   let support=this.groundY;
+   // Terrain is a sparse heightfield. An optional function lets the
+   // unchanged collision solver follow authored hills/valleys with
+   // existing joystick + camera movement (including negative heights).
+   const terrain=typeof this.groundY==='function'?
+    this.groundY(position.x,position.z):this.groundY;
+   let support=Number.isFinite(terrain)?terrain:0;
    for(const hit of hits){
     const n=hit.face?.normal?.clone().transformDirection(hit.object.matrixWorld);
     if(!n||n.y<.55||hit.point.y>start.y+.001)continue;
