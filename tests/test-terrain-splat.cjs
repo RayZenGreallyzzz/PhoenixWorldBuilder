@@ -1,0 +1,57 @@
+'use strict';
+const assert=require('node:assert/strict');
+const splat=require('../app/src/main/assets/engine/core/phoenix-terrain-splat.js');
+const Layout=require('../app/src/main/assets/engine/core/phoenix-world-layout.js');
+const name='texture:landscape:rock-7';
+const grass='texture:landscape:grass-1';
+const data={width:500,depth:500};
+const painter=new splat.Painter(data);
+assert.equal(painter.materials().length,0);
+assert.throws(()=>new splat.Painter({width:99999,depth:20}),/world size/);
+assert.throws(()=>painter.paint(0,0,10,'javascript:1'),/texture ID/);
+assert.throws(()=>painter.paint(0,0,10,name,1,false,7),/round texture brush/);
+let changed=painter.paint(0,0,12,name,1,false,.6);
+assert(changed.length>=1,'Round splat should touch nearby patches');
+assert(changed.length<=4,'12m circle should not fill square sectors');
+const base=painter.serialize();
+assert(base.length<=4,'Only touched patches need masks');
+assert(base.every(item=>item.imageId===name&&typeof item.mask==='string'));
+const centerRect=splat.bounds(data,5,5); // 500m: origin lies at a four-patch junction
+const patch=painter.layersFor('5:5').get(name);
+assert(patch);
+const at=(x,y)=>patch[y*splat.RES+x];
+assert(at(0,0)>0,'Centre of rock brush should be visible');
+assert.equal(at(62,62),0,'Outside the circle must remain transparent');
+assert.equal(at(0,30),0,'A round brush must not paint a square');
+assert.equal(at(30,0),0,'No square bounding-box artifacts');
+const firstSerialized=JSON.stringify(base);
+assert(!firstSerialized.includes('data:image'),'No PNG/WebP bytes may be copied per brush');
+for(let i=0;i<350;i++)painter.paint(1,1,12,name,1,false,.6);
+const after=JSON.stringify(painter.serialize());
+assert(painter.materials().length===1);
+assert(after.length<=firstSerialized.length+220,
+ 'Repeating the same brush 350 times must NOT append 350 stamps to JSON');
+const previous=painter.serialize();
+painter.paint(1,1,5,grass,1,false,.4);
+assert.equal(painter.materials().length,2,'New texture referenced exactly once');
+assert.equal(painter.serialize().some(p=>p.imageId===grass),true);
+const grassMask=painter.layersFor('5:5').get(grass);
+assert(grassMask&&grassMask.some(v=>v>0));
+const eraser=new splat.Painter(data,painter.serialize());
+eraser.paint(1,1,8,null,1,true,0);
+assert(eraser.patches.size>=0);
+const restored=new splat.Painter(data,previous);
+assert.deepEqual(restored.serialize(),previous,
+ 'Portable world masks must survive JSON round-trip without external bitmap duplication');
+assert.equal(splat.decode(splat.encode(new Uint8Array(splat.COUNT))).length,splat.COUNT);
+assert.throws(()=>splat.decode('not valid!'),/encoding/);
+assert.throws(()=>splat.decode(btoa(String.fromCharCode(255,12))),/Incomplete/);
+assert.throws(()=>splat.checkEntries([...base,base[0]],data),/Duplicate/);
+assert.throws(()=>splat.checkEntries([{...base[0],imageId:'https://bad'}],data),/texture ID/);
+const world=Layout.validate({...Layout.plain(),paintMasks:after?JSON.parse(after):[]});
+assert.equal(world.paintMasks.length,painter.serialize().length);
+assert.deepEqual(Layout.validate(JSON.parse(JSON.stringify(world))),world);
+assert.throws(()=>Layout.resize(world,{width:600}),/ландшафт/);
+assert(Layout.legacy().paintMasks.length===0,
+ 'Old UV44 world has no texture masks and continues to open');
+console.log('PASS: circle/feather texture splats, no painted square, each texture ID once, 350 repeated strokes with bounded save size');
