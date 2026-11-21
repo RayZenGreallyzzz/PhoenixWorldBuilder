@@ -241,6 +241,7 @@
    if(m.type==='joined'){
     this.joined=true;this.playerId=m.playerId;
     this.clearRemote();
+    if(this.layer)this.layer.visible=true;
     const self=(m.players||[]).find(p=>p.id===m.playerId);
     if(self&&Array.isArray(self.position)){
      this.b.player?.position?.fromArray?.(self.position);
