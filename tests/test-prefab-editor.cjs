@@ -119,7 +119,7 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  const authoredAI=ed.world.getComponent(entity,'character').ai;
  assert.equal(authoredAI.mode,'patrol-aggro');
  assert.deepEqual(authoredAI.waypoints,[[8,.5,8],[10,.5,11]]);
- assert.equal(ed.registry.get('prefab-1').ai.mode,'patrol',
+ assert.equal(ed.registry.get('prefab-1').ai.mode,'chase',
   'Editing a mob must not change the shared prefab template');
  const second=await ed.createEntity('prefab-1',[12,0,17]);
  assert.equal(ed.world.getComponent(second,'character').ai.mode,'chase',
