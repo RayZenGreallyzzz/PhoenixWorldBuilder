@@ -60,7 +60,8 @@
   blank(){
    return {name:'Новый навык',description:'',icon:'✨',iconImage:'',type:'damage',
     basePower:30,growth:10,level:1,maxLevel:5,manaCost:15,
-    cooldown:5,range:8,animation:'cast'};
+    cooldown:5,range:8,animation:'cast',
+    effect:{preset:'impact',color:'#ffce65',size:1,duration:.5}};
   }
   read(){
    const get=id=>this.el('skillDef'+id).value;
@@ -70,7 +71,9 @@
     type:get('Type'),level:Number(get('Level')),maxLevel:Number(get('MaxLevel')),
     basePower:Number(get('BasePower')),growth:Number(get('Growth')),
     manaCost:Number(get('ManaCost')),cooldown:Number(get('Cooldown')),
-    range:Number(get('Range')),animation:get('Animation')
+    range:Number(get('Range')),animation:get('Animation'),
+    effect:{preset:get('FxPreset'),color:get('FxColor'),
+     size:Number(get('FxSize')),duration:Number(get('FxDuration'))}
    };
   }
   write(data){
@@ -79,7 +82,11 @@
     Name:s.name,Description:s.description,Icon:s.icon,Type:s.type,
     Level:s.level,MaxLevel:s.maxLevel,BasePower:s.basePower,
     Growth:s.growth,ManaCost:s.manaCost,Cooldown:s.cooldown,
-    Range:s.range,Animation:s.animation
+    Range:s.range,Animation:s.animation,
+    FxPreset:s.effect?.preset||(s.type==='heal'?'heal':'impact'),
+    FxColor:s.effect?.color||'#ffce65',
+    FxSize:s.effect?.size??1,
+    FxDuration:s.effect?.duration??.5
    };
    for(const [key,value] of Object.entries(keys))
     this.el('skillDef'+key).value=String(value);
@@ -113,7 +120,7 @@
    this.write(saved);
    this.status(saved?
     '✅ Навык этого персонажа и слота загружен.':
-    'Создай навык, затем сохрани. В PLAY работают эффекты урона и лечения.');
+    'Создай навык, затем сохрани. В PLAY скиллы работают у игрока и мобов с эффектами.');
   }
   preview(){
    const el=this.el('skillDefPreview');
