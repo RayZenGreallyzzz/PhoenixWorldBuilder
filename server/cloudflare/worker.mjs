@@ -93,6 +93,8 @@ export class PhoenixRoomObject extends DurableObject{
      return respond({error:'Manifest too large'},413);
     const world=validateWorld(JSON.parse(raw));
     if(world.worldId!==id)return respond({error:'World ID mismatch'},400);
+    if(world.revision<this.room.world.revision)
+     return respond({error:'World revision cannot decrease'},409);
     // Commit the persistent revision before exposing it to any new joiner.
     await this.ctx.storage.put('world',world);
     this.room.replaceWorld(world);
