@@ -258,6 +258,22 @@ assert.equal(editor.setTextureBrushRadius(50,false),50);
 editor.paintTextureAt(12,12);
 assert.equal(paintedRadius,50,'Changing slider changes real texture brush radius');
 editor.painter.paint=previousPaint;
+assert.equal(editor.setTextureBrushRadius(.2,false),.2);
+assert.equal(elements.worldTextureRadiusValue.textContent,
+ '20 см радиус · 40 см диаметр');
+assert.equal(editor.currentBrushRadius(),.2);
+assert.equal(elements.worldBrushRadius.value,'125',
+ '20cm texturing must not change 125m mountain brush radius');
+assert.equal(editor.paintTextureAt(12.3,12.3),true,
+ 'A 20cm stroke must actually paint a mask, not disappear');
+const smallMask=editor.painter.layersFor('5:5').get(imageId);
+assert.equal(smallMask.length,512*512,'20cm brush promotes only its painted patch');
+assert.equal(editor.textureMeshes.get('5:5').get(imageId).canvas.width,512,
+ 'GPU alpha overlay must upload upgraded 512px detail for small marks');
+assert.equal(editor.serialize().paintMasks.find(p=>
+ p.imageId===imageId&&p.col===5&&p.row===5).resolution,512,
+ 'Detailed 20cm edits must survive JSON/Undo serialization');
+assert.equal(editor.setTextureBrushRadius(50,false),50);
 assert.equal(editor.showBrushIndicator(0,0),true);
 assert.equal(editor.brushIndicator.visible,true);
 const ring=editor.brushIndicator.geometry.getAttribute('position');
@@ -265,6 +281,9 @@ assert(ring.count>=64*6);
 const ringPoint=(index=0)=>Math.hypot(ring.getX(index),ring.getZ(index));
 assert(Math.abs(ringPoint()-50)<2,
  'Visible brush ring radius must match selected size in metres');
+assert.equal(editor.setTextureBrushRadius(.2,false),.2);
+assert(Math.abs(ringPoint()-.2)<.05,
+ '20cm indicator must show exact 0.2m radius, not round it to 1m');
 assert.equal(editor.setTextureBrushRadius(5,false),5);
 assert(Math.abs(ringPoint()-5)<1,'Ring must resize immediately when brush slider changes');
 input('pointermove',404,20,25);
