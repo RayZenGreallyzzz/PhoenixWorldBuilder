@@ -772,9 +772,15 @@ class CleanBuilder{
     container.append(btn);
    }
   }
+  const terrainFolder=folder==='landscape-tiles';
+  const landscapeHint=$('landscapeLibraryHint');
+  if(landscapeHint)landscapeHint.hidden=!terrainFolder;
+  const faceTools=$('textureQuickFaces');
+  if(faceTools)faceTools.hidden=terrainFolder;
   const list=this.textureFiles.filter(item=>{
    const group=item.id.startsWith('texture:decal:')||item.folder==='transparent-graffiti'?
-    'transparent-graffiti':item.folder==='textures'?'textures':'my-textures';
+    'transparent-graffiti':item.folder==='landscape-tiles'?'landscape-tiles':
+    item.folder==='textures'?'textures':'my-textures';
    return (folder==='all'?group!=='transparent-graffiti':folder===group)&&
     (!term||SmartCatalog.tokenize(item.name+' '+(item.path||'')).includes(term));
   }).reverse(); // New imports visible first without losing older images.
@@ -803,16 +809,27 @@ class CleanBuilder{
     const wrap=document.createElement('div');wrap.className='textureCardWrap';
     const card=document.createElement('button');card.type='button';card.className='textureCard';
     const isDecal=item.id.startsWith('texture:decal:')||item.folder==='transparent-graffiti';
-    card.classList.toggle('active',isDecal?this.activeDecalImageId===item.id:
+    const terrain=item.folder==='landscape-tiles';
+    card.classList.toggle('active',terrain?
+     this.worldEditor?.textureId===item.id:
+     isDecal?this.activeDecalImageId===item.id:
      selected.style==='custom'&&selected.imageId===item.id);
     const img=document.createElement('img');img.className='texturePreview';
     img.dataset.texturePreview=item.id;img.alt='Образец '+item.name;img.loading='lazy';
     const title=document.createElement('strong');title.textContent=item.name;
     const size=document.createElement('small');
     size.textContent=(item.width&&item.height?item.width+'×'+item.height:'Изображение')+
-     ' · '+(isDecal?'Прозрачное граффити':item.folder==='textures'?'Текстуры':'Мои текстуры');
+     ' · '+(terrain?'🏞 Ландшафт':isDecal?'Прозрачное граффити':
+      item.folder==='textures'?'Текстуры':'Мои текстуры');
     card.append(img,title,size);
     card.onclick=()=>{
+     if(terrain){
+      this.surfaceSidePick=false;this.pendingTexture=null;
+      this.worldEditor?.selectTexture(item.id);
+      this.syncQuickTextureFaces();
+      this.renderTextureLibrary();
+      return;
+     }
      if(isDecal){
       this.pendingTexture=null;this.activeDecalImageId=item.id;
       $('decalImageStatus').textContent=item.name;
@@ -853,6 +870,7 @@ class CleanBuilder{
   const projectUses=this.entries.some(e=>JSON.stringify({surface:e.surface,
    sides:e.surfaceSides,parts:e.surfaceParts}).includes(ref))||
    this.decals.some(d=>d.imageId===id)||
+   this.worldEditor?.usesTexture(id)||
    (this.preview&&JSON.stringify({surface:this.preview.surface,
     sides:this.preview.surfaceSides,parts:this.preview.surfaceParts}).includes(ref))||
    (this.presets||[]).some(p=>JSON.stringify(p).includes(ref));
@@ -875,6 +893,7 @@ class CleanBuilder{
     tx.onerror=()=>{db.close();reject(tx.error)};
    });
    this.textureFiles=this.textureFiles.filter(t=>t.id!==id);
+   this.worldEditor?.releaseTexture?.(id);
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
    const cached=this.textureCache.get(id);if(cached){cached.dispose?.();this.textureCache.delete(id)}
    if(this.activeDecalImageId===id){this.activeDecalImageId='';
@@ -965,7 +984,8 @@ class CleanBuilder{
     {lossless:$('textureImportQuality').value==='lossless'});
    const id='texture:'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);
    await putAsset(id,processed.bytes);
-   const texture={id,name:safeName(file.name),folder:'my-textures',type:processed.type,
+   const folder=options.folder==='landscape-tiles'?'landscape-tiles':'my-textures';
+   const texture={id,name:safeName(file.name),folder,type:processed.type,
     width:processed.width,height:processed.height,bytes:processed.storedBytes};
    this.textureFiles=[...this.textureFiles,texture];
    localStorage.setItem('phoenix-builder-v2-textures',JSON.stringify(this.textureFiles));
@@ -981,6 +1001,28 @@ class CleanBuilder{
    if(!batch)notify('Ошибка текстуры: '+(err?.message||err),'error');
    return false;
   }
+ }
+ async importLandscapeTextures(files){
+  const list=Array.from(files||[]);
+  if(!list.length)return false;
+  let saved=0,firstId='';
+  for(let i=0;i<list.length;i++){
+   const before=new Set(this.textureFiles.map(item=>item.id));
+   if(await this.importTextureFile(list[i],
+      {batch:true,folder:'landscape-tiles'})){
+    saved++;
+    if(!firstId)firstId=this.textureFiles.find(item=>!before.has(item.id))?.id||'';
+   }
+   if(i%2===1)await new Promise(resolve=>setTimeout(resolve,0));
+  }
+  this.setTextureTab('textures');
+  $('textureCategoryFilter').value='landscape-tiles';
+  this.renderTextureLibrary();
+  if(firstId)this.worldEditor?.selectTexture(firstId);
+  notify('🏞 В папку «Ландшафт» добавлено '+saved+
+   ' текстур. Нажми изображение слева и рисуй круглой кистью.',
+   saved?'success':'warn');
+  return saved>0;
  }
  async importTextureFiles(files){
   const list=Array.from(files||[]);
@@ -4631,6 +4673,7 @@ class CleanBuilder{
    else notify('Нужна модель GLB, glTF, FBX, OBJ, VOX, STL или PLY','warn');
   };
   $('btnDirectImage').onclick=()=>$('importTexture').click();
+  $('btnDirectLandscapeImage').onclick=()=>$('importLandscapeTexture').click();
   $('btnDirectDecals').onclick=()=>$('decalImageInput').click();
   $('btnDirectTextureZip').onclick=()=>$('importTextureZIP').click();
   $('btnDirectDecalZip').onclick=()=>$('importDecalZIP').click();
@@ -4673,6 +4716,10 @@ class CleanBuilder{
     'Коллизии персонажа выключены','success');
   };
   $('importTexture').onchange=e=>{const files=Array.from(e.target.files||[]);e.target.value='';this.importTextureFiles(files)};
+  $('importLandscapeTexture').onchange=e=>{
+   const files=Array.from(e.target.files||[]);e.target.value='';
+   this.importLandscapeTextures(files);
+  };
   $('textureFaceScope').onchange=()=>{
    // Load that side's saved settings into the editor WITHOUT applying paint.
    // The manual touch-paint checkbox is never modified here.
