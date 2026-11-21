@@ -250,8 +250,9 @@
  <label>Сторона<select id="phoenixPrefabFaction"><option value="enemy">Враг</option><option value="neutral">Нейтрал</option><option value="ally">Союзник</option></select></label></div>
  <label>Цвет имени шаблона <input id="phoenixPrefabNameColor" type="color" value="#ffffff" aria-label="Цвет имени шаблона моба"></label>
  <label>3D-модель GLB<select id="phoenixPrefabAsset"><option value="">Капсула-заглушка</option></select></label>
- <button type="button" id="btnPrefabImportGlb">📂 Импортировать GLB</button>
- <small>Используются модели из библиотеки Builder. Для сохранения на другом устройстве нужна резервная копия проекта с GLB.</small>
+ <button type="button" id="btnPrefabImportGlb">🧬 Импортировать GLB для моба</button>
+ <input id="phoenixMobImportModel" type="file" accept=".glb,model/gltf-binary" hidden>
+ <small>GLB из этого раздела назначается мобу и не появляется среди строительных деталей. После импорта нажми «Сохранить шаблон», затем «Поставить моба». Для переноса на другое устройство экспортируй резервную копию с GLB.</small>
  <div class="phoenixPrefabRow"><label>HP<input id="phoenixPrefabHP" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="100"></label>
  <label>Урон<input id="phoenixPrefabDamage" type="number" min="0" max="1000000" step="1" inputmode="numeric" value="10"></label>
  <label>Скорость<input id="phoenixPrefabSpeed" type="number" min="0" max="100" step=".1" inputmode="decimal" value="2"></label></div>
