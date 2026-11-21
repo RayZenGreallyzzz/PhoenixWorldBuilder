@@ -4090,6 +4090,9 @@ class CleanBuilder{
   }catch(err){notify('Игровой экспорт: '+err.message,'error')}
  }
  place(){
+  // A building part may only be installed by the explicit build/place tool.
+  // Character, camera and terrain editing can never spawn construction GLBs.
+  if(this.mode!=='build'||this.tool!=='place')return false;
   // The bottom "Установить" button is for construction modules only.
   // While configuring or placing NPCs, never silently spawn a static GLB.
   // Game entities are placed exclusively through Prefab Editor.
@@ -5057,8 +5060,8 @@ class CleanBuilder{
   $('btnPick').onclick=()=>{this.setTextureTab('parts');this.setTool('pick');this.syncInspector()};
   $('btnPlace').onclick=()=>{this.setTextureTab('parts');this.setMode('build');this.selected=null;this.setTool('place');this.syncInspector()};
   $('btnConfirm').onclick=()=>{
+   if(this.mode!=='build')return;
    if(this.libraryTab==='textures')this.setTextureTab('parts');
-   if(this.mode!=='build')this.aimPlacement();
    this.place();
   };
   $('btnCancel').onclick=()=>{
@@ -5225,6 +5228,8 @@ class CleanBuilder{
    if(this.prefabEditor?.pendingPlace||this.prefabEditor?.pendingWaypointId){
     this.prefabEditor.placeFromEvent(e);return;
    }
+   // Landscape brushes and character camera touches aren't construction picks.
+   if(this.mode!=='build'||this.worldEditor?.painting)return;
    if(this.shapeSourceMode){this.shapeSourceAt(e);return}
    if(this.decalPickMode){this.placeDecalAt(e);return}
    if(this.surfaceSidePick&&this.libraryTab==='textures'){
@@ -5243,7 +5248,8 @@ class CleanBuilder{
   });
   this.canvas.addEventListener('pointercancel',()=>{this.pointerStart=null});
   this.canvas.addEventListener('pointermove',e=>{
-   if(this.playBridge?.active||this.prefabEditor?.pendingPlace)return;
+   if(this.playBridge?.active||this.mode!=='build'||this.worldEditor?.painting||
+      this.prefabEditor?.pendingPlace||this.prefabEditor?.pendingWaypointId)return;
    if(e.buttons||this.cameraFocusPick||this.tool!=='place')return;
    const point=this.floor===0&&this.worldEditor?.hasElevations()?
     this.worldEditor.pointerTerrain(e):this.rayPoint(e);
