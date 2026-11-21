@@ -72,13 +72,13 @@
    on('btnWorldClearHeights',()=>this.clearHeights());
    const catalog=this.el('btnCatalogLandscape');
    if(catalog)catalog.onclick=event=>{
-    event?.preventDefault?.();this.open();return false;
+    event?.preventDefault?.();this.openTextureFolder();return false;
    };
    const folder=this.el('smartCategoryFilter'),oldFolder=folder?.onchange;
    if(folder)folder.onchange=e=>{
     if(folder.value==='landscape'){
      folder.value=this.b.smartCatalogFolder||'all';
-     this.open();return;
+     this.openTextureFolder();return;
     }
     oldFolder?.call(folder,e);
    };
