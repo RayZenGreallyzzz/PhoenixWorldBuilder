@@ -19,7 +19,10 @@
    builder.scene.add(this.layer);
    this.rendered=new Map();this.selectedId='';this.pendingPlace='';
    this.playing=false;this.loadGeneration=0;this.clipGeneration=0;this.previewBefore=null;
-   this.aiCursor=0;this.collider=null;
+   this.aiCursor=0;this.collider=null;this.pendingWaypointId='';
+   this.previewAttackTime=0;this.previewAttackEntity='';
+   this.routeHelper=new THREE.Group();this.routeHelper.name='phoenix:edit:route';
+   builder.scene.add(this.routeHelper);
    this.combat=new PhoenixCombat.Session({damage:25,range:2.7,cooldown:.65});
    this.panel=document.getElementById('phoenixPrefabPanel');
    if(!this.panel)throw Error('Prefab Editor UI is missing');
@@ -51,6 +54,16 @@
    this.el('phoenixPrefabSaved').addEventListener('change',e=>this.selectPrefab(e.target.value));
    this.el('phoenixPrefabAsset').addEventListener('change',()=>this.refreshClips());
    this.el('btnPrefabImportGlb').addEventListener('click',()=>this.el('importUniversalModel').click());
+   const on=(id,type,fn)=>this.el(id)?.addEventListener(type,fn);
+   on('phoenixPrefabEntities','change',()=>this.selectEntity());
+   on('btnPrefabApplyTransform','click',()=>this.applyEntityTransform());
+   on('btnPrefabSnapGround','click',()=>this.snapEntityToGround());
+   on('phoenixEntityAI','change',()=>this.applyEntityAI());
+   on('btnPrefabWaypointAdd','click',()=>this.addWaypoint());
+   on('btnPrefabWaypointTap','click',()=>this.beginWaypointPlacement());
+   on('btnPrefabWaypointRemove','click',()=>this.removeWaypoint());
+   on('phoenixEntityWaypoints','change',()=>this.selectWaypoint());
+   on('btnPrefabPreviewAttack','click',()=>this.previewAttack());
   }
   refreshModels(selectId){
    const select=this.el('phoenixPrefabAsset'),wanted=selectId===undefined?select.value:selectId;
@@ -62,6 +75,11 @@
    for(const entry of this.b.entries||[])
     if(entry.kind?.startsWith('glb:')&&!names.has(entry.kind))
      names.set(entry.kind,this.b.descriptor(entry.kind)?.name||entry.kind);
+   // Assets used only by placed NPCs may not be present in Builder's
+   // construction catalog. Keep their GLB selectors after project reload.
+   for(const prefab of this.registry.list())
+    if(prefab.assetId&&!names.has(prefab.assetId))
+     names.set(prefab.assetId,prefab.name+' · '+prefab.assetId);
    select.replaceChildren(this.option('','Простая капсула (без GLB)'));
    for(const [id,name] of names)select.appendChild(this.option(id,name));
    if(wanted&&!names.has(wanted))select.appendChild(
@@ -161,6 +179,7 @@
      tr.position.map(n=>Number(n).toFixed(1)).join(', ')));
    }
    placed.value=[...placed.options].some(o=>o.value===previous)?previous:'';
+   this.selectEntity(placed.value);
    this.el('phoenixPrefabCounts').textContent=
     'Шаблонов: '+this.registry.list().length+' · На сцене: '+(placed.options.length-1);
   }
@@ -207,8 +226,8 @@
     '👆 Поставь '+p.name+' касанием пола · 🧬 Prefabs — отмена';
   }
   cancelPlacement(){
-   if(!this.pendingPlace)return;
-   this.pendingPlace='';
+   if(!this.pendingPlace&&!this.pendingWaypointId)return;
+   this.pendingPlace='';this.pendingWaypointId='';
    const old=this.previewBefore;this.previewBefore=null;
    if(old?.root&&this.b.preview?.root===old.root)
     old.root.visible=old.visible;
@@ -229,8 +248,18 @@
     const normal=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
     if(normal.y>.55)return hit.point.clone();
    }
+   // Since 1.4 the large shared ground mesh is hidden and elevations
+   // are drawn with independent terrain patches. Check those before Y=0.
+   if(this.b.worldEditor?.sculptPatches?.size){
+    const roots=[...this.b.worldEditor.sculptPatches.values()];
+    const painted=ray.intersectObjects(roots,false);
+    if(painted.length)return painted[0].point.clone();
+   }
    const ground=ray.intersectObject(this.b.ground,false);
-   return ground.length?ground[0].point.clone().setY(0):null;
+   if(ground.length)return ground[0].point.clone().setY(0);
+   const point=new THREE.Vector3();
+   const plane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+   return ray.ray.intersectPlane(plane,point)?point:null;
   }
   placeholder(){
    const group=new THREE.Group();
@@ -330,7 +359,10 @@
    render.animation.setState('idle');
   }
   setPlaying(yes){
+   if(yes)this.cancelPlacement();
+   this.previewAttackTime=0;this.previewAttackEntity='';
    this.playing=!!yes;
+   this.routeHelper.visible=!this.playing&& !this.panel.hidden;
    for(const [id,render] of this.rendered){
     render.animation?.stop();render.animation=null;
     const saved=this.world.getComponent(id,'transform');
@@ -356,7 +388,20 @@
     this.collider.groundY=(x,z)=>this.b.worldEditor.heightAt(x,z);
   }
   update(dt){
-   if(!this.playing||!Number.isFinite(dt)||dt<=0)return;
+   if(!Number.isFinite(dt)||dt<=0)return;
+   if(!this.playing){
+    if(this.previewAttackTime>0){
+     const render=this.rendered.get(this.previewAttackEntity);
+     render?.animation?.update(dt);
+     if(render)this.groundVisual(render,dt);
+     this.previewAttackTime=Math.max(0,this.previewAttackTime-dt);
+     if(this.previewAttackTime===0&&render){
+      render.animation?.stop();render.animation=null;
+      this.groundVisual(render,0,true);
+     }
+    }
+    return;
+   }
    for(const [id,render] of this.rendered){
     render.animation?.update(dt);
     // Fix animated root/bone vertical drift without changing NPC position.
@@ -383,15 +428,20 @@
     const [id,render]=entities[(this.aiCursor+step)%entities.length];
     if(this.combat.isDead(id)||render.hitHold>0)continue;
     const p=this.registry.get(this.world.getComponent(id,'prefab')?.id);
-    if(!p||p.ai?.mode==='idle')continue;
+    if(!p||this.world.getComponent(id,'character')?.ai?.mode==='idle'||
+      (!this.world.getComponent(id,'character')?.ai&&p.ai?.mode==='idle'))continue;
     if(render.accum<.12)continue;
     const dtStep=render.accum;render.accum=0;
     if(Math.hypot(render.root.position.x-player.x,
      render.root.position.z-player.z)>35){
      render.animation?.setState('idle');continue;
     }
+    const ownAI=this.world.getComponent(id,'character')?.ai||p.ai;
+    const duration=render.animation?.resolve('attack')?.duration||.5;
+    const behavior={...ownAI,
+     attackDuration:Math.max(.15,Math.min(8,duration))};
     const decision=PhoenixAI.tick(render.aiState,render.root.position.toArray(),
-     player.toArray(),p.ai,p.stats,dtStep,p.faction);
+     player.toArray(),behavior,p.stats,dtStep,p.faction);
     render.aiState=decision.state;
     if(Math.hypot(decision.move[0],decision.move[2])>.0001){
      const before=render.root.position.clone();
@@ -515,9 +565,17 @@
    this.refresh();this.b.save();return id;
   }
   async placeFromEvent(event){
-   if(!this.pendingPlace||this.b.playBridge.active)return false;
+   if((!this.pendingPlace&&!this.pendingWaypointId)||this.b.playBridge.active)return false;
+   const pointEntity=this.pendingWaypointId;
    const id=this.pendingPlace;
    const hit=this.findPoint(event);
+   if(pointEntity){
+    if(!hit){this.status('Выбери точку земли для маршрута');return true;}
+    this.cancelPlacement();
+    this.addWaypointToEntity(pointEntity,[hit.x,hit.y,hit.z]);
+    this.panel.hidden=false;this.routeHelper.visible=true;
+    return true;
+   }
    if(!hit){this.status('Не найден пол или земля. Попробуй другой участок.');return true;}
    // One tap places one mob. Await async GLB loads outside the input handler.
    this.cancelPlacement();
@@ -527,6 +585,162 @@
      Math.max(elevation,hit.y):hit.y,hit.z]);
     this.status('✅ Моб установлен. Нажми ▶ PLAY для просмотра анимации Idle.');
    }catch(err){this.status('Не удалось установить моба: '+err.message)}
+   return true;
+  }
+  selectedEntity(){
+   const id=this.el('phoenixPrefabEntities')?.value||'';
+   return this.world.hasEntity(id)?id:'';
+  }
+  selectEntity(id=this.selectedEntity()){
+   const tr=id&&this.world.getComponent(id,'transform');
+   const c=id&&this.world.getComponent(id,'character');
+   for(const [key,index] of [['phoenixEntityX',0],['phoenixEntityY',1],['phoenixEntityZ',2]]){
+    if(this.el(key))this.el(key).value=tr?String(tr.position[index]):'0';
+   }
+   if(this.el('phoenixEntityYaw'))
+    this.el('phoenixEntityYaw').value=tr?String(Number(((tr.yaw||0)*180/Math.PI).toFixed(1))):'0';
+   if(this.el('phoenixEntityAI'))
+    this.el('phoenixEntityAI').value=c?.ai?.mode||'idle';
+   const list=this.el('phoenixEntityWaypoints');
+   if(list){
+    list.replaceChildren();
+    for(const [index,p] of (c?.ai?.waypoints||[]).entries())
+     list.appendChild(this.option(String(index),
+      (index+1)+'. '+p.map(n=>Number(n).toFixed(2)).join(' / ')));
+   }
+   this.drawRoute(id);
+  }
+  editEntity(id,operation){
+   if(this.b.playBridge.active)return this.status('Редактируй мобов в EDIT'),false;
+   if(!id||!this.world.hasEntity(id))return this.status('Выбери моба на сцене'),false;
+   const transform=this.world.getComponent(id,'transform');
+   const character=this.world.getComponent(id,'character');
+   try{
+    const updated=operation({transform,character});
+    if(!updated)return false;
+    this.b.recordEdit?.();
+    if(updated.transform)this.world.setComponent(id,'transform',updated.transform);
+    if(updated.character)this.world.setComponent(id,'character',updated.character);
+    const render=this.rendered.get(id),tr=updated.transform||transform;
+    if(render){
+     render.root.position.fromArray(tr.position);
+     render.root.rotation.y=tr.yaw||0;
+     render.aiState=PhoenixAI.initial(tr.position);
+     this.groundVisual(render,0,true);
+    }
+    this.refresh();this.el('phoenixPrefabEntities').value=id;this.selectEntity(id);
+    this.b.save();
+    return true;
+   }catch(error){this.status('Не удалось изменить моба: '+error.message);return false;}
+  }
+  applyEntityTransform(){
+   const id=this.selectedEntity();if(!id)return this.status('Выбери моба на сцене');
+   const position=['phoenixEntityX','phoenixEntityY','phoenixEntityZ']
+    .map(name=>Number(this.el(name)?.value));
+   const yaw=Number(this.el('phoenixEntityYaw')?.value);
+   if(position.some(v=>!Number.isFinite(v)||Math.abs(v)>100000)||
+      !Number.isFinite(yaw)||Math.abs(yaw)>360)
+    return this.status('Позиция и поворот должны быть конечными числами');
+   return this.editEntity(id,({transform})=>({
+    transform:{...transform,position,yaw:yaw*Math.PI/180}
+   }))&&this.status('✅ Координаты и поворот моба сохранены');
+  }
+  snapEntityToGround(){
+   const id=this.selectedEntity();if(!id)return this.status('Выбери моба на сцене');
+   const tr=this.world.getComponent(id,'transform');
+   const position=[...tr.position];
+   position[1]=this.b.worldEditor?.heightAt(position[0],position[2])??0;
+   return this.editEntity(id,({transform})=>({
+    transform:{...transform,position}
+   }))&&this.status('✅ Моб поставлен на высоту ландшафта');
+  }
+  applyEntityAI(){
+   const id=this.selectedEntity(),mode=this.el('phoenixEntityAI')?.value;
+   if(!id||!PhoenixAI.BEHAVIORS.includes(mode))return false;
+   return this.editEntity(id,({character})=>({
+    character:{...character,ai:{...character.ai,mode}}
+   }))&&this.status('🤖 Поведение этого моба: '+mode);
+  }
+  addWaypointToEntity(id,position){
+   if(!Array.isArray(position)||position.length!==3||
+      position.some(v=>!Number.isFinite(v)||Math.abs(v)>100000))
+    return this.status('Некорректная точка маршрута'),false;
+   return this.editEntity(id,({character})=>{
+    const ai=PhoenixAI.normalize(character.ai);
+    if(ai.waypoints.length>=32)throw Error('Максимум 32 точки на маршрут');
+    return {character:{...character,ai:{...ai,waypoints:[...ai.waypoints,position]}}};
+   })&&this.status('🧭 Точка маршрута добавлена');
+  }
+  addWaypoint(){
+   const position=['phoenixWaypointX','phoenixWaypointY','phoenixWaypointZ']
+    .map(name=>Number(this.el(name)?.value));
+   return this.addWaypointToEntity(this.selectedEntity(),position);
+  }
+  selectWaypoint(){
+   const id=this.selectedEntity(),index=Number(this.el('phoenixEntityWaypoints')?.value);
+   const p=this.world.getComponent(id,'character')?.ai?.waypoints?.[index];
+   if(!p)return;
+   for(const [name,i] of [['phoenixWaypointX',0],['phoenixWaypointY',1],['phoenixWaypointZ',2]])
+    this.el(name).value=String(p[i]);
+  }
+  removeWaypoint(){
+   const id=this.selectedEntity();
+   const index=Number(this.el('phoenixEntityWaypoints')?.value);
+   return this.editEntity(id,({character})=>{
+    const ai=PhoenixAI.normalize(character.ai);
+    if(!Number.isInteger(index)||index<0||index>=ai.waypoints.length)return null;
+    ai.waypoints.splice(index,1);
+    return {character:{...character,ai}};
+   });
+  }
+  beginWaypointPlacement(){
+   const id=this.selectedEntity();
+   if(!id)return this.status('Выбери моба для редактирования маршрута');
+   if(this.b.playBridge.active)return;
+   this.cancelPlacement();this.b.setMode('build');this.b.setTool('place');
+   this.previewBefore={root:this.b.preview?.root||null,
+    outline:this.b.previewOutline||null,
+    visible:this.b.preview?.root?.visible,
+    outlineVisible:this.b.previewOutline?.visible};
+   if(this.previewBefore.root)this.previewBefore.root.visible=false;
+   if(this.previewBefore.outline)this.previewBefore.outline.visible=false;
+   this.pendingWaypointId=id;this.panel.hidden=true;
+   this.status('👆 Коснись сцены для новой точки маршрута');
+  }
+  drawRoute(id){
+   for(const child of [...this.routeHelper.children]){
+    child.geometry?.dispose();child.material?.dispose();
+    this.routeHelper.remove(child);
+   }
+   const tr=id&&this.world.getComponent(id,'transform');
+   const points=id&&this.world.getComponent(id,'character')?.ai?.waypoints||[];
+   this.routeHelper.visible=!!tr&&!this.playing&&!this.panel.hidden;
+   if(!tr||!points.length)return;
+   const coords=[...points.map(p=>p.slice())];
+   const positions=[...tr.position, ...coords.flat()];
+   const geometry=new THREE.BufferGeometry();
+   geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+   const mesh=new THREE.Line(geometry,new THREE.LineBasicMaterial({
+    color:0x41ffbd,depthTest:false,transparent:true,opacity:.95}));
+   mesh.renderOrder=850;this.routeHelper.add(mesh);
+  }
+  previewAttack(){
+   if(this.playing)return false;
+   const id=this.selectedEntity(),render=this.rendered.get(id);
+   if(!render)return this.status('Выбери моба на сцене'),false;
+   const p=this.registry.get(this.world.getComponent(id,'prefab')?.id);
+   const controller=new PhoenixAnimations.Controller(render.visual||render.root,
+    render.clips||[],p?.animations||{},THREE);
+   const clip=controller.resolve('attack');
+   if(!clip){
+    this.status('⚠ GLB не содержит распознанной Attack. Впиши точное название клипа Attack в шаблоне.');
+    return false;
+   }
+   render.animation?.stop();render.animation=controller;
+   controller.setState('attack',0);
+   this.previewAttackTime=Math.max(.2,Math.min(8,clip.duration||.6));
+   this.previewAttackEntity=id;
+   this.status('▶ Проверяю атаку: '+clip.name+' ('+this.previewAttackTime.toFixed(2)+' сек)');
    return true;
   }
   removeRender(id){
