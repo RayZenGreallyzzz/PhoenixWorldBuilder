@@ -65,6 +65,10 @@
    on('btnPrefabWaypointRemove','click',()=>this.removeWaypoint());
    on('phoenixEntityWaypoints','change',()=>this.selectWaypoint());
    on('btnPrefabPreviewAttack','click',()=>this.previewAttack());
+   on('phoenixPrefabAttackClip','change',e=>{
+    const field=this.el('phoenixPrefabAttack');
+    if(field)field.value=e.target.value;
+   });
   }
   refreshModels(selectId){
    const select=this.el('phoenixPrefabAsset'),wanted=selectId===undefined?select.value:selectId;
@@ -100,6 +104,13 @@
    const clips=(id&&this.b.assets.get(id)?.animations)||[];
    listing.replaceChildren();
    for(const clip of clips)listing.appendChild(this.option(clip.name,clip.name));
+   const attackSelect=this.el('phoenixPrefabAttackClip');
+   if(attackSelect){
+    const chosen=this.el('phoenixPrefabAttack')?.value||'';
+    attackSelect.replaceChildren(this.option('','Автоматически по имени клипа'));
+    for(const clip of clips)attackSelect.appendChild(this.option(clip.name,clip.name));
+    attackSelect.value=clips.some(c=>c.name===chosen)?chosen:'';
+   }
    this.el('phoenixPrefabClips').textContent=id?
     clips.length?'Анимаций в GLB: '+clips.map(c=>c.name).slice(0,12).join(', '):
     'Анимации пока не найдены. Можно оставить поля пустыми.':
@@ -741,8 +752,12 @@
    const id=this.selectedEntity(),render=this.rendered.get(id);
    if(!render)return this.status('Выбери моба на сцене'),false;
    const p=this.registry.get(this.world.getComponent(id,'prefab')?.id);
+   const selectedTemplate=this.selectedId===this.world.getComponent(id,'prefab')?.id;
+   const chosen=selectedTemplate?this.el('phoenixPrefabAttack')?.value?.trim():'';
+   const bindings={...(p?.animations||{}),
+    ...(chosen?{attack:chosen}:{})};
    const controller=new PhoenixAnimations.Controller(render.visual||render.root,
-    render.clips||[],p?.animations||{},THREE);
+    render.clips||[],bindings,THREE);
    const clip=controller.resolve('attack');
    if(!clip){
     this.status('⚠ GLB не содержит распознанной Attack. Впиши точное название клипа Attack в шаблоне.');
