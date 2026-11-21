@@ -58,7 +58,7 @@ const guardFar=AI.tick(AI.initial([0,0,0]),[0,0,0],[40,0,0],
  {mode:'guard',aggroRadius:5},{speed:2},.15,'enemy');
 assert.equal(guardFar.animation,'idle');
 assert.throws(()=>AI.normalize({waypoints:[[NaN,0,0]]}),/waypoint/);
-assert.throws(()=>AI.normalize({waypoints:new Array(33).fill([0,0,0])}),/waypoints/);
+assert.throws(()=>AI.normalize({waypoints:new Array(257).fill([0,0,0])}),/waypoints/);
 const points=[[1,0,0]];
 const safeAI=AI.normalize({mode:'patrol-aggro',waypoints:points});
 points[0][0]=100;
