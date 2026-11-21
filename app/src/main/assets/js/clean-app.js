@@ -232,10 +232,10 @@ class CleanBuilder{
  }
  setDefaultAvatar(){
   this.avatarAssetId='';this.avatarFileName='';this.avatarAttackClip='';
-  if($('avatarAttackClip'))this.fillAvatarAttackClips();
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarRoot=null;this.avatarGroundY=0;this.avatarGroundTimer=0;
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
+  if($('avatarAttackClip'))this.fillAvatarAttackClips();
   const cloth=new THREE.MeshStandardMaterial({color:0x355d82});
   const skin=new THREE.MeshStandardMaterial({color:0xe0b783});
   const dark=new THREE.MeshStandardMaterial({color:0x21384b});
