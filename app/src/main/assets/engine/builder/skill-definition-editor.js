@@ -1,4 +1,4 @@
-/* Phoenix Engine 1.0 — no-code per-character skill authoring.
+/* Phoenix Engine 1.1 — per-character skill authoring with PNG/WebP icons.
  * No raw JavaScript from form fields. Persistent definitions are separate from
  * temporary PLAY mana, cooldown and damage.
  */
@@ -14,6 +14,7 @@
    this.b=builder;this.doc=doc||document;
    this.catalog=new PhoenixSkills.Catalog();
    this.runtime=null;
+   this.imageDraft='';this.imageRequestToken=0;
    this.panel=this.el('phoenixSkillDefinitions');
    if(!this.panel)throw new Error('Skill definition UI missing');
    this.bind();this.refreshCharacters();this.loadForm();
@@ -32,6 +33,14 @@
    this.el('btnSkillDefSave')?.addEventListener('click',()=>this.save());
    this.el('btnSkillDefDelete')?.addEventListener('click',()=>this.remove());
    this.el('btnSkillDefLevelUp')?.addEventListener('click',()=>this.levelUp());
+   const imageInput=this.el('skillDefImageFile');
+   this.el('btnSkillDefImagePick')?.addEventListener('click',()=>{
+    if(imageInput){imageInput.value='';imageInput.click();}
+   });
+   imageInput?.addEventListener('change',()=>{
+    if(imageInput.files?.[0])this.importImage(imageInput.files[0]);
+   });
+   this.el('btnSkillDefImageRemove')?.addEventListener('click',()=>this.removeImage());
    this.el('skillDefCharacter')?.addEventListener('change',()=>this.loadForm());
    this.el('skillDefSlot')?.addEventListener('change',()=>this.loadForm());
    for(const id of ['skillDefLevel','skillDefBasePower','skillDefGrowth'])
@@ -49,7 +58,7 @@
   selected(){return {character:this.el('skillDefCharacter').value||'player',
    slot:this.el('skillDefSlot').value||'slot3'};}
   blank(){
-   return {name:'Новый навык',description:'',icon:'✨',type:'damage',
+   return {name:'Новый навык',description:'',icon:'✨',iconImage:'',type:'damage',
     basePower:30,growth:10,level:1,maxLevel:5,manaCost:15,
     cooldown:5,range:8,animation:'cast'};
   }
@@ -57,6 +66,7 @@
    const get=id=>this.el('skillDef'+id).value;
    return {
     name:get('Name'),description:get('Description'),icon:get('Icon'),
+    iconImage:this.imageDraft,
     type:get('Type'),level:Number(get('Level')),maxLevel:Number(get('MaxLevel')),
     basePower:Number(get('BasePower')),growth:Number(get('Growth')),
     manaCost:Number(get('ManaCost')),cooldown:Number(get('Cooldown')),
@@ -73,7 +83,29 @@
    };
    for(const [key,value] of Object.entries(keys))
     this.el('skillDef'+key).value=String(value);
-   this.preview();
+   this.imageRequestToken++;
+   this.imageDraft=s.iconImage||'';
+   this.previewImage();this.preview();
+  }
+  previewImage(){
+   const preview=this.el('skillDefImagePreview');
+   if(preview){preview.hidden=!this.imageDraft;preview.src=this.imageDraft||'';}
+  }
+  async importImage(file){
+   const selected=this.selected(),token=++this.imageRequestToken;
+   try{
+    const image=await globalThis.PhoenixSkillImages.fromFile(file,this.doc);
+    const current=this.selected();
+    if(token!==this.imageRequestToken||selected.character!==current.character||
+       selected.slot!==current.slot)return false;
+    this.imageDraft=image;this.previewImage();
+    this.status('🖼 PNG/WebP загружен. Нажми «Сохранить навык».');
+    return true;
+   }catch(error){this.status('Ошибка картинки: '+error.message);return false;}
+  }
+  removeImage(){
+   this.imageRequestToken++;this.imageDraft='';this.previewImage();
+   this.status('Картинка убрана. Нажми «Сохранить навык».');
   }
   loadForm(){
    const {character,slot}=this.selected();
@@ -112,8 +144,8 @@
     if(character==='player'&&this.b.skillEditor?.layout){
      const ui=this.b.skillEditor;
      ui.layout=ui.schema.update(ui.layout,slot,{
-      icon:validated.icon,label:[...validated.name].slice(0,16).join(''),
-      enabled:true
+      icon:validated.icon,image:validated.iconImage,
+      label:[...validated.name].slice(0,16).join(''),enabled:true
      });
      ui.render();
     }
