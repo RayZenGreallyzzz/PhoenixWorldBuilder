@@ -52,6 +52,10 @@ on:
       - 'tests/test-play-weapon-skills.cjs'
       - 'tests/test-phoenix-player-combat.cjs'
       - 'tests/test-editor-mode-isolation.cjs'
+      - 'server/**'
+      - 'app/src/main/assets/engine/core/phoenix-server-export.js'
+      - 'app/src/main/assets/engine/builder/phoenix-network-editor.js'
+      - 'app/src/main/AndroidManifest.xml'
       - 'app/src/main/assets/engine/core/phoenix-player-combat.js'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
@@ -86,6 +90,13 @@ jobs:
           node --check app/src/main/assets/engine/builder/skill-hud-editor.js
           node --check app/src/main/assets/engine/runtime/phoenix-animations.js
           node --check app/src/main/assets/engine/builder/prefab-editor.js
+          node --check app/src/main/assets/engine/builder/phoenix-network-editor.js
+          node --check app/src/main/assets/engine/core/phoenix-server-export.js
+          node --check server/shared/protocol.mjs
+          node --check server/shared/world.mjs
+          node --check server/shared/room.mjs
+          node --check server/node/server.mjs
+          node --check server/cloudflare/worker.mjs
           node --check app/src/main/assets/js/avatar-motion.js
           node --check app/src/main/assets/js/placement-ghost.js
           node --check app/src/main/assets/js/clean-app.js
@@ -130,3 +141,4 @@ jobs:
           node tests/test-play-weapon-skills.cjs
           node tests/test-phoenix-player-combat.cjs
           node tests/test-editor-mode-isolation.cjs
+          node --test server/tests/room.test.mjs
