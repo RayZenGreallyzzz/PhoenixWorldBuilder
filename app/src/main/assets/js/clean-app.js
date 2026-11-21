@@ -104,7 +104,8 @@ class CleanBuilder{
   this.scene.add(new THREE.HemisphereLight(0xe2efff,0x6b765f,.95));
   const sun=new THREE.DirectionalLight(0xffedcf,1);
   sun.position.set(-28,50,24);this.scene.add(sun);
-  this.scene.add(new THREE.GridHelper(128,64,0x54837f,0x81a3a1));
+  // No always-on grid: the world sector grid is opt-in via ▦ СЕТКА.
+  // Avoid drawing tens of thousands of grid lines on 5×5 km Android scenes.
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(128,128),
    new THREE.MeshStandardMaterial({color:0x657e64,roughness:1}));
   ground.rotation.x=-Math.PI/2;ground.position.y=-.012;this.scene.add(ground);
@@ -198,6 +199,7 @@ class CleanBuilder{
   this.prefabEditor=new PhoenixPrefabEditor(this);
   this.skillEditor=new PhoenixSkillEditor(this);
   this.skillDefinitionEditor=new PhoenixSkillDefinitionEditor(this);
+  this.worldEditor=new PhoenixWorldEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
@@ -4146,6 +4148,7 @@ class CleanBuilder{
     const item=this.encode(obj);item.rot=obj.root.rotation.y;return item;
    }),floor:this.floor,nextId:this.nextId,
     phoenixGame:this.prefabEditor?.serialize()||null,
+    worldCanvas:this.worldEditor?.serialize()||null,
     decals:SurfaceDecals.normalize(this.decals),
     textureLibrary:this.textureFiles.map(t=>({
      id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,
@@ -4458,6 +4461,9 @@ class CleanBuilder{
     notify('Дом открыт, но игровые объекты в JSON повреждены: '+err.message,'warn');
    }
   }
+  // World and brush edits use the SAME Builder project history as
+  // construction; legacy UV44 JSON stays on its original 128m canvas.
+  this.worldEditor?.loadFromProject(doc.worldCanvas||null,{preserveUI});
   // Skill layout is optional; old UV44 JSON projects keep device preferences.
   this.skillEditor?.loadFromProject(doc.phoenixGame?.hudLayout||null);
   if(this.skillDefinitionEditor){
