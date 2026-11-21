@@ -11,6 +11,8 @@
  'use strict';
  const Features=(typeof globalThis!=='undefined'&&globalThis.PhoenixMobFeatures)||
   (typeof require==='function'?require('../core/phoenix-mob-features.js'):null);
+ const Path=(typeof globalThis!=='undefined'&&globalThis.PhoenixPatrolPath)||
+  (typeof require==='function'?require('../core/phoenix-patrol-path.js'):null);
  class PhoenixPrefabEditor{
   constructor(builder){
    if(!builder?.playBridge||!window.PhoenixCore||!window.PhoenixPrefabs||!window.PhoenixAI||!window.PhoenixAnimations)
@@ -22,6 +24,7 @@
    this.rendered=new Map();this.selectedId='';this.pendingPlace='';
    this.playing=false;this.loadGeneration=0;this.clipGeneration=0;this.previewBefore=null;
    this.aiCursor=0;this.collider=null;this.pendingWaypointId='';
+   this.routeDraft=null;
    this.respawner=new Features.Respawner();this.aiTime=0;
    this.previewAttackTime=0;this.previewAttackEntity='';
    this.routeHelper=new THREE.Group();this.routeHelper.name='phoenix:edit:route';
@@ -46,7 +49,7 @@
    this.refreshModels();this.panel.hidden=false;
    this.drawRoute(this.selectedEntity());
   }
-  close(){this.panel.hidden=true;this.routeHelper.visible=false;this.cancelPlacement();}
+  close(){this.cancelRouteDrawing();this.panel.hidden=true;this.routeHelper.visible=false;this.cancelPlacement();}
   toggle(){this.panel.hidden?this.open():this.close();}
   bind(){
    this.el('btnPhoenixPrefabs').addEventListener('click',()=>this.toggle());
@@ -91,6 +94,16 @@
    on('btnPrefabWaypointTap','click',()=>this.beginWaypointPlacement());
    on('btnPrefabWaypointRemove','click',()=>this.removeWaypoint());
    on('phoenixEntityWaypoints','change',()=>this.selectWaypoint());
+   on('btnPhoenixRouteDraw','click',()=>this.startRouteDrawing('draw'));
+   on('btnPhoenixRouteStops','click',()=>this.startRouteDrawing('stops'));
+   on('btnPhoenixRouteDrawTool','click',()=>this.setRouteTool('draw'));
+   on('btnPhoenixRouteStopTool','click',()=>this.setRouteTool('stop'));
+   on('btnPhoenixRouteSave','click',()=>this.saveRouteDrawing());
+   on('btnPhoenixRouteCancel','click',()=>this.cancelRouteDrawing());
+   on('btnPhoenixRouteClear','click',()=>this.clearRouteDrawing());
+   // Capture before Builder's own click/drag gestures; a route is never a wall.
+   for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])
+    this.b.canvas?.addEventListener(type,e=>this.routePointer(type,e),true);
    on('btnPrefabPreviewAttack','click',()=>this.previewAttack());
    on('phoenixPrefabAttackClip','change',e=>{
     const field=this.el('phoenixPrefabAttack');
@@ -613,7 +626,12 @@
     else if(Number.isFinite(render.facingYaw))
      render.root.rotation.y=Features.turn(render.root.rotation.y,
       render.facingYaw,dtStep,8);
-    render.animation?.setState(decision.animation);
+    if(decision.routeClip){
+     const clip='route:'+decision.routeClip;
+     if(render.animation?.state!==clip)
+      render.animation?.playClip(decision.routeClip,
+       {state:clip,once:false,fade:.15});
+    }else render.animation?.setState(decision.animation);
     if(this.tryNpcSkill(id,render,p,player,
       Math.hypot(render.root.position.x-player.x,
        render.root.position.z-player.z),decision.engaged))continue;
@@ -851,9 +869,12 @@
    const list=this.el('phoenixEntityWaypoints');
    if(list){
     list.replaceChildren();
-    for(const [index,p] of (c?.ai?.waypoints||[]).entries())
+    for(const [index,p] of (c?.ai?.waypoints||[]).entries()){
+     const stop=(c?.ai?.stops||[]).find(s=>s.index===index);
      list.appendChild(this.option(String(index),
-      (index+1)+'. '+p.map(n=>Number(n).toFixed(2)).join(' / ')));
+      (index+1)+'. '+p.map(n=>Number(n).toFixed(2)).join(' / ')+
+      (stop?' ⏸ '+stop.seconds+'с '+stop.animation:'')));
+    }
    }
    this.drawRoute(id);
   }
@@ -957,7 +978,7 @@
     return this.status('Некорректная точка маршрута'),false;
    const ok=this.editEntity(id,({character})=>{
     const ai=PhoenixAI.normalize(character.ai);
-    if(ai.waypoints.length>=32)throw Error('Максимум 32 точки на маршрут');
+    if(ai.waypoints.length>=Path.MAX_POINTS)throw Error('Максимум '+Path.MAX_POINTS+' точек на маршрут');
     return {character:{...character,ai:{...ai,waypoints:[...ai.waypoints,position]}}};
    });
    if(ok)this.status('🧭 Точка маршрута добавлена');
@@ -982,6 +1003,8 @@
     const ai=PhoenixAI.normalize(character.ai);
     if(!Number.isInteger(index)||index<0||index>=ai.waypoints.length)return null;
     ai.waypoints.splice(index,1);
+    ai.stops=ai.stops.filter(s=>s.index!==index).map(s=>({
+     ...s,index:s.index>index?s.index-1:s.index}));
     return {character:{...character,ai}};
    });
   }
@@ -1006,16 +1029,27 @@
     this.routeHelper.remove(child);
    }
    const tr=id&&this.world.getComponent(id,'transform');
-   const points=id&&this.world.getComponent(id,'character')?.ai?.waypoints||[];
-   this.routeHelper.visible=!!tr&&!this.playing&&!this.panel.hidden;
+   const draft=this.routeDraft?.id===id?this.routeDraft:null;
+   const ai=id&&this.world.getComponent(id,'character')?.ai||{};
+   const points=draft?(draft.mode==='draw'?Path.fromStroke(draft.raw):draft.points):
+    (ai.waypoints||[]);
+   const stops=draft?Path.stopsFromMarkers(points,draft.markers):(ai.stops||[]);
+   this.routeHelper.visible=!!tr&&!this.playing&&(!this.panel.hidden||!!draft);
    if(!tr||!points.length)return;
-   const coords=[...points.map(p=>p.slice())];
-   const positions=[...tr.position, ...coords.flat()];
+   // One open polyline; PLAY closes the loop from last waypoint to first.
+   const coords=[tr.position,...points];
    const geometry=new THREE.BufferGeometry();
-   geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+   geometry.setAttribute('position',new THREE.Float32BufferAttribute(coords.flat(),3));
    const mesh=new THREE.Line(geometry,new THREE.LineBasicMaterial({
-    color:0x41ffbd,depthTest:false,transparent:true,opacity:.95}));
+    color:draft?0xffd166:0x41ffbd,depthTest:false,transparent:true,opacity:.95}));
    mesh.renderOrder=850;this.routeHelper.add(mesh);
+   for(const stop of stops){
+    const p=points[stop.index];if(!p)continue;
+    const dot=new THREE.Mesh(new THREE.SphereGeometry(.32,8,6),
+     new THREE.MeshBasicMaterial({color:0xffa442,depthTest:false}));
+    dot.position.set(p[0],p[1]+.55,p[2]);
+    dot.renderOrder=860;this.routeHelper.add(dot);
+   }
   }
   previewAttack(){
    if(this.playing)return false;
@@ -1063,7 +1097,7 @@
     skills:this.b.skillDefinitionEditor?.serialize()||null};
   }
   async loadFromProject(doc){
-   this.cancelPlacement();
+   this.cancelRouteDrawing();this.cancelPlacement();
    let registry=new PhoenixPrefabs.PhoenixPrefabCatalog();
    let world=new PhoenixCore.PhoenixWorld();
    if(doc!==null&&doc!==undefined){
