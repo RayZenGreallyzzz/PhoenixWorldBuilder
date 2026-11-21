@@ -6,8 +6,8 @@ android {
         applicationId 'com.phoenix.worldbuilder'
         minSdk 26
         targetSdk 35
-        versionCode 10
-        versionName '1.0.0'
+        versionCode 11
+        versionName '1.1.0'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes {
@@ -16,8 +16,8 @@ android {
         // Initial v0.6 install is separate from older experimental package IDs.
         debug {
             applicationIdSuffix '.engine.stable'
-            versionNameSuffix '-fps-mmo-skills'
-            manifestPlaceholders = [appLabel: 'Phoenix Engine 1.0']
+            versionNameSuffix '-moba-icons'
+            manifestPlaceholders = [appLabel: 'Phoenix Engine 1.1']
         }
         release {
             minifyEnabled false
