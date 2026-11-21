@@ -189,6 +189,8 @@
     this.healReadyAt=0;
     if(this.combatHud)this.combatHud.hidden=false;
     this.showGenreHud();this.updatePlayerHud();
+    // Explicit opt-in only: entering PLAY may join a saved test server.
+    b.networkEditor?.beginPlay?.();
     if(this.hpBar)this.hpBar.hidden=true;
     if(this.hpTarget)this.hpTarget.textContent='⚔ Ближайший враг';
     if(this.combatNotice)this.combatNotice.textContent='Касайся ⚔ или нажми F';
@@ -196,6 +198,7 @@
    } catch (error) {
     // Entering PLAY must never leave the editor with a half-finished UI.
     this.active = false;
+    b.networkEditor?.disconnect?.();
     this.selectMob('');
     b.prefabEditor?.setPlaying(false);
     this.clearMobTags();this.effects?.dispose();this.effects=null;
@@ -256,6 +259,7 @@
    b.keys.clear();
    if (b.joystick) b.joystick.reset();
    this.active = false;
+    b.networkEditor?.disconnect?.();
     this.selectMob('');
     b.prefabEditor?.setPlaying(false);
     this.clearMobTags();this.effects?.dispose();this.effects=null;
