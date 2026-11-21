@@ -803,3 +803,17 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
 #phoenixRouteDock button.active,#phoenixRouteDock button.primary{border-color:#9effdf;background:#197b65}
 #phoenixRouteDock #phoenixRouteStatus{border:1px solid #3f7e78;border-radius:7px;background:#173d49;padding:6px}
 @media(max-width:700px){#phoenixRouteDock{width:min(290px,calc(100vw - 12px));padding:8px;gap:5px;max-height:63dvh}}
+
+/* RPG mathematical balance lab: independent from the shared 3D canvas. */
+#phoenixProgressionEditor{max-width:min(94vw,760px);max-height:80dvh;overflow-y:auto}
+#phoenixProgressionEditor .phoenixPrefabRow{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
+#phoenixProgressionEditor .phoenixPrefabRow button{flex:1 1 130px}
+#phoenixProgressionEditor .phoenixSkillRow{gap:7px}
+#phoenixProgressionEditor input,#phoenixProgressionEditor select{max-width:100%}
+.phoenixProgressionFields{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:7px;margin:10px 0}
+.phoenixProgressionStat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;align-items:end;padding:7px;background:#193743;border:1px solid #477b80;border-radius:8px}
+.phoenixProgressionStat>b{grid-column:1/-1;color:#abf5da;font-size:12px}
+.phoenixProgressionStat label{display:flex;flex-direction:column;gap:3px;font-size:10px;min-width:0}
+.phoenixProgressionStat input{box-sizing:border-box;min-height:34px;width:100%;font-size:12px;padding:4px;background:#143442;color:#f6fffb;border:1px solid #65948f;border-radius:6px}
+.phoenixProgressionResults{white-space:pre-wrap;overflow-x:auto;line-height:1.65;font-size:11px;font-family:monospace;border:1px solid #498f80;border-radius:9px;padding:9px;color:#d4ffee;background:#0d2c34;margin:8px 0}
+@media(max-width:550px){.phoenixProgressionFields{grid-template-columns:minmax(0,1fr)}.phoenixProgressionStat{gap:3px}.phoenixProgressionResults{font-size:10px}}
