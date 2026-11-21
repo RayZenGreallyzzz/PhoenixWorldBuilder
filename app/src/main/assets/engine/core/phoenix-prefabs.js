@@ -10,6 +10,8 @@
  'use strict';
  const VERSION=1, MAX_PREFABS=300;
  const TYPES=['mob','npc'], FACTIONS=['enemy','neutral','ally'];
+ const Path=(typeof globalThis!=='undefined'&&globalThis.PhoenixPatrolPath)||
+  (typeof require==='function'?require('./phoenix-patrol-path.js'):null);
  function safeText(s,max=120){
   if(typeof s!=='string'||!s.trim()||s.length>max)throw new TypeError('Invalid name');
   return s.trim();
@@ -49,11 +51,10 @@
   const engagement=ai.engagement??'auto';
   if(!['auto','passive','defensive','aggressive'].includes(engagement))
    throw new TypeError('Invalid AI engagement');
-  const points=ai.waypoints??[];
-  if(!Array.isArray(points)||points.length>32||
-     points.some(p=>!Array.isArray(p)||p.length!==3||
-      p.some(v=>typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>100000)))
-   throw new TypeError('Invalid AI waypoints');
+  const points=Path.validatePoints(ai.waypoints??[]);
+  const routeMode=ai.routeMode??'points';
+  if(!Path.MODES.includes(routeMode))throw new TypeError('Invalid AI route mode');
+  const stops=Path.normalizeStops(points,ai.stops??[]);
   const behavior={
    mode,engagement,
    patrolRadius:number(ai.patrolRadius??3,0,30,'patrolRadius'),
@@ -61,7 +62,7 @@
    attackRange:number(ai.attackRange??1.25,.3,8,'attackRange'),
    attackCooldown:number(ai.attackCooldown??1.8,.35,30,'attackCooldown'),
    attackDuration:number(ai.attackDuration??.5,.15,8,'attackDuration'),
-   waypoints:points.map(p=>p.slice())
+   waypoints:points,routeMode,stops
   };
   return {
    name:safeText(value.name),type,faction,nameColor,assetId,ai:behavior,
