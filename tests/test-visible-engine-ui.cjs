@@ -33,6 +33,12 @@ for(const id of ['btnPhoenixWorld','btnWorldGrid','phoenixWorldPanel',
  'worldBrushRadius','worldBrushPower','btnCatalogLandscape']){
  assert(html.includes('id="'+id+'"'),'Missing 1.4 world/terrain control '+id);
 }
+for(const id of ['worldTextureRadius','worldTextureRadiusValue']){
+ assert(html.includes('id="'+id+'"'), 'Landscape brush size slider must be visible');
+}
+for(const value of [2,5,10,25,50,100])
+ assert(html.includes('data-texture-brush-radius="'+value+'"'),
+  'Missing quick terrain brush size '+value+'m');
 assert(html.includes('value="5000"'),'Missing 5km canvas preset');
 for(const name of ['50 × 50 м','100 × 100 м','250 × 250 м',
  '500 × 500 м','1000 × 1000 м','Свой размер'])
