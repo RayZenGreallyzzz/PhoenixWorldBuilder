@@ -1,6 +1,9 @@
 'use strict';
 const assert=require('node:assert/strict');
 const Skills=require('../app/src/main/assets/engine/core/phoenix-skills.js');
+const Layout=require('../app/src/main/assets/engine/core/phoenix-skill-layout.js');
+const imagePNG='data:image/png;base64,'+
+ Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]).toString('base64');
 global.PhoenixSkills=Skills;
 class Element{
  constructor(id){this.id=id;this.value='';this.textContent='';this.hidden=true;this.options=[];this.listeners={};}
@@ -13,13 +16,17 @@ const ids=['phoenixSkillDefinitions','btnPhoenixSkillDefs','btnSkillDefClose',
  'skillDefCharacter','skillDefSlot','skillDefName','skillDefDescription','skillDefIcon',
  'skillDefType','skillDefLevel','skillDefMaxLevel','skillDefBasePower','skillDefGrowth',
  'skillDefManaCost','skillDefCooldown','skillDefRange','skillDefAnimation',
- 'skillDefPreview','skillDefMessage'];
+ 'skillDefPreview','skillDefMessage','skillDefImageFile','skillDefImagePreview',
+ 'btnSkillDefImagePick','btnSkillDefImageRemove'];
 const elements=Object.fromEntries(ids.map(id=>[id,new Element(id)]));
 elements.skillDefSlot.value='slot3';
 const doc={getElementById:id=>elements[id]||null,createElement:tag=>new Element(tag)};
 let saved=0;
 const p={id:'prefab-1',name:'Медведь',type:'mob'};
-const builder={playBridge:{active:false},skillEditor:{close(){}},
+let redraws=0;
+const builder={playBridge:{active:false},
+ skillEditor:{close(){},schema:Layout,layout:Layout.defaultLayout(),
+  render(){redraws++}},
  prefabEditor:{close(){},registry:{list(){return [p]},get(id){return id===p.id?p:null}}},
  save(){saved++}};
 const Editor=require('../app/src/main/assets/engine/builder/skill-definition-editor.js');
@@ -38,10 +45,15 @@ elements.skillDefManaCost.value='30';
 elements.skillDefCooldown.value='6';
 elements.skillDefRange.value='12';
 elements.skillDefAnimation.value='cast';
+ed.imageDraft=imagePNG;ed.previewImage();
 assert.equal(ed.save(),true);
 assert.equal(saved,1);
 assert.equal(ed.catalog.get('player','slot3').basePower,80);
 assert.equal(ed.catalog.get('player','slot3').level,2);
+assert.equal(ed.catalog.get('player','slot3').iconImage,imagePNG);
+assert.equal(builder.skillEditor.layout.slots[2].image,imagePNG,
+ 'Saving player skill must put PNG on actual HUD button');
+assert(redraws>0,'HUD should be refreshed after assigning player skill image');
 assert.equal(elements.skillDefPreview.textContent,'Сила на уровне 2: 105');
 elements.skillDefCharacter.value='prefab-1';
 elements.skillDefSlot.value='ultimate';
@@ -50,6 +62,8 @@ elements.skillDefName.value='Рёв';
 elements.skillDefDescription.value='Сила медведя';
 assert.equal(ed.save(),true);
 assert.equal(ed.catalog.get('prefab-1','ultimate').name,'Рёв');
+assert.equal(ed.catalog.get('prefab-1','ultimate').iconImage,'',
+ 'NPC skill image stays independent of the player HUD');
 const json=ed.serialize();
 const other=new Editor(builder,doc);other.loadFromProject(JSON.parse(JSON.stringify(json)));
 assert.deepEqual(other.serialize(),json);
@@ -64,4 +78,4 @@ other.loadFromProject(null);
 assert.equal(other.catalog.characters().length,0);
 assert.equal(other.open(),true);
 assert.equal(other.catalog.get('player','slot3'),null);
-console.log('PASS: per-character Skill Editor saves player and NPC abilities, JSON, MP and level scaling');
+console.log('PASS: per-character PNG skill image, player HUD sync, NPC isolation, MP and level scaling');
