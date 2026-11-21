@@ -41,10 +41,11 @@
   const lost=!running||action.enabled===false||action.paused===true||
    !Number.isFinite(weight)||weight<=.0001;
   const nonLoop=action.loop!==T.LoopRepeat||action.clampWhenFinished===true;
-  // Rebinding the same movement state must swap clips as well.
-  const changed=state!==currentState||!running||
-   (actions&&Object.entries(actions).some(([key,a])=>key!==clip.name&&
-    a?.isRunning?.()&&(a.getEffectiveWeight?.()??0)>.5));
+  // When an explicit binding changes, launch its clip and cross-fade the
+  // previous action. Do not repeatedly restart fades during Idle/Walk blends.
+  const rebound=!running&&Object.entries(actions||{}).some(([key,a])=>
+   key!==clip.name&&a?.isRunning?.()&&(a.getEffectiveWeight?.()??0)>.5);
+  const changed=state!==currentState||rebound;
   if(!lost&&!nonLoop&&!changed)
    return {state,updated:false,recovered:false,clip:clip.name};
   let hasOther=false;
