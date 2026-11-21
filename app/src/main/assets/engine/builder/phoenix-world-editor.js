@@ -547,6 +547,7 @@
    this.b.surfaceSidePick=false;
    this.b.decalPickMode=false;
    this.updateStatus();
+   this.hideBrushIndicator();
    return true;
   }
   usesTexture(id){
@@ -710,7 +711,7 @@
   }
   paintTextureAt(x,z,erase=false,seconds=.09){
    if(!erase&&!this.textureId)return false;
-   const radius=Number(this.el('worldBrushRadius')?.value||25);
+   const radius=this.textureBrushRadius();
    const opacity=Number(this.el('worldTextureOpacity')?.value||100)/100;
    const softness=Number(this.el('worldTextureSoftness')?.value||65)/100;
    const oldState=!this.stroke?this.b.project?.():null;
@@ -733,7 +734,7 @@
   }
   startPainting(erase=false){
    if(this.b.playBridge?.active)return false;
-   this.finishStroke();
+   this.finishStroke();this.hideBrushIndicator();
    this.painting=true;this.paintMode=erase?'erase':'place';
    this.b.prefabEditor?.cancelPlacement?.();
    this.updateStatus();
@@ -742,14 +743,14 @@
   startSculpt(mode){
    if(this.b.playBridge?.active||
       !['raise','lower','smooth'].includes(mode))return false;
-   this.finishStroke();
+   this.finishStroke();this.hideBrushIndicator();
    this.painting=true;this.paintMode=mode;
    this.b.prefabEditor?.cancelPlacement?.();
    this.updateStatus();
    return true;
   }
   stopPainting(){
-   this.finishStroke();
+   this.finishStroke();this.hideBrushIndicator();
    this.painting=false;this.updateStatus();return true;
   }
   rememberEdit(){
@@ -777,6 +778,8 @@
      this.rememberEdit();
      this.state=next;
      this.refreshSculptArea(x,z,radius);
+     if(this.brushIndicator.visible&&this.indicatorPoint)
+      this.showBrushIndicator(this.indicatorPoint.x,this.indicatorPoint.z);
      if(this.stroke)this.stroke.changed=true;
      else this.b.save?.();
      this.updateStatus();
@@ -803,7 +806,7 @@
    const distance=Math.hypot(to.x-from.x,to.z-from.z);
    // Minimum stamp separation prevents gaps even when pointermove events
    // are throttled by Android. This keeps long pencil strokes continuous.
-   const radius=Number(this.el('worldBrushRadius')?.value||25);
+   const radius=this.currentBrushRadius();
    const step=Math.max(.45,Math.min(12,radius*.28));
    const samples=Math.max(1,Math.ceil(distance/step));
    let any=false;
@@ -817,10 +820,19 @@
   handleBrushPointer(type,event){
    if(!this.painting||this.b.playBridge?.active)return;
    const canvas=this.b.canvas;
+   if(type==='pointermove'&&!this.stroke){
+    if(event.target===canvas&&event.isPrimary!==false){
+     const hit=this.pointerTerrain(event);
+     if(hit)this.showBrushIndicator(hit.x,hit.z);
+     else this.hideBrushIndicator();
+    }
+    return;
+   }
    if(type==='pointerdown'){
     if(event.target!==canvas||event.isPrimary===false||this.stroke)return;
     const hit=this.pointerTerrain(event);
     if(!hit)return;
+    this.showBrushIndicator(hit.x,hit.z);
     this.stroke={pointerId:event.pointerId,snapshot:this.b.project?.(),
      recorded:false,changed:false,last:performance.now(),
      point:{x:hit.x,z:hit.z}};
@@ -837,12 +849,15 @@
      if(hit){
       const to={x:hit.x,z:hit.z};
       this.brushLine(this.stroke.point,to,Math.min(.24,Math.max(.04,dt)));
+      this.showBrushIndicator(to.x,to.z);
       this.stroke.point=to;
      }
      this.stroke.last=now;
     }
    }
-   if(type==='pointerup'||type==='pointercancel')this.finishStroke();
+   if(type==='pointerup'||type==='pointercancel'){
+    this.finishStroke();this.hideBrushIndicator();
+   }
    event.preventDefault();event.stopImmediatePropagation();
   }
   finishStroke(){
