@@ -54,4 +54,36 @@ assert.deepEqual(Layout.validate(JSON.parse(JSON.stringify(world))),world);
 assert.throws(()=>Layout.resize(world,{width:600}),/ландшафт/);
 assert(Layout.legacy().paintMasks.length===0,
  'Old UV44 world has no texture masks and continues to open');
+// 20cm radius must not vanish on the old 50m/64px mask:
+// upgrade ONLY the painted patch to 512px = 9.8cm per pixel.
+const micro=new splat.Painter(data);
+assert.throws(()=>micro.paint(.35,.35,.19,name),/brush settings/);
+const touched=micro.paint(.35,.35,.2,name);
+assert.deepEqual(touched,['5:5']);
+const microMask=micro.layersFor('5:5').get(name);
+assert.equal(microMask.length,splat.DETAIL_RES*splat.DETAIL_RES);
+const inked=microMask.reduce((n,v)=>n+(v>0?1:0),0);
+assert(inked>=4&&inked<=25,
+ '20cm paint needs a visible small circular mark, not a 50m painted square');
+const microSaved=micro.serialize();
+assert.equal(microSaved[0].resolution,512);
+assert.equal(microSaved.length,1);
+const microWorld=Layout.validate({...Layout.plain(),paintMasks:microSaved});
+assert.equal(microWorld.paintMasks[0].resolution,512,
+ 'Undo/Redo and JSON must preserve detailed mask resolution');
+assert.deepEqual(new splat.Painter(data,microWorld.paintMasks).serialize(),microSaved);
+const firstMicroBytes=JSON.stringify(microSaved).length;
+for(let i=0;i<80;i++)micro.paint(.35,.35,.2,name);
+assert.equal(micro.serialize().length,1,'Many 20cm strokes reuse one mask');
+assert(JSON.stringify(micro.serialize()).length<=firstMicroBytes+300,
+ 'Repeated 20cm strokes must not duplicate PNG/WebP or append stamp objects');
+const broad=new splat.Painter(data);
+broad.paint(10,10,25,name);
+assert.equal(broad.layersFor('5:5').get(name).length,splat.COUNT,
+ 'Broad strokes must remain economical at 64px on Android');
+broad.paint(10.35,10.35,.2,name);
+assert.equal(broad.layersFor('5:5').get(name).length,splat.DETAIL_RES**2,
+ 'Micro stroke should promote an existing painted mask without losing the material');
+assert.equal(broad.materials().length,1);
+assert.throws(()=>micro.paint(.35,.35,50.1,name),/brush settings/);
 console.log('PASS: circle/feather texture splats, no painted square, each texture ID once, 350 repeated strokes with bounded save size');
