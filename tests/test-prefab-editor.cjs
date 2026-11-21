@@ -84,6 +84,22 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert.equal(battle.hp,175);
  assert.equal(ed.rendered.get(entity).animation?.state,'hit');
  assert.equal(ed.attackNearest(1.01).reason,'cooldown');
+ // A killed mob respawns at its originally authored coordinates after the
+ // template's configured delay, without rewriting project JSON.
+ const respawning=ed.registry.get('prefab-1');
+ respawning.respawn={enabled:true,delay:2};
+ ed.registry.update('prefab-1',respawning);
+ const beforeDeath=ed.world.getComponent(entity,'transform').position.slice();
+ const death=ed.damageEnemy(entity,175);
+ assert.equal(death.killed,true);
+ assert.equal(ed.respawner.remaining(entity),2);
+ for(let j=0;j<4;j++)ed.update(.5);
+ assert.equal(ed.combat.get(entity).hp,200);
+ assert.equal(ed.respawner.remaining(entity),null);
+ assert(ed.rendered.get(entity).root.visible);
+ assert(Math.abs(ed.rendered.get(entity).root.position.x-beforeDeath[0])<.3);
+ assert.deepEqual(ed.world.getComponent(entity,'transform').position,beforeDeath,
+  'PLAY respawn must not overwrite original mobile Builder JSON coordinates');
  ed.setPlaying(false);
  assert.equal(ed.combat.get(entity),null,'EDIT must not retain temporary battle HP');
  assert.equal(ed.rendered.get(entity).root.position.x,5,
