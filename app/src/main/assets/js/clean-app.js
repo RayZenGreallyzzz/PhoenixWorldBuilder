@@ -1634,7 +1634,10 @@ class CleanBuilder{
     if(this.outline&&obj===this.selected)this.outline.setFromObject(root);
    }else this.rebuildImported(obj);
   }else this.applySurfaceTo(obj);
-  if(obj===this.preview)this.updatePreview(this.cursor,false);
+  if(obj===this.preview){
+   this.applyPreviewGhost(obj);
+   this.updatePreview(this.cursor,false);
+  }
   this.syncInspector();this.renderTextureLibrary();
   notify(reset?'Исходный материал восстановлен':'Материал применён к модулю','success');
  }
@@ -2257,7 +2260,18 @@ class CleanBuilder{
  applyPreviewGhost(obj=this.preview){
   if(!obj?.root)return;
   PhoenixPlacementGhost.style(obj.root,THREE);
-  // Draw cyan contour LAST, above terrain and the translucent mesh.
+  // Geometry rebuilds replace the preview root. Rebind its outline as well;
+  // otherwise a stale BoxHelper draws a thin line at the old module position.
+  if(this.previewOutline?.object&&
+     this.previewOutline.object!==obj.root){
+   this.previewOutline.removeFromParent();
+   this.previewOutline.geometry?.dispose();
+   this.previewOutline.material?.dispose();
+   this.previewOutline=new THREE.BoxHelper(obj.root,0x4efcff);
+   this.previewOutline.material.depthTest=false;
+   this.previewOutline.material.depthWrite=false;
+   this.scene.add(this.previewOutline);
+  }
   if(this.previewOutline)this.previewOutline.renderOrder=960;
  }
  disposePreview(){
@@ -2957,6 +2971,7 @@ class CleanBuilder{
   // Rebuilt preview material is re-applied at the end, not cloned per face.
   this.scene.add(fresh);old.removeFromParent();
   obj.root=fresh;obj.floorTrim=edit;obj.root.visible=!obj.hidden;
+  if(obj===this.preview)this.applyPreviewGhost(obj);
   this.queueDecalRebuild();
   this.applySurfaceTo(obj);
   if(this.outline&&obj===this.selected)this.outline.setFromObject(fresh);
