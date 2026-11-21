@@ -817,3 +817,23 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
 .phoenixProgressionStat input{box-sizing:border-box;min-height:34px;width:100%;font-size:12px;padding:4px;background:#143442;color:#f6fffb;border:1px solid #65948f;border-radius:6px}
 .phoenixProgressionResults{white-space:pre-wrap;overflow-x:auto;line-height:1.65;font-size:11px;font-family:monospace;border:1px solid #498f80;border-radius:9px;padding:9px;color:#d4ffee;background:#0d2c34;margin:8px 0}
 @media(max-width:550px){.phoenixProgressionFields{grid-template-columns:minmax(0,1fr)}.phoenixProgressionStat{gap:3px}.phoenixProgressionResults{font-size:10px}}
+
+/* Phoenix Server profiles: explicit network opt-in, never a canvas tool. */
+#phoenixEngineDock #btnPhoenixServer{background:#175984;border:1px solid #77d8ff;color:#e8fbff}
+#phoenixServerPanel{position:fixed;top:max(76px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));z-index:73;box-sizing:border-box;width:min(385px,calc(100vw - 16px));max-height:calc(100dvh - 90px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:9px;padding:13px;background:#112d3ded;border:1px solid #69c3dd;border-radius:14px;box-shadow:0 8px 30px #000b;color:#f3fdff}
+#phoenixServerPanel[hidden],body.phoenixPlaying #phoenixServerPanel{display:none!important}
+#phoenixServerPanel .phoenixSkillTitle{display:flex;justify-content:space-between;gap:5px;align-items:center}
+#phoenixServerPanel .phoenixSkillTitle b{font-size:14px;color:#a9f4ff}
+#phoenixServerPanel label{display:flex;flex-direction:column;gap:4px;font-size:12px;min-width:0}
+#phoenixServerPanel input,#phoenixServerPanel select{min-height:36px;width:100%;box-sizing:border-box;border:1px solid #72b4ca;border-radius:8px;background:#163a4e;color:#fff;padding:6px;font-size:13px}
+#phoenixServerPanel .phoenixSkillRow{display:flex;gap:8px}
+#phoenixServerPanel .phoenixSkillRow>*{min-width:0;flex:1}
+#phoenixServerPanel .phoenixSkillCheck{flex-direction:row;align-items:center}
+#phoenixServerPanel .phoenixSkillCheck input{width:auto;min-height:auto}
+#phoenixServerPanel small{font-size:11px;line-height:1.45;color:#c0e7f8}
+#phoenixServerPanel button{min-height:37px;border-radius:8px;padding:5px 8px;background:#265974;color:#fff;border:1px solid #78b9d7;font-weight:700}
+#phoenixServerPanel #btnPhoenixServerExport{background:#147662;border-color:#74efc5}
+#phoenixServerPanel .phoenixServerActions{display:flex;flex-wrap:wrap;gap:6px}
+#phoenixServerPanel .phoenixServerActions button{flex:1 1 95px}
+#phoenixServerStatus,#phoenixServerPlayers{display:block;border:1px solid #477f96;background:#193947;padding:8px;border-radius:8px}
+@media(max-width:600px){#phoenixServerPanel{padding:10px;gap:7px}#phoenixServerPanel input{font-size:12px}}
