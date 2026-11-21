@@ -231,7 +231,8 @@ class CleanBuilder{
   this.camera.aspect=b.width/b.height;this.camera.updateProjectionMatrix();
  }
  setDefaultAvatar(){
-  this.avatarAssetId='';this.avatarFileName='';
+  this.avatarAssetId='';this.avatarFileName='';this.avatarAttackClip='';
+  if($('avatarAttackClip'))this.fillAvatarAttackClips();
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarRoot=null;this.avatarGroundY=0;this.avatarGroundTimer=0;
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
@@ -261,6 +262,19 @@ class CleanBuilder{
   this.player.updateMatrixWorld(true);
   return fit;
  }
+ fillAvatarAttackClips(wanted=this.avatarAttackClip||''){
+  const select=$('avatarAttackClip');if(!select)return;
+  select.replaceChildren();
+  const add=(value,name)=>{
+   const item=document.createElement('option');item.value=value;
+   item.textContent=name;select.appendChild(item);
+  };
+  add('','Автоматически по имени клипа');
+  for(const clip of this.avatarClips||[])add(clip.name,clip.name);
+  const exact=this.avatarClips?.find(c=>c.name===wanted);
+  this.avatarAttackClip=exact?exact.name:'';
+  select.value=this.avatarAttackClip;
+ }
  async importAvatar(file,{storedId='',restore=false}={}){
   if(!file)return false;
   try{
@@ -276,6 +290,7 @@ class CleanBuilder{
    // code measured the inactive bind pose before starting the idle clip.
    // First evaluate the actual idle pose, then measure its skinned vertices.
    this.avatarClips=scene.animations||[];
+   this.fillAvatarAttackClips(restore?this.avatarAttackClip:'');
    this.avatarMixer=this.avatarClips.length?new THREE.AnimationMixer(root):null;
    this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
    if(this.avatarMixer){
@@ -330,7 +345,11 @@ class CleanBuilder{
   if(typeof doc.assetId!=='string'||!/^glb:avatar:[a-zA-Z0-9._-]{1,140}$/.test(doc.assetId))
    throw Error('Некорректная ссылка на GLB персонажа');
   this.applyAvatarHeight(doc.heightCm??175);
-  if(this.avatarAssetId===doc.assetId&&this.avatarRoot)return true;
+  this.avatarAttackClip=typeof doc.attackClip==='string'?doc.attackClip:'';
+  if(this.avatarAssetId===doc.assetId&&this.avatarRoot){
+   this.fillAvatarAttackClips(this.avatarAttackClip);
+   return true;
+  }
   const buffer=await getAsset(doc.assetId);
   if(!buffer)throw Error('Не найден сохранённый GLB персонажа '+doc.assetId+
    '. Открой переносимую резервную копию с моделями.');
@@ -4262,7 +4281,7 @@ class CleanBuilder{
     phoenixGame:this.prefabEditor?.serialize()||null,
     avatar:this.avatarAssetId?{
      assetId:this.avatarAssetId,fileName:this.avatarFileName||'Player.glb',
-     heightCm:this.avatarHeightCm
+     heightCm:this.avatarHeightCm,attackClip:this.avatarAttackClip||''
     }:null,
     worldCanvas:this.worldEditor?.serialize()||null,
     decals:SurfaceDecals.normalize(this.decals),
@@ -4604,8 +4623,8 @@ class CleanBuilder{
  playAttackAnimation(){
   // Existing imported avatar clips only: no retargeter and no new mixer.
   if(!this.avatarMixer||!this.avatarClips.length)return false;
-  const clip=this.avatarClips.find(c=>
-   /attack|strike|melee|удар|атак/i.test(c.name));
+  const clip=this.avatarClips.find(c=>c.name===this.avatarAttackClip)||
+   this.avatarClips.find(c=>/attack|strike|melee|удар|атак/i.test(c.name));
   if(!clip)return false;
   const action=this.avatarActions[clip.name];if(!action)return false;
   for(const other of Object.values(this.avatarActions))
@@ -4639,7 +4658,8 @@ class CleanBuilder{
    // One-shot ATTACK may finish before its display timer. If its action is
    // already stopped, immediately restore locomotion instead of leaving
    // the avatar without any skinned pose until the joystick is released.
-   const clip=this.avatarClips.find(c=>/attack|strike|melee|удар|атак/i.test(c.name));
+   const clip=this.avatarClips.find(c=>c.name===this.avatarAttackClip)||
+    this.avatarClips.find(c=>/attack|strike|melee|удар|атак/i.test(c.name));
    const attack=clip&&this.avatarActions[clip.name];
    if(attack?.isRunning()&&(attack.getEffectiveWeight?.()??1)>.0001)return;
   }
@@ -4789,6 +4809,11 @@ class CleanBuilder{
   };
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
   $('avatarHeight').onchange=()=>{if(this.avatarAssetId)this.save()};
+  $('avatarAttackClip').onchange=e=>{
+   const name=e.target.value;
+   this.avatarAttackClip=this.avatarClips.some(c=>c.name===name)?name:'';
+   if(this.avatarAssetId)this.save();
+  };
   $('enableCollisions').onchange=e=>{
    this.collisionsEnabled=e.target.checked;
    localStorage.setItem('phoenix-builder-collisions',this.collisionsEnabled?'on':'off');
