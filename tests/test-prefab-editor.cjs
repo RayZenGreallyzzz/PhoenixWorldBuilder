@@ -89,6 +89,11 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  // Explicitly switch this ONE instance to chase to exercise NPC combat.
  els.phoenixPrefabEntities.value=entity;ed.selectEntity();
  els.phoenixEntityAI.value='chase';assert(ed.applyEntityAI());
+ const currentAI=ed.world.getComponent(entity,'character').ai;
+ assert.equal(currentAI.mode,'chase','Per-entity mode must be updated before PLAY');
+ const probe=ai.tick(ai.initial([5,0,7]),[5,0,7],[4,0,7],
+  currentAI,ed.registry.get('prefab-1').stats,.15,'enemy');
+ assert.equal(probe.attack,true,'Chase NPC should attack an enemy within melee range');
  const incoming=[];
  builder.playBridge.onPlayerHit=(hit,name)=>incoming.push({hit,name});
  ed.setPlaying(true);
