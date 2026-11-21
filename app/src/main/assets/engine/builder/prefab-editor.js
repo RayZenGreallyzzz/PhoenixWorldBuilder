@@ -601,6 +601,41 @@
    return !this.collider.hits(new THREE.Ray(begin,vector.normalize()),
     meshes,0,Math.max(0,length-.25)).length;
   }
+  mobProfile(id){
+   if(!id||!this.world.hasEntity(id))return null;
+   const prefabId=this.world.getComponent(id,'prefab')?.id;
+   const prefab=this.registry.get(prefabId);
+   if(!prefab)return null;
+   const stats=this.combat.get(id);
+   const nickname=this.world.getComponent(id,'character')?.nickname||'';
+   const skills=this.b.skillDefinitionEditor?.catalog?.entries(prefabId)||{};
+   return {...Features.profile(prefab,stats,skills,nickname),
+    id,prefabId,respawn:Features.respawn(prefab.respawn),
+    respawnLeft:this.respawner.remaining(id)};
+  }
+  pickMobAt(event){
+   if(!this.playing||!event||!this.b.canvas||!this.b.ray)return null;
+   const rect=this.b.canvas.getBoundingClientRect();
+   if(!rect.width||!rect.height)return null;
+   const point={x:(event.clientX-rect.left)/rect.width*2-1,
+    y:-(event.clientY-rect.top)/rect.height*2+1};
+   this.b.ray.setFromCamera(point,this.b.camera);
+   const ray=this.b.ray.ray;
+   let best=null,nearest=Infinity;
+   for(const [id,render] of this.rendered){
+    if(!render.root.visible||this.combat.isDead(id))continue;
+    render.root.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(render.visual||render.root);
+    if(bounds.isEmpty())continue;
+    // Tiny models still get a usable tap target on a phone.
+    bounds.expandByScalar(.15);
+    const impact=ray.intersectBox(bounds,new THREE.Vector3());
+    if(!impact)continue;
+    const distance=ray.origin.distanceTo(impact);
+    if(distance<nearest){nearest=distance;best=id}
+   }
+   return best;
+  }
   findEnemy(range,{forward=false}={}){
    if(!this.playing||this.combat.isPlayerDead())return null;
    const origin=this.b.player.position;
