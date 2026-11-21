@@ -41,13 +41,21 @@
   const ai=value.ai||{};
   if(typeof ai!=='object'||Array.isArray(ai))throw new TypeError('Invalid AI settings');
   const mode=ai.mode||'idle';
-  if(!['idle','patrol','chase'].includes(mode))throw new TypeError('Invalid AI mode');
+  if(!['idle','patrol','chase','patrol-aggro','guard'].includes(mode))
+   throw new TypeError('Invalid AI mode');
+  const points=ai.waypoints??[];
+  if(!Array.isArray(points)||points.length>32||
+     points.some(p=>!Array.isArray(p)||p.length!==3||
+      p.some(v=>typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>100000)))
+   throw new TypeError('Invalid AI waypoints');
   const behavior={
    mode,
    patrolRadius:number(ai.patrolRadius??3,0,30,'patrolRadius'),
    aggroRadius:number(ai.aggroRadius??7,0,50,'aggroRadius'),
    attackRange:number(ai.attackRange??1.25,.3,8,'attackRange'),
-   attackCooldown:number(ai.attackCooldown??1.8,.35,30,'attackCooldown')
+   attackCooldown:number(ai.attackCooldown??1.8,.35,30,'attackCooldown'),
+   attackDuration:number(ai.attackDuration??.5,.15,8,'attackDuration'),
+   waypoints:points.map(p=>p.slice())
   };
   return {
    name:safeText(value.name),type,faction,assetId,ai:behavior,
