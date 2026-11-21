@@ -8,6 +8,9 @@ on:
     paths:
       - 'app/src/main/assets/engine/**'
       - 'tests/test-phoenix-core.cjs'
+      - 'tests/test-phoenix-events-quests.cjs'
+      - 'app/src/main/assets/engine/core/phoenix-events.js'
+      - 'app/src/main/assets/engine/core/phoenix-quests.js'
       - 'app/src/main/assets/index.html'
       - 'app/src/main/assets/clean.css'
       - 'app/src/main/assets/js/clean-app.js'
@@ -65,6 +68,8 @@ jobs:
           node --check app/src/main/assets/engine/core/phoenix-ai.js
           node --check app/src/main/assets/engine/core/phoenix-combat.js
           node --check app/src/main/assets/engine/core/phoenix-skill-layout.js
+          node --check app/src/main/assets/engine/core/phoenix-events.js
+          node --check app/src/main/assets/engine/core/phoenix-quests.js
           node --check app/src/main/assets/engine/core/phoenix-skill-images.js
           node --check app/src/main/assets/engine/core/phoenix-weapon.js
           node --check app/src/main/assets/engine/core/phoenix-skills.js
@@ -84,6 +89,7 @@ jobs:
       - name: Run Phoenix Core unit tests
         run: |
           node tests/test-phoenix-core.cjs
+          node tests/test-phoenix-events-quests.cjs
           node tests/test-play-bridge.cjs
           node tests/test-play-wiring.cjs
           node tests/test-prefab-core.cjs
