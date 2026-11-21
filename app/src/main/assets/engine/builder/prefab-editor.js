@@ -66,6 +66,7 @@
    on('btnPrefabApplyPreset','click',()=>this.applyEntityPreset());
    on('phoenixEntityAI','change',()=>this.applyEntityAI());
    on('phoenixEntityEngagement','change',()=>this.applyEntityAI());
+   on('phoenixEntityAggroRadius','change',()=>this.applyEntityAI());
    on('btnPrefabWaypointAdd','click',()=>this.addWaypoint());
    on('btnPrefabWaypointTap','click',()=>this.beginWaypointPlacement());
    on('btnPrefabWaypointRemove','click',()=>this.removeWaypoint());
@@ -809,6 +810,8 @@
     this.el('phoenixEntityNameColor').value=c?.nameColor||prefab?.nameColor||'#ffffff';
    if(this.el('phoenixEntityEngagement'))
     this.el('phoenixEntityEngagement').value=c?.ai?.engagement||prefab?.ai?.engagement||'auto';
+   if(this.el('phoenixEntityAggroRadius'))
+    this.el('phoenixEntityAggroRadius').value=String(c?.ai?.aggroRadius??prefab?.ai?.aggroRadius??7);
    if(this.el('phoenixEntityAI'))
     this.el('phoenixEntityAI').value=c?.ai?.mode||'idle';
    const list=this.el('phoenixEntityWaypoints');
@@ -902,10 +905,14 @@
   applyEntityAI(){
    const id=this.selectedEntity(),mode=this.el('phoenixEntityAI')?.value;
    const engagement=this.el('phoenixEntityEngagement')?.value||'auto';
+   const original=this.world.getComponent(id,'character')?.ai?.aggroRadius??7;
+   const aggroRadius=this.el('phoenixEntityAggroRadius')?
+    Number(this.el('phoenixEntityAggroRadius').value):original;
    if(!id||!PhoenixAI.BEHAVIORS.includes(mode)||
-      !PhoenixAI.ENGAGEMENTS.includes(engagement))return false;
+      !PhoenixAI.ENGAGEMENTS.includes(engagement)||
+      !Number.isFinite(aggroRadius)||aggroRadius<0||aggroRadius>50)return false;
    const ok=this.editEntity(id,({character})=>({
-    character:{...character,ai:{...character.ai,mode,engagement}}
+    character:{...character,ai:{...character.ai,mode,engagement,aggroRadius}}
    }));
    if(ok)this.status('🤖 Маршрут: '+mode+' · реакция: '+engagement);
    return ok;
