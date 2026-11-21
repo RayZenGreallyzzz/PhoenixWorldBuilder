@@ -176,6 +176,16 @@
  <label>Кулдаун, сек<input id="skillDefCooldown" type="number" min=".1" max="120" step=".1" value="5"></label></div>
  <div class="phoenixSkillRow"><label>Дальность, м<input id="skillDefRange" type="number" min=".5" max="60" step=".5" value="8"></label>
  <label>Анимация GLB<input id="skillDefAnimation" maxlength="80" value="cast"></label></div>
+ <b>✨ Визуальный эффект навыка · игрок и моб</b>
+ <label>Тип эффекта<select id="skillDefFxPreset">
+  <option value="none">Без эффекта</option><option value="impact">💥 Удар</option>
+  <option value="ring">🟠 Энергетическая волна</option><option value="spark">✨ Искры</option>
+  <option value="magic">🪄 Магическая сфера</option><option value="heal">💚 Исцеление</option>
+ </select></label>
+ <div class="phoenixSkillRow"><label>Цвет<input id="skillDefFxColor" type="color" value="#ffce65"></label>
+ <label>Размер (0.2–8)<input id="skillDefFxSize" type="number" min=".2" max="8" step=".2" value="1"></label>
+ <label>Длительность, сек<input id="skillDefFxDuration" type="number" min=".1" max="3" step=".1" value=".5"></label></div>
+ <small>Мобы используют назначенные в разделе «НАВЫКИ» умения с расходом MP и кулдауном в PLAY.</small>
  <b id="skillDefPreview">Сила на уровне 1: 30</b>
  <div class="phoenixSkillRow"><button id="btnSkillDefLevelUp" type="button">⬆ Уровень +1</button><button id="btnSkillDefSave" type="button">💾 Сохранить навык</button></div>
  <button id="btnSkillDefDelete" type="button">🗑 Удалить навык из слота</button>
@@ -230,7 +240,7 @@
  <small>Игровые мобы и NPC отдельно от строительных деталей. Без программирования.</small>
  <label>Шаблоны<select id="phoenixPrefabSaved"><option value="">— Новый шаблон —</option></select></label>
  <div class="phoenixPrefabRow"><button type="button" id="btnPrefabNew">＋ Новый</button><button type="button" id="btnPrefabDelete">🗑 Шаблон</button></div>
- <label>Имя<input type="text" id="phoenixPrefabName" maxlength="120" value="Новый моб" autocomplete="off"></label>
+ <label>Имя шаблона (показывается в PLAY)<input type="text" id="phoenixPrefabName" maxlength="120" value="Новый моб" autocomplete="off"></label>
  <div class="phoenixPrefabRow"><label>Тип<select id="phoenixPrefabType"><option value="mob">🐺 Моб</option><option value="npc">🧑 NPC</option></select></label>
  <label>Сторона<select id="phoenixPrefabFaction"><option value="enemy">Враг</option><option value="neutral">Нейтрал</option><option value="ally">Союзник</option></select></label></div>
  <label>3D-модель GLB<select id="phoenixPrefabAsset"><option value="">Капсула-заглушка</option></select></label>
@@ -239,6 +249,17 @@
  <div class="phoenixPrefabRow"><label>HP<input id="phoenixPrefabHP" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="100"></label>
  <label>Урон<input id="phoenixPrefabDamage" type="number" min="0" max="1000000" step="1" inputmode="numeric" value="10"></label>
  <label>Скорость<input id="phoenixPrefabSpeed" type="number" min="0" max="100" step=".1" inputmode="decimal" value="2"></label></div>
+ <div class="phoenixPrefabRow"><label>Уровень<input id="phoenixPrefabLevel" type="number" min="1" max="1000" step="1" value="1"></label>
+ <label>Защита<input id="phoenixPrefabDefense" type="number" min="0" max="1000000" step="1" value="0"></label></div>
+ <b>🔁 Респаун и эффект обычной атаки</b>
+ <label class="phoenixSkillCheck"><input id="phoenixPrefabRespawnEnabled" type="checkbox"> Возрождать моба после смерти</label>
+ <label>Время респауна, сек<input id="phoenixPrefabRespawnDelay" type="number" min="2" max="3600" step="1" value="30"></label>
+ <label>Визуальный эффект обычной атаки<select id="phoenixPrefabAttackEffect">
+  <option value="none">Без эффекта</option><option value="impact" selected>💥 Удар</option>
+  <option value="ring">🟠 Волна / кольцо</option><option value="spark">✨ Искры</option>
+  <option value="magic">🪄 Магия</option><option value="heal">💚 Свет лечения</option>
+ </select></label>
+ <small>После гибели моб возвращается к точке установки с полным HP. В EDIT изменения позиций не вносятся.</small>
  <datalist id="phoenixPrefabClipList"></datalist>
  <label>Idle<input id="phoenixPrefabIdle" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
  <label>Walk<input id="phoenixPrefabWalk" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Название клипа" autocomplete="off"></label>
@@ -269,6 +290,8 @@
  <hr>
  <b>Объекты на сцене</b><small id="phoenixPrefabCounts">Шаблонов: 0 · На сцене: 0</small>
  <label>Размещённые мобы<select id="phoenixPrefabEntities"><option value="">— Выбери моба на сцене —</option></select></label>
+ <label>Ник конкретного моба (необязательно)<input id="phoenixEntityNickname" type="text" maxlength="80" placeholder="Например: Лесной страж"></label>
+ <button id="btnPrefabApplyNickname" type="button">🏷 Сохранить ник этого моба</button>
  <details id="phoenixEntityEdit" open><summary>📍 Точное положение и собственный маршрут выбранного моба</summary>
  <small>Для каждого экземпляра отдельно. Одинаковые GLB и шаблоны не мешают назначать разные координаты и маршруты.</small>
  <div class="phoenixPrefabRow"><label>X, м<input id="phoenixEntityX" type="number" step=".01" value="0"></label><label>Y, м<input id="phoenixEntityY" type="number" step=".01" value="0"></label><label>Z, м<input id="phoenixEntityZ" type="number" step=".01" value="0"></label></div>
@@ -842,7 +865,18 @@
 <div id="phoenixPlayHud" hidden role="group" aria-label="Phoenix Engine игровой режим">
  <span>🔥 PHOENIX · PLAY</span><button type="button" id="btnPhoenixEdit">⏹ EDIT</button>
 </div>
-<section id="phoenixCombatHud" hidden role="group" aria-label="Phoenix Engine бой">
+<section id="phoenixMobCard" hidden role="region" aria-label="Характеристики выбранного моба">
+  <div class="phoenixMobCardTitle"><strong id="phoenixMobCardName">🐺 Моб</strong>
+   <button id="btnPhoenixMobCardClose" type="button" aria-label="Закрыть карточку">✕</button></div>
+  <small id="phoenixMobCardRole">Враг · Ур. 1</small>
+  <progress id="phoenixMobCardHP" max="100" value="100"></progress>
+  <span id="phoenixMobCardHPText">100 / 100 HP</span>
+  <div id="phoenixMobCardStats">⚔ Урон · 🛡 Защита · 🏃 Скорость</div>
+  <div id="phoenixMobCardSkills">✨ Умения</div>
+  <small id="phoenixMobCardRespawn"></small>
+  <small>Коснись другого моба на сцене, чтобы выбрать новую цель.</small>
+ </section>
+ <section id="phoenixCombatHud" hidden role="group" aria-label="Phoenix Engine бой">
  <div class="phoenixPlayerHealth"><b>❤️ Игрок</b>
  <progress id="phoenixPlayerHP" max="100" value="100" aria-label="Здоровье игрока"></progress>
  <span id="phoenixPlayerHPText">100 / 100 HP</span></div>
@@ -941,6 +975,8 @@
 <script src="engine/core/phoenix-combat.js"></script>
 <script src="engine/core/phoenix-weapon.js"></script>
 <script src="engine/core/phoenix-skill-images.js"></script>
+<script src="engine/runtime/phoenix-vfx.js"></script>
+<script src="engine/core/phoenix-mob-features.js"></script>
 <script src="engine/core/phoenix-skills.js"></script>
 <script src="engine/core/phoenix-skill-layout.js"></script>
 <script src="engine/core/phoenix-prefabs.js"></script>
