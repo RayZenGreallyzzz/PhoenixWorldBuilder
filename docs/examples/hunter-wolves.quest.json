@@ -1,0 +1,14 @@
+{
+  "id": "hunter-wolves",
+  "title": "Охота на волков",
+  "requirements": {"minLevel": 5, "flags": []},
+  "prerequisites": [],
+  "goals": [
+    {"id": "kill-wolves", "event": "mob.killed", "target": "wolf", "count": 5},
+    {"id": "collect-skins", "event": "item.collected", "target": "wolf_skin", "count": 3}
+  ],
+  "rewards": [
+    {"type": "currency", "id": "gold", "amount": 500},
+    {"type": "xp", "id": "xp", "amount": 100}
+  ]
+}
