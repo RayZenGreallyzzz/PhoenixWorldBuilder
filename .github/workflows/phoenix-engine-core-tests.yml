@@ -32,6 +32,9 @@ on:
       - 'tests/test-phoenix-combat.cjs'
       - 'tests/test-player-hud.cjs'
       - 'tests/test-avatar-motion.cjs'
+      - 'tests/test-avatar-animation-bindings.cjs'
+      - 'tests/test-phoenix-patrol-drawing.cjs'
+      - 'app/src/main/assets/engine/core/phoenix-patrol-path.js'
       - 'tests/test-world-layout.cjs'
       - 'tests/test-world-editor.cjs'
       - 'tests/test-terrain-splat.cjs'
@@ -111,6 +114,8 @@ jobs:
           node tests/test-phoenix-combat.cjs
           node tests/test-player-hud.cjs
           node tests/test-avatar-motion.cjs
+          node tests/test-avatar-animation-bindings.cjs
+          node tests/test-phoenix-patrol-drawing.cjs
           node tests/test-world-layout.cjs
           node tests/test-world-editor.cjs
           node tests/test-terrain-splat.cjs
