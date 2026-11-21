@@ -545,8 +545,12 @@
     const [id,render]=entities[(this.aiCursor+step)%entities.length];
     if(this.combat.isDead(id)||render.hitHold>0)continue;
     const p=this.registry.get(this.world.getComponent(id,'prefab')?.id);
-    if(!p||this.world.getComponent(id,'character')?.ai?.mode==='idle'||
-      (!this.world.getComponent(id,'character')?.ai&&p.ai?.mode==='idle'))continue;
+    const configuredAI=this.world.getComponent(id,'character')?.ai||p?.ai;
+    // Idle is a movement choice, not a reason to disable explicitly aggressive
+    // or provoked defensive attacks.
+    const reactWhileIdle=configuredAI?.engagement==='aggressive'||
+     (configuredAI?.engagement==='defensive'&&(render.aiState?.provoked||0)>0);
+    if(!p||(configuredAI?.mode==='idle'&&!reactWhileIdle))continue;
     if(render.accum<.001)continue;
     // Each mobile frame advances at most 50ms. Never teleport by a 120–350ms
     // AI backlog; the old behaviour caused visible start-stop mob movement.
