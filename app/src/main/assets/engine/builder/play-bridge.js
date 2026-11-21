@@ -9,6 +9,8 @@
  if (root) root.PhoenixPlayBridge = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
  'use strict';
+ const PlayerProfiles=(typeof globalThis!=='undefined'&&globalThis.PhoenixPlayerCombat)||
+  (typeof require==='function'?require('../core/phoenix-player-combat.js'):null);
  class PhoenixPlayBridge {
   constructor(builder, core, doc) {
    if (!builder || !core || !core.PhoenixWorld || !core.PhoenixModeController)
@@ -21,6 +23,7 @@
    this.active = false;
    this.saved = null;
    this.healReadyAt=0;
+   this.playerCombat=PlayerProfiles.normalize();
    this.weapon=typeof PhoenixWeapon!=='undefined'?new PhoenixWeapon.Session():null;
    this.ammoSignature='';
    const playButton = this.document.getElementById('btnPhoenixPlay');
@@ -47,7 +50,7 @@
     playerFx?.addEventListener('change',()=>{
      const selected=playerFx.value;
      if(PhoenixVFX.PRESETS.includes(selected)){
-      this.playerAttackEffect=selected;this.builder.save?.();
+      this.playerAttackEffect=selected;this.builder.markProjectDirty?.();
      }
     });
     const canvas=builder.canvas;
@@ -72,6 +75,44 @@
    editButton.addEventListener('click', () => this.exit());
    this.attackButton?.addEventListener('click', () => this.attack());
    this.respawnButton?.addEventListener('click', () => this.respawn());
+   this.document.getElementById('btnPlayerCombatPreset')?.
+    addEventListener('click',()=>this.showPlayerCombatForm(
+     PlayerProfiles.preset(this.document.getElementById('phoenixPlayerCombatMode')?.value||'melee')));
+   this.document.getElementById('btnPlayerCombatApply')?.
+    addEventListener('click',()=>this.applyPlayerCombatForm());
+   this.showPlayerCombatForm();
+  }
+
+  showPlayerCombatForm(profile=this.playerCombat){
+   const el=id=>this.document.getElementById('phoenixPlayerCombat'+id);
+   for(const [key,value] of Object.entries(profile)){
+    const suffix=key[0].toUpperCase()+key.slice(1);
+    const input=el(suffix);
+    if(input)input.value=String(value);
+   }
+   const mode=el('Mode');if(mode)mode.value=profile.mode;
+  }
+  applyPlayerCombatForm(){
+   if(this.active)return false;
+   const el=id=>this.document.getElementById('phoenixPlayerCombat'+id);
+   const raw={mode:el('Mode')?.value||'melee'};
+   for(const key of ['hp','damage','range','cooldown','magazineSize',
+    'reserveCapacity','reloadDuration']){
+    const suffix=key[0].toUpperCase()+key.slice(1);
+    raw[key]=Number(el(suffix)?.value);
+   }
+   const status=this.document.getElementById('phoenixPlayerCombatStatus');
+   try{
+    this.playerCombat=PlayerProfiles.normalize(raw);
+    this.builder.markProjectDirty?.();
+    if(status)status.textContent='✅ Стиль героя применён: '+
+     (this.playerCombat.mode==='ranged'?'дальний':'ближний')+
+     '. Для сохранения в проект нажми верхнюю 💾 Сохранить.';
+    return true;
+   }catch(error){
+    if(status)status.textContent='Ошибка настройки героя: '+error.message;
+    return false;
+   }
   }
 
   message(text, level) {
@@ -130,7 +171,14 @@
     this.createMobTags();this.selectMob('');
     b.skillEditor?.setPlaying(true);
     b.skillDefinitionEditor?.startPlay();
-    this.weapon?.reset();this.ammoSignature='';
+    if(this.weapon&&typeof PhoenixWeapon!=='undefined')
+     this.weapon=new PhoenixWeapon.Session({
+      magazineSize:this.playerCombat.magazineSize,
+      reserveCapacity:this.playerCombat.reserveCapacity,
+      damage:this.playerCombat.damage,range:this.playerCombat.range,
+      fireInterval:this.playerCombat.cooldown,
+      reloadDuration:this.playerCombat.reloadDuration});
+    this.ammoSignature='';
     this.healReadyAt=0;
     if(this.combatHud)this.combatHud.hidden=false;
     this.showGenreHud();this.updatePlayerHud();
@@ -384,7 +432,8 @@
 
   now(){return (typeof performance!=='undefined'?performance.now():Date.now())/1000;}
   showGenreHud(){
-   const shooter=!!this.builder.skillEditor?.layout?.slots?.some(s=>s.id==='fire'&&s.enabled);
+   const shooter=this.playerCombat.mode==='ranged'||
+    !!this.builder.skillEditor?.layout?.slots?.some(s=>s.id==='fire'&&s.enabled);
    if(this.ammoLine)this.ammoLine.hidden=!shooter;
    if(this.crosshair)this.crosshair.hidden=!shooter;
    if(this.mpLine)this.mpLine.hidden=!
@@ -425,6 +474,7 @@
      attempt.reason==='reloading'?'🔄 Перезарядка...':'⏳ Подожди';
     return false;
    }
+   this.builder.playAttackAnimation?.();
    const target=this.builder.prefabEditor?.findEnemy(attempt.range,{forward:true});
    const result=target?this.builder.prefabEditor.damageEnemy(target.id,attempt.damage):null;
    if(result?.ok)this.effects?.spawn({preset:'spark'},target.position);
@@ -519,6 +569,7 @@
 
   attack(){
    if(!this.active)return false;
+   if(this.playerCombat.mode==='ranged')return this.fire();
    const now=(typeof performance!=='undefined'?performance.now():Date.now())/1000;
    const result=this.builder.prefabEditor?.attackNearest(now,this.selectedMobId);
    if(!result)return false;
