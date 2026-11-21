@@ -85,6 +85,10 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  const template=ed.registry.get('prefab-1');
  template.ai.mode='chase';
  ed.registry.update('prefab-1',template);
+ // Existing placed mobs intentionally retain their own AI settings.
+ // Explicitly switch this ONE instance to chase to exercise NPC combat.
+ els.phoenixPrefabEntities.value=entity;ed.selectEntity();
+ els.phoenixEntityAI.value='chase';assert(ed.applyEntityAI());
  const incoming=[];
  builder.playBridge.onPlayerHit=(hit,name)=>incoming.push({hit,name});
  ed.setPlaying(true);
