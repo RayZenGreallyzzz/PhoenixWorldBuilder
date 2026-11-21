@@ -33,6 +33,10 @@
     color:0x657e64,roughness:1,side:THREE.DoubleSide
    }));
    this.heightLookup=new Map();
+   // Reuse Builder's collision solver for joystick movement over hills
+   // rather than introducing a second Android physics/render loop.
+   if(builder.collisionSolver)
+    builder.collisionSolver.groundY=(x,z)=>this.heightAt(x,z);
    this.stroke=null;this.strokeChanged=false;this.lastPointerAt=0;
    this.bind();this.applyScene();this.renderForm();this.updateStatus();
   }
