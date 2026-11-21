@@ -1,4 +1,4 @@
-/* Phoenix Engine 0.9 — portable MOBA, MMO and Shooter HUD layouts.
+/* Phoenix Engine 1.1 — portable, brand-neutral MOBA, MMO and shooter HUD layouts.
  * v1 (four-slot) / v2 (six-slot) migrate to v3 without losing authored positions.
  * No rendering, DOM or platform dependencies.
  */
@@ -30,25 +30,16 @@
  const style=(id,changes)=>({...base.find(item=>item.id===id),...changes});
  const extend=()=>IDS.slice(6).map(id=>style(id,{}));
  const configure=changes=>IDS.map(id=>style(id,changes[id]||{}));
- function presetLayout(preset='mobile-legends'){
+ function presetLayout(preset='moba'){
   const presets={
    'classic':base.map(copy),
-   'mobile-legends':[
+   'moba':[
     style('attack',{x:90,y:84,size:86}),
     style('heal',{x:69,y:89,size:52}),
-    style('slot3',{x:76,y:77,size:64,label:'СКИЛЛ 1',enabled:true}),
-    style('slot4',{x:83,y:67,size:64,label:'СКИЛЛ 2',enabled:true}),
-    style('slot5',{x:90,y:64,size:64,label:'СКИЛЛ 3',enabled:false}),
-    style('ultimate',{x:82,y:54,size:72,enabled:true}),
-    ...extend()
-   ],
-   'wild-rift':[
-    style('attack',{x:90,y:84,size:82}),
-    style('heal',{x:70,y:91,size:50}),
-    style('slot3',{x:76,y:77,size:60,label:'Q',enabled:true}),
-    style('slot4',{x:83,y:69,size:60,label:'W',enabled:true}),
-    style('slot5',{x:90,y:65,size:60,label:'E',enabled:true}),
-    style('ultimate',{x:82,y:54,size:70,label:'R · УЛЬТА',enabled:true}),
+    style('slot3',{x:76,y:77,size:64,label:'УМЕНИЕ 1',enabled:true}),
+    style('slot4',{x:83,y:67,size:64,label:'УМЕНИЕ 2',enabled:true}),
+    style('slot5',{x:90,y:64,size:64,label:'УМЕНИЕ 3',enabled:true}),
+    style('ultimate',{x:82,y:54,size:72,label:'УЛЬТА',enabled:true}),
     ...extend()
    ],
    'mmorpg':configure({
@@ -73,12 +64,21 @@
   };
   if(!Object.prototype.hasOwnProperty.call(presets,preset))
    throw new TypeError('Unknown skill HUD preset: '+preset);
-  return {version:VERSION,slots:copy(presets[preset])};
+  return {version:VERSION,slots:copy(presets[preset].map(s=>({image:'',...s})))};
  }
  function number(n,min,max,label){
   if(typeof n!=='number'||!Number.isFinite(n)||n<min||n>max)
    throw new TypeError('Invalid '+label);
   return n;
+ }
+ function safeImage(raw){
+  const images=(typeof globalThis!=='undefined'&&globalThis.PhoenixSkillImages)||
+   (typeof require==='function'?require('./phoenix-skill-images.js'):null);
+  if(!images){
+   if(!raw)return '';
+   throw new TypeError('Skill image loader missing');
+  }
+  return images.validate(raw);
  }
  function validateSlot(slot,id){
   if(!slot||typeof slot!=='object'||Array.isArray(slot)||slot.id!==id)
@@ -96,7 +96,7 @@
    x:number(slot.x,5,95,'x'),y:number(slot.y,8,95,'y'),
    size:number(slot.size,48,120,'size'),color:slot.color,
    opacity:number(slot.opacity,.45,1,'opacity'),shape:slot.shape,
-   enabled:slot.enabled};
+   image:safeImage(slot.image),enabled:slot.enabled};
  }
  function validate(raw){
   if(!raw||typeof raw!=='object'||!Array.isArray(raw.slots))
@@ -117,7 +117,7 @@
    if(!found.has(id))found.set(id,validateSlot(base.find(s=>s.id===id),id));
   return {version:VERSION,slots:IDS.map(id=>found.get(id))};
  }
- function defaultLayout(){return presetLayout('mobile-legends');}
+ function defaultLayout(){return presetLayout('moba');}
  function update(layout,id,changes){
   if(!IDS.includes(id))throw new TypeError('Unknown skill slot');
   const safe=validate(layout);
