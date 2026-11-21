@@ -248,6 +248,7 @@
  <label>Имя шаблона (показывается в PLAY)<input type="text" id="phoenixPrefabName" maxlength="120" value="Новый моб" autocomplete="off"></label>
  <div class="phoenixPrefabRow"><label>Тип<select id="phoenixPrefabType"><option value="mob">🐺 Моб</option><option value="npc">🧑 NPC</option></select></label>
  <label>Сторона<select id="phoenixPrefabFaction"><option value="enemy">Враг</option><option value="neutral">Нейтрал</option><option value="ally">Союзник</option></select></label></div>
+ <label>Цвет имени шаблона <input id="phoenixPrefabNameColor" type="color" value="#ffffff" aria-label="Цвет имени шаблона моба"></label>
  <label>3D-модель GLB<select id="phoenixPrefabAsset"><option value="">Капсула-заглушка</option></select></label>
  <button type="button" id="btnPrefabImportGlb">📂 Импортировать GLB</button>
  <small>Используются модели из библиотеки Builder. Для сохранения на другом устройстве нужна резервная копия проекта с GLB.</small>
@@ -277,6 +278,7 @@
  <label>Death<input id="phoenixPrefabDeath" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Death"></label>
  <label>Cast<input id="phoenixPrefabCast" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Cast"></label></div>
  <b>🤖 Поведение моба (PLAY)</b>
+ <label>Агрессивность шаблона<select id="phoenixPrefabEngagement"><option value="auto">Как в существующих настройках (совместимость)</option><option value="passive">Не атакует игрока</option><option value="defensive">Защищается после нападения</option><option value="aggressive">Атакует первым в радиусе агро</option></select></label>
  <label>Поведение<select id="phoenixPrefabAI"><option value="idle">Стоять на месте</option><option value="patrol">Патрулировать вокруг точки</option><option value="chase">Преследовать игрока и атаковать (анимация)</option><option value="patrol-aggro">Патруль → агро → атака → возврат</option><option value="guard">Охрана точки → агро → атака</option></select></label>
  <div class="phoenixPrefabRow">
  <label>Радиус патруля, м<input id="phoenixPrefabPatrolRadius" type="number" min="0" max="30" step=".5" value="3"></label>
@@ -296,12 +298,17 @@
  <b>Объекты на сцене</b><small id="phoenixPrefabCounts">Шаблонов: 0 · На сцене: 0</small>
  <label>Размещённые мобы<select id="phoenixPrefabEntities"><option value="">— Выбери моба на сцене —</option></select></label>
  <label>Ник конкретного моба (необязательно)<input id="phoenixEntityNickname" type="text" maxlength="80" placeholder="Например: Лесной страж"></label>
- <button id="btnPrefabApplyNickname" type="button">🏷 Сохранить ник этого моба</button>
+ <label>🎨 Цвет ника (любой на твой выбор)<input id="phoenixEntityNameColor" type="color" value="#ffffff" aria-label="Выбрать собственный цвет ника"></label>
+ <button id="btnPrefabApplyNickname" type="button">🏷 Сохранить имя и цвет</button>
+ <label>✨ Готовые шаблоны (необязательно)<select id="phoenixEntityPreset"><option value="white-defensive">⚪ Белый — патруль, отвечает на атаку</option><option value="red-aggressive">🔴 Красный — патруль, сам атакует в радиусе агро</option><option value="green-friendly">🟢 Зелёный — союзник, не атакует игрока</option><option value="yellow-guard">🟡 Жёлтый — охрана, защищается</option></select></label>
+ <button id="btnPrefabApplyPreset" type="button">✨ Применить шаблон к этому мобу</button>
+ <small>Цвет, поведение и маршрут можно изменять независимо. Белый защитный моб доступен для атаки, но не нападает первым; после попадания защищается. Ник без рамки показывается над головой в PLAY.</small>
  <details id="phoenixEntityEdit" open><summary>📍 Точное положение и собственный маршрут выбранного моба</summary>
  <small>Для каждого экземпляра отдельно. Одинаковые GLB и шаблоны не мешают назначать разные координаты и маршруты.</small>
  <div class="phoenixPrefabRow"><label>X, м<input id="phoenixEntityX" type="number" step=".01" value="0"></label><label>Y, м<input id="phoenixEntityY" type="number" step=".01" value="0"></label><label>Z, м<input id="phoenixEntityZ" type="number" step=".01" value="0"></label></div>
  <label>Поворот, градусы<input id="phoenixEntityYaw" type="number" min="-360" max="360" step=".1" value="0"></label>
  <div class="phoenixPrefabRow"><button id="btnPrefabApplyTransform" type="button">✅ Сохранить положение</button><button id="btnPrefabSnapGround" type="button">🌍 На высоту земли</button></div>
+ <label>⚔ Реакция этого моба на игрока<select id="phoenixEntityEngagement"><option value="auto">Как раньше (по режиму маршрута)</option><option value="passive">Не нападает и не отвечает</option><option value="defensive">Только защищается после нападения</option><option value="aggressive">Нападает первым при сближении</option></select></label>
  <label>Поведение этого моба<select id="phoenixEntityAI">
  <option value="idle">Стоять</option><option value="patrol">Маршрут без боя</option>
  <option value="chase">Агрессия, преследование, атака</option>
