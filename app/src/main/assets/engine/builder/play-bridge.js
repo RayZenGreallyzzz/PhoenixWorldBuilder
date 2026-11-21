@@ -89,7 +89,7 @@
   showPlayerCombatForm(profile=this.playerCombat){
    const el=id=>this.document.getElementById('phoenixPlayerCombat'+id);
    for(const [key,value] of Object.entries(profile)){
-    const suffix=key[0].toUpperCase()+key.slice(1);
+    const suffix=key==='hp'?'HP':key[0].toUpperCase()+key.slice(1);
     const input=el(suffix);
     if(input)input.value=String(value);
    }
@@ -101,7 +101,7 @@
    const raw={mode:el('Mode')?.value||'melee'};
    for(const key of ['hp','damage','range','cooldown','magazineSize',
     'reserveCapacity','reloadDuration']){
-    const suffix=key[0].toUpperCase()+key.slice(1);
+    const suffix=key==='hp'?'HP':key[0].toUpperCase()+key.slice(1);
     raw[key]=Number(el(suffix)?.value);
    }
    const status=this.document.getElementById('phoenixPlayerCombatStatus');
