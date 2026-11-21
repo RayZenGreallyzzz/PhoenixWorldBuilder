@@ -39,6 +39,23 @@
    this.ammoLine = this.document.getElementById('phoenixAmmoLine');
    this.ammoText = this.document.getElementById('phoenixAmmoText');
    this.crosshair = this.document.getElementById('phoenixCrosshair');
+    this.mobCard=this.document.getElementById('phoenixMobCard');
+    this.selectedMobId='';this.mobTags=new Map();this.mobTagTextures=new Map();
+    this.effects=null;this.mobCardElapsed=0;this.mobPointer=null;
+    const canvas=builder.canvas;
+    canvas?.addEventListener('pointerdown',e=>{
+     if(this.active&&e.isPrimary!==false&&e.target===canvas)
+      this.mobPointer={id:e.pointerId,x:e.clientX,y:e.clientY};
+    });
+    canvas?.addEventListener('pointerup',e=>{
+     const p=this.mobPointer;this.mobPointer=null;
+     if(!this.active||!p||p.id!==e.pointerId||
+      Math.hypot(e.clientX-p.x,e.clientY-p.y)>12)return;
+     this.selectMobAt(e);
+    });
+    canvas?.addEventListener('pointercancel',()=>{this.mobPointer=null});
+    this.document.getElementById('btnPhoenixMobCardClose')?.
+     addEventListener('click',()=>this.selectMob(''));
    this.mpLine = this.document.getElementById('phoenixMpLine');
    this.mpText = this.document.getElementById('phoenixMpText');
    if (!playButton || !editButton || !this.hud)
@@ -100,6 +117,8 @@
     this.hud.hidden = false;
     this.modeController.setMode('play');
     b.prefabEditor?.setPlaying(true);
+    if(typeof PhoenixVFX!=='undefined')this.effects=new PhoenixVFX.SceneFX(b.scene,THREE);
+    this.createMobTags();this.selectMob('');
     b.skillEditor?.setPlaying(true);
     b.skillDefinitionEditor?.startPlay();
     this.weapon?.reset();this.ammoSignature='';
@@ -113,7 +132,9 @@
    } catch (error) {
     // Entering PLAY must never leave the editor with a half-finished UI.
     this.active = false;
+    this.selectMob('');
     b.prefabEditor?.setPlaying(false);
+    this.clearMobTags();this.effects?.dispose();this.effects=null;
     b.skillEditor?.setPlaying(false);
     b.skillDefinitionEditor?.stopPlay();
     this.document.body.classList.remove('phoenixPlaying');
@@ -154,8 +175,10 @@
    b.keys.clear();
    if (b.joystick) b.joystick.reset();
    this.active = false;
-   b.prefabEditor?.setPlaying(false);
-   b.skillEditor?.setPlaying(false);
+    this.selectMob('');
+    b.prefabEditor?.setPlaying(false);
+    this.clearMobTags();this.effects?.dispose();this.effects=null;
+    b.skillEditor?.setPlaying(false);
    b.skillDefinitionEditor?.stopPlay();
    this.document.body.classList.remove('phoenixPlaying');
    this.hud.hidden = true;
@@ -205,6 +228,7 @@
       !this.builder.prefabEditor?.combat?.isPlayerDead())return false;
    const b=this.builder;
    // Restart only the disposable PLAY runtime; never touch Builder project JSON.
+   this.clearMobTags();this.selectMob('');
    b.prefabEditor.setPlaying(false);
    const delta=this.saved.playerPosition.clone().sub(b.player.position);
    b.player.position.add(delta);
@@ -215,6 +239,7 @@
    b.keys.clear();b.joystick?.reset();
    b.avatarAttackUntil=0;b.avatarState='';
    b.prefabEditor.setPlaying(true);
+   this.createMobTags();
    b.skillDefinitionEditor?.resetPlay();
    this.weapon?.reset();this.ammoSignature='';
    this.healReadyAt=0;
