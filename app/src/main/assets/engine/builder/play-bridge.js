@@ -212,6 +212,10 @@
   restore(saved) {
    const b = this.builder;
    b.setMode(saved.mode);
+   // Restore a consciously selected construction tool after leaving PLAY;
+   // character editor never inherits a wall placement tool.
+   if(saved.mode==='build'&&typeof b.setTool==='function'&&saved.tool)
+    b.setTool(saved.tool);
    b.player.position.copy(saved.playerPosition);
    b.player.rotation.copy(saved.playerRotation);
    b.camera.position.copy(saved.camera);
