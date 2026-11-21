@@ -24,6 +24,8 @@ for(const id of ['phoenixMobCard','phoenixMobCardName','phoenixMobCardRole',
  'phoenixMobCardHP','phoenixMobCardHPText','phoenixMobCardStats',
  'phoenixMobCardSkills','phoenixMobCardRespawn','btnPhoenixMobCardClose',
  'phoenixEntityNickname','btnPrefabApplyNickname','phoenixPrefabLevel',
+ 'phoenixPrefabNameColor','phoenixPrefabEngagement','phoenixEntityNameColor',
+ 'phoenixEntityPreset','btnPrefabApplyPreset','phoenixEntityEngagement','phoenixEntityAggroRadius',
  'phoenixPrefabDefense','phoenixPrefabRespawnEnabled','phoenixPrefabRespawnDelay',
  'phoenixPrefabAttackEffect','skillDefFxPreset','skillDefFxColor',
  'skillDefFxSize','skillDefFxDuration','phoenixPlayerAttackEffect']){
