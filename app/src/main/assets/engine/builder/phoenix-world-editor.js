@@ -322,6 +322,7 @@
     }
     for(const key of dirty)this.refreshSculptPatch(key);
    }
+   this.refreshAllTexturePatches();
   }
   refreshSculptPatch(key){
    const flat=this.flatPatches.get(key);
@@ -344,7 +345,8 @@
     if(mesh){this.terrainRoot.remove(mesh);mesh.geometry.dispose();
      this.sculptPatches.delete(key);}
     else geometry.dispose();
-    this.setFlatVisibility(key,true);return;
+    this.setFlatVisibility(key,true);
+    this.refreshTexturePatch(key,true);return;
    }
    attr.needsUpdate=true;
    geometry.computeVertexNormals();
@@ -358,6 +360,7 @@
     this.terrainRoot.add(mesh);this.sculptPatches.set(key,mesh);
     this.setFlatVisibility(key,false);
    }
+   this.refreshTexturePatch(key,true);
   }
   refreshSculptArea(x,z,radius){
    this.refreshHeightLookup();
@@ -378,12 +381,15 @@
     const nx=Math.ceil(s.width/s.tileSize),nz=Math.ceil(s.depth/s.tileSize);
     text.textContent='🌍 '+s.width+'×'+s.depth+' м · '+
      nx+'×'+nz+' секторов · '+this.state.tiles.length+
-     ' окрашено · максимум '+this.schema.MAX_TILES+
-     ' тайлов · сетка '+(this.gridVisible?'вкл':'выкл');
+     ' цветных секторов · '+this.painter.patches.size+
+     ' секторов с текстурами · '+this.painter.materials().length+
+     ' материалов · сетка '+(this.gridVisible?'вкл':'выкл');
    }
    const paint=this.el('worldPaintStatus');
    if(paint)paint.textContent=this.painting?
-    (this.paintMode==='erase'?'🧹 Ластик: коснись сектора на сцене':
+    (this.paintMode==='texture'?'🖌 Мягкая круглая кисть: веди пальцем по горе / земле':
+     this.paintMode==='texture-erase'?'🧽 Ластик покрытия: сотри текстуру круглой кистью':
+     this.paintMode==='erase'?'🧹 Ластик старого сектора: коснись земли':
      ['raise','lower','smooth'].includes(this.paintMode)?
      ('⛰ '+{raise:'Подними',lower:'Опусти',smooth:'Сгладь'}[this.paintMode]+
      ' землю пальцем. Undo/Redo — общие кнопки Builder.'):
@@ -449,7 +455,6 @@
   async ensureTexture(id){
    if(this.textureMaps.has(id))return this.textureMaps.get(id);
    if(this.texturePromises.has(id))return this.texturePromises.get(id);
-   const token=this.textureGeneration;
    const request=Promise.resolve().then(()=>this.b.textureAsset(id))
     .then(raw=>{
      // Three.js Texture.clone() shares the decoded image, not a new copy
@@ -460,10 +465,8 @@
      tex.needsUpdate=true;
      this.textureMaps.set(id,tex);
      this.texturePromises.delete(id);
-     if(token===this.textureGeneration){
-      for(const [key,layers] of this.painter.patches)
-       if(layers.has(id))this.refreshTexturePatch(key);
-     }
+     for(const [key,layers] of this.painter.patches)
+      if(layers.has(id))this.refreshTexturePatch(key);
      return tex;
     }).catch(error=>{this.texturePromises.delete(id);throw error});
    this.texturePromises.set(id,request);
@@ -608,8 +611,11 @@
     this.textureId,opacity,erase,softness);
    if(!changed.length)return false;
    // History uses the exact same Builder snapshots as walls/doors/modules.
-   this.b.recordEdit?.(this.stroke?.snapshot||oldState);
-   if(this.stroke){this.stroke.recorded=true;this.stroke.changed=true;}
+   if(!this.stroke?.recorded){
+    const ok=this.b.recordEdit?.(this.stroke?.snapshot||oldState);
+    if(this.stroke)this.stroke.recorded=ok!==false;
+   }
+   if(this.stroke)this.stroke.changed=true;
    for(const key of changed)this.refreshTexturePatch(key);
    if(!this.stroke){
     this.state.paintMasks=this.painter.serialize();
@@ -650,6 +656,8 @@
   brushAt(x,z,seconds=.09){
    if(!this.painting||this.b.playBridge?.active)return false;
    try{
+    if(this.paintMode==='texture'||this.paintMode==='texture-erase')
+     return this.paintTextureAt(x,z,this.paintMode==='texture-erase',seconds);
     if(['raise','lower','smooth'].includes(this.paintMode)){
      const radius=Number(this.el('worldBrushRadius')?.value||25);
      const strength=Number(this.el('worldBrushPower')?.value||6);
@@ -672,33 +680,62 @@
     this.notify('⚠ Кисть: '+error.message,'warn');return false;
    }
   }
+  pointerTerrain(event){
+   // Trace actual hills before the old UV44 flat Y=0 placement plane.
+   // The brush must land on a rock summit, not project behind the hill.
+   const plane=this.b.rayPoint(event,0);
+   if(this.sculptPatches.size&&this.b.ray?.intersectObjects){
+    this.terrainRoot.updateMatrixWorld(true);
+    const hits=this.b.ray.intersectObjects([...this.sculptPatches.values()],false);
+    if(hits.length)return hits[0].point;
+   }
+   return plane;
+  }
+  brushLine(from,to,seconds){
+   if(!from)return this.brushAt(to.x,to.z,seconds);
+   const distance=Math.hypot(to.x-from.x,to.z-from.z);
+   // Minimum stamp separation prevents gaps even when pointermove events
+   // are throttled by Android. This keeps long pencil strokes continuous.
+   const radius=Number(this.el('worldBrushRadius')?.value||25);
+   const step=Math.max(.45,Math.min(12,radius*.28));
+   const samples=Math.max(1,Math.ceil(distance/step));
+   let any=false;
+   for(let i=1;i<=samples;i++){
+    const t=i/samples;
+    any=this.brushAt(from.x+(to.x-from.x)*t,
+     from.z+(to.z-from.z)*t,seconds/samples)||any;
+   }
+   return any;
+  }
   handleBrushPointer(type,event){
    if(!this.painting||this.b.playBridge?.active)return;
    const canvas=this.b.canvas;
    if(type==='pointerdown'){
     if(event.target!==canvas||event.isPrimary===false||this.stroke)return;
-    const hit=this.b.rayPoint(event,0);
+    const hit=this.pointerTerrain(event);
     if(!hit)return;
     this.stroke={pointerId:event.pointerId,snapshot:this.b.project?.(),
-     recorded:false,changed:false,last:performance.now()};
+     recorded:false,changed:false,last:performance.now(),
+     point:{x:hit.x,z:hit.z}};
     canvas.setPointerCapture?.(event.pointerId);
     this.brushAt(hit.x,hit.z,.12);
     event.preventDefault();event.stopImmediatePropagation();
     return;
    }
    if(!this.stroke||event.pointerId!==this.stroke.pointerId)return;
-   if(type==='pointermove'){
+   if(type==='pointermove'||type==='pointerup'){
     const now=performance.now(),dt=(now-this.stroke.last)/1000;
-    if(dt<.045){
-     event.preventDefault();event.stopImmediatePropagation();return;
+    if(type==='pointerup'||dt>=.045){
+     const hit=this.pointerTerrain(event);
+     if(hit){
+      const to={x:hit.x,z:hit.z};
+      this.brushLine(this.stroke.point,to,Math.min(.24,Math.max(.04,dt)));
+      this.stroke.point=to;
+     }
+     this.stroke.last=now;
     }
-    const hit=this.b.rayPoint(event,0);
-    if(hit)this.brushAt(hit.x,hit.z,Math.min(.24,dt));
-    this.stroke.last=now;
-   }else{
-    // End of a gesture is a single global undoable transaction.
-    this.finishStroke();
    }
+   if(type==='pointerup'||type==='pointercancel')this.finishStroke();
    event.preventDefault();event.stopImmediatePropagation();
   }
   finishStroke(){
@@ -709,7 +746,10 @@
     if(this.b.canvas.hasPointerCapture?.(stroke.pointerId))
      this.b.canvas.releasePointerCapture(stroke.pointerId);
    }catch(error){console.warn('Terrain pointer release:',error)}
-   if(stroke.changed)this.b.save?.();
+   if(stroke.changed){
+    this.state.paintMasks=this.painter.serialize();
+    this.b.save?.();
+   }
   }
   clearHeights(){
    if(!this.state.heights.length)return false;
@@ -782,7 +822,10 @@
    this.notify('Ландшафтные тайлы удалены. Постройки не тронуты.','success');
    return true;
   }
-  serialize(){return this.schema.validate(this.state)}
+  serialize(){
+   this.state.paintMasks=this.painter.serialize();
+   return this.schema.validate(this.state);
+  }
   loadFromProject(data,options={}){
    const showGrid=options.preserveUI&&this.gridVisible;
    this.stopPainting();
@@ -795,6 +838,7 @@
    }
    // Grid display is always opt-in after opening a scene or restarting.
    this.gridVisible=!!showGrid;
+   this.painter=new this.splat.Painter(this.state,this.state.paintMasks);
    this.applyScene();this.renderForm();
   }
  }
