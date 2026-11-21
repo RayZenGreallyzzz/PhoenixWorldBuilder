@@ -130,6 +130,19 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert.deepEqual(authoredAI.waypoints,[[8,.5,8],[10,.5,11]]);
  assert.equal(ed.registry.get('prefab-1').ai.mode,'chase',
   'Editing a mob must not change the shared prefab template');
+ els.phoenixPrefabEntities.value=entity;ed.selectEntity();
+ ed.beginWaypointPlacement();
+ assert.equal(ed.pendingWaypointId,entity,
+  'Waypoint touch mode belongs to selected NPC');
+ ed.findPoint=()=>new T.Vector3(11.25,.5,9.75);
+ assert.equal(await ed.placeFromEvent({clientX:5,clientY:5}),true);
+ assert.equal(ed.pendingWaypointId,'','One point added per tap');
+ assert.equal(ed.world.getComponent(entity,'character').ai.waypoints.length,3);
+ assert.equal(ed.panel.hidden,false);
+ const routeLine=ed.routeHelper.children[0];
+ assert(routeLine&&routeLine.geometry.attributes.position.count===4,
+  'Route line must start at mob and pass through three custom waypoints');
+
  const second=await ed.createEntity('prefab-1',[12,0,17]);
  assert.equal(ed.world.getComponent(second,'character').ai.mode,'chase',
   'Fresh mob gets the template AI, not another mob\'s route');
@@ -215,6 +228,15 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert.deepEqual(ed.world.getComponent(instance,'transform').position,savedPosition,
   'Runtime pose correction must never change saved prefab coordinates');
  ed.setPlaying(false);
+ els.phoenixPrefabEntities.value=instance;ed.selectEntity();
+ assert.equal(ed.previewAttack(),true,
+  'Attack button must preview existing imported GLB attack clip in EDIT');
+ assert.equal(model.animation?.state,'attack');
+ ed.update(.15);
+ assert(model.animation?.action?.isRunning(),
+  'Imported GLB Attack clip must really animate the mob, not just play an AI state');
+ ed.update(1.0);
+ assert.equal(model.animation,null,'EDIT attack preview must cleanly stop after the clip');
  assert(Math.abs(model.anchor.position.y-1)<.06,
   'EDIT restores feet-ground alignment after Attack');
  assert.equal(model.root.position.y,0);
