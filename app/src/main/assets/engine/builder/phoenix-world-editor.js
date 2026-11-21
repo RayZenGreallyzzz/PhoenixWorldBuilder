@@ -50,7 +50,11 @@
   el(id){return this.doc.getElementById(id)}
   textureBrushRadius(){
    const radius=Number(this.el('worldTextureRadius')?.value||10);
-   return Number.isFinite(radius)?Math.max(1,Math.min(150,radius)):10;
+   return Number.isFinite(radius)?Math.max(.2,Math.min(50,radius)):10;
+  }
+  formatBrushSize(metres){
+   return metres<1?Math.round(metres*100)+' см':
+    Number(metres.toFixed(1))+' м';
   }
   currentBrushRadius(){
    return this.paintMode==='texture'||this.paintMode==='texture-erase'?
@@ -59,11 +63,12 @@
   setTextureBrushRadius(radius,persist=true){
    const number=Number(radius);
    if(!Number.isFinite(number))return false;
-   const value=Math.round(Math.max(1,Math.min(150,number)));
+   const value=Math.round(Math.max(.2,Math.min(50,number))*10)/10;
    const input=this.el('worldTextureRadius');
    if(input)input.value=String(value);
    const label=this.el('worldTextureRadiusValue');
-   if(label)label.textContent=value+' м радиус · '+(value*2)+' м диаметр';
+   if(label)label.textContent=this.formatBrushSize(value)+' радиус · '+
+    this.formatBrushSize(value*2)+' диаметр';
    for(const button of this.doc.querySelectorAll?.('[data-texture-brush-radius]')||[]){
     const active=Number(button.getAttribute?.('data-texture-brush-radius'))===value;
     button.classList?.toggle('active',active);
@@ -95,8 +100,8 @@
   }
   showBrushIndicator(x,z){
    if(!this.painting||!Number.isFinite(x)||!Number.isFinite(z))return false;
-   const radius=Math.max(.3,this.currentBrushRadius());
-   const thickness=Math.max(.13,Math.min(2.5,radius*.024));
+   const radius=Math.max(.2,this.currentBrushRadius());
+   const thickness=Math.max(.025,Math.min(1.2,radius*.03));
    const inner=Math.max(.08,radius-thickness*.5);
    const outer=radius+thickness*.5;
    const attr=this.brushIndicator.geometry.getAttribute('position');
@@ -181,7 +186,7 @@
     try{savedRadius=Number(localStorage.getItem('phoenix-terrain-texture-radius'))}
     catch(error){/* browser storage may be disabled */}
    }
-   if(Number.isFinite(savedRadius)&&savedRadius>=1&&savedRadius<=150)
+   if(Number.isFinite(savedRadius)&&savedRadius>=.2&&savedRadius<=50)
     this.setTextureBrushRadius(savedRadius,false);
    else this.setTextureBrushRadius(this.textureBrushRadius(),false);
    this.el('worldTextureScale')?.addEventListener('change',e=>{
@@ -250,8 +255,8 @@
    if(power)this.el('worldBrushPowerValue').textContent=power.value+' м/с';
    const textureRadius=this.textureBrushRadius();
    const sizeLabel=this.el('worldTextureRadiusValue');
-   if(sizeLabel)sizeLabel.textContent=textureRadius+
-    ' м радиус · '+(textureRadius*2)+' м диаметр';
+   if(sizeLabel)sizeLabel.textContent=this.formatBrushSize(textureRadius)+
+    ' радиус · '+this.formatBrushSize(textureRadius*2)+' диаметр';
    for(const [id,display,suffix] of [['worldTextureSoftness','worldTextureSoftnessValue','%'],
     ['worldTextureOpacity','worldTextureOpacityValue','%'],
     ['worldTextureScale','worldTextureScaleValue',' м']]){
@@ -670,9 +675,17 @@
      continue;
     }
     let overlay=overlays.get(id);
+    const resolution=this.splat.resolutionOf(mask);
+    // Upgraded a legacy 64px patch to a detailed 512px patch:
+    // replace its alpha canvas once, without cloning source PNG/WebP.
+    if(overlay&&overlay.canvas.width!==resolution){
+     this.disposeTextureOverlay(overlay);
+     overlays.delete(id);
+     overlay=null;
+    }
     if(!overlay){
      const canvas=this.doc.createElement('canvas');
-     canvas.width=canvas.height=this.splat.RES;
+     canvas.width=canvas.height=resolution;
      const context=canvas.getContext('2d',{willReadFrequently:true});
      if(!context)continue;
      const maskTexture=new THREE.CanvasTexture(canvas);
@@ -694,7 +707,7 @@
      overlay.mesh.geometry.dispose();
      overlay.mesh.geometry=geo;
     }
-    const pixels=overlay.context.createImageData(this.splat.RES,this.splat.RES);
+    const pixels=overlay.context.createImageData(resolution,resolution);
     for(let i=0;i<mask.length;i++){
      const off=i*4,v=mask[i];
      pixels.data[off]=v;pixels.data[off+1]=v;
@@ -808,7 +821,7 @@
    // Minimum stamp separation prevents gaps even when pointermove events
    // are throttled by Android. This keeps long pencil strokes continuous.
    const radius=this.currentBrushRadius();
-   const step=Math.max(.45,Math.min(12,radius*.28));
+   const step=Math.max(.07,Math.min(12,radius*.45));
    const samples=Math.max(1,Math.ceil(distance/step));
    let any=false;
    for(let i=1;i<=samples;i++){
