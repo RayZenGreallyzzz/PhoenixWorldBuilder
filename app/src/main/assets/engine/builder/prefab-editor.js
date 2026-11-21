@@ -269,7 +269,8 @@
    if(this.b.projectLoadRunning||this.b.restoringProject)
     return this.status('Заверши загрузку проекта.');
    this.cancelPlacement();
-   this.b.setMode('build');this.b.setTool('place');
+   this.b.setMode('build');this.b.setTool('pick');
+   // Game placement uses its own touch handler, never a construction ghost.
    this.previewBefore={
     root:this.b.preview?.root||null,
     outline:this.b.previewOutline||null,
@@ -438,6 +439,15 @@
     render.root.userData.phoenixDead=false;
     if(this.playing)this.startAnimation(id,render);
     this.groundVisual(render,0,true);
+   }
+   if(this.playing){
+    const hero=this.b.playBridge?.playerCombat;
+    if(hero){
+     this.combat.damage=hero.damage;
+     this.combat.range=hero.range;
+     this.combat.cooldown=hero.cooldown;
+     this.combat.playerMaxHp=hero.hp;
+    }
    }
    this.combat.reset(this.playing?[...this.rendered.keys()].map(id=>{
     const stats=this.world.getComponent(id,'stats')||{hp:100};
@@ -977,7 +987,8 @@
    const id=this.selectedEntity();
    if(!id)return this.status('Выбери моба для редактирования маршрута');
    if(this.b.playBridge.active)return;
-   this.cancelPlacement();this.b.setMode('build');this.b.setTool('place');
+   this.cancelPlacement();this.b.setMode('build');this.b.setTool('pick');
+   // Tap-to-waypoint needs no wall placement preview.
    this.previewBefore={root:this.b.preview?.root||null,
     outline:this.b.previewOutline||null,
     visible:this.b.preview?.root?.visible,
@@ -1046,6 +1057,7 @@
    return {version:1,catalog:this.registry.serialize(),world:this.world.serialize(),
     hudLayout:this.b.skillEditor?.serialize()||null,
      playerAttackEffect:this.b.playBridge?.playerAttackEffect||'impact',
+     playerCombat:this.b.playBridge?.playerCombat||null,
     skills:this.b.skillDefinitionEditor?.serialize()||null};
   }
   async loadFromProject(doc){
@@ -1068,6 +1080,18 @@
    const token=++this.loadGeneration;
    for(const id of [...this.rendered.keys()])this.removeRender(id);
    this.registry=registry;this.world=world;this.b.playBridge.gameWorld=world;
+   // Old projects without a hero profile keep the original melee defaults.
+   try{
+    const Profiles=(typeof globalThis!=='undefined'&&globalThis.PhoenixPlayerCombat)||
+     (typeof require==='function'?require('../core/phoenix-player-combat.js'):null);
+    this.b.playBridge.playerCombat=Profiles.normalize(doc?.playerCombat);
+   }catch(error){
+    console.warn('Invalid player combat profile ignored:',error);
+    this.b.playBridge.playerCombat={
+     mode:'melee',hp:100,damage:25,range:2.7,cooldown:.65,
+     magazineSize:12,reserveCapacity:48,reloadDuration:1.4};
+   }
+   this.b.playBridge.showPlayerCombatForm?.();
    const fx=doc?.playerAttackEffect;
    this.b.playBridge.playerAttackEffect=
     typeof PhoenixVFX!=='undefined'&&PhoenixVFX.PRESETS.includes(fx)?fx:'impact';
