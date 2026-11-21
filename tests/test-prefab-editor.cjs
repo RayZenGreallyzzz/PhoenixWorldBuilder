@@ -21,7 +21,7 @@ const names=['phoenixPrefabPanel','btnPhoenixPrefabs','btnPrefabClose',
  'btnPrefabNew','btnPrefabSave','btnPrefabDelete','btnPrefabPlace',
  'btnPrefabCancelPlace','btnPrefabRemoveEntity','phoenixPrefabSaved',
  'phoenixPrefabAsset','phoenixPrefabEntities','phoenixPrefabName',
- 'phoenixPrefabType','phoenixPrefabFaction','phoenixPrefabHP',
+ 'phoenixPrefabType','phoenixPrefabFaction','phoenixPrefabNameColor','phoenixPrefabEngagement','phoenixPrefabHP',
  'phoenixPrefabDamage','phoenixPrefabSpeed','phoenixPrefabLevel',
  'phoenixPrefabDefense','phoenixPrefabRespawnEnabled','phoenixPrefabRespawnDelay',
  'phoenixPrefabAttackEffect','phoenixPrefabIdle',
@@ -30,7 +30,8 @@ const names=['phoenixPrefabPanel','btnPhoenixPrefabs','btnPrefabClose',
  'phoenixPrefabAggroRadius','phoenixPrefabAttackRange','phoenixPrefabCooldown','phoenixPrefabClipList',
  'phoenixPrefabClips','phoenixPrefabCounts','phoenixPrefabStatus',
  'btnPrefabImportGlb','importUniversalModel','status',
- 'btnPrefabApplyTransform','btnPrefabSnapGround','btnPrefabApplyNickname','phoenixEntityNickname','phoenixEntityAI',
+ 'btnPrefabApplyTransform','btnPrefabSnapGround','btnPrefabApplyNickname','phoenixEntityNickname','phoenixEntityNameColor',
+ 'phoenixEntityPreset','btnPrefabApplyPreset','phoenixEntityEngagement','phoenixEntityAggroRadius','phoenixEntityAI',
  'phoenixEntityX','phoenixEntityY','phoenixEntityZ','phoenixEntityYaw',
  'phoenixEntityWaypoints','phoenixWaypointX','phoenixWaypointY',
  'phoenixWaypointZ','btnPrefabWaypointAdd','btnPrefabWaypointTap',
@@ -262,5 +263,38 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert(Math.abs(model.anchor.position.y-1)<.06,
   'EDIT restores feet-ground alignment after Attack');
  assert.equal(model.root.position.y,0);
- console.log('PASS: Prefab Editor grounds animated GLB and creates/removes mobs, touch placement, PLAY and JSON restore');
+ // User chooses nick color independently; optional presets change aggression.
+ els.phoenixPrefabEntities.value=instance;ed.selectEntity();
+ els.phoenixEntityPreset.value='white-defensive';
+ assert.equal(ed.applyEntityPreset(),true);
+ let custom=ed.world.getComponent(instance,'character');
+ assert.equal(custom.nameColor,'#ffffff');
+ assert.equal(custom.ai.engagement,'defensive');
+ assert.equal(custom.ai.mode,'patrol');
+ assert.equal(custom.faction,'enemy','Defensive mobs remain attackable');
+ els.phoenixEntityNameColor.value='#34acdf';
+ els.phoenixEntityNickname.value='Асура';
+ assert.equal(ed.applyEntityNickname(),true);
+ custom=ed.world.getComponent(instance,'character');
+ assert.equal(custom.nameColor,'#34acdf','Custom color overrides preset');
+ assert.equal(custom.nickname,'Асура');
+ assert.equal(custom.ai.engagement,'defensive','Changing color cannot change aggression');
+ els.phoenixEntityAggroRadius.value='13.5';
+ assert.equal(ed.applyEntityAI(),true);
+ assert.equal(ed.world.getComponent(instance,'character').ai.aggroRadius,13.5);
+ els.phoenixEntityPreset.value='red-aggressive';
+ assert.equal(ed.applyEntityPreset(),true);
+ custom=ed.world.getComponent(instance,'character');
+ assert.equal(custom.nameColor,'#ff4444');
+ assert.equal(custom.ai.engagement,'aggressive');
+ assert.equal(custom.ai.aggroRadius,13.5,'Preset must preserve per-mob aggro radius');
+ els.phoenixEntityPreset.value='green-friendly';
+ assert.equal(ed.applyEntityPreset(),true);
+ custom=ed.world.getComponent(instance,'character');
+ assert.equal(custom.faction,'ally');
+ assert.equal(custom.ai.engagement,'passive');
+ const persisted=ed.serialize();
+ assert.equal(persisted.world.entities[0].components.character.nameColor,'#55ff88');
+ assert.equal(persisted.world.entities[0].components.character.ai.aggroRadius,13.5);
+  console.log('PASS: Prefab Editor grounds animated GLB and creates/removes mobs, touch placement, PLAY JSON restore, mob nickname presets and custom aggro');
 })().catch(error=>{console.error(error);process.exitCode=1});
