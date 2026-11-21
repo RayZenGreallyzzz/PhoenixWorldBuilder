@@ -56,7 +56,7 @@ assert(css.includes('.phoenixPrefabPanel[hidden]'));
 assert(css.includes('#phoenixCombatHud[hidden]'));
 assert(editor.includes('this.combat.attack('),'No combat attack integration');
 assert(editor.includes('this.combat.isDead(id)'),'Dead enemies must not move');
-assert(bridge.includes('this.builder.prefabEditor?.attackNearest(now)'),
+assert(bridge.includes('this.builder.prefabEditor?.attackNearest(now,this.selectedMobId)'),
  'PLAY button must attack the game session');
 assert(!editor.includes('new THREE.WebGLRenderer'));
 assert(!bridge.includes('new THREE.WebGLRenderer'));
