@@ -24,6 +24,8 @@ on:
       - 'tests/test-avatar-motion.cjs'
       - 'tests/test-world-layout.cjs'
       - 'tests/test-world-editor.cjs'
+      - 'tests/test-terrain-splat.cjs'
+      - 'app/src/main/assets/engine/core/phoenix-terrain-splat.js'
       - 'app/src/main/assets/js/character-collision.js'
       - 'tests/test-visible-engine-ui.cjs'
       - 'tests/test-skill-layout.cjs'
@@ -66,6 +68,7 @@ jobs:
           node --check app/src/main/assets/engine/builder/prefab-editor.js
           node --check app/src/main/assets/js/avatar-motion.js
           node --check app/src/main/assets/js/clean-app.js
+          node --check app/src/main/assets/engine/core/phoenix-terrain-splat.js
           node --check app/src/main/assets/engine/core/phoenix-world-layout.js
           node --check app/src/main/assets/engine/builder/phoenix-world-editor.js
           node --check app/src/main/assets/js/character-collision.js
@@ -84,6 +87,7 @@ jobs:
           node tests/test-avatar-motion.cjs
           node tests/test-world-layout.cjs
           node tests/test-world-editor.cjs
+          node tests/test-terrain-splat.cjs
           node tests/test-visible-engine-ui.cjs
           node tests/test-skill-layout.cjs
           node tests/test-skill-editor.cjs
