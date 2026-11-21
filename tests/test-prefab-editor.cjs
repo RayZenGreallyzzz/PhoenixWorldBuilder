@@ -163,7 +163,8 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert.equal(builder.preview.root.visible,true);
  assert.equal(ed.world.entityIds().length,2);
  const select=els.phoenixPrefabEntities;
- select.value='entity-2';ed.removeSelectedEntity();
+ select.value=ed.world.entityIds().find(id=>id!==entity);
+ ed.removeSelectedEntity();
  assert.equal(ed.world.entityIds().length,1);
  assert.equal(ed.layer.children.length,1);
  // Invalid game extension is rejected before changing the existing world.
