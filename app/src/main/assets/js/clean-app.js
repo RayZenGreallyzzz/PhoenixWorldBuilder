@@ -4557,7 +4557,9 @@ class CleanBuilder{
  async restore(doc,options={}){
   const preserveUI=!!options.preserveUI;
   const previousUI=preserveUI?{
-   tool:this.tool,kind:this.preview?.kind||this.lastPlacementKind,
+   // Only an actual user-selected preview may survive Undo/Redo.
+   // lastPlacementKind starts as 'wall' but must never rearm it implicitly.
+   tool:this.tool,kind:this.preview?.kind||'',
    selectedId:this.selected?.id,
    folder:this.smartCatalogFolder,group:this.catalogGroup,
    search:$('smartCatalogSearch')?.value||'',
