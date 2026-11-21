@@ -338,7 +338,13 @@
  <b>✍ Маршрут от руки / остановки</b>
  <div class="phoenixPrefabRow"><button id="btnPhoenixRouteDraw" type="button">✍ Рисовать пальцем</button><button id="btnPhoenixRouteStops" type="button">⏸ Стопы на маршруте</button></div>
  <small>Старые точки XYZ остаются. Для плавного маршрута нажми «Рисовать пальцем»: камера зафиксируется, а линия будет следовать пальцу. Указывай остановки с анимациями и сохраняй маршрут конкретного моба. После сохранения камера снова управляется как раньше.</small>
+
+ <small>Маршрут показывается линией в EDIT. Остановки выполняются в PLAY без строительства стен. Для сохранения проекта на устройстве нажми верхнюю 💾 Сохранить.</small>
  </details>
+ <button type="button" id="btnPrefabRemoveEntity">🗑 Удалить со сцены</button>
+ <small id="phoenixPrefabStatus" aria-live="polite">Создай шаблон, затем коснись места на сцене.</small>
+ <small>«На сцене» считает только мобов, поставленных кнопкой «Поставить моба», а не обычные GLB Builder. В PLAY работают патруль, преследование, атаки и коррекция высоты ступней модели.</small>
+</section>
  <div id="phoenixRouteDock" class="phoenixRouteDock" hidden role="group" aria-label="Рисование маршрута моба">
   <strong>✍ Маршрут выбранного моба</strong>
   <span id="phoenixRouteHelp">Камера закреплена. Веди пальцем по земле, чтобы нарисовать путь.</span>
@@ -348,12 +354,6 @@
   <small id="phoenixRouteStatus" aria-live="polite">Нарисуй путь или выбери место для остановки.</small>
   <div class="phoenixPrefabRow"><button id="btnPhoenixRouteClear" type="button">↺ Очистить рисунок</button><button id="btnPhoenixRouteCancel" type="button">✕ Отмена</button><button id="btnPhoenixRouteSave" type="button" class="primary">💾 Сохранить маршрут</button></div>
  </div>
- <small>Маршрут показывается линией в EDIT. Остановки выполняются в PLAY без строительства стен. Для сохранения проекта на устройстве нажми верхнюю 💾 Сохранить.</small>
- </details>
- <button type="button" id="btnPrefabRemoveEntity">🗑 Удалить со сцены</button>
- <small id="phoenixPrefabStatus" aria-live="polite">Создай шаблон, затем коснись места на сцене.</small>
- <small>«На сцене» считает только мобов, поставленных кнопкой «Поставить моба», а не обычные GLB Builder. В PLAY работают патруль, преследование, атаки и коррекция высоты ступней модели.</small>
-</section>
 <section id="shapeToolPanel" class="shapeToolPanel" hidden aria-label="Фигурная подрезка модуля">
  <div class="shapeToolTitle"><b>✂ Фигурная подрезка</b><button id="btnShapeClose" type="button" aria-label="Закрыть">✕</button></div>
  <small id="shapeToolInfo">Выдели установленный модуль. Работает с полом, крышей, стеной или статическим GLB.</small>
