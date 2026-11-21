@@ -57,7 +57,25 @@
    this.el('btnPrefabRemoveEntity').addEventListener('click',()=>this.removeSelectedEntity());
    this.el('phoenixPrefabSaved').addEventListener('change',e=>this.selectPrefab(e.target.value));
    this.el('phoenixPrefabAsset').addEventListener('change',()=>this.refreshClips());
-   this.el('btnPrefabImportGlb').addEventListener('click',()=>this.el('importUniversalModel').click());
+   // Dedicated NPC import. Never route through the construction importer input.
+   this.el('btnPrefabImportGlb').addEventListener('click',()=>this.el('phoenixMobImportModel').click());
+   this.el('phoenixMobImportModel').addEventListener('change',async event=>{
+    const file=event.target.files?.[0];
+    event.target.value='';
+    if(!file)return;
+    if(!/\.glb$/i.test(file.name)){
+     this.status('Для мобов нужен анимированный GLB. Выбери файл .glb.');
+     return;
+    }
+    const button=this.el('btnPrefabImportGlb');
+    if(button)button.disabled=true;
+    try{
+     const id=await this.b.importGLB(file,{forMob:true});
+     if(!id)this.status('Ошибка импорта GLB. Проверь файл.');
+    }catch(error){
+     this.status('Не удалось загрузить моба: '+(error?.message||error));
+    }finally{if(button)button.disabled=false}
+   });
    const on=(id,type,fn)=>this.el(id)?.addEventListener(type,fn);
    on('phoenixPrefabEntities','change',()=>this.selectEntity());
    on('btnPrefabApplyTransform','click',()=>this.applyEntityTransform());
