@@ -683,14 +683,26 @@
   }
   damageEnemy(id,amount){
    if(!this.playing)return {ok:false,reason:'edit'};
-   return this.animateHit(id,this.combat.damageMob(id,amount));
+   const prefab=this.registry.get(this.world.getComponent(id,'prefab')?.id);
+   const defense=Math.max(0,prefab?.stats?.defense||0);
+   const reduced=Math.max(0,Math.round(amount*100/(100+defense)));
+   return this.animateHit(id,this.combat.damageMob(id,reduced));
   }
-  attackNearest(now){
+  attackNearest(now,preferredId=''){
    if(!this.playing)return {ok:false,reason:'edit'};
    const player=this.b.player.position;
    const targets=[];
-   for(const [id,render] of this.rendered)
-    targets.push({id,position:render.root.position.toArray()});
+   const selected=preferredId&&this.rendered.get(preferredId);
+   const selectedMob=preferredId&&this.combat.get(preferredId);
+   const selectedDistance=selected?
+    player.distanceTo(selected.root.position):Infinity;
+   if(selected&&selectedMob?.faction==='enemy'&&!selectedMob.dead&&
+      selectedDistance<=this.combat.range){
+    targets.push({id:preferredId,position:selected.root.position.toArray()});
+   }else{
+    for(const [id,render] of this.rendered)
+     targets.push({id,position:render.root.position.toArray()});
+   }
    const result=this.combat.attack(player.toArray(),targets,now,
     (item,distance)=>this.canStrike(player,
      new THREE.Vector3(...item.position),distance));
