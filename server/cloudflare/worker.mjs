@@ -2,6 +2,7 @@
  * Runs multiplayer rooms at the edge. Do not store admin secrets in Android.
  * No account registration, persistent characters or authoritative combat yet.
  */
+import {DurableObject} from 'cloudflare:workers';
 import {PhoenixRoom} from '../shared/room.mjs';
 import {blankWorld,validateWorld} from '../shared/world.mjs';
 import {validRoom} from '../shared/protocol.mjs';
@@ -36,9 +37,10 @@ async function forward(request,env){
 }
 export default {fetch:forward};
 
-export class PhoenixRoomObject{
+export class PhoenixRoomObject extends DurableObject{
  constructor(ctx,env){
-  this.ctx=ctx;this.env=env;this.room=null;
+  super(ctx,env);
+  this.room=null;
   ctx.blockConcurrencyWhile(async()=>{
    const existing=await ctx.storage.get('world');
    const first=ctx.getWebSockets()?.[0];
@@ -98,6 +100,13 @@ export class PhoenixRoomObject{
   if(entry)ws.serializeAttachment({worldId:this.room.world.worldId,
    id:entry.id,name:entry.name,position:entry.position.slice()});
  }
- webSocketClose(ws){this.room.leave(ws)}
+ webSocketClose(ws,code,reason){
+  this.room.leave(ws);
+  try{
+   if(code>=1000&&code<5000&&![1004,1005,1006,1015].includes(code))
+    ws.close(code,reason);
+   else ws.close();
+  }catch{/* Already closed. */}
+ }
  webSocketError(ws){this.room.leave(ws)}
 }
