@@ -88,6 +88,8 @@ jobs:
             node tests/test-phoenix-combat.cjs
             node tests/test-player-hud.cjs
             node tests/test-avatar-motion.cjs
+            node tests/test-avatar-animation-bindings.cjs
+            node tests/test-phoenix-patrol-drawing.cjs
             node tests/test-world-layout.cjs
             node tests/test-world-editor.cjs
             node tests/test-terrain-splat.cjs
