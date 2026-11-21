@@ -35,8 +35,13 @@ const names=['phoenixPrefabPanel','btnPhoenixPrefabs','btnPrefabClose',
  'phoenixEntityX','phoenixEntityY','phoenixEntityZ','phoenixEntityYaw',
  'phoenixEntityWaypoints','phoenixWaypointX','phoenixWaypointY',
  'phoenixWaypointZ','btnPrefabWaypointAdd','btnPrefabWaypointTap',
- 'btnPrefabWaypointRemove','btnPrefabPreviewAttack'];
+ 'btnPrefabWaypointRemove','btnPrefabPreviewAttack',
+ 'btnPhoenixRouteDraw','btnPhoenixRouteStops','phoenixRouteDock',
+ 'btnPhoenixRouteDrawTool','btnPhoenixRouteStopTool','phoenixRouteHelp',
+ 'phoenixRouteAnimation','phoenixRoutePause','phoenixRouteStatus',
+ 'btnPhoenixRouteSave','btnPhoenixRouteCancel','btnPhoenixRouteClear'];
 const els=Object.fromEntries(names.map(id=>[id,new Element(id)]));
+els.phoenixRoutePause.value='2.5';els.phoenixRouteAnimation.value='idle';
 els.phoenixPrefabName.value='Лесной волк';
 els.phoenixPrefabType.value='mob';
 els.phoenixPrefabFaction.value='enemy';
@@ -55,8 +60,10 @@ const builder={
  player:{position:new T.Vector3(4,0,7)},collisionsEnabled:false,
  camera:new T.PerspectiveCamera(),entries:[{kind:'wall',category:'wall'}],
  catalogMeta:new Map(),assets:new Map(),playBridge:{active:false,gameWorld:new core.PhoenixWorld()},
- preview:{root:{visible:true}},previewOutline:{visible:true},canvas:{getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})},
+ preview:{root:{visible:true}},previewOutline:{visible:true},canvas:{style:{touchAction:'auto'},
+ getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})},
  projectLoadRunning:false,restoringProject:false,mode:'build',tool:'place',
+ controls:{enabled:true},
  setMode(m){this.mode=m;},setTool(t){this.tool=t;this.preview.root.visible=t==='place';this.previewOutline.visible=t==='place';},
  save(){this.saved=(this.saved||0)+1;},
  ensureTemplate:async()=>false,cloneTemplate:()=>null,descriptor:()=>null
@@ -188,6 +195,32 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert.equal(ed.layer.children.length,1,'Reload must restore placed mobs');
  assert.equal(ed.world.entityIds().length,1);
  assert.equal(builder.saved,saved,'Opening a project must not autosave over it');
+ // Freehand editing owns canvas input, never creates a construction module.
+ els.phoenixPrefabEntities.value=entity;
+ const oldRoute=JSON.stringify(ed.world.getComponent(entity,'character').ai);
+ assert.equal(ed.startRouteDrawing('draw'),true);
+ assert.equal(builder.controls.enabled,false,'Camera freezes while drawing');
+ assert.equal(els.phoenixRouteDock.hidden,false);
+ ed.routeDraft.raw=Array.from({length:24},(_,i)=>[
+  5+3*Math.cos(i*Math.PI/12),0,7+3*Math.sin(i*Math.PI/12)]);
+ assert(ed.routeDraft.raw.length>10);
+ assert.equal(ed.setRouteTool('stop'),true);
+ assert.equal(ed.addDraftStop(ed.routeDraft.raw[4]),true);
+ assert.equal(ed.saveRouteDrawing(),true);
+ assert.equal(builder.controls.enabled,true,'Camera unlocks after save');
+ assert.equal(builder.canvas.style.touchAction,'auto');
+ const authored=ed.world.getComponent(entity,'character').ai;
+ assert.equal(authored.routeMode,'drawn');
+ assert(authored.waypoints.length>8);
+ assert.equal(authored.stops.length,1);
+ assert.equal(builder.entries.length,1,'Drawing cannot create building wall entries');
+ assert.equal(ed.startRouteDrawing('draw'),true);
+ ed.routeDraft.raw=[[0,0,0],[1,0,1],[2,0,0]];
+ const committed=JSON.stringify(ed.world.getComponent(entity,'character').ai);
+ assert.equal(ed.cancelRouteDrawing(),true);
+ assert.equal(JSON.stringify(ed.world.getComponent(entity,'character').ai),committed,
+  'Cancelled draft must leave previously saved route untouched');
+ assert.notEqual(JSON.stringify(authored),oldRoute);
  ed.selectPrefab('prefab-1');
  ed.beginPlacement();
  assert.equal(ed.pendingPlace,'prefab-1');
