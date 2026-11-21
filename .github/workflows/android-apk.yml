@@ -121,7 +121,7 @@ jobs:
       - name: Publish APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.ref == 'refs/heads/phoenix-engine-0.1' && 'PhoenixEngine-1.8-MICRO-BRUSH-20CM-TEST-APK' || (github.ref == 'refs/heads/stable/uv44' && 'PhoenixBuilder-UV44-Test-APK' || 'PhoenixWorldBuilder-Android-APK') }}
+          name: ${{ github.ref == 'refs/heads/phoenix-engine-0.1' && 'PhoenixEngine-1.9-MOBS-SAVE-ATTACK-TEST-APK' || (github.ref == 'refs/heads/stable/uv44' && 'PhoenixBuilder-UV44-Test-APK' || 'PhoenixWorldBuilder-Android-APK') }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
