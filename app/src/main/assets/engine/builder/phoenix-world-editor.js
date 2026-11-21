@@ -218,6 +218,8 @@
     this.notify('Сначала выйди из PLAY в EDIT','warn');return false;
    }
    this.b.prefabEditor?.close();
+   // The terrain brush owns canvas edits; construction ghost must be off.
+   if(this.b.tool==='place')this.b.setTool('pick');
    this.b.skillEditor?.close();
    this.b.skillDefinitionEditor?.close();
    this.panel.hidden=false;this.renderForm();this.updateStatus();
