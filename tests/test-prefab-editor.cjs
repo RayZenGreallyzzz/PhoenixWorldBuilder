@@ -6,6 +6,7 @@ const prefabs=require('../app/src/main/assets/engine/core/phoenix-prefabs.js');
 const ai=require('../app/src/main/assets/engine/core/phoenix-ai.js');
 const anim=require('../app/src/main/assets/engine/runtime/phoenix-animations.js');
 const combat=require('../app/src/main/assets/engine/core/phoenix-combat.js');
+global.AvatarFit=require('../app/src/main/assets/js/avatar-fit.js');
 global.THREE=T;global.PhoenixCore=core;global.PhoenixPrefabs=prefabs;
 global.PhoenixAI=ai;global.PhoenixAnimations=anim;global.PhoenixCombat=combat;
 global.window={PhoenixCore:core,PhoenixPrefabs:prefabs,PhoenixAI:ai,PhoenixAnimations:anim,PhoenixCombat:combat};
@@ -128,5 +129,48 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  assert.equal(ed.world.entityIds().length,0);
  assert.equal(ed.layer.children.length,0);
  assert.equal(builder.entries.length,1);
- console.log('PASS: Prefab Editor creates/removes mobs, touch placement, PLAY and JSON restore');
+ // Regression: many animated GLBs have origin at the waist and Attack
+ // tracks move their imported root down. Neither can bury a playable mob.
+ builder.ensureTemplate=async()=>true;
+ builder.cloneTemplate=()=>{
+  const visual=new T.Group();
+  visual.name='GLB_ActorRoot';
+  const body=new T.Mesh(new T.BoxGeometry(.8,2,.6),
+   new T.MeshBasicMaterial());
+  body.name='BODY';visual.add(body);
+  return visual;
+ };
+ const attackFrames=new T.VectorKeyframeTrack('.position',
+  [0,.4,.8],[0,0,0, 0,-.9,0, 0,-.9,0]);
+ builder.assets.set('glb:underground-regression',{
+  animations:[new T.AnimationClip('Idle',.8,[]),
+   new T.AnimationClip('Attack',.8,[attackFrames])]
+ });
+ ed.newDraft();
+ els.phoenixPrefabAsset.value='glb:underground-regression';
+ els.phoenixPrefabAI.value='idle';
+ ed.saveDraft();
+ const instance=await ed.createEntity('prefab-1',[2,0,3]);
+ const model=ed.rendered.get(instance);
+ assert(model.visual!==model.root,'Animated GLB must not be world mover');
+ assert.equal(model.root.position.y,0,'Authored AI Y stays at world ground');
+ assert(Math.abs(model.anchor.position.y-1)<.06,
+  'Model centered on hips should be raised so feet land on ground');
+ const savedPosition=ed.world.getComponent(instance,'transform').position.slice();
+ ed.setPlaying(true);
+ assert.equal(model.animation.model,model.visual,
+  'GLB animation must not alter the AI mover position');
+ model.animation.setState('attack',0);
+ for(let i=0;i<9;i++)ed.update(.1);
+ assert.equal(model.root.position.y,0,'Attack root motion must not sink NPC mover');
+ assert(model.visual.position.y<-.65,'Actual GLB Attack root motion is active');
+ assert(Math.abs((model.anchor.position.y+model.visual.position.y)-1)<.24,
+  'Live grounding must compensate Attack root motion');
+ assert.deepEqual(ed.world.getComponent(instance,'transform').position,savedPosition,
+  'Runtime pose correction must never change saved prefab coordinates');
+ ed.setPlaying(false);
+ assert(Math.abs(model.anchor.position.y-1)<.06,
+  'EDIT restores feet-ground alignment after Attack');
+ assert.equal(model.root.position.y,0);
+ console.log('PASS: Prefab Editor grounds animated GLB and creates/removes mobs, touch placement, PLAY and JSON restore');
 })().catch(error=>{console.error(error);process.exitCode=1});
