@@ -515,7 +515,7 @@
    if(result.reason==='player-dead')return false;
    this.builder.playAttackAnimation?.();
    if(result.ok){
-    const mob=this.builder.prefabEditor?.rendered.get(result.id);
+    const mob=this.builder.prefabEditor?.rendered?.get(result.id);
     this.effects?.spawn({preset:this.playerAttackEffect},mob?.root.position);
     this.updatePlayerHud();this.refreshMobCard();
     if(this.hpTarget)this.hpTarget.textContent=
