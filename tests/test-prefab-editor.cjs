@@ -196,7 +196,8 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
  const placed=await ed.placeFromEvent({clientX:10,clientY:10});
  assert.equal(placed,true);
  assert.equal(ed.pendingPlace,'');
- assert.equal(builder.preview.root.visible,true);
+ assert.equal(builder.preview.root.visible,false,
+  'Placing a mob must not reactivate the old wall preview');
  assert.equal(ed.world.entityIds().length,2);
  const select=els.phoenixPrefabEntities;
  select.value=ed.world.entityIds().find(id=>id!==entity);
