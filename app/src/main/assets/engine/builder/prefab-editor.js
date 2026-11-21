@@ -103,7 +103,7 @@
    on('btnPhoenixRouteClear','click',()=>this.clearRouteDrawing());
    // Capture before Builder's own click/drag gestures; a route is never a wall.
    for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])
-    this.b.canvas?.addEventListener(type,e=>this.routePointer(type,e),true);
+    this.b.canvas?.addEventListener?.(type,e=>this.routePointer(type,e),true);
    on('btnPrefabPreviewAttack','click',()=>this.previewAttack());
    on('phoenixPrefabAttackClip','change',e=>{
     const field=this.el('phoenixPrefabAttack');
