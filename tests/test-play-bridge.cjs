@@ -5,6 +5,8 @@ class V {
  constructor(x, y, z) {this.x = x;this.y = y;this.z = z;}
  clone() {return new V(this.x,this.y,this.z);}
  copy(other) {this.x=other.x;this.y=other.y;this.z=other.z;return this;}
+ add(other) {this.x+=other.x;this.y+=other.y;this.z+=other.z;return this;}
+ sub(other) {this.x-=other.x;this.y-=other.y;this.z-=other.z;return this;}
 }
 const classes = new Set();
 const dom = {};
@@ -85,10 +87,15 @@ assert.equal(bridge.handleKeyDown({key:'Escape',preventDefault(){prevented++;}})
 assert.equal(prevented,3);
 assert.equal(bridge.active,false);
 assert.equal(builder.mode,'build');
-assert.deepEqual(builder.camera.position,originalCamera);
-assert.deepEqual(builder.controls.target,originalTarget);
-assert.deepEqual(builder.player.position,originalPosition);
-assert.deepEqual(builder.player.rotation,originalRotation);
+const travel=new V(20-originalPosition.x,0,30-originalPosition.z);
+assert.deepEqual(builder.camera.position,originalCamera.clone().add(travel),
+ 'EDIT camera must follow the final hero position, not jump back to house');
+assert.deepEqual(builder.controls.target,originalTarget.clone().add(travel),
+ 'EDIT camera focus must translate with the hero');
+assert.deepEqual(builder.player.position,new V(20,0,30),
+ 'Leaving PLAY must preserve the current world position');
+assert.deepEqual(builder.player.rotation,new V(0,5,0),
+ 'Leaving PLAY must preserve the hero facing direction');
 assert.equal(builder.preview.root.visible,true);
 assert.equal(builder.previewOutline.visible,true);
 assert.equal(builder.entries,entries);
@@ -111,8 +118,15 @@ builder.shapePlaceMode=true;
 assert.equal(bridge.enter(),false);
 builder.shapePlaceMode=false;
 assert.equal(bridge.enter(),true);
+assert.deepEqual(builder.player.position,new V(20,0,30),
+ 'Re-entering PLAY after editing a mob must start at previous gameplay position');
+builder.player.position.copy(new V(28,2,37));
+builder.player.rotation.copy(new V(0,6,0));
 assert.equal(dom.btnPhoenixEdit.listeners.click(),true);
+assert.deepEqual(builder.player.position,new V(28,2,37),
+ 'A second PLAY→EDIT cycle must also preserve the new position');
+assert.deepEqual(builder.player.rotation,new V(0,6,0));
 assert.equal(builder.mode,'build');
 assert.equal(builder.preview.root.visible,true);
 assert.equal(modeChanges.length,4);
-console.log('PASS: Phoenix PLAY -> EDIT restores camera/player/preview; blocks unsafe actions; no extra RAF');
+console.log('PASS: PLAY→EDIT→PLAY preserves last hero location, camera-relative focus, edit state and no extra RAF');
