@@ -417,6 +417,7 @@
    this.updatePlayerHud();
    if(this.combatNotice)this.combatNotice.textContent=
     '💔 '+mobName+': −'+hit.damage+' HP';
+   if(!hit.dead)this.builder.playHitAnimation?.();
    if(hit.dead){
     this.builder.keys.clear();
     this.builder.joystick?.reset();
@@ -557,6 +558,7 @@
      result.reason==='no-target'?'🎯 Нет доступной цели':'🧙 Навык не назначен';
     return false;
    }
+   this.builder.playCastAnimation?.();
    const effect=def.type==='heal'?combat.healPlayer(result.power):
      this.builder.prefabEditor.damageEnemy(target.id,result.power);
    if(effect?.ok)this.effects?.spawn(def.effect,
@@ -585,6 +587,7 @@
     return false;
    }
    this.healReadyAt=now+12;
+   this.builder.playCastAnimation?.();
    this.effects?.spawn({preset:'heal'},this.builder.player.position,'heal');
    this.updatePlayerHud();
    if(this.combatNotice)this.combatNotice.textContent=
@@ -593,11 +596,13 @@
   }
 
   attack(){
-   if(!this.active)return false;
+   if(!this.active||this.builder.prefabEditor?.combat?.isPlayerDead())return false;
    if(this.playerCombat.mode==='ranged')return this.fire();
    const now=(typeof performance!=='undefined'?performance.now():Date.now())/1000;
    const result=this.builder.prefabEditor?.attackNearest(now,this.selectedMobId);
-   if(!result)return false;
+   // A sword can swing without a selected target; animation is not tied to
+   // a mob hit result. Cooldown/death still prevent repeated hit triggers.
+   if(!result){this.builder.playAttackAnimation?.();return false;}
    if(result.reason==='cooldown'){
     if(this.combatNotice)this.combatNotice.textContent=
      '⏳ Перезарядка '+result.remaining.toFixed(1)+' сек';
