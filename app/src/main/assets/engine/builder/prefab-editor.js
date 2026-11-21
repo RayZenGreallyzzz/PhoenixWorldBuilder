@@ -39,8 +39,9 @@
    if(this.b.playBridge.active)return;
    this.b.skillEditor?.close();this.b.skillDefinitionEditor?.close();
    this.refreshModels();this.panel.hidden=false;
+   this.drawRoute(this.selectedEntity());
   }
-  close(){this.panel.hidden=true;this.cancelPlacement();}
+  close(){this.panel.hidden=true;this.routeHelper.visible=false;this.cancelPlacement();}
   toggle(){this.panel.hidden?this.open():this.close();}
   bind(){
    this.el('btnPhoenixPrefabs').addEventListener('click',()=>this.toggle());
@@ -562,7 +563,10 @@
     if(id)this.world.removeEntity(id);
     throw err;
    }
-   this.refresh();this.b.save();return id;
+   this.refresh();
+   this.el('phoenixPrefabEntities').value=id;
+   this.selectEntity(id);
+   this.b.save();return id;
   }
   async placeFromEvent(event){
    if((!this.pendingPlace&&!this.pendingWaypointId)||this.b.playBridge.active)return false;
@@ -641,35 +645,43 @@
    if(position.some(v=>!Number.isFinite(v)||Math.abs(v)>100000)||
       !Number.isFinite(yaw)||Math.abs(yaw)>360)
     return this.status('Позиция и поворот должны быть конечными числами');
-   return this.editEntity(id,({transform})=>({
+   const ok=this.editEntity(id,({transform})=>({
     transform:{...transform,position,yaw:yaw*Math.PI/180}
-   }))&&this.status('✅ Координаты и поворот моба сохранены');
+   }));
+   if(ok)this.status('✅ Координаты и поворот моба сохранены');
+   return ok;
   }
   snapEntityToGround(){
    const id=this.selectedEntity();if(!id)return this.status('Выбери моба на сцене');
    const tr=this.world.getComponent(id,'transform');
    const position=[...tr.position];
    position[1]=this.b.worldEditor?.heightAt(position[0],position[2])??0;
-   return this.editEntity(id,({transform})=>({
+   const ok=this.editEntity(id,({transform})=>({
     transform:{...transform,position}
-   }))&&this.status('✅ Моб поставлен на высоту ландшафта');
+   }));
+   if(ok)this.status('✅ Моб поставлен на высоту ландшафта');
+   return ok;
   }
   applyEntityAI(){
    const id=this.selectedEntity(),mode=this.el('phoenixEntityAI')?.value;
    if(!id||!PhoenixAI.BEHAVIORS.includes(mode))return false;
-   return this.editEntity(id,({character})=>({
+   const ok=this.editEntity(id,({character})=>({
     character:{...character,ai:{...character.ai,mode}}
-   }))&&this.status('🤖 Поведение этого моба: '+mode);
+   }));
+   if(ok)this.status('🤖 Поведение этого моба: '+mode);
+   return ok;
   }
   addWaypointToEntity(id,position){
    if(!Array.isArray(position)||position.length!==3||
       position.some(v=>!Number.isFinite(v)||Math.abs(v)>100000))
     return this.status('Некорректная точка маршрута'),false;
-   return this.editEntity(id,({character})=>{
+   const ok=this.editEntity(id,({character})=>{
     const ai=PhoenixAI.normalize(character.ai);
     if(ai.waypoints.length>=32)throw Error('Максимум 32 точки на маршрут');
     return {character:{...character,ai:{...ai,waypoints:[...ai.waypoints,position]}}};
-   })&&this.status('🧭 Точка маршрута добавлена');
+   });
+   if(ok)this.status('🧭 Точка маршрута добавлена');
+   return ok;
   }
   addWaypoint(){
    const position=['phoenixWaypointX','phoenixWaypointY','phoenixWaypointZ']
