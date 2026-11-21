@@ -48,7 +48,7 @@ assert.throws(()=>splat.decode('not valid!'),/encoding/);
 assert.throws(()=>splat.decode(btoa(String.fromCharCode(255,12))),/Incomplete/);
 assert.throws(()=>splat.checkEntries([...base,base[0]],data),/Duplicate/);
 assert.throws(()=>splat.checkEntries([{...base[0],imageId:'https://bad'}],data),/texture ID/);
-const world=Layout.validate({...Layout.plain(),paintMasks:after?JSON.parse(after):[]});
+const world=Layout.validate({...Layout.plain(),paintMasks:painter.serialize()});
 assert.equal(world.paintMasks.length,painter.serialize().length);
 assert.deepEqual(Layout.validate(JSON.parse(JSON.stringify(world))),world);
 assert.throws(()=>Layout.resize(world,{width:600}),/ландшафт/);
