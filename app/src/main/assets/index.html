@@ -81,7 +81,29 @@
  <div class="phoenixWorldRow"><button id="btnWorldApply" type="button" class="primary">✅ Применить размеры</button><button id="btnWorldOverview" type="button">🌐 Весь мир</button></div>
  <small>⚠ Изменение размера мира с уже нарисованным ландшафтом требует очистить тайлы, чтобы не потерять расположение объектов. Строительные детали и мобы не удаляются.</small>
  <hr>
- <b>🏞 Папка «Ландшафт» · рисование тайлов</b>
+ <b>🏞 Текстуры ландшафта · круглая кисть</b>
+ <small>Выбери материал в левой библиотеке «Текстуры → 🏞 Ландшафт». Нажми картинку травы/скал — и веди пальцем по земле или горе. Мягкая круглая кисть плавно смешивает текстуры, а исходный файл хранится один раз.</small>
+ <div class="phoenixWorldRow">
+  <button id="btnWorldOpenTextures" type="button">📂 Папка материалов слева</button>
+  <button id="btnWorldImportTexture" type="button">＋ Загрузить PNG/WebP</button>
+ </div>
+ <div id="worldTextureChosen" class="phoenixWorldSelectedTexture">🎨 Выбери картинку в левой папке «Ландшафт»</div>
+ <div class="phoenixWorldRow">
+  <button id="btnWorldTexturePaint" type="button">🖌 Круглая кисть</button>
+  <button id="btnWorldTextureErase" type="button">🧽 Стереть покрытие</button>
+ </div>
+ <label>Мягкость кисти <strong id="worldTextureSoftnessValue">65%</strong>
+  <input id="worldTextureSoftness" type="range" min="0" max="100" step="5" value="65">
+ </label>
+ <label>Насыщенность мазка <strong id="worldTextureOpacityValue">100%</strong>
+  <input id="worldTextureOpacity" type="range" min="5" max="100" step="5" value="100">
+ </label>
+ <label>Масштаб повторения текстуры, м <strong id="worldTextureScaleValue">4 м</strong>
+  <input id="worldTextureScale" type="range" min="1" max="32" step="1" value="4">
+ </label>
+ <small>Текстура сохраняется один раз. Одинаковые мазки лишь обновляют маску покрытия участка, не добавляя новую копию PNG. Края кисти круглые, без квадратных границ секторов.</small>
+ <details id="worldOldColors"><summary>🎨 Старые цветные квадратные тайлы (совместимость 1.4)</summary>
+ <b>Цветовые тайлы по секторам</b>
  <label>Материал тайла<select id="worldTileStyle">
   <option value="grass">🌱 Трава</option><option value="earth">🟤 Земля</option>
   <option value="sand">🏖 Песок</option><option value="stone">🪨 Камень</option>
@@ -106,6 +128,7 @@
   <button id="btnWorldClearHeights" type="button">⤴ Сбросить рельеф</button>
  </div>
  <div class="phoenixWorldRow"><button id="btnWorldFill" type="button">▦ Заполнить мир</button><button id="btnWorldClear" type="button">🗑 Очистить тайлы</button></div>
+ </details>
  <small id="worldCanvasInfo" aria-live="polite">Размер мира и секторов</small>
  <small id="worldPaintStatus">Рисование выключено</small>
  <small id="worldCanvasStatus" aria-live="polite">Для рисования выбери материал и коснись земли на общей сцене.</small>
@@ -364,12 +387,14 @@
   <summary>📥 Загрузка PNG, текстур и граффити ▾</summary>
   <div class="textureImportBody">
   <button id="btnDirectImage" type="button">🎨 Загрузить текстуры (можно сразу несколько)</button>
+  <button id="btnDirectLandscapeImage" type="button" class="alt">🏞 Добавить тайл-текстуры ландшафта PNG/WebP</button>
   <button id="btnDirectDecals" type="button" class="alt">🖼 Загрузить прозрачное граффити (несколько PNG)</button>
   <button id="btnDirectTextureZip" type="button">📦 Загрузить ZIP с текстурами</button>
   <details class="drawerFold"><summary>📦 ZIP с прозрачными граффити (много PNG)</summary>
     <button id="btnDirectDecalZip" type="button" class="alt">🖼 Импортировать ZIP в папку «Прозрачное граффити»</button>
   </details>
   <input id="importTexture" type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.bmp,.gif" multiple hidden>
+  <input id="importLandscapeTexture" type="file" accept="image/png,image/webp,image/jpeg,.png,.webp,.jpg,.jpeg" multiple hidden>
   <input id="importTextureZIP" type="file" accept=".zip,application/zip" hidden>
   <input id="importDecalZIP" type="file" accept=".zip,application/zip" hidden>
   <small class="tip">📱 Для нескольких PNG открой «Файлы / Обзор», удерживай первый файл, затем отметь остальные и нажми «Открыть». Галерея может выбирать лишь один.</small>
@@ -380,6 +405,7 @@
  <div class="cols2"><label>Папка<select id="textureCategoryFilter">
  <option value="all">Все обычные текстуры</option><option value="textures">🎨 Текстуры</option>
  <option value="my-textures">🖼 Мои текстуры</option>
+ <option value="landscape-tiles">🏞 Ландшафт — тайл-текстуры</option>
  <option value="transparent-graffiti">🖼 Прозрачное граффити</option></select></label>
  <label>Поиск<input id="textureSearch" type="search" placeholder="Имя текстуры"></label></div>
  <details id="textureUploadFold" class="drawerFold"><summary>⚙ Качество загружаемых текстур</summary>
@@ -390,6 +416,7 @@
   </label>
   <small class="tip">PNG, JPG, JPEG, WebP, BMP и первый кадр GIF. Очень большие изображения подгоняются под возможности Android, сохраняя пропорции.</small>
  </div></details>
+ <div id="landscapeLibraryHint" class="landscapeLibraryHint" hidden>🏞 <b>Ландшафт</b>: нажми изображение ниже — оно станет материалом круглой кисти на общей сцене. Радиус регулируется через 🌍 МИР; каждый мазок можно отменить общей кнопкой Undo.</div>
  <div id="textureQuickFaces" class="textureQuickFaces">
   <b>🎨 Как красить стену или пол</b>
   <small id="faceQuickTarget" class="tip">Выбери текстуру; обычный режим наносит её на весь модуль.</small>
@@ -855,6 +882,7 @@
  <script src="js/editor-history.js"></script>
  <script src="js/scene-manager.js"></script>
  <script src="js/project-load-stages.js"></script>
+<script src="engine/core/phoenix-terrain-splat.js"></script>
 <script src="engine/core/phoenix-world-layout.js"></script>
 <script src="engine/core/phoenix-core.js"></script>
 <script src="engine/core/phoenix-ai.js"></script>
