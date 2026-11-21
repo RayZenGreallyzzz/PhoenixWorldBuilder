@@ -407,8 +407,8 @@ class CleanBuilder{
   notify('📷 Камера отдалена для просмотра персонажа в реальном масштабе','success');
  }
  setMode(mode){
-  // Switching to a character camera must also disarm any active wall preview.
-  if(mode==='character'&&this.tool==='place')this.setTool('pick');
+  // Camera/view changes never carry a building placement tool into another mode.
+  if(mode!=='build'&&this.tool==='place')this.setTool('pick');
   if(mode!=='build'&&this.surfaceSidePick){
    this.surfaceSidePick=false;
    this.syncQuickTextureFaces();
