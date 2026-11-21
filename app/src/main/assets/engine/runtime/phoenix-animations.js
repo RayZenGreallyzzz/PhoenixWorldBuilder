@@ -17,6 +17,21 @@
   death:/death|die|dead|смерт|гибел/i,
   cast:/cast|spell|magic|заклин/i
  };
+ function findClip(clips,bindings,state){
+  if(!STATES.includes(state))throw new TypeError('Invalid animation '+state);
+  clips=clips||[];const assigned=bindings?.[state];
+  if(assigned){
+   const selected=clips.find(x=>x.name===assigned);
+   if(selected)return selected;
+  }
+  const pattern=PATTERNS[state];
+  const automatic=clips.find(clip=>pattern.test(clip.name));
+  if(automatic)return automatic;
+  if(state==='run')return clips.find(c=>PATTERNS.walk.test(c.name))||null;
+  if(state==='walk')return clips.find(c=>PATTERNS.run.test(c.name))||null;
+  if(state==='idle')return clips[0]||null;
+  return null;
+ }
  class Controller{
   constructor(model,clips,bindings={},THREERef){
    const T=THREERef||(typeof THREE!=='undefined'?THREE:null);
@@ -36,21 +51,7 @@
    }));
   }
   resolve(state){
-   if(!STATES.includes(state))throw new TypeError('Invalid animation '+state);
-   const assigned=this.bindings[state];
-   if(assigned){
-    const selected=this.clips.find(x=>x.name===assigned);
-    if(selected)return selected;
-   }
-   const pattern=PATTERNS[state];
-   const automatic=this.clips.find(clip=>pattern.test(clip.name));
-   // Walk/run may use a fallback locomotion clip; a missing attack must
-   // never accidentally use arbitrary combat footage.
-   if(automatic)return automatic;
-   if(state==='run')return this.clips.find(c=>PATTERNS.walk.test(c.name))||null;
-   if(state==='walk')return this.clips.find(c=>PATTERNS.run.test(c.name))||null;
-   if(state==='idle')return this.clips[0]||null;
-   return null;
+   return findClip(this.clips,this.bindings,state);
   }
   playClip(name,options={}){
    if(!this.mixer)return false;
@@ -95,5 +96,5 @@
    this.actions.clear();this.action=null;this.state='';
   }
  }
- return Object.freeze({STATES,Controller});
+ return Object.freeze({STATES,PATTERNS,findClip,Controller});
 });
