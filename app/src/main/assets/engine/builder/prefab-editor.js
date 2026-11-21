@@ -231,7 +231,7 @@
     if(this.selectedId)this.registry.update(this.selectedId,value);
     else this.selectedId=this.registry.create(value);
     this.refresh();this.b.skillDefinitionEditor?.refreshCharacters();this.b.markProjectDirty?.();
-    this.status('✅ Шаблон сохранён. Изменения применяются к новым экземплярам.');
+    this.status('✅ Шаблон применён к редактору. Для записи проекта нажми верхнюю 💾 Сохранить.');
    }catch(err){this.status('Ошибка шаблона: '+err.message)}
   }
   deletePrefab(){
@@ -242,7 +242,7 @@
    this.b.skillDefinitionEditor?.catalog.removeCharacter(this.selectedId);
    this.registry.remove(this.selectedId);this.newDraft();this.refresh();
    this.b.skillDefinitionEditor?.refreshCharacters();this.b.markProjectDirty?.();
-   this.status('Шаблон удалён.');
+   this.status('Шаблон удалён. Для записи проекта нажми верхнюю 💾 Сохранить.');
   }
   beginPlacement(){
    if(this.b.playBridge.active)return this.status('Размещать мобов можно в EDIT.');
@@ -1020,7 +1020,7 @@
    const id=this.el('phoenixPrefabEntities').value;
    if(!this.world.hasEntity(id))return this.status('Выбери моба из списка.');
    this.removeRender(id);this.world.removeEntity(id);
-   this.refresh();this.b.markProjectDirty?.();this.status('Экземпляр убран со сцены.');
+   this.refresh();this.b.markProjectDirty?.();this.status('Моб убран со сцены. Для записи проекта нажми верхнюю 💾 Сохранить.');
   }
   hasContent(){return this.registry.list().length>0||this.world.entityIds().length>0||
    !!this.b.skillDefinitionEditor?.catalog.characters().length;}
