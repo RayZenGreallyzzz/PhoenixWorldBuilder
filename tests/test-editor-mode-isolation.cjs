@@ -11,6 +11,8 @@ assert(!app.includes("this.setMode('build');this.selectKind('wall');"),
  'Startup must never create a default wall preview');
 assert(app.includes("this.setMode('build');this.setTool('pick');"),
  'Startup must begin in neutral select mode');
+assert(app.includes("tool:this.tool,kind:this.preview?.kind||''"),
+ 'Undo/Redo must not reactivate the old default wall from lastPlacementKind');
 assert(app.includes('this.selected=null;this.disposePreview();this.setTool(\'pick\');'),
  'Opening project must not silently recreate a default wall');
 assert(app.includes("if(mode!=='build'&&this.tool==='place')this.setTool('pick');"),
