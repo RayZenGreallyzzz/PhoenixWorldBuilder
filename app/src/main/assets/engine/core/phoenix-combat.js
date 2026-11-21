@@ -95,9 +95,10 @@
    return {ok:true,id:target.id,name:target.name,damage:amount,
     hp:target.hp,maxHp:target.maxHp,killed};
   }
-  attack(origin,targets,time,canHit=()=>true){
+  attack(origin,targets,time,canHit=()=>true,resolveDamage=(_,amount)=>amount){
    if(!validPoint(origin)||!Array.isArray(targets)||
-      typeof canHit!=='function')throw new TypeError('Invalid combat target list');
+      typeof canHit!=='function'||typeof resolveDamage!=='function')
+    throw new TypeError('Invalid combat target list');
    bounded(time,0,Number.MAX_SAFE_INTEGER,'time');
    if(this.playerDead)return {ok:false,reason:'player-dead'};
    if(time<this.readyAt)return {ok:false,reason:'cooldown',
@@ -117,7 +118,11 @@
     nearest=distance;target=mob;
    }
    if(!target)return {ok:false,reason:blocked?'blocked':'miss',remaining:this.cooldown};
-   return {...this.damageMob(target.id,this.damage),
+   // Resolve armor and other authored defenses before damage is applied.
+   // Default callback is identity to preserve every legacy damage value.
+   const finalDamage=bounded(resolveDamage(target,this.damage),0,1000000,
+    'resolved damage');
+   return {...this.damageMob(target.id,finalDamage),
     distance:nearest,remaining:this.cooldown};
   }
  }
