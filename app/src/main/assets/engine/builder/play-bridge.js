@@ -278,6 +278,11 @@
   update(dt){
    if(!this.active||!Number.isFinite(dt)||dt<=0)return;
    if(this.ammoLine&&!this.ammoLine.hidden)this.updateAmmoHud();
+   this.effects?.update(dt);
+   this.mobCardElapsed+=dt;
+   if(this.mobCardElapsed>=.18){
+    this.mobCardElapsed=0;this.refreshMobCard();this.refreshMobTags();
+   }
   }
   fire(){
    if(!this.active||!this.weapon||
@@ -291,6 +296,7 @@
    }
    const target=this.builder.prefabEditor?.findEnemy(attempt.range,{forward:true});
    const result=target?this.builder.prefabEditor.damageEnemy(target.id,attempt.damage):null;
+   if(result?.ok)this.effects?.spawn({preset:'spark'},target.position);
    this.updateAmmoHud();
    if(this.combatNotice)this.combatNotice.textContent=result?.ok?
     result.killed?'🔫 Противник повержен':'🔫 Попадание: −'+result.damage+' HP':
@@ -346,7 +352,9 @@
     return false;
    }
    const effect=def.type==='heal'?combat.healPlayer(result.power):
-    this.builder.prefabEditor.damageEnemy(target.id,result.power);
+     this.builder.prefabEditor.damageEnemy(target.id,result.power);
+   if(effect?.ok)this.effects?.spawn(def.effect,
+    def.type==='heal'?this.builder.player.position:target?.position,def.type);
    this.updateManaHud();this.updatePlayerHud();
    if(this.combatNotice)this.combatNotice.textContent=
     result.skill.icon+' '+result.skill.name+': '+
@@ -371,6 +379,7 @@
     return false;
    }
    this.healReadyAt=now+12;
+   this.effects?.spawn({preset:'heal'},this.builder.player.position,'heal');
    this.updatePlayerHud();
    if(this.combatNotice)this.combatNotice.textContent=
     '💚 Восстановлено '+result.healed+' HP · откат 12 сек';
@@ -380,7 +389,7 @@
   attack(){
    if(!this.active)return false;
    const now=(typeof performance!=='undefined'?performance.now():Date.now())/1000;
-   const result=this.builder.prefabEditor?.attackNearest(now);
+   const result=this.builder.prefabEditor?.attackNearest(now,this.selectedMobId);
    if(!result)return false;
    if(result.reason==='cooldown'){
     if(this.combatNotice)this.combatNotice.textContent=
@@ -390,7 +399,9 @@
    if(result.reason==='player-dead')return false;
    this.builder.playAttackAnimation?.();
    if(result.ok){
-    this.updatePlayerHud();
+    const mob=this.builder.prefabEditor?.rendered.get(result.id);
+    this.effects?.spawn({preset:'impact'},mob?.root.position);
+    this.updatePlayerHud();this.refreshMobCard();
     if(this.hpTarget)this.hpTarget.textContent=
      result.name+' · HP '+result.hp+'/'+result.maxHp;
     if(this.hpBar){
