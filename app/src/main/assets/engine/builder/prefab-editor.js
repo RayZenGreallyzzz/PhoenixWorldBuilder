@@ -1030,7 +1030,7 @@
   }
   startRouteDrawing(mode='draw'){
    const id=this.selectedEntity();
-   if(this.playing||this.b.playBridge?.active)return false;
+   if(this.playing||this.b.playBridge?.active||this.b.gizmoPointer!=null||this.b.dragMove)return false;
    if(!id)return this.status('Сначала выбери установленного моба'),false;
    if(!['draw','stops'].includes(mode))return false;
    const char=this.world.getComponent(id,'character');
@@ -1041,13 +1041,14 @@
    this.cancelPlacement();
    this.b.worldEditor?.stopPainting?.();
    if(this.b.tool==='place')this.b.setTool('pick');
+   this.b.gizmo?.deactivate?.();
    const canvas=this.b.canvas;
    const draft={id,mode,tool:mode==='draw'?'draw':'stop',
     raw:[],points:mode==='stops'?ai.waypoints.map(p=>p.slice()):[],
     markers:mode==='stops'?(ai.stops||[]).map(s=>({
      position:ai.waypoints[s.index].slice(),seconds:s.seconds,
      animation:s.animation})):[],
-    pointerId:null,
+    pointerId:null,lastPreview:0,
     previousEnabled:this.b.controls.enabled,
     previousTouchAction:canvas?.style?.touchAction||''};
    this.routeDraft=draft;
@@ -1118,8 +1119,9 @@
     const p=this.findPoint(event);
     if(p)this.addDraftStop([p.x,p.y,p.z]);
     else this.routeMessage('Коснись земли рядом с нарисованной линией');
-   }else if(type==='pointerup'&&draft.tool==='draw')
-    this.routeStrokePoint(event);
+   }else if(type==='pointerup'&&draft.tool==='draw'){
+    this.routeStrokePoint(event);this.drawRoute(draft.id);
+   }
    if(this.b.canvas.hasPointerCapture?.(event.pointerId))
     this.b.canvas.releasePointerCapture?.(event.pointerId);
    draft.pointerId=null;return true;
@@ -1137,7 +1139,10 @@
    }
    draft.raw.push(xyz);
    // Throttle preview rebuilds on Android; the path remains in raw data.
-   if(first||draft.raw.length%3===0)this.drawRoute(draft.id);
+   const now=typeof performance!=='undefined'?performance.now():Date.now();
+   if(first||now-draft.lastPreview>=90){
+    draft.lastPreview=now;this.drawRoute(draft.id);
+   }
    this.routeMessage('✍ Линия: '+draft.raw.length+
     ' исходных точек · после сохранения до '+Path.MAX_POINTS+
     ' точек. Для паузы нажми ⏸ Остановка.');
@@ -1171,6 +1176,8 @@
    const draft=this.routeDraft;if(!draft)return false;
    if(draft.mode==='draw')draft.raw=[];
    draft.markers=[];
+   if(draft.pointerId!==null&&this.b.canvas?.hasPointerCapture?.(draft.pointerId))
+    this.b.canvas.releasePointerCapture?.(draft.pointerId);
    draft.pointerId=null;
    draft.tool=draft.mode==='draw'?'draw':'stop';
    this.setRouteTool(draft.tool);this.drawRoute(draft.id);
