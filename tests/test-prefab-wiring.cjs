@@ -38,7 +38,8 @@ const warnings=[];
 const safePlace=new Function('notify',
  'return function(){'+placeGuard[1]+'\n return true; }')(
  message=>warnings.push(message));
-const app={prefabEditor:{panel:{hidden:false},pendingPlace:'',pendingWaypointId:''}};
+const app={mode:'build',tool:'place',
+ prefabEditor:{panel:{hidden:false},pendingPlace:'',pendingWaypointId:''}};
 assert.equal(safePlace.call(app),false,'Open NPC editor must block static GLB placement');
 app.prefabEditor.panel.hidden=true;app.prefabEditor.pendingPlace='prefab-1';
 assert.equal(safePlace.call(app),false,'Placing an NPC must block static GLB');
@@ -46,6 +47,11 @@ app.prefabEditor.pendingPlace='';app.prefabEditor.pendingWaypointId='entity-1';
 assert.equal(safePlace.call(app),false,'Placing waypoint must block static GLB');
 app.prefabEditor.pendingWaypointId='';
 assert.equal(safePlace.call(app),true,'Ordinary construction must remain possible');
+app.mode='character';
+assert.equal(safePlace.call(app),false,'Character mode cannot spawn construction walls');
+app.mode='build';app.tool='pick';
+assert.equal(safePlace.call(app),false,'Select mode cannot spawn a construction wall');
+app.tool='place';
 assert.equal(warnings.length,3);
 assert(js.includes('this.prefabEditor=new PhoenixPrefabEditor(this)'));
 assert(js.includes('this.prefabEditor?.update(dt)'), 'Must reuse UV44 frame loop');
