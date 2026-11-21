@@ -250,20 +250,37 @@
  <label>Death<input id="phoenixPrefabDeath" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Death"></label>
  <label>Cast<input id="phoenixPrefabCast" type="text" maxlength="120" list="phoenixPrefabClipList" placeholder="Cast"></label></div>
  <b>🤖 Поведение моба (PLAY)</b>
- <label>Поведение<select id="phoenixPrefabAI"><option value="idle">Стоять на месте</option><option value="patrol">Патрулировать вокруг точки</option><option value="chase">Преследовать игрока и атаковать (анимация)</option></select></label>
+ <label>Поведение<select id="phoenixPrefabAI"><option value="idle">Стоять на месте</option><option value="patrol">Патрулировать вокруг точки</option><option value="chase">Преследовать игрока и атаковать (анимация)</option><option value="patrol-aggro">Патруль → агро → атака → возврат</option><option value="guard">Охрана точки → агро → атака</option></select></label>
  <div class="phoenixPrefabRow">
  <label>Радиус патруля, м<input id="phoenixPrefabPatrolRadius" type="number" min="0" max="30" step=".5" value="3"></label>
  <label>Радиус агро, м<input id="phoenixPrefabAggroRadius" type="number" min="0" max="50" step=".5" value="7"></label></div>
  <div class="phoenixPrefabRow">
  <label>Дистанция атаки, м<input id="phoenixPrefabAttackRange" type="number" min=".3" max="8" step=".1" value="1.25"></label>
  <label>Перезарядка, сек<input id="phoenixPrefabCooldown" type="number" min=".35" max="30" step=".1" value="1.8"></label></div>
- <small>Базовый ИИ обходит стены через проверку столкновений Builder, но пока без поиска пути и урона. Позиция в EDIT не меняется.</small>
+ <small>⚔ Attack — анимационное действие, а не отдельный маршрут. Для атак используй «Преследовать», «Патруль + агро» или «Охрана». Точный клип Attack указывается выше. Столкновения проверяются; полноценный NavMesh для обхода сложных препятствий пока не включён.</small>
+ <button id="btnPrefabPreviewAttack" type="button">▶ Проверить анимацию атаки выбранного моба</button>
  <small id="phoenixPrefabClips">Выбери GLB, чтобы увидеть доступные анимации.</small>
  <div class="phoenixPrefabRow"><button id="btnPrefabSave" type="button" class="primary">💾 Сохранить шаблон</button><button id="btnPrefabPlace" type="button">👆 Поставить моба</button></div>
  <button type="button" id="btnPrefabCancelPlace">✖ Отменить размещение</button>
  <hr>
  <b>Объекты на сцене</b><small id="phoenixPrefabCounts">Шаблонов: 0 · На сцене: 0</small>
  <label>Размещённые мобы<select id="phoenixPrefabEntities"><option value="">— Выбери моба на сцене —</option></select></label>
+ <details id="phoenixEntityEdit" open><summary>📍 Точное положение и собственный маршрут выбранного моба</summary>
+ <small>Для каждого экземпляра отдельно. Одинаковые GLB и шаблоны не мешают назначать разные координаты и маршруты.</small>
+ <div class="phoenixPrefabRow"><label>X, м<input id="phoenixEntityX" type="number" step=".01" value="0"></label><label>Y, м<input id="phoenixEntityY" type="number" step=".01" value="0"></label><label>Z, м<input id="phoenixEntityZ" type="number" step=".01" value="0"></label></div>
+ <label>Поворот, градусы<input id="phoenixEntityYaw" type="number" min="-360" max="360" step=".1" value="0"></label>
+ <div class="phoenixPrefabRow"><button id="btnPrefabApplyTransform" type="button">✅ Сохранить положение</button><button id="btnPrefabSnapGround" type="button">🌍 На высоту земли</button></div>
+ <label>Поведение этого моба<select id="phoenixEntityAI">
+ <option value="idle">Стоять</option><option value="patrol">Маршрут без боя</option>
+ <option value="chase">Агрессия, преследование, атака</option>
+ <option value="patrol-aggro">Маршрут + агрессия + атака</option>
+ <option value="guard">Охрана точки + атака</option></select></label>
+ <b>🧭 Маршрут по точкам (каждый моб отдельно)</b>
+ <label>Точки маршрута<select id="phoenixEntityWaypoints" size="3" aria-label="Точки патруля"></select></label>
+ <div class="phoenixPrefabRow"><label>X<input id="phoenixWaypointX" type="number" step=".01" value="0"></label><label>Y<input id="phoenixWaypointY" type="number" step=".01" value="0"></label><label>Z<input id="phoenixWaypointZ" type="number" step=".01" value="0"></label></div>
+ <div class="phoenixPrefabRow"><button id="btnPrefabWaypointTap" type="button">👆 Точка касанием сцены</button><button id="btnPrefabWaypointAdd" type="button">＋ Добавить XYZ</button><button id="btnPrefabWaypointRemove" type="button">− Удалить</button></div>
+ <small>Маршрут показывается линией в EDIT. Действия Idle, Walk и Attack переключаются автоматически по состоянию ИИ. В PLAY изменения положения не сохраняются.</small>
+ </details>
  <button type="button" id="btnPrefabRemoveEntity">🗑 Удалить со сцены</button>
  <small id="phoenixPrefabStatus" aria-live="polite">Создай шаблон, затем коснись места на сцене.</small>
  <small>«На сцене» считает только мобов, поставленных кнопкой «Поставить моба», а не обычные GLB Builder. В PLAY работают патруль, преследование, атаки и коррекция высоты ступней модели.</small>
