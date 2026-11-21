@@ -7,7 +7,7 @@
  if(root)root.PhoenixAI=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const BEHAVIORS=Object.freeze(['idle','patrol','chase']);
+ const BEHAVIORS=Object.freeze(['idle','patrol','chase','patrol-aggro','guard']);
  function number(v,min,max,name){
   if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)
    throw new TypeError('Invalid '+name);
@@ -22,7 +22,16 @@
   const aggroRadius=number(value.aggroRadius??7,0,50,'aggroRadius');
   const attackRange=number(value.attackRange??1.25,.3,8,'attackRange');
   const attackCooldown=number(value.attackCooldown??1.8,.35,30,'attackCooldown');
-  return {mode,patrolRadius,aggroRadius,attackRange,attackCooldown};
+  const attackDuration=number(value.attackDuration??.5,.15,8,'attackDuration');
+  const points=value.waypoints??[];
+  if(!Array.isArray(points)||points.length>32)throw new TypeError('Invalid AI waypoints');
+  const waypoints=points.map((point,i)=>{
+   if(!finite3(point)||point.some(n=>Math.abs(n)>100000))
+    throw new TypeError('Invalid AI waypoint '+i);
+   return point.slice();
+  });
+  return {mode,patrolRadius,aggroRadius,attackRange,attackCooldown,
+   attackDuration,waypoints};
  }
  function finite3(p){
   return Array.isArray(p)&&p.length===3&&p.every(n=>typeof n==='number'&&Number.isFinite(n));
@@ -50,31 +59,33 @@
   let mode='idle',move={dx:0,dz:0},attack=false,rotate=null;
   const enemy=faction==='enemy',playerDist=Math.hypot(player[0]-position[0],player[2]-position[2]);
   if(next.attackHold>0)mode='attack';
-  else if(profile.mode==='chase'&&enemy&&playerDist<=profile.aggroRadius){
+  else if(['chase','patrol-aggro','guard'].includes(profile.mode)&&
+   enemy&&playerDist<=profile.aggroRadius){
    if(playerDist<=profile.attackRange){
     mode='idle';
     rotate=Math.atan2(player[0]-position[0],player[2]-position[2]);
     if(next.cooldown<=0&&dt>0){
      mode='attack';attack=true;
      next.cooldown=profile.attackCooldown;
-     next.attackHold=.5;
+     next.attackHold=profile.attackDuration;
     }
    }else{
     mode='walk';
     move=toward(position,player,speed,dt,profile.attackRange*.85);
    }
-  }else if(profile.mode==='patrol'||profile.mode==='chase'){
+  }else if(['patrol','chase','patrol-aggro'].includes(profile.mode)){
    if(profile.mode==='chase'&&Math.hypot(position[0]-next.home[0],position[2]-next.home[2])<.4)
     mode='idle';
-   else if(profile.patrolRadius<.25)mode='idle';
+   else if(profile.patrolRadius<.25&&!profile.waypoints.length)mode='idle';
    else {
     const r=profile.patrolRadius,h=next.home;
-    const points=[[h[0]+r,h[1],h[2]],[h[0]+r,h[1],h[2]+r],
-     [h[0]-r,h[1],h[2]+r],[h[0]-r,h[1],h[2]-r]];
-    const goal=profile.mode==='chase'?h:points[((next.point%4)+4)%4];
+    const points=profile.waypoints.length?profile.waypoints:
+     [[h[0]+r,h[1],h[2]],[h[0]+r,h[1],h[2]+r],
+      [h[0]-r,h[1],h[2]+r],[h[0]-r,h[1],h[2]-r]];
+    const goal=profile.mode==='chase'?h:points[((next.point%points.length)+points.length)%points.length];
     move=toward(position,goal,speed,dt,.25);
-    if(move.dist<.28&&profile.mode==='patrol'){
-     next.point=(next.point+1)%4;
+    if(move.dist<.28&&profile.mode!=='chase'){
+     next.point=(next.point+1)%points.length;
      move=toward(position,points[next.point],speed,dt,.25);
     }
     if(Math.hypot(move.dx,move.dz)>1e-6)mode='walk';
