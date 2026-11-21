@@ -27,7 +27,12 @@ const names=['phoenixPrefabPanel','btnPhoenixPrefabs','btnPrefabClose',
  'phoenixPrefabDeath','phoenixPrefabCast','phoenixPrefabAI','phoenixPrefabPatrolRadius',
  'phoenixPrefabAggroRadius','phoenixPrefabAttackRange','phoenixPrefabCooldown','phoenixPrefabClipList',
  'phoenixPrefabClips','phoenixPrefabCounts','phoenixPrefabStatus',
- 'btnPrefabImportGlb','importUniversalModel','status'];
+ 'btnPrefabImportGlb','importUniversalModel','status',
+ 'btnPrefabApplyTransform','btnPrefabSnapGround','phoenixEntityAI',
+ 'phoenixEntityX','phoenixEntityY','phoenixEntityZ','phoenixEntityYaw',
+ 'phoenixEntityWaypoints','phoenixWaypointX','phoenixWaypointY',
+ 'phoenixWaypointZ','btnPrefabWaypointAdd','btnPrefabWaypointTap',
+ 'btnPrefabWaypointRemove','btnPrefabPreviewAttack'];
 const els=Object.fromEntries(names.map(id=>[id,new Element(id)]));
 els.phoenixPrefabName.value='Лесной волк';
 els.phoenixPrefabType.value='mob';
@@ -94,6 +99,37 @@ const Editor=require('../app/src/main/assets/engine/builder/prefab-editor.js');
 
  assert.equal(ed.hasContent(),true);
  assert.equal(ed.rendered.size,1);
+ // Both the exact placement and routes belong to each ENTITY, not to
+ // the shared wolf GLB/prefab. Edits must round-trip through ordinary JSON.
+ els.phoenixPrefabEntities.value=entity;ed.selectEntity();
+ els.phoenixEntityX.value='5.25';
+ els.phoenixEntityY.value='0.5';
+ els.phoenixEntityZ.value='7.75';
+ els.phoenixEntityYaw.value='90';
+ assert(ed.applyEntityTransform());
+ assert.deepEqual(ed.world.getComponent(entity,'transform').position,[5.25,.5,7.75]);
+ assert(Math.abs(ed.world.getComponent(entity,'transform').yaw-Math.PI/2)<1e-8);
+ els.phoenixEntityAI.value='patrol-aggro';
+ assert(ed.applyEntityAI());
+ els.phoenixWaypointX.value='8';els.phoenixWaypointY.value='.5';
+ els.phoenixWaypointZ.value='8';
+ assert(ed.addWaypoint());
+ els.phoenixWaypointX.value='10';els.phoenixWaypointZ.value='11';
+ assert(ed.addWaypoint());
+ const authoredAI=ed.world.getComponent(entity,'character').ai;
+ assert.equal(authoredAI.mode,'patrol-aggro');
+ assert.deepEqual(authoredAI.waypoints,[[8,.5,8],[10,.5,11]]);
+ assert.equal(ed.registry.get('prefab-1').ai.mode,'patrol',
+  'Editing a mob must not change the shared prefab template');
+ const second=await ed.createEntity('prefab-1',[12,0,17]);
+ assert.equal(ed.world.getComponent(second,'character').ai.mode,'chase',
+  'Fresh mob gets the template AI, not another mob\'s route');
+ assert.deepEqual(ed.world.getComponent(second,'character').ai.waypoints,[]);
+ els.phoenixPrefabEntities.value=second;
+ ed.removeSelectedEntity();
+ assert.equal(ed.world.entityIds().length,1);
+ els.phoenixPrefabEntities.value=entity;ed.selectEntity();
+
  const snapshot=ed.serialize();
  assert.equal(snapshot.version,1);
  assert.equal(snapshot.world.entities.length,1);
