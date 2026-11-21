@@ -78,7 +78,7 @@ assert.equal(elements.phoenixSkillLayer.hidden,true);
 editor.setPlaying(true);
 assert.equal(elements.phoenixSkillLayer.hidden,false);
 assert.equal(elements.btnPhoenixSlot3.hidden,false);
-assert.equal(elements.btnPhoenixSlot5.hidden,true);
+assert.equal(elements.btnPhoenixSlot5.hidden,false,'MOBA uses three skill slots');
 elements.btnPhoenixHeal.listeners.click();
 assert.equal(builder.playBridge.heals,1,'Heal slot must trigger PLAY action');
 editor.setPlaying(false);
