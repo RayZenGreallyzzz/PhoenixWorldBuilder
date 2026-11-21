@@ -180,6 +180,7 @@ class CleanBuilder{
   this.clock=new THREE.Clock();
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;this.avatarAttackUntil=0;
+  this.avatarBindings={};this.avatarPreviewName='';this.avatarPreviewUntil=0;
   this.setDefaultAvatar();
   this.keys=new Set();this.joy={x:0,y:0};this.pointerStart=null;this.lastFrame=0;
   this.bind();
@@ -234,7 +235,7 @@ class CleanBuilder{
   this.camera.aspect=b.width/b.height;this.camera.updateProjectionMatrix();
  }
  setDefaultAvatar(){
-  this.avatarAssetId='';this.avatarFileName='';this.avatarAttackClip='';
+  this.avatarAssetId='';this.avatarFileName='';this.avatarAttackClip='';this.avatarBindings={};this.avatarPreviewName='';this.avatarPreviewUntil=0;
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarRoot=null;this.avatarGroundY=0;this.avatarGroundTimer=0;
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
@@ -265,6 +266,76 @@ class CleanBuilder{
   this.player.updateMatrixWorld(true);
   return fit;
  }
+ fillAvatarAnimationChoices(wanted=this.avatarBindings||{}){
+  const clips=this.avatarClips||[];
+  const list=$('avatarPreviewClip');
+  const option=(value,title)=>{
+   const el=document.createElement('option');el.value=value;el.textContent=title;return el;
+  };
+  if(list){
+   const selected=clips.some(c=>c.name===list.value)?list.value:'';
+   list.replaceChildren(option('','— Выбери клип GLB —'));
+   for(const clip of clips)list.appendChild(option(clip.name,clip.name+
+    (Number.isFinite(clip.duration)?' · '+clip.duration.toFixed(1)+' с':'')));
+   list.value=selected||'';
+  }
+  this.avatarBindings={};
+  for(const input of document.querySelectorAll('[data-avatar-animation-state]')){
+   const state=input.dataset.avatarAnimationState;
+   input.replaceChildren(option('','Автоматически'));
+   for(const clip of clips)input.appendChild(option(clip.name,clip.name));
+   const chosen=typeof wanted[state]==='string'&&clips.some(x=>x.name===wanted[state])?
+    wanted[state]:'';
+   input.value=chosen;
+   if(chosen)this.avatarBindings[state]=chosen;
+  }
+  const status=$('avatarClipStatus');
+  if(status)status.textContent=clips.length?
+   '🎞 В файле '+clips.length+' анимаций. Выбери любую для Idle, Walk, Attack и других действий.':
+   'В персонаже нет анимаций GLB. Для движений нужен анимированный файл.';
+ }
+ previewAvatarClip(name){
+  if(this.playBridge?.active)return false;
+  const clip=this.avatarClips?.find(c=>c.name===name);
+  const action=clip&&this.avatarActions?.[name];
+  if(!action||!this.avatarMixer)return false;
+  for(const other of Object.values(this.avatarActions))
+   if(other!==action&&other.isRunning?.())other.fadeOut(.12);
+  action.stopFading?.();action.reset();action.enabled=true;action.paused=false;
+  action.clampWhenFinished=false;action.setLoop(THREE.LoopOnce,1);
+  action.fadeIn(.12).play();
+  this.avatarPreviewName=name;
+  this.avatarPreviewUntil=performance.now()+Math.min(30000,
+   Math.max(700,(clip.duration||1)*1000+300));
+  const status=$('avatarClipStatus');
+  if(status)status.textContent='▶ Воспроизвожу: '+name;
+  return true;
+ }
+ autoBindAvatarClips(){
+  if(!this.avatarClips?.length)return false;
+  const patterns={
+   idle:/idle|stand|rest|breath|покой/i,
+   walk:/walk|move|ходьб|шаг/i,
+   run:/run|sprint|бег/i,
+   attack:/attack|strike|melee|удар|атак/i,
+   hit:/hit|hurt|damage|react|боль/i,
+   death:/death|die|dead|смерт/i,
+   cast:/cast|spell|magic|заклин/i
+  };
+  const bindings={};
+  for(const [state,pattern] of Object.entries(patterns)){
+   const clip=this.avatarClips.find(c=>pattern.test(c.name));
+   if(clip)bindings[state]=clip.name;
+  }
+  this.fillAvatarAnimationChoices(bindings);
+  this.avatarAttackClip=this.avatarBindings.attack||'';
+  this.fillAvatarAttackClips(this.avatarAttackClip);
+  if(this.avatarAssetId)this.markProjectDirty();
+  if($('avatarClipStatus'))$('avatarClipStatus').textContent=
+   '✨ Назначено '+Object.keys(this.avatarBindings).length+
+   ' из 7 действий. Все клипы можно переназначить вручную.';
+  return true;
+ }
  fillAvatarAttackClips(wanted=this.avatarAttackClip||''){
   const select=$('avatarAttackClip');if(!select)return;
   select.replaceChildren();
@@ -277,6 +348,7 @@ class CleanBuilder{
   const exact=this.avatarClips?.find(c=>c.name===wanted);
   this.avatarAttackClip=exact?exact.name:'';
   select.value=this.avatarAttackClip;
+  this.fillAvatarAnimationChoices(this.avatarBindings||{});
  }
  async importAvatar(file,{storedId='',restore=false}={}){
   if(!file)return false;
@@ -293,7 +365,11 @@ class CleanBuilder{
    // code measured the inactive bind pose before starting the idle clip.
    // First evaluate the actual idle pose, then measure its skinned vertices.
    this.avatarClips=scene.animations||[];
+   if(!restore)this.avatarBindings={};
    this.fillAvatarAttackClips(restore?this.avatarAttackClip:'');
+   if(this.avatarAttackClip&&!this.avatarBindings.attack)
+    this.avatarBindings.attack=this.avatarAttackClip;
+   this.fillAvatarAnimationChoices(this.avatarBindings);
    this.avatarMixer=this.avatarClips.length?new THREE.AnimationMixer(root):null;
    this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
    if(this.avatarMixer){
@@ -349,8 +425,13 @@ class CleanBuilder{
    throw Error('Некорректная ссылка на GLB персонажа');
   this.applyAvatarHeight(doc.heightCm??175);
   this.avatarAttackClip=typeof doc.attackClip==='string'?doc.attackClip:'';
+  this.avatarBindings=doc.animationBindings&&typeof doc.animationBindings==='object'&&
+   !Array.isArray(doc.animationBindings)?{...doc.animationBindings}:{};
+  if(this.avatarAttackClip&&!this.avatarBindings.attack)
+   this.avatarBindings.attack=this.avatarAttackClip;
   if(this.avatarAssetId===doc.assetId&&this.avatarRoot){
    this.fillAvatarAttackClips(this.avatarAttackClip);
+   this.fillAvatarAnimationChoices(this.avatarBindings);
    return true;
   }
   const buffer=await getAsset(doc.assetId);
@@ -4331,7 +4412,8 @@ class CleanBuilder{
     phoenixGame:this.prefabEditor?.serialize()||null,
     avatar:this.avatarAssetId?{
      assetId:this.avatarAssetId,fileName:this.avatarFileName||'Player.glb',
-     heightCm:this.avatarHeightCm,attackClip:this.avatarAttackClip||''
+     heightCm:this.avatarHeightCm,attackClip:this.avatarBindings.attack||this.avatarAttackClip||'',
+     animationBindings:{...this.avatarBindings}
     }:null,
     worldCanvas:this.worldEditor?.serialize()||null,
     decals:SurfaceDecals.normalize(this.decals),
@@ -4681,7 +4763,8 @@ class CleanBuilder{
  playAttackAnimation(){
   // Existing imported avatar clips only: no retargeter and no new mixer.
   if(!this.avatarMixer||!this.avatarClips.length)return false;
-  const clip=this.avatarClips.find(c=>c.name===this.avatarAttackClip)||
+  const clip=this.avatarClips.find(c=>c.name===this.avatarBindings?.attack)||
+   this.avatarClips.find(c=>c.name===this.avatarAttackClip)||
    this.avatarClips.find(c=>/attack|strike|melee|удар|атак/i.test(c.name));
   if(!clip)return false;
   const action=this.avatarActions[clip.name];if(!action)return false;
@@ -4712,18 +4795,24 @@ class CleanBuilder{
  }
  setAvatarAnimation(moving){
   if(this.playBridge?.active&&this.prefabEditor?.combat?.isPlayerDead())return;
+  if(!this.playBridge?.active&&this.avatarPreviewUntil>performance.now()){
+   const action=this.avatarActions?.[this.avatarPreviewName];
+   if(action?.isRunning?.())return;
+  }
   if(this.playBridge?.active&&this.avatarAttackUntil>performance.now()){
    // One-shot ATTACK may finish before its display timer. If its action is
    // already stopped, immediately restore locomotion instead of leaving
    // the avatar without any skinned pose until the joystick is released.
-   const clip=this.avatarClips.find(c=>c.name===this.avatarAttackClip)||
+   const clip=this.avatarClips.find(c=>c.name===this.avatarBindings?.attack)||
+    this.avatarClips.find(c=>c.name===this.avatarAttackClip)||
     this.avatarClips.find(c=>/attack|strike|melee|удар|атак/i.test(c.name));
    const attack=clip&&this.avatarActions[clip.name];
    if(attack?.isRunning()&&(attack.getEffectiveWeight?.()??1)>.0001)return;
   }
   if(!this.avatarMixer||!this.avatarClips.length)return;
   const result=PhoenixAvatarMotion.reconcile(
-   this.avatarClips,this.avatarActions,this.avatarState,!!moving,THREE,.18);
+   this.avatarClips,this.avatarActions,this.avatarState,!!moving,THREE,.18,
+   this.avatarBindings);
   if(result.updated){
    this.avatarState=result.state;
    if(result.recovered){
@@ -4870,7 +4959,32 @@ class CleanBuilder{
   $('avatarAttackClip').onchange=e=>{
    const name=e.target.value;
    this.avatarAttackClip=this.avatarClips.some(c=>c.name===name)?name:'';
+   this.avatarBindings.attack=this.avatarAttackClip;
+   this.fillAvatarAnimationChoices(this.avatarBindings);
    if(this.avatarAssetId)this.markProjectDirty();
+  };
+  for(const input of document.querySelectorAll('[data-avatar-animation-state]')){
+   input.onchange=e=>{
+    const state=e.target.dataset.avatarAnimationState;
+    const name=e.target.value;
+    if(this.avatarClips.some(c=>c.name===name))this.avatarBindings[state]=name;
+    else delete this.avatarBindings[state];
+    if(state==='attack'){
+     this.avatarAttackClip=this.avatarBindings.attack||'';
+     $('avatarAttackClip').value=this.avatarAttackClip;
+    }
+    if(this.avatarAssetId)this.markProjectDirty();
+    if($('avatarClipStatus'))$('avatarClipStatus').textContent=
+     '✅ Назначена анимация '+state+': '+(name||'автоматически')+
+     '. Для записи проекта нажми верхнюю 💾 Сохранить.';
+   };
+  }
+  $('btnAvatarPreviewClip').onclick=()=>{
+   const name=$('avatarPreviewClip')?.value;
+   if(!this.previewAvatarClip(name))notify('Выбери клип GLB для просмотра','warn');
+  };
+  $('btnAvatarAutoAnimations').onclick=()=>{
+   if(!this.autoBindAvatarClips())notify('В GLB нет анимаций для назначения','warn');
   };
   $('enableCollisions').onchange=e=>{
    this.collisionsEnabled=e.target.checked;
