@@ -11,8 +11,17 @@
  'use strict';
  const WALK=/walk|move|run|ход|бег/i;
  const IDLE=/idle|stand|rest|breath|покой/i;
- function choose(clips,moving){
+ function choose(clips,moving,bindings={}){
   if(!Array.isArray(clips)||!clips.length)return null;
+  const selected=bindings?.[moving?'walk':'idle'];
+  if(typeof selected==='string'&&selected){
+   const explicit=clips.find(clip=>clip.name===selected);
+   if(explicit)return explicit;
+  }
+  if(moving&&typeof bindings?.run==='string'&&bindings.run){
+   const run=clips.find(clip=>clip.name===bindings.run);
+   if(run)return run;
+  }
   // Prefer a proper looping locomotion clip. Never use a one-shot Attack
   // as a locomotion fallback when an Idle/Walk alternative exists.
   return (moving?clips.find(c=>WALK.test(c.name)):
@@ -22,9 +31,9 @@
    clips.find(c=>!/(attack|hit|death|die|cast)/i.test(c.name))||
    clips[0];
  }
- function reconcile(clips,actions,currentState,moving,T,fade=.18){
+ function reconcile(clips,actions,currentState,moving,T,fade=.18,bindings={}){
   const state=moving?'walk':'idle';
-  const clip=choose(clips,moving);
+  const clip=choose(clips,moving,bindings);
   const action=clip&&actions?.[clip.name];
   if(!action||!T)return {state:currentState,updated:false,recovered:false};
   const running=!!action.isRunning?.();
@@ -32,7 +41,10 @@
   const lost=!running||action.enabled===false||action.paused===true||
    !Number.isFinite(weight)||weight<=.0001;
   const nonLoop=action.loop!==T.LoopRepeat||action.clampWhenFinished===true;
-  const changed=state!==currentState;
+  // Rebinding the same movement state must swap clips as well.
+  const changed=state!==currentState||!running||
+   (actions&&Object.entries(actions).some(([key,a])=>key!==clip.name&&
+    a?.isRunning?.()&&(a.getEffectiveWeight?.()??0)>.5));
   if(!lost&&!nonLoop&&!changed)
    return {state,updated:false,recovered:false,clip:clip.name};
   let hasOther=false;
