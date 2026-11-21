@@ -60,9 +60,15 @@ export class PhoenixRoomObject extends DurableObject{
   const id=request.headers.get('X-Phoenix-World-Id')||'main';
   if(!validRoom(id))return respond({error:'Invalid world ID'},400);
   if(this.room.world.worldId!==id){
-   // Durable Object name is stable; on first use, adopt the requested room ID.
+   // Persist the room ID even for guest-only rooms. On hibernation Cloudflare
+   // reconstructs the object and existing connections from stored metadata.
    if(this.room.count())return respond({error:'Wrong room'},409);
-   this.room=new PhoenixRoom({world:blankWorld(id),
+   const existing=await this.ctx.storage.get('world');
+   if(existing&&existing.worldId!==id)
+    return respond({error:'Stored world ID mismatch'},409);
+   const created=blankWorld(id);
+   await this.ctx.storage.put('world',created);
+   this.room=new PhoenixRoom({world:created,
     maxPlayers:Number(this.env.PHOENIX_MAX_PLAYERS||16),
     nextId:()=>crypto.randomUUID()});
   }
@@ -87,8 +93,9 @@ export class PhoenixRoomObject extends DurableObject{
      return respond({error:'Manifest too large'},413);
     const world=validateWorld(JSON.parse(raw));
     if(world.worldId!==id)return respond({error:'World ID mismatch'},400);
-    this.room.replaceWorld(world);
+    // Commit the persistent revision before exposing it to any new joiner.
     await this.ctx.storage.put('world',world);
+    this.room.replaceWorld(world);
     return respond({ok:true,world:this.room.worldInfo()});
    }catch(error){return respond({error:error.message||'Invalid world'},400)}
   }
