@@ -81,6 +81,7 @@ jobs:
           node tests/test-phoenix-mob-nametags.cjs
             node tests/test-character-mob-save.cjs
             node tests/test-prefab-wiring.cjs
+          node tests/test-manual-project-save.cjs
             node tests/test-phoenix-ai.cjs
             node tests/test-phoenix-animations.cjs
             node tests/test-phoenix-combat.cjs
