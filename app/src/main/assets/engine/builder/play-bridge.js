@@ -88,6 +88,7 @@
    };
    try {
     b.prefabEditor?.close();
+    b.worldEditor?.close();
     b.keys.clear();
     if (b.joystick) b.joystick.reset();
     this.saved = saved;
