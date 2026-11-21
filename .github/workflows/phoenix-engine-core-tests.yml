@@ -16,6 +16,9 @@ on:
       - 'tests/test-play-wiring.cjs'
       - 'tests/test-prefab-core.cjs'
       - 'tests/test-prefab-editor.cjs'
+      - 'tests/test-mob-features.cjs'
+      - 'app/src/main/assets/engine/core/phoenix-mob-features.js'
+      - 'app/src/main/assets/engine/runtime/phoenix-vfx.js'
       - 'tests/test-character-mob-save.cjs'
       - 'tests/test-prefab-wiring.cjs'
       - 'tests/test-phoenix-ai.cjs'
@@ -72,6 +75,8 @@ jobs:
           node --check app/src/main/assets/js/avatar-motion.js
           node --check app/src/main/assets/js/placement-ghost.js
           node --check app/src/main/assets/js/clean-app.js
+          node --check app/src/main/assets/engine/core/phoenix-mob-features.js
+          node --check app/src/main/assets/engine/runtime/phoenix-vfx.js
           node --check app/src/main/assets/engine/core/phoenix-terrain-splat.js
           node --check app/src/main/assets/engine/core/phoenix-world-layout.js
           node --check app/src/main/assets/engine/builder/phoenix-world-editor.js
@@ -83,6 +88,7 @@ jobs:
           node tests/test-play-wiring.cjs
           node tests/test-prefab-core.cjs
           node tests/test-prefab-editor.cjs
+          node tests/test-mob-features.cjs
           node tests/test-character-mob-save.cjs
           node tests/test-prefab-wiring.cjs
           node tests/test-phoenix-ai.cjs
