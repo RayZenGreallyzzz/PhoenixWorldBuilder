@@ -12,10 +12,11 @@ const source=[
 "const app=window.PhoenixClean;",
 "if(!app||document.body.dataset.cleanReady!=='true')throw Error('Editor init failed');",
 "const count=app.entries.length;",
-"app.setMode('drone');if(!app.preview.root.visible)throw Error('Drone missing preview');",
-"app.place();if(app.entries.length!==count+1)throw Error('Drone cannot place');",
-"app.setMode('character');if(!app.preview.root.visible)throw Error('Avatar missing preview');",
-"app.place();if(app.entries.length!==count+2)throw Error('Avatar cannot place');",
+"if(app.preview)throw Error('Startup must not auto-select a construction wall');",
+"app.setMode('drone');if(app.preview?.root.visible)throw Error('Drone should not show a building preview');",
+"app.place();if(app.entries.length!==count)throw Error('Drone must not spawn default walls');",
+"app.setMode('character');if(app.preview?.root.visible)throw Error('Characters should not show a building preview');",
+"app.place();if(app.entries.length!==count)throw Error('Character mode must not spawn walls');",
 "app.setMode('build');",
 "const wall=app.createEntry('wall',{position:[8,0,0]});app.entries.push(wall);app.scene.add(wall.root);",
 "const decor=new THREE.Group();decor.add(new THREE.Mesh(new THREE.BoxGeometry(.8,.6,.08),new THREE.MeshStandardMaterial()));",
@@ -54,4 +55,4 @@ if(!(r.stdout||'').includes('data-interaction-smoke="ok"')){
  const error=(r.stdout||'').match(/data-interaction-smoke="([^"]*)"/)?.[1]||'unknown';
  console.error('Interaction failure:',error,(r.stderr||'').slice(-1000));process.exit(1);
 }
-console.log('Chrome UI: build in drone/character, mount decor, bend/trim GLB and restore scene OK');
+console.log('Chrome UI: neutral shared canvas, isolated character/drone modes, selected construction, edit GLB and restore OK');
