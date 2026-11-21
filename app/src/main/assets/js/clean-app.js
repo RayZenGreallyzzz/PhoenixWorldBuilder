@@ -206,11 +206,14 @@ class CleanBuilder{
   this.skillDefinitionEditor=new PhoenixSkillDefinitionEditor(this);
   this.worldEditor=new PhoenixWorldEditor(this);
   this.progressionEditor=new PhoenixProgressionEditor(this);
+  if(typeof PhoenixNetworkEditor!=='undefined')
+   this.networkEditor=new PhoenixNetworkEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
   this.animate=now=>{requestAnimationFrame(this.animate);
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
-   this.updatePlayer(dt);this.prefabEditor?.update(dt);this.playBridge?.update(dt);this.controls.update();
+   this.updatePlayer(dt);this.prefabEditor?.update(dt);this.playBridge?.update(dt);
+   this.networkEditor?.update(dt);this.controls.update();
    if(!this.playBridge?.active)this.gizmo.update();
    if(this.previewOutline&&this.previewOutline.visible)this.previewOutline.update();
    this.renderer.render(this.scene,this.camera);
