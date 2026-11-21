@@ -76,7 +76,24 @@
    return true;
   }
   setState(state,fade=.18){
-   if(this.state===state)return false;
+   if(this.state===state){
+    // A finished/disabled Walk or Idle GLB action may stay as the current
+    // state while rendering a bind pose. Reconcile it without restarting
+    // valid running clips every frame.
+    const loop=['idle','walk','run'].includes(state);
+    const action=this.action;
+    if(!loop||!this.mixer)return false;
+    const missing=!action||action.enabled===false||action.paused===true||
+     (typeof action.isRunning==='function'&&!action.isRunning())||
+     (typeof action.getEffectiveWeight==='function'&&
+      action.getEffectiveWeight()<=.0001);
+    if(!missing)return false;
+    const clip=this.resolve(state);
+    if(!clip)return false;
+    action?.stopFading?.();
+    return this.playClip(this.clips.indexOf(clip),
+     {state,once:false,fade:0});
+   }
    const clip=this.resolve(state);
    const previous=this.action;
    if(!clip||!this.mixer){
