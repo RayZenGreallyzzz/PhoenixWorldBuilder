@@ -258,20 +258,75 @@
    }
   }
   attach(id,render,transform){
-   render.root.name='phoenix:'+id;
-   render.root.userData.phoenixEntityId=id;
-   render.root.position.fromArray(transform.position);
-   render.root.rotation.y=transform.yaw||0;
+   // The GLB origin is often at the hips instead of the soles. Keep the
+   // gameplay root (AI/collision/saved coordinates) independent of GLB
+   // animation, and ground only its visual child, without modifying bones.
+   const visual=render.root;
+   const mover=new THREE.Group();
+   const anchor=new THREE.Group();
+   mover.name='phoenix:'+id;
+   mover.userData.phoenixEntityId=id;
+   anchor.name='phoenix:feet-anchor';
+   mover.add(anchor);anchor.add(visual);
+   render.root=mover;render.visual=visual;render.anchor=anchor;
+   render.groundElapsed=0;render.groundTarget=0;
+   mover.position.fromArray(transform.position);
+   mover.rotation.y=transform.yaw||0;
    render.accum=0;
    render.aiState=PhoenixAI.initial(transform.position);
-   this.layer.add(render.root);this.rendered.set(id,render);
-   if(this.playing)this.startAnimation(id,render);
+   this.layer.add(mover);this.rendered.set(id,render);
+   // Use actual skin-deformed vertices, not Box3 bind-pose bounding boxes.
+   // This fixes characters spawning knee/waist deep in the ground.
+   this.groundVisual(render,0,true);
+   if(this.playing){
+    this.startAnimation(id,render);
+    this.groundVisual(render,0,true);
+   }
+  }
+  groundVisual(render,dt=0,instant=false){
+   if(!render.visual||!render.anchor)return;
+   render.groundElapsed=(render.groundElapsed||0)+
+    (Number.isFinite(dt)?Math.max(0,Math.min(dt,.25)):0);
+   // Sampling deformed skinned vertices every frame is too costly on Android.
+   // A small sampled pose every ~0.35s is enough; interpolate each frame.
+   if(instant||render.groundElapsed>=.35){
+    render.groundElapsed=0;
+    try{
+     if(typeof AvatarFit!=='undefined'&&AvatarFit?.measure){
+      const bounds=AvatarFit.measure(render.visual,render.anchor,1500);
+      if(Number.isFinite(bounds.min.y)&&Math.abs(bounds.min.y)<=10000)
+       render.groundTarget=-bounds.min.y*render.anchor.scale.y;
+     }else{
+      const box=new THREE.Box3().setFromObject(render.visual);
+      if(!box.isEmpty()){
+       const base=render.anchor.getWorldPosition(new THREE.Vector3()).y;
+       // Approximate in world coordinates when AvatarFit is not available.
+       render.groundTarget=render.anchor.position.y+(base-box.min.y);
+      }
+     }
+    }catch(error){
+     // Broken meshes must not interrupt AI or combat on Android.
+     if(!render.groundErrorReported){
+      console.warn('Phoenix mob grounding fallback:',error);
+      render.groundErrorReported=true;
+     }
+    }
+   }
+   if(Number.isFinite(render.groundTarget)){
+    const dy=render.groundTarget-render.anchor.position.y;
+    if(instant)render.anchor.position.y=render.groundTarget;
+    else if(Math.abs(dy)>.0001)
+     render.anchor.position.y+=dy*
+      (1-Math.exp(-10*Math.max(0,Math.min(.12,dt))));
+   }
   }
   startAnimation(id,render){
    const prefabId=this.world.getComponent(id,'prefab')?.id;
    const p=this.registry.get(prefabId);
-   render.animation=new PhoenixAnimations.Controller(render.root,render.clips||[],
-    p?.animations||{},THREE);
+   // Mixer must drive the imported GLB, NEVER the AI's mover transform.
+   // Otherwise an Attack root-motion track may sink the entire NPC.
+   render.animation=new PhoenixAnimations.Controller(render.visual||render.root,
+    render.clips||[],p?.animations||{},THREE);
    render.animation.setState('idle');
   }
   setPlaying(yes){
@@ -287,6 +342,7 @@
     render.accum=0;render.hitHold=0;
     render.root.userData.phoenixDead=false;
     if(this.playing)this.startAnimation(id,render);
+    this.groundVisual(render,0,true);
    }
    this.combat.reset(this.playing?[...this.rendered.keys()].map(id=>{
     const stats=this.world.getComponent(id,'stats')||{hp:100};
@@ -301,6 +357,8 @@
    if(!this.playing||!Number.isFinite(dt)||dt<=0)return;
    for(const [id,render] of this.rendered){
     render.animation?.update(dt);
+    // Fix animated root/bone vertical drift without changing NPC position.
+    this.groundVisual(render,dt);
     if(this.combat.isDead(id))continue;
     if(render.hitHold>0){
      render.hitHold=Math.max(0,render.hitHold-dt);
