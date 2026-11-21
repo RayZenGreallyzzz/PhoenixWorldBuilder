@@ -2,6 +2,9 @@ name: Phoenix Engine Core checks
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - phoenix-engine-0.1
   push:
     branches:
       - phoenix-engine-0.1
@@ -68,6 +71,8 @@ jobs:
           node --check app/src/main/assets/engine/core/phoenix-ai.js
           node --check app/src/main/assets/engine/core/phoenix-combat.js
           node --check app/src/main/assets/engine/core/phoenix-skill-layout.js
+          node --check app/src/main/assets/engine/core/phoenix-events.js
+          node --check app/src/main/assets/engine/core/phoenix-quests.js
           node --check app/src/main/assets/engine/core/phoenix-skill-images.js
           node --check app/src/main/assets/engine/core/phoenix-weapon.js
           node --check app/src/main/assets/engine/core/phoenix-skills.js
