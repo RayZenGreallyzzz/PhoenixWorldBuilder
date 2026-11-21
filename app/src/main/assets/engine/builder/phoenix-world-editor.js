@@ -183,6 +183,7 @@
    }
    if(Number.isFinite(savedRadius)&&savedRadius>=1&&savedRadius<=150)
     this.setTextureBrushRadius(savedRadius,false);
+   else this.setTextureBrushRadius(this.textureBrushRadius(),false);
    this.el('worldTextureScale')?.addEventListener('change',e=>{
     const next=Number(e.target.value);
     if(!Number.isFinite(next)||next<1||next>32||
