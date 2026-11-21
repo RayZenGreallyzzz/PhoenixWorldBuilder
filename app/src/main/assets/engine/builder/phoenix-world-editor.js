@@ -92,6 +92,15 @@
    this.el('worldTileStyle')?.addEventListener('change',e=>{
     this.currentStyle=e.target.value;
    });
+   this.el('worldTextureScale')?.addEventListener('change',e=>{
+    const next=Number(e.target.value);
+    if(!Number.isFinite(next)||next<1||next>32||
+       this.state.textureScale===next)return;
+    this.b.recordEdit?.();
+    this.state.textureScale=next;
+    this.setTextureScale(next);
+    this.b.save?.();
+   });
    for(const [id,display] of [['worldBrushRadius','worldBrushRadiusValue'],
     ['worldBrushPower','worldBrushPowerValue'],
     ['worldTextureSoftness','worldTextureSoftnessValue'],
@@ -134,6 +143,8 @@
     String(s.tileSize):'custom';
    const style=this.el('worldTileStyle');
    if(style)style.value=this.currentStyle;
+   const tileScale=this.el('worldTextureScale');
+   if(tileScale)tileScale.value=String(s.textureScale||4);
    const grid=this.el('btnWorldGrid');
    if(grid){
     grid.textContent=this.gridVisible?'▦ СЕТКА: ВКЛ':'▦ СЕТКА: ВЫКЛ';
@@ -506,7 +517,7 @@
    return geo;
   }
   materialForTexture(id,rect,maskTexture){
-   const tileMetres=Number(this.el('worldTextureScale')?.value||4);
+   const tileMetres=this.state.textureScale||4;
    const texture=this.textureMaps.get(id);
    const material=new THREE.MeshBasicMaterial({
     map:texture,alphaMap:maskTexture,
