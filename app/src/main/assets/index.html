@@ -151,6 +151,21 @@
 <section id="phoenixSkillDefinitions" class="phoenixSkillEditor" hidden role="region" aria-label="Редактор способностей персонажей">
  <div class="phoenixSkillTitle"><b>🧙 Редактор навыков персонажей</b><button id="btnSkillDefClose" type="button">✕</button></div>
  <small>Редактируй способности игрока или любого сохранённого моба/NPC. Характеристики сохраняются в JSON проекта.</small>
+ <details id="phoenixPlayerCombatPanel" class="rowSection" open>
+  <summary>🧍⚔ Настройка героя · ближний / дальний бой</summary>
+  <small>Настройки основного удара игрока, не строительных моделей. Для отдельных навыков используй слоты ниже.</small>
+  <label>Стиль обычной атаки<select id="phoenixPlayerCombatMode"><option value="melee">⚔ Ближний бой (меч, кулаки)</option><option value="ranged">🏹 Дальний бой (лук, стрелок)</option></select></label>
+  <button id="btnPlayerCombatPreset" type="button">✨ Заполнить параметры выбранного стиля</button>
+  <div class="phoenixSkillRow"><label>❤️ HP героя<input id="phoenixPlayerCombatHP" type="number" min="1" max="1000000" step="1" value="100"></label>
+   <label>⚔ Урон обычной атаки<input id="phoenixPlayerCombatDamage" type="number" min="0" max="1000000" step="1" value="25"></label></div>
+  <div class="phoenixSkillRow"><label>🎯 Дальность, м<input id="phoenixPlayerCombatRange" type="number" min=".3" max="100" step=".1" value="2.7"></label>
+   <label>⏱ Задержка между атаками, сек<input id="phoenixPlayerCombatCooldown" type="number" min=".06" max="10" step=".01" value=".65"></label></div>
+  <div class="phoenixSkillRow"><label>🏹 Патронов/стрел в магазине<input id="phoenixPlayerCombatMagazineSize" type="number" min="1" max="200" step="1" value="12"></label>
+   <label>🎒 Запас боеприпасов<input id="phoenixPlayerCombatReserveCapacity" type="number" min="0" max="2000" step="1" value="48"></label></div>
+  <label>🔄 Время перезарядки, сек<input id="phoenixPlayerCombatReloadDuration" type="number" min=".1" max="20" step=".1" value="1.4"></label>
+  <button id="btnPlayerCombatApply" type="button">✅ Применить настройки героя</button>
+  <small id="phoenixPlayerCombatStatus" aria-live="polite">В ближнем бою кнопка ⚔ наносит удар рядом. В дальнем — использует прицел, запас боеприпасов и дистанцию. Чтобы записать изменения на устройство, нажми верхнюю 💾 Сохранить.</small>
+ </details>
  <label>Персонаж<select id="skillDefCharacter"><option value="player">🧍 Игрок / мой герой</option></select></label>
  <label>Игровая кнопка / слот<select id="skillDefSlot">
   <option value="slot3">✨ Умение 1</option><option value="slot4">🌀 Умение 2</option>
@@ -989,6 +1004,7 @@
 <script src="engine/core/phoenix-quests.js"></script>
 <script src="engine/core/phoenix-ai.js"></script>
 <script src="engine/core/phoenix-combat.js"></script>
+<script src="engine/core/phoenix-player-combat.js"></script>
 <script src="engine/core/phoenix-weapon.js"></script>
 <script src="engine/core/phoenix-skill-images.js"></script>
 <script src="engine/runtime/phoenix-vfx.js"></script>
