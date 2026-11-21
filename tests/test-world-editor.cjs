@@ -30,6 +30,7 @@ const ids=[
  'btnWorldOpenTextures','btnWorldImportTexture','worldTextureScale',
  'worldTextureScaleValue','worldTextureOpacity','worldTextureOpacityValue',
  'worldTextureSoftness','worldTextureSoftnessValue','textureCategoryFilter',
+ 'worldTextureRadius','worldTextureRadiusValue',
  'importLandscapeTexture',
  'worldBrushRadius','worldBrushPower','worldBrushRadiusValue',
  'worldBrushPowerValue','smartCategoryFilter','btnCatalogLandscape'
@@ -44,6 +45,7 @@ elements.worldTileStyle.value='grass';
 elements.worldTextureScale.value='4';
 elements.worldTextureOpacity.value='100';
 elements.worldTextureSoftness.value='65';
+elements.worldTextureRadius.value='10';
 const canvas={captured:new Set(),setPointerCapture(id){this.captured.add(id)},
  hasPointerCapture(id){return this.captured.has(id)},
  releasePointerCapture(id){this.captured.delete(id)}};
@@ -237,6 +239,48 @@ assert.equal(editor.serialize().textureScale,8,
 assert.equal(editor.usesTexture(imageId),true);
 assert.equal(editor.releaseTexture(imageId),false,
  'A painting in the project protects its source image from accidental deletion');
+// Texture paint size is INDEPENDENT from the separate terrain-mountain radius.
+editor.startTexturePaint(false);
+elements.worldBrushRadius.value='125';
+assert.equal(editor.setTextureBrushRadius(2,false),2);
+assert.equal(elements.worldTextureRadiusValue.textContent,
+ '2 м радиус · 4 м диаметр');
+assert.equal(editor.currentBrushRadius(),2);
+assert.equal(elements.worldBrushRadius.value,'125',
+ 'Changing texture brush must never alter the sculpt-mountain brush');
+const previousPaint=editor.painter.paint;
+let paintedRadius=NaN;
+editor.painter.paint=(x,z,radius)=>{paintedRadius=radius;return []};
+assert.equal(editor.paintTextureAt(12,12),false);
+assert.equal(paintedRadius,2,
+ 'Actual texture splat painter must use its own selected brush size');
+assert.equal(editor.setTextureBrushRadius(50,false),50);
+editor.paintTextureAt(12,12);
+assert.equal(paintedRadius,50,'Changing slider changes real texture brush radius');
+editor.painter.paint=previousPaint;
+assert.equal(editor.showBrushIndicator(0,0),true);
+assert.equal(editor.brushIndicator.visible,true);
+const ring=editor.brushIndicator.geometry.getAttribute('position');
+assert(ring.count>=64*6);
+const ringPoint=(index=0)=>Math.hypot(ring.getX(index),ring.getZ(index));
+assert(Math.abs(ringPoint()-50)<2,
+ 'Visible brush ring radius must match selected size in metres');
+assert.equal(editor.setTextureBrushRadius(5,false),5);
+assert(Math.abs(ringPoint()-5)<1,'Ring must resize immediately when brush slider changes');
+input('pointermove',404,20,25);
+assert.equal(editor.brushIndicator.visible,true,'Move pointer shows terrain brush outline');
+assert(Math.abs(ring.getX(0)-25)<6,
+ 'Outline follows pointer across the actual terrain');
+input('pointerdown',405,0,0);
+assert(editor.brushIndicator.visible,'Touch-down shows live brush boundary');
+input('pointerup',405,0,0);
+assert.equal(editor.brushIndicator.visible,false,'Release hides the interactive brush preview');
+editor.stopPainting();
+assert.equal(editor.brushIndicator.visible,false);
+editor.startSculpt('raise');
+assert.equal(editor.currentBrushRadius(),125,
+ 'Mountain sculpt radius is still separate from terrain texture radius');
+editor.stopPainting();
 // Old UV44 documents without worldCanvas are migrated to original size.
 editor.loadFromProject(null);
 assert.equal(editor.state.width,128);
