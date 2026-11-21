@@ -1448,6 +1448,12 @@ class CleanBuilder{
  }
  applySurfaceTo(obj){
   if(!obj)return Promise.resolve(false);
+  // The placement ghost must never be painted with an opaque material.
+  // Texture overrides belong only to committed scene entries.
+  if(obj===this.preview){
+   this.applyPreviewGhost(obj);
+   return Promise.resolve(true);
+  }
   const root=obj.root,settings=SurfaceMaterials.normalize(obj.surface);
   const sides=SurfaceMaterials.normalizeSides(obj.surfaceSides);
   const parts=bundledModules.has(obj.kind)?SurfaceMaterials.normalizeParts(obj.surfaceParts):{};
@@ -2248,6 +2254,12 @@ class CleanBuilder{
    ArchitectureKit.setDoorAngle(obj.root,obj.doorAngle||0);
   obj.root.updateMatrixWorld(true);
  }
+ applyPreviewGhost(obj=this.preview){
+  if(!obj?.root)return;
+  PhoenixPlacementGhost.style(obj.root,THREE);
+  // Draw cyan contour LAST, above terrain and the translucent mesh.
+  if(this.previewOutline)this.previewOutline.renderOrder=960;
+ }
  disposePreview(){
   if(this.previewOutline){
    this.previewOutline.removeFromParent();
@@ -2271,17 +2283,15 @@ class CleanBuilder{
    this.wallChainManual=false;
   }
   this.scene.add(this.preview.root);
-  // Always show a high-contrast cyan outline over the pale floor grid.
+  // Cyan x-ray preview stays distinguishable even when the camera or
+  // module is below a large flat terrain tile. Real installed meshes keep
+  // their normal opaque/material depth-test behaviour.
   this.previewOutline=new THREE.BoxHelper(this.preview.root,0x4efcff);
   this.previewOutline.material.depthTest=false;
-  this.previewOutline.renderOrder=900;
+  this.previewOutline.material.depthWrite=false;
+  this.previewOutline.renderOrder=960;
   this.scene.add(this.previewOutline);
-  this.preview.root.traverse(m=>{if(!m.isMesh)return;
-   m.material=Array.isArray(m.material)?m.material.map(v=>v.clone()):m.material.clone();
-   for(const mat of(Array.isArray(m.material)?m.material:[m.material])){
-    mat.transparent=true;mat.opacity=.55;mat.depthWrite=false;
-   }
-  });
+  this.applyPreviewGhost();
   this.preview.root.visible=true;
   this.lastPlacementKind=kind;
   this.setTool('place');this.syncInspector();
@@ -2864,12 +2874,7 @@ class CleanBuilder{
   const old=obj.root,newRoot=this.cloneTemplate(obj.kind,obj.thickness,obj.scale,obj.axes);
   newRoot.position.copy(old.position);newRoot.rotation.copy(old.rotation);newRoot.scale.copy(old.scale);
   this.scene.add(newRoot);old.removeFromParent();
-  if(obj===this.preview){
-   newRoot.traverse(m=>{if(m.isMesh){
-    m.material=m.material.clone();m.material.transparent=true;
-    m.material.opacity=.55;m.material.depthWrite=false;
-   }});
-  }
+  // The shared ghost material is applied AFTER all geometry changes.
   obj.root=newRoot;obj.root.visible=!obj.hidden;
   if(obj.openings?.length){
    const result=WallOpenings.render(newRoot,obj.kind,obj.openings,
@@ -2949,12 +2954,7 @@ class CleanBuilder{
   }
   const old=obj.root;
   fresh.position.copy(old.position);fresh.rotation.copy(old.rotation);fresh.scale.copy(old.scale);
-  if(obj===this.preview){
-   fresh.traverse(mesh=>{if(!mesh.isMesh)return;
-    mesh.material=mesh.material.clone();mesh.material.transparent=true;
-    mesh.material.opacity=.55;mesh.material.depthWrite=false;
-   });
-  }
+  // Rebuilt preview material is re-applied at the end, not cloned per face.
   this.scene.add(fresh);old.removeFromParent();
   obj.root=fresh;obj.floorTrim=edit;obj.root.visible=!obj.hidden;
   this.queueDecalRebuild();
@@ -3114,14 +3114,7 @@ class CleanBuilder{
    if(!crop.ok){notify('Фигурная подрезка: '+crop.reason,'error');return false}
    editResult={...editResult,shapeCrop:crop};
   }
-  if(obj===this.preview){
-   template.traverse(mesh=>{if(!mesh.isMesh)return;
-    mesh.material=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
-    for(const mat of(Array.isArray(mesh.material)?mesh.material:[mesh.material])){
-     mat.transparent=true;mat.opacity=.78;mat.depthWrite=false;
-    }
-   });
-  }
+  // Rebuilt GLB stays a cyan ghost rather than a semi-opaque copy of its PBR material.
   this.scene.add(template);old.removeFromParent();
   obj.root=template;obj.meshEdit=requested;obj.root.visible=!obj.hidden;
   this.applySurfaceTo(obj);this.queueDecalRebuild();
@@ -3568,6 +3561,12 @@ class CleanBuilder{
   const ground=new THREE.Plane(V(0,1,0),-this.floor*2.6),where=V();
   const found=this.ray.ray.intersectPlane(ground,where);
   if(this.preview?.category==='decor')return this.surfaceHit?.point.clone()||null;
+  if(this.floor===0&&this.worldEditor?.hasElevations()){
+   this.worldEditor.terrainRoot.updateMatrixWorld(true);
+   const hits=this.ray.intersectObjects(
+    [...this.worldEditor.sculptPatches.values()],false);
+   if(hits.length)return hits[0].point.clone();
+  }
   return found?where:null;
  }
  aimPlacement(){
@@ -3868,6 +3867,14 @@ class CleanBuilder{
     obj._snapRotation=fix.rotation;this.previewStatus=fix;
     notify('🟢 Плитка поставлена вплотную к соседней — без перекрытия','success');
    }
+  }
+  // In a 5 km world, Y=0 is not necessarily the floor under the cursor.
+  // For unsnapped ground-floor modules, seat the physical lowest vertex
+  // on the heightfield; snapped walls keep the magnet's precise Y.
+  if(!snap&&this.floor===0&&obj.manualPlacementY===undefined&&
+     obj.category!=='decor'&&obj.category!=='roof'&&this.worldEditor){
+   const height=this.worldEditor.heightAt(obj.root.position.x,obj.root.position.z);
+   PhoenixPlacementGhost.align(obj.root,height,THREE);
   }
   obj.root.updateMatrixWorld(true);
   this.syncInspector();
@@ -5085,7 +5092,9 @@ class CleanBuilder{
   this.canvas.addEventListener('pointermove',e=>{
    if(this.playBridge?.active||this.prefabEditor?.pendingPlace)return;
    if(e.buttons||this.cameraFocusPick||this.tool!=='place')return;
-   const point=this.rayPoint(e);if(!point&&!this.floor)return;
+   const point=this.floor===0&&this.worldEditor?.hasElevations()?
+    this.worldEditor.pointerTerrain(e):this.rayPoint(e);
+   if(!point&&!this.floor)return;
    if(point)this.cursor.copy(point);
    if(this.preview?.category==='wall')this.wallChainManual=true;
    this.updatePreview(this.cursor,true,this.ray);
