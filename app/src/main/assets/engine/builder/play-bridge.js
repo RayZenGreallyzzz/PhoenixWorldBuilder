@@ -41,6 +41,7 @@
    this.respawnButton = this.document.getElementById('btnPhoenixRespawn');
    this.ammoLine = this.document.getElementById('phoenixAmmoLine');
    this.ammoText = this.document.getElementById('phoenixAmmoText');
+   this.rangedControls=this.document.getElementById('phoenixRangedControls');
    this.crosshair = this.document.getElementById('phoenixCrosshair');
     this.mobCard=this.document.getElementById('phoenixMobCard');
     this.selectedMobId='';this.mobTags=new Map();this.mobTagTextures=new Map();
@@ -75,6 +76,8 @@
    editButton.addEventListener('click', () => this.exit());
    this.attackButton?.addEventListener('click', () => this.attack());
    this.respawnButton?.addEventListener('click', () => this.respawn());
+   this.document.getElementById('btnPhoenixRangedAim')?.addEventListener('click',()=>this.aim());
+   this.document.getElementById('btnPhoenixRangedReload')?.addEventListener('click',()=>this.reload());
    this.document.getElementById('btnPlayerCombatPreset')?.
     addEventListener('click',()=>this.showPlayerCombatForm(
      PlayerProfiles.preset(this.document.getElementById('phoenixPlayerCombatMode')?.value||'melee')));
@@ -216,6 +219,7 @@
    this.weapon?.setAim(false);
    if(this.crosshair)this.crosshair.hidden=true;
    if(this.ammoLine)this.ammoLine.hidden=true;
+   if(this.rangedControls)this.rangedControls.hidden=true;
    if(this.mpLine)this.mpLine.hidden=true;
    if (saved.previewRoot && b.preview && b.preview.root === saved.previewRoot)
     saved.previewRoot.visible = saved.previewVisible;
@@ -435,6 +439,7 @@
    const shooter=this.playerCombat.mode==='ranged'||
     !!this.builder.skillEditor?.layout?.slots?.some(s=>s.id==='fire'&&s.enabled);
    if(this.ammoLine)this.ammoLine.hidden=!shooter;
+   if(this.rangedControls)this.rangedControls.hidden=this.playerCombat.mode!=='ranged';
    if(this.crosshair)this.crosshair.hidden=!shooter;
    if(this.mpLine)this.mpLine.hidden=!
     Object.keys(this.builder.skillDefinitionEditor?.runtime?.skills||{}).length;
