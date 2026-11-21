@@ -260,47 +260,61 @@
    for(const [id,render] of rendered){
     const profile=this.builder.prefabEditor.mobProfile(id);
     if(!profile)continue;
-    let texture=this.mobTagTextures.get(profile.name);
+    const color=/^#[0-9a-fA-F]{6}$/.test(profile.nameColor||'')?
+     profile.nameColor:'#ffffff';
+    const key=profile.name+'|'+color.toLowerCase();
+    let texture=this.mobTagTextures.get(key);
     if(!texture){
      const canvas=this.document.createElement('canvas');
-     canvas.width=256;canvas.height=64;
+     canvas.width=512;canvas.height=128;
      const ctx=canvas.getContext?.('2d');
      if(!ctx)continue;
-     ctx.fillStyle='rgba(5,31,45,.85)';
-     ctx.fillRect(0,8,256,48);
-     ctx.strokeStyle='#80f1d5';ctx.lineWidth=2;ctx.strokeRect(1,9,254,46);
+     // Transparent label: user-selected text only, no rectangle or border.
+     ctx.clearRect?.(0,0,512,128);
      ctx.textAlign='center';ctx.textBaseline='middle';
-     ctx.font='bold 22px sans-serif';ctx.fillStyle='#f3fffc';
-     const name=profile.name.length>23?profile.name.slice(0,22)+'…':profile.name;
-     ctx.fillText(name,128,33,240);
+     ctx.font='bold 48px sans-serif';
+     ctx.lineJoin='round';ctx.lineWidth=7;
+     ctx.strokeStyle='rgba(0,0,0,.85)';ctx.fillStyle=color;
+     const name=[...profile.name].length>36?
+      [...profile.name].slice(0,35).join('')+'…':profile.name;
+     ctx.strokeText?.(name,256,64,492);
+     ctx.fillText(name,256,64,492);
      texture=new THREE.CanvasTexture(canvas);
      texture.minFilter=THREE.LinearFilter;
      texture.generateMipmaps=false;
-     this.mobTagTextures.set(profile.name,texture);
+     this.mobTagTextures.set(key,texture);
     }
     const material=new THREE.SpriteMaterial({map:texture,transparent:true,
      depthWrite:false,depthTest:false});
     const tag=new THREE.Sprite(material);tag.name='phoenix:mob:nametag';
-    tag.scale.set(2.4,.6,1);
-    const bounds=new THREE.Box3().setFromObject(render.visual||render.root);
-    const top=Number.isFinite(bounds.max.y)?
-     bounds.max.y-render.root.position.y+.35:2.3;
-    tag.position.y=Math.max(1.6,Math.min(12,top));
+    tag.scale.set(3.1,.775,1);tag.renderOrder=950;
+    // Box3.setFromObject on skinned GLB measures bind pose and may place
+    // names near the grass. Sample posed vertices in the mob-root space.
+    let top=2.2;
+    try{
+     if(typeof AvatarFit!=='undefined'&&AvatarFit?.measure&&render.visual){
+      const metrics=AvatarFit.measure(render.visual,render.root,2000);
+      if(Number.isFinite(metrics.max.y))top=metrics.max.y+.35;
+     }else{
+      const bounds=new THREE.Box3().setFromObject(render.visual||render.root);
+      if(Number.isFinite(bounds.max.y))
+       top=bounds.max.y-render.root.getWorldPosition(new THREE.Vector3()).y+.35;
+     }
+    }catch(error){console.warn('Nickname height fallback:',error)}
+    tag.position.y=Math.max(1.85,Math.min(10,top));
     render.root.add(tag);this.mobTags.set(id,tag);tag.visible=false;
    }
    this.refreshMobTags();
   }
   refreshMobTags(){
    if(!this.active)return;
-   const player=this.builder.player?.position;
-   if(!player)return;
    for(const [id,tag] of this.mobTags){
     const render=this.builder.prefabEditor?.rendered.get(id);
     if(!render)continue;
-    const near=player.distanceToSquared(render.root.position)<=28*28;
-    tag.visible=near&&render.root.visible&&
+    // No distance fade: visible while the living mob is rendered.
+    tag.visible=render.root.visible&&
      !this.builder.prefabEditor?.combat.isDead(id);
-    tag.material.color.setHex(id===this.selectedMobId?0xffdd77:0xffffff);
+    tag.material.color.setHex(0xffffff); // Preserve the exact chosen name color.
    }
   }
   clearMobTags(){
