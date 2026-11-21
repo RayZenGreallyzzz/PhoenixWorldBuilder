@@ -77,6 +77,7 @@ jobs:
             node tests/test-play-wiring.cjs
             node tests/test-prefab-core.cjs
             node tests/test-prefab-editor.cjs
+            node tests/test-phoenix-mob-import.cjs
             node tests/test-mob-features.cjs
             node tests/test-phoenix-mob-nametags.cjs
             node tests/test-character-mob-save.cjs
