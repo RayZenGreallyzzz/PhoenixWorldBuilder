@@ -677,3 +677,17 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
 #phoenixSkillDefinitions #btnSkillDefSave{background:#168062}
 #phoenixSkillDefinitions #skillDefMessage{padding:8px;background:#27445b;color:#b8e7ff;border-radius:7px;font-size:11px}
 #phoenixSkillDefinitions small{font-size:11px;color:#c6e0ed;line-height:1.4}
+
+/* Phoenix Engine 1.1 — PNG/WebP skill images in MOBA touch controls. */
+#phoenixSkillLayer .phoenixSkillPicture{display:block;object-fit:contain;width:76%;height:76%;max-width:100%;max-height:100%;border-radius:inherit;pointer-events:none;user-select:none;-webkit-user-drag:none;filter:drop-shadow(0 2px 3px #0006)}
+#phoenixSkillLayer .phoenixSkillButton:has(.phoenixSkillPicture){gap:0;padding:5px}
+#phoenixSkillLayer .phoenixSkillButton:has(.phoenixSkillPicture) .phoenixSkillCaption{position:absolute;bottom:3px;left:2px;right:2px;background:#071525ad;border-radius:5px;font-size:9px;padding:1px 2px;text-shadow:0 1px 2px #000}
+#phoenixSkillEditor .phoenixSkillImageRow,#phoenixSkillDefinitions .phoenixSkillImageRow{display:flex;align-items:center;flex-wrap:wrap;gap:7px;border:1px solid #506e89;padding:7px;border-radius:9px;background:#173349}
+#phoenixSkillEditor .phoenixSkillImageRow button,#phoenixSkillDefinitions .phoenixSkillImageRow button{flex:1 1 105px;min-height:39px;font-size:11px}
+#phoenixSkillEditor .phoenixIconPreview,#phoenixSkillDefinitions .phoenixIconPreview{width:62px;height:62px;object-fit:contain;max-height:62px;border:2px solid #9bd2e8;border-radius:13px;background:#253b4d}
+#phoenixSkillEditor .phoenixIconPreview[hidden],#phoenixSkillDefinitions .phoenixIconPreview[hidden]{display:none!important}
+#phoenixSkillEditor input[type=file][hidden],#phoenixSkillDefinitions input[type=file][hidden]{display:none!important}
+@media(max-width:780px){
+ #phoenixSkillEditor .phoenixSkillImageRow button,#phoenixSkillDefinitions .phoenixSkillImageRow button{font-size:10px;min-height:36px}
+ #phoenixSkillLayer .phoenixSkillPicture{width:73%;height:73%}
+}
