@@ -189,7 +189,12 @@
  <b id="skillDefPreview">Сила на уровне 1: 30</b>
  <div class="phoenixSkillRow"><button id="btnSkillDefLevelUp" type="button">⬆ Уровень +1</button><button id="btnSkillDefSave" type="button">💾 Сохранить навык</button></div>
  <button id="btnSkillDefDelete" type="button">🗑 Удалить навык из слота</button>
- <small id="skillDefMessage" aria-live="polite">В PLAY навыки игрока наносят урон или лечат, расходуют MP и имеют откат. Навыки мобов пока сохраняются как характеристики для будущего ИИ.</small>
+ <label>✨ Эффект обычной атаки игрока<select id="phoenixPlayerAttackEffect">
+  <option value="none">Без эффекта</option><option value="impact" selected>💥 Удар</option>
+  <option value="ring">🟠 Волна</option><option value="spark">✨ Искры</option>
+  <option value="magic">🪄 Магия</option><option value="heal">💚 Свет лечения</option>
+ </select></label>
+ <small id="skillDefMessage" aria-live="polite">Игрок и мобы используют сохранённые навыки, откаты, MP и визуальные эффекты в PLAY.</small>
 </section>
 <section id="phoenixSkillEditor" class="phoenixSkillEditor" hidden role="region" aria-label="Редактор игровых кнопок">
  <div class="phoenixSkillTitle"><b>🎮 Редактор скиллов · HUD</b><button id="btnSkillClose" type="button" aria-label="Закрыть настройку HUD">✕</button></div>
