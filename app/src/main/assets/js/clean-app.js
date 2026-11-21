@@ -127,6 +127,7 @@ class CleanBuilder{
   this.sceneRowsSignature='';
   this.bakeSelection=new Set();this.bakeBusy=false;
   this.history=new EditorHistory(20);
+  this.projectDirty=false;
   this.catalogMeta=this.loadCatalogMeta();
   this.smartCatalogFolder=localStorage.getItem('phoenix-builder-catalog-folder-v2')||'all';
   if(!SmartCatalog.order.includes(this.smartCatalogFolder))this.smartCatalogFolder='all';
@@ -3960,8 +3961,27 @@ class CleanBuilder{
   $('btnUndo').disabled=!this.history.canUndo||this.history.busy;
   $('btnRedo').disabled=!this.history.canRedo||this.history.busy;
  }
+ markProjectDirty(){
+  // Never serialize or write storage just to show an unsaved-change indicator.
+  if(this.restoringProject||this.projectLoadRunning)return;
+  this.projectDirty=true;
+  const saveButton=document.getElementById('btnSave');
+  if(saveButton){
+   saveButton.classList.add('phoenixUnsaved');
+   saveButton.title='Изменения не сохранены — нажми 💾 Сохранить';
+  }
+ }
+ markProjectSaved(){
+  this.projectDirty=false;
+  const saveButton=document.getElementById('btnSave');
+  if(saveButton){
+   saveButton.classList.remove('phoenixUnsaved');
+   saveButton.title='Сохранить редактируемый проект в приложении';
+  }
+ }
  recordEdit(snapshot){
   const ok=this.history.record(snapshot||this.project());
+  if(ok)this.markProjectDirty();
   this.updateHistoryButtons();return ok;
  }
  async historyAction(direction){
@@ -3972,6 +3992,7 @@ class CleanBuilder{
     this.history.undo(this.project(),doc=>this.restore(doc,{preserveUI:true})):
     this.history.redo(this.project(),doc=>this.restore(doc,{preserveUI:true}));
    const done=await change;this.updateHistoryButtons();
+   if(done)this.markProjectDirty();
    notify(done?(direction==='undo'?'↶ Изменение отменено':'↷ Изменение повторено'):
     'История действий пуста',done?'success':'warn');
   }catch(err){this.updateHistoryButtons();
@@ -4483,17 +4504,19 @@ class CleanBuilder{
    notify('Ошибка открытия проекта: '+(err?.message||err),'error')}
  }
  save(){
-  const json=JSON.stringify(this.project());
   try{
+   const json=JSON.stringify(this.project());
    if(window.NativeBridge?.saveCleanProject){
     const done=window.NativeBridge.saveCleanProject(json);
     if(done){
      localStorage.setItem('phoenix-builder-clean-v2',json);
+     this.markProjectSaved();
      notify('💾 Проект сохранён внутри приложения. Для переносимой копии: 📁 Файлы проекта','success');
      return true;
     }
    }
    localStorage.setItem('phoenix-builder-clean-v2',json);
+   this.markProjectSaved();
    notify('💾 Проект сохранён на устройстве. Для переноса с текстурами: 📁 Файлы проекта','success');
    return true;
   }catch(err){notify('Ошибка сохранения: '+err.message,'error');return false}
@@ -4505,6 +4528,7 @@ class CleanBuilder{
    if(!json){notify('Нет сохранённого проекта версии 2.0','warn');return}
    await this.restoreForOpen(JSON.parse(json));
    this.history.clear();this.updateHistoryButtons();
+   this.markProjectSaved();
    notify('Проект загружен из сохранения','success');
   }catch(err){notify('Ошибка загрузки: '+err.message,'error')}
  }
@@ -4816,11 +4840,11 @@ class CleanBuilder{
     'success');
   };
   $('avatarHeight').oninput=e=>this.applyAvatarHeight(e.target.value);
-  $('avatarHeight').onchange=()=>{if(this.avatarAssetId)this.save()};
+  $('avatarHeight').onchange=()=>{if(this.avatarAssetId)this.markProjectDirty()};
   $('avatarAttackClip').onchange=e=>{
    const name=e.target.value;
    this.avatarAttackClip=this.avatarClips.some(c=>c.name===name)?name:'';
-   if(this.avatarAssetId)this.save();
+   if(this.avatarAssetId)this.markProjectDirty();
   };
   $('enableCollisions').onchange=e=>{
    this.collisionsEnabled=e.target.checked;
