@@ -9,6 +9,8 @@
  if(root)root.PhoenixPrefabEditor=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
+ const Features=(typeof globalThis!=='undefined'&&globalThis.PhoenixMobFeatures)||
+  (typeof require==='function'?require('../core/phoenix-mob-features.js'):null);
  class PhoenixPrefabEditor{
   constructor(builder){
    if(!builder?.playBridge||!window.PhoenixCore||!window.PhoenixPrefabs||!window.PhoenixAI||!window.PhoenixAnimations)
@@ -20,7 +22,7 @@
    this.rendered=new Map();this.selectedId='';this.pendingPlace='';
    this.playing=false;this.loadGeneration=0;this.clipGeneration=0;this.previewBefore=null;
    this.aiCursor=0;this.collider=null;this.pendingWaypointId='';
-   this.respawner=new PhoenixMobFeatures.Respawner();this.aiTime=0;
+   this.respawner=new Features.Respawner();this.aiTime=0;
    this.previewAttackTime=0;this.previewAttackEntity='';
    this.routeHelper=new THREE.Group();this.routeHelper.name='phoenix:edit:route';
    builder.scene.add(this.routeHelper);
@@ -414,7 +416,8 @@
     const stats=this.world.getComponent(id,'stats')||{hp:100};
     const char=this.world.getComponent(id,'character')||{};
     const name=this.registry.get(this.world.getComponent(id,'prefab')?.id)?.name||id;
-    return {id,maxHp:stats.hp,faction:char.faction||'enemy',name};
+    return {id,maxHp:stats.hp,faction:char.faction||'enemy',
+     name:char.nickname||name};
    }):[]);
    if(this.playing&&!this.collider&&typeof CharacterCollision!=='undefined')
     this.collider=new CharacterCollision.Solver({radius:.27,height:1.6});
@@ -436,17 +439,29 @@
     }
     return;
    }
+   this.aiTime+=Math.min(.1,dt);
+   for(const id of this.respawner.tick(Math.min(.5,dt)))this.reappear(id);
+   const player=this.b.player.position;
    for(const [id,render] of this.rendered){
+    if(this.combat.isDead(id)){
+     render.deadElapsed=(render.deadElapsed||0)+dt;
+     if(render.deadElapsed>1.5){render.root.visible=false;render.hiddenDead=true;}
+     else render.animation?.update(dt);
+     continue;
+    }
     render.animation?.update(dt);
     // Fix animated root/bone vertical drift without changing NPC position.
     this.groundVisual(render,dt);
-    if(this.combat.isDead(id))continue;
     if(render.hitHold>0){
+     this.faceMob(render,player,dt);
      render.hitHold=Math.max(0,render.hitHold-dt);
      if(render.hitHold===0)render.animation?.setState('idle');
      continue;
     }
-    render.accum=Math.min(.35,(render.accum||0)+dt);
+    render.accum=Math.min(.35,(render.accum||0)+Math.min(dt,.05));
+    if(Number.isFinite(render.facingYaw))
+     render.root.rotation.y=Features.turn(render.root.rotation.y,
+      render.facingYaw,dt,8);
    }
    const entities=[...this.rendered.entries()];
    if(!entities.length)return;
@@ -456,7 +471,6 @@
     }
     return;
    }
-   const player=this.b.player.position;
    const max=Math.min(entities.length,10);
    for(let step=0;step<max;step++){
     const [id,render]=entities[(this.aiCursor+step)%entities.length];
@@ -464,8 +478,10 @@
     const p=this.registry.get(this.world.getComponent(id,'prefab')?.id);
     if(!p||this.world.getComponent(id,'character')?.ai?.mode==='idle'||
       (!this.world.getComponent(id,'character')?.ai&&p.ai?.mode==='idle'))continue;
-    if(render.accum<.12)continue;
-    const dtStep=render.accum;render.accum=0;
+    if(render.accum<.001)continue;
+    // Each mobile frame advances at most 50ms. Never teleport by a 120–350ms
+    // AI backlog; the old behaviour caused visible start-stop mob movement.
+    const dtStep=Math.min(.05,render.accum);render.accum=0;
     if(Math.hypot(render.root.position.x-player.x,
      render.root.position.z-player.z)>35){
      render.animation?.setState('idle');continue;
@@ -488,8 +504,15 @@
        decision.animation='idle';
      }else render.root.position.add(delta);
     }
-    if(decision.yaw!==null)render.root.rotation.y=decision.yaw;
+    if(decision.yaw!==null)render.facingYaw=decision.yaw;
+    if(decision.animation==='attack')this.faceMob(render,player,dtStep);
+    else if(Number.isFinite(render.facingYaw))
+     render.root.rotation.y=Features.turn(render.root.rotation.y,
+      render.facingYaw,dtStep,8);
     render.animation?.setState(decision.animation);
+    if(this.tryNpcSkill(id,render,p,player,
+      Math.hypot(render.root.position.x-player.x,
+       render.root.position.z-player.z)))continue;
     // Only the AI's cooled-down attack intent can damage the player.
     // Check actual Builder wall triangles before applying any HP change.
     if(decision.attack&&p.faction==='enemy'&&!this.combat.isPlayerDead()&&
@@ -497,7 +520,12 @@
         Math.hypot(render.root.position.x-player.x,
          render.root.position.z-player.z))){
      const hit=this.combat.damagePlayer(id,p.stats.damage);
-     if(hit.ok)this.b.playBridge?.onPlayerHit(hit,p.name);
+     if(hit.ok){
+      this.b.playBridge?.onPlayerHit(hit,
+       this.world.getComponent(id,'character')?.nickname||p.name);
+      this.b.playBridge?.effects?.spawn(
+       {preset:p.attackEffect||'impact'},player);
+     }
     }
    }
    this.aiCursor=(this.aiCursor+max)%entities.length;
@@ -550,10 +578,14 @@
    if(!render)return result;
    if(result.killed){
     render.hitHold=Infinity;
+    render.deadElapsed=0;
     render.root.userData.phoenixDead=true;
+    const prefab=this.registry.get(this.world.getComponent(id,'prefab')?.id);
+    this.respawner.mark(id,prefab?.respawn);
     render.animation?.setState('death',.1);
    }else{
     render.hitHold=.45;
+    this.faceMob(render,this.b.player.position,.15);
     render.animation?.setState('hit',.1);
    }
    return result;
