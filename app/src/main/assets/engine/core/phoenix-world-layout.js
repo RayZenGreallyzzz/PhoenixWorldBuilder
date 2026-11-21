@@ -7,7 +7,7 @@
  if(root)root.PhoenixWorldLayout=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION=1,MAX_METERS=5000,MAX_TILES=2048;
+ const VERSION=1,MAX_METERS=5000,MAX_TILES=10000;
  const SIZES=Object.freeze([50,100,250,500,1000]);
  const STYLES=Object.freeze({
   grass:{title:'🌱 Трава',color:0x648a4c},
