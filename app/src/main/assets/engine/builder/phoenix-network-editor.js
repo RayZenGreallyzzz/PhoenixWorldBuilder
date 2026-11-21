@@ -326,5 +326,8 @@
    this.players('Игроков в комнате: —');
   }
  }
+ // Allow offline unit tests to check endpoint policy without a WebView.
+ NetworkEditor.serverUrl=serverUrl;
+ NetworkEditor.validConfig=validConfig;
  return NetworkEditor;
 });
