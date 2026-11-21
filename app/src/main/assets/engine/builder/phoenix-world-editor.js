@@ -79,6 +79,14 @@
    this.el('worldTileStyle')?.addEventListener('change',e=>{
     this.currentStyle=e.target.value;
    });
+   for(const [id,display] of [['worldBrushRadius','worldBrushRadiusValue'],
+    ['worldBrushPower','worldBrushPowerValue']]){
+    this.el(id)?.addEventListener('input',e=>{
+     const target=this.el(display);
+     if(target)target.textContent=e.target.value+
+      (id==='worldBrushRadius'?' м':' м/с');
+    });
+   }
   }
   getVisible(){return !this.panel.hidden}
   open(){
@@ -349,6 +357,9 @@
    const paint=this.el('worldPaintStatus');
    if(paint)paint.textContent=this.painting?
     (this.paintMode==='erase'?'🧹 Ластик: коснись сектора на сцене':
+     ['raise','lower','smooth'].includes(this.paintMode)?
+     ('⛰ '+{raise:'Подними',lower:'Опусти',smooth:'Сгладь'}[this.paintMode]+
+     ' землю пальцем. Undo/Redo — общие кнопки Builder.'):
      '🖌 Рисование «'+this.schema.STYLES[this.currentStyle]?.title+
      '»: коснись сектора на сцене'):
     'Рисование выключено. Для выбора сектора нажми «Рисовать» или «Стереть».';
@@ -362,13 +373,108 @@
   }
   startPainting(erase=false){
    if(this.b.playBridge?.active)return false;
+   this.finishStroke();
    this.painting=true;this.paintMode=erase?'erase':'place';
    this.b.prefabEditor?.cancelPlacement?.();
    this.updateStatus();
    return true;
   }
+  startSculpt(mode){
+   if(this.b.playBridge?.active||
+      !['raise','lower','smooth'].includes(mode))return false;
+   this.finishStroke();
+   this.painting=true;this.paintMode=mode;
+   this.b.prefabEditor?.cancelPlacement?.();
+   this.updateStatus();
+   return true;
+  }
   stopPainting(){
+   this.finishStroke();
    this.painting=false;this.updateStatus();return true;
+  }
+  rememberEdit(){
+   if(this.stroke&&this.stroke.recorded)return;
+   const snapshot=this.stroke?.snapshot||this.b.project?.();
+   const recorded=this.b.recordEdit?.(snapshot);
+   if(this.stroke)this.stroke.recorded=recorded!==false;
+   if(recorded===false&&this.b.history?.lastWarning)
+    this.notify('⚠ '+this.b.history.lastWarning,'warn');
+  }
+  brushAt(x,z,seconds=.09){
+   if(!this.painting||this.b.playBridge?.active)return false;
+   try{
+    if(['raise','lower','smooth'].includes(this.paintMode)){
+     const radius=Number(this.el('worldBrushRadius')?.value||25);
+     const strength=Number(this.el('worldBrushPower')?.value||6);
+     const next=this.schema.sculpt(this.state,x,z,{
+      mode:this.paintMode,radius,strength,seconds
+     });
+     if(next.heights.length===this.state.heights.length&&
+        JSON.stringify(next.heights)===JSON.stringify(this.state.heights))
+      return false;
+     this.rememberEdit();
+     this.state=next;
+     this.refreshSculptArea(x,z,radius);
+     if(this.stroke)this.stroke.changed=true;
+     else this.b.save?.();
+     this.updateStatus();
+     return true;
+    }
+    return this.paintAt(x,z,this.paintMode==='erase');
+   }catch(error){
+    this.notify('⚠ Кисть: '+error.message,'warn');return false;
+   }
+  }
+  handleBrushPointer(type,event){
+   if(!this.painting||this.b.playBridge?.active)return;
+   const canvas=this.b.canvas;
+   if(type==='pointerdown'){
+    if(event.target!==canvas||event.isPrimary===false||this.stroke)return;
+    const hit=this.b.rayPoint(event,0);
+    if(!hit)return;
+    this.stroke={pointerId:event.pointerId,snapshot:this.b.project?.(),
+     recorded:false,changed:false,last:performance.now()};
+    canvas.setPointerCapture?.(event.pointerId);
+    this.brushAt(hit.x,hit.z,.12);
+    event.preventDefault();event.stopImmediatePropagation();
+    return;
+   }
+   if(!this.stroke||event.pointerId!==this.stroke.pointerId)return;
+   if(type==='pointermove'){
+    const now=performance.now(),dt=(now-this.stroke.last)/1000;
+    if(dt<.045){
+     event.preventDefault();event.stopImmediatePropagation();return;
+    }
+    const hit=this.b.rayPoint(event,0);
+    if(hit)this.brushAt(hit.x,hit.z,Math.min(.24,dt));
+    this.stroke.last=now;
+   }else{
+    // End of a gesture is a single global undoable transaction.
+    this.finishStroke();
+   }
+   event.preventDefault();event.stopImmediatePropagation();
+  }
+  finishStroke(){
+   const stroke=this.stroke;
+   this.stroke=null;
+   if(!stroke)return;
+   try{
+    if(this.b.canvas.hasPointerCapture?.(stroke.pointerId))
+     this.b.canvas.releasePointerCapture(stroke.pointerId);
+   }catch(error){console.warn('Terrain pointer release:',error)}
+   if(stroke.changed)this.b.save?.();
+  }
+  clearHeights(){
+   if(!this.state.heights.length)return false;
+   if(typeof window!=='undefined'&&!window.confirm(
+    'Сбросить всю высоту гор и низин? Текстуры тайлов и постройки останутся.'))
+    return false;
+   this.stopPainting();
+   this.b.recordEdit?.();
+   this.state=this.schema.validate({...this.state,heights:[]});
+   this.rebuildTerrain();this.b.save?.();this.updateStatus();
+   this.notify('⛰ Рельеф сброшен. Строительство и тайлы сохранены.','success');
+   return true;
   }
   paintFromEvent(event){
    if(!this.painting||this.b.playBridge?.active)return false;
@@ -384,8 +490,10 @@
     // Don't clutter undo history when erasing an empty cell or repainting
     // a cell in the same colour.
     if(JSON.stringify(next.tiles)!==JSON.stringify(this.state.tiles)){
-     this.b.recordEdit?.();
-     this.state=next;this.rebuildTerrain();this.b.save?.();
+     this.rememberEdit();
+     this.state=next;this.rebuildTerrain();
+     if(this.stroke)this.stroke.changed=true;
+     else this.b.save?.();
     }
     this.updateStatus();
     const at=this.schema.cellAt(this.state,x,z);
@@ -428,7 +536,8 @@
    return true;
   }
   serialize(){return this.schema.validate(this.state)}
-  loadFromProject(data){
+  loadFromProject(data,options={}){
+   const showGrid=options.preserveUI&&this.gridVisible;
    this.stopPainting();
    // Projects from UV44 up through 1.3 have no `worldCanvas` member.
    // Restore their original 128x128 ground rather than resizing silently.
@@ -438,7 +547,7 @@
     this.state=this.schema.legacy();
    }
    // Grid display is always opt-in after opening a scene or restarting.
-   this.gridVisible=false;
+   this.gridVisible=!!showGrid;
    this.applyScene();this.renderForm();
   }
  }
