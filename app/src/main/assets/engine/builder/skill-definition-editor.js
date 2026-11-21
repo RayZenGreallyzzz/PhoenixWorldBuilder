@@ -161,7 +161,7 @@
      ui.render();
     }
     this.write(validated);
-    this.b.save?.();
+    this.b.markProjectDirty?.();
     this.status('✅ Навык сохранён: '+validated.name+
      '. Сила: '+PhoenixSkills.power(validated));
     return true;
@@ -171,7 +171,7 @@
    if(this.b.playBridge?.active)return false;
    const {character,slot}=this.selected();
    const result=this.catalog.remove(character,slot);
-   if(result){this.write(null);this.b.save?.();}
+   if(result){this.write(null);this.b.markProjectDirty?.();}
    this.status(result?'Навык удалён из слота.':'Слот пуст.');return result;
   }
   levelUp(){
