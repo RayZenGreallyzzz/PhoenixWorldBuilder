@@ -41,10 +41,17 @@ const ed={catalog:skills,runtime:null,
 let saves=0,projections=0,unsaved=0;
 const editor={
  combat,close(){},setPlaying(on){
+  const hero=b?.playBridge?.playerCombat;
+  if(hero){
+   combat.damage=hero.damage;combat.range=hero.range;
+   combat.cooldown=hero.cooldown;combat.playerMaxHp=hero.hp;
+  }
   combat.reset(on?[{id:'enemy-1',name:'Медведь',maxHp:160,faction:'enemy'}]:[]);
  },
  findEnemy(range){return {id:'enemy-1',distance:4}},
- damageEnemy(id,amount){return combat.damageMob(id,amount)}
+ damageEnemy(id,amount){return combat.damageMob(id,amount)},
+ attackNearest(now){return combat.attack([0,0,0],
+  [{id:'enemy-1',position:[1,0,0]}],now)}
 };
 const player={position:new V(0,0,0),rotation:new V(0,0,0)};
 const b={
@@ -110,7 +117,8 @@ assert.equal(bridge.applyPlayerCombatForm(),true);
 assert.equal(bridge.enter(),true);
 assert.equal(els.phoenixRangedControls.hidden,true);
 assert.equal(bridge.attack(),true,'Main Attack button uses melee targeting');
-assert.equal(combat.get('enemy-1').hp,135,'Melee legacy mock keeps its authored hit');
+assert.equal(combat.get('enemy-1').hp,105,'Melee attack uses configured 55 damage');
+assert.equal(combat.getPlayer().maxHp,150,'Hero max HP applies to real combat');
 assert.equal(bridge.exit(),true);
 assert.equal(saves,0);
 console.log('PASS: shooter legacy compatibility, configurable ranged combat, aim/reload, melee targeting, and no autosaves');
