@@ -103,8 +103,32 @@ public class MainActivity extends Activity {
                 try {
                     Intent intent = params.createIntent();
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                    intent.setType("*/*");
+                    // For skill icons let Android open its native PNG/WebP image
+                    // picker; keep universal file import unchanged for GLB/JSON.
+                    boolean imageOnly = false;
+                    boolean sawAccept = false;
+                    String[] accepts = params.getAcceptTypes();
+                    if (accepts != null) {
+                        imageOnly = true;
+                        for (String item : accepts) {
+                            if (item == null) continue;
+                            for (String part : item.split(",")) {
+                                String type = part.trim().toLowerCase(java.util.Locale.ROOT);
+                                if (type.isEmpty()) continue;
+                                sawAccept = true;
+                                if (!type.equals("image/png") && !type.equals("image/webp")
+                                    && !type.equals(".png") && !type.equals(".webp")
+                                    && !type.equals("image/*")) imageOnly = false;
+                            }
+                        }
+                    }
+                    imageOnly = imageOnly && sawAccept;
+                    intent.setType(imageOnly ? "image/*" : "*/*");
+                    if (imageOnly) {
+                        intent.putExtra(Intent.EXTRA_MIME_TYPES,
+                            new String[]{"image/png", "image/webp"});
+                    }
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, !imageOnly);
                     startActivityForResult(intent, PICK_FILE);
                     return true;
                 } catch (Exception e) {
