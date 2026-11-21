@@ -85,6 +85,7 @@ jobs:
             node tests/test-avatar-motion.cjs
             node tests/test-world-layout.cjs
             node tests/test-world-editor.cjs
+            node tests/test-terrain-splat.cjs
             node tests/test-visible-engine-ui.cjs
             node tests/test-skill-layout.cjs
             node tests/test-skill-editor.cjs
