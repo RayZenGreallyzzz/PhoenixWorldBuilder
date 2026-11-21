@@ -21,14 +21,14 @@ const ids=['phoenixSkillDefinitions','btnPhoenixSkillDefs','btnSkillDefClose',
 const elements=Object.fromEntries(ids.map(id=>[id,new Element(id)]));
 elements.skillDefSlot.value='slot3';
 const doc={getElementById:id=>elements[id]||null,createElement:tag=>new Element(tag)};
-let saved=0;
+let saved=0,dirty=0;
 const p={id:'prefab-1',name:'Медведь',type:'mob'};
 let redraws=0;
 const builder={playBridge:{active:false},
  skillEditor:{close(){},schema:Layout,layout:Layout.defaultLayout(),
   render(){redraws++}},
  prefabEditor:{close(){},registry:{list(){return [p]},get(id){return id===p.id?p:null}}},
- save(){saved++}};
+ save(){saved++},markProjectDirty(){dirty++}};
 const Editor=require('../app/src/main/assets/engine/builder/skill-definition-editor.js');
 const ed=new Editor(builder,doc);
 assert.equal(ed.open(),true);
@@ -47,7 +47,8 @@ elements.skillDefRange.value='12';
 elements.skillDefAnimation.value='cast';
 ed.imageDraft=imagePNG;ed.previewImage();
 assert.equal(ed.save(),true);
-assert.equal(saved,1);
+assert.equal(saved,0,'Saving skill settings must not write full project');
+assert.equal(dirty,1,'Skill edit should mark unsaved project');
 assert.equal(ed.catalog.get('player','slot3').basePower,80);
 assert.equal(ed.catalog.get('player','slot3').level,2);
 assert.equal(ed.catalog.get('player','slot3').iconImage,imagePNG);
@@ -61,6 +62,8 @@ ed.loadForm();
 elements.skillDefName.value='Рёв';
 elements.skillDefDescription.value='Сила медведя';
 assert.equal(ed.save(),true);
+assert.equal(saved,0,'Skill changes only persist on manual project save');
+assert.equal(dirty,2);
 assert.equal(ed.catalog.get('prefab-1','ultimate').name,'Рёв');
 assert.equal(ed.catalog.get('prefab-1','ultimate').iconImage,'',
  'NPC skill image stays independent of the player HUD');
