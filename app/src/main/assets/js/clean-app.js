@@ -181,6 +181,7 @@ class CleanBuilder{
   this.player=new THREE.Group();this.player.position.set(0,0,0);this.scene.add(this.player);
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.playerMoving=false;this.avatarAttackUntil=0;
   this.avatarBindings={};this.avatarPreviewName='';this.avatarPreviewUntil=0;
+  this.avatarCurrentActionName='';
   this.setDefaultAvatar();
   this.keys=new Set();this.joy={x:0,y:0};this.pointerStart=null;this.lastFrame=0;
   this.bind();
@@ -236,6 +237,7 @@ class CleanBuilder{
  }
  setDefaultAvatar(){
   this.avatarAssetId='';this.avatarFileName='';this.avatarAttackClip='';this.avatarBindings={};this.avatarPreviewName='';this.avatarPreviewUntil=0;
+  this.avatarCurrentActionName='';
   this.player.clear();this.avatarFitGroup=null;this.avatarMetrics=null;
   this.avatarRoot=null;this.avatarGroundY=0;this.avatarGroundTimer=0;
   this.avatarMixer=null;this.avatarClips=[];this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
@@ -372,6 +374,7 @@ class CleanBuilder{
    this.fillAvatarAnimationChoices(this.avatarBindings);
    this.avatarMixer=this.avatarClips.length?new THREE.AnimationMixer(root):null;
    this.avatarActions={};this.avatarState='';this.avatarAttackUntil=0;
+   this.avatarCurrentActionName='';
    if(this.avatarMixer){
     for(const clip of this.avatarClips)this.avatarActions[clip.name]=
      this.avatarMixer.clipAction(clip);
@@ -4760,38 +4763,42 @@ class CleanBuilder{
    }
   }
  }
- playAttackAnimation(){
-  // Existing imported avatar clips only: no retargeter and no new mixer.
+ playAvatarAction(state){
+  // One bound GLB clip per authored action. No duplicate mixers or retargeting.
   if(!this.avatarMixer||!this.avatarClips.length)return false;
-  const clip=this.avatarClips.find(c=>c.name===this.avatarBindings?.attack)||
-   this.avatarClips.find(c=>c.name===this.avatarAttackClip)||
-   this.avatarClips.find(c=>/attack|strike|melee|удар|атак/i.test(c.name));
-  if(!clip)return false;
-  const action=this.avatarActions[clip.name];if(!action)return false;
+  const patterns={
+   attack:/attack|strike|melee|удар|атак/i,
+   death:/death|die|dead|смерт|гибел/i,
+   hit:/hit|hurt|damage|react|боль/i,
+   cast:/cast|spell|magic|заклин/i
+  };
+  const explicit=this.avatarBindings?.[state]||
+   (state==='attack'?this.avatarAttackClip:'');
+  const clip=this.avatarClips.find(c=>c.name===explicit)||
+   this.avatarClips.find(c=>patterns[state]?.test(c.name));
+  const action=clip&&this.avatarActions[clip.name];
+  if(!action)return false;
   for(const other of Object.values(this.avatarActions))
-   if(other!==action&&other.isRunning())other.fadeOut(.12);
-  action.reset();
-  action.clampWhenFinished=true;
-  action.setLoop(THREE.LoopOnce,1);
+   if(other!==action&&other.isRunning?.())other.fadeOut(.12);
+  action.stopFading?.();action.reset();action.enabled=true;action.paused=false;
+  action.clampWhenFinished=true;action.setLoop(THREE.LoopOnce,1);
   action.fadeIn(.12).play();
-  this.avatarState='attack';
-  this.avatarAttackUntil=performance.now()+
-   Math.max(350,Math.min(1000,(clip.duration||.6)*1000));
+  this.avatarState=state;
+  this.avatarCurrentActionName=clip.name;
+  this.avatarAttackUntil=state==='death'?Infinity:
+   performance.now()+Math.max(350,Math.min(5000,
+    (clip.duration||.6)*1000+120));
   return true;
  }
+ playAttackAnimation(){return this.playAvatarAction('attack')}
+ playCastAnimation(){return this.playAvatarAction('cast')}
+ playHitAnimation(){return this.playAvatarAction('hit')}
  playDeathAnimation(){
-  // Existing GLB avatar only; no retargeting or second AnimationMixer.
-  if(!this.avatarMixer||!this.avatarClips.length)return false;
-  const clip=this.avatarClips.find(c=>/death|die|dead|смерт|гибел/i.test(c.name));
-  if(!clip){this.avatarMixer.stopAllAction();this.avatarState='death';return false;}
-  const action=this.avatarActions[clip.name];if(!action)return false;
-  for(const other of Object.values(this.avatarActions))
-   if(other!==action&&other.isRunning())other.fadeOut(.1);
-  action.reset();action.clampWhenFinished=true;
-  action.setLoop(THREE.LoopOnce,1);
-  action.fadeIn(.1).play();
+  if(this.playAvatarAction('death'))return true;
+  if(!this.avatarMixer)return false;
+  this.avatarMixer.stopAllAction();
   this.avatarState='death';this.avatarAttackUntil=Infinity;
-  return true;
+  return false;
  }
  setAvatarAnimation(moving){
   if(this.playBridge?.active&&this.prefabEditor?.combat?.isPlayerDead())return;
@@ -4800,14 +4807,10 @@ class CleanBuilder{
    if(action?.isRunning?.())return;
   }
   if(this.playBridge?.active&&this.avatarAttackUntil>performance.now()){
-   // One-shot ATTACK may finish before its display timer. If its action is
-   // already stopped, immediately restore locomotion instead of leaving
-   // the avatar without any skinned pose until the joystick is released.
-   const clip=this.avatarClips.find(c=>c.name===this.avatarBindings?.attack)||
-    this.avatarClips.find(c=>c.name===this.avatarAttackClip)||
-    this.avatarClips.find(c=>/attack|strike|melee|удар|атак/i.test(c.name));
-   const attack=clip&&this.avatarActions[clip.name];
-   if(attack?.isRunning()&&(attack.getEffectiveWeight?.()??1)>.0001)return;
+   // Hold any authored one-shot clip (Attack, Hit, Cast) until it completes,
+   // then restore Idle/Walk without ever leaving the GLB in bind pose.
+   const action=this.avatarActions?.[this.avatarCurrentActionName];
+   if(action?.isRunning?.()&&(action.getEffectiveWeight?.()??1)>.0001)return;
   }
   if(!this.avatarMixer||!this.avatarClips.length)return;
   const result=PhoenixAvatarMotion.reconcile(
