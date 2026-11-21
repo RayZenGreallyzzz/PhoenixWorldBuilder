@@ -107,9 +107,10 @@
    return [...ids];
   }
   layersFor(key){return this.patches.get(key)||new Map()}
-  paint(x,z,radius,imageId,opacity=1,erase=false){
+  paint(x,z,radius,imageId,opacity=1,erase=false,softness=.65){
    if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(radius)||
-      !Number.isFinite(opacity)||radius<.3||radius>250||opacity<=0||opacity>1)
+      !Number.isFinite(opacity)||!Number.isFinite(softness)||
+      softness<0||softness>1||radius<.3||radius>250||opacity<=0||opacity>1)
     throw new TypeError('Invalid round texture brush settings');
    if(!erase)validId(imageId);
    if(x<-this.world.width/2-radius||x>this.world.width/2+radius||
@@ -145,7 +146,11 @@
       const worldX=rect.x+(px+.5)*rect.width/RES;
       const norm2=((worldX-x)**2+(worldZ-z)**2)/(radius*radius);
       if(norm2>=1)continue;
-      const alpha=Math.min(1,(1-norm2)**2*opacity);
+      // Feathered circular pencil/marker edge, not a painted square.
+      const dist=Math.sqrt(norm2),inner=1-softness;
+      const falloff=dist<=inner?1:
+       Math.max(0,(1-dist)/Math.max(.001,softness));
+      const alpha=Math.min(1,falloff*falloff*(3-2*falloff)*opacity);
       const index=py*RES+px;
       for(const [layerId,mask] of layers){
        const old=mask[index];
