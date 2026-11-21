@@ -230,7 +230,7 @@
     const value=this.collect();
     if(this.selectedId)this.registry.update(this.selectedId,value);
     else this.selectedId=this.registry.create(value);
-    this.refresh();this.b.skillDefinitionEditor?.refreshCharacters();this.b.save();
+    this.refresh();this.b.skillDefinitionEditor?.refreshCharacters();this.b.markProjectDirty?.();
     this.status('✅ Шаблон сохранён. Изменения применяются к новым экземплярам.');
    }catch(err){this.status('Ошибка шаблона: '+err.message)}
   }
@@ -241,7 +241,7 @@
    if(used)return this.status('Сначала удали экземпляры этого шаблона со сцены.');
    this.b.skillDefinitionEditor?.catalog.removeCharacter(this.selectedId);
    this.registry.remove(this.selectedId);this.newDraft();this.refresh();
-   this.b.skillDefinitionEditor?.refreshCharacters();this.b.save();
+   this.b.skillDefinitionEditor?.refreshCharacters();this.b.markProjectDirty?.();
    this.status('Шаблон удалён.');
   }
   beginPlacement(){
@@ -770,7 +770,7 @@
    this.refresh();
    this.el('phoenixPrefabEntities').value=id;
    this.selectEntity(id);
-   this.b.save();return id;
+   this.b.markProjectDirty?.();return id;
   }
   async placeFromEvent(event){
    if((!this.pendingPlace&&!this.pendingWaypointId)||this.b.playBridge.active)return false;
@@ -846,7 +846,7 @@
      this.groundVisual(render,0,true);
     }
     this.refresh();this.el('phoenixPrefabEntities').value=id;this.selectEntity(id);
-    this.b.save();
+    this.b.markProjectDirty?.();
     return true;
    }catch(error){this.status('Не удалось изменить моба: '+error.message);return false;}
   }
@@ -1020,7 +1020,7 @@
    const id=this.el('phoenixPrefabEntities').value;
    if(!this.world.hasEntity(id))return this.status('Выбери моба из списка.');
    this.removeRender(id);this.world.removeEntity(id);
-   this.refresh();this.b.save();this.status('Экземпляр убран со сцены.');
+   this.refresh();this.b.markProjectDirty?.();this.status('Экземпляр убран со сцены.');
   }
   hasContent(){return this.registry.list().length>0||this.world.entityIds().length>0||
    !!this.b.skillDefinitionEditor?.catalog.characters().length;}
