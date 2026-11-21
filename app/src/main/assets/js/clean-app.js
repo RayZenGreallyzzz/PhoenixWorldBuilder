@@ -4503,23 +4503,25 @@ class CleanBuilder{
  }
  setAvatarAnimation(moving){
   if(this.playBridge?.active&&this.prefabEditor?.combat?.isPlayerDead())return;
-  if(this.playBridge?.active&&this.avatarAttackUntil>performance.now())return;
+  if(this.playBridge?.active&&this.avatarAttackUntil>performance.now()){
+   // One-shot ATTACK may finish before its display timer. If its action is
+   // already stopped, immediately restore locomotion instead of leaving
+   // the avatar without any skinned pose until the joystick is released.
+   const clip=this.avatarClips.find(c=>/attack|strike|melee|удар|атак/i.test(c.name));
+   const attack=clip&&this.avatarActions[clip.name];
+   if(attack?.isRunning()&&(attack.getEffectiveWeight?.()??1)>.0001)return;
+  }
   if(!this.avatarMixer||!this.avatarClips.length)return;
-  const mode=moving?'walk':'idle';
-  if(this.avatarState===mode)return;
-  const clip=moving?
-   this.avatarClips.find(c=>/walk|move|run|ход|бег/i.test(c.name)):
-   this.avatarClips.find(c=>/idle|stand|rest|breath|покой/i.test(c.name));
-  const selected=clip||this.avatarClips[0];
-  if(!selected)return;
-  const action=this.avatarActions[selected.name];if(!action)return;
-  for(const [name,other] of Object.entries(this.avatarActions))
-   if(name!==selected.name&&other.isRunning())other.fadeOut(.18);
-  if(!action.isRunning())action.reset().fadeIn(.18).play();
-  this.avatarState=mode;
-  // Do not remeasure or refit when animation changes. Bone poses are allowed
-  // to move naturally; only importing a GLB or the height slider can change
-  // avatar:stable-fit's scale.
+  const result=PhoenixAvatarMotion.reconcile(
+   this.avatarClips,this.avatarActions,this.avatarState,!!moving,THREE,.18);
+  if(result.updated){
+   this.avatarState=result.state;
+   if(result.recovered){
+    // Scan soles on the next animated frame after a recovered T-pose.
+    // Never re-fit or rescale the imported GLB during movement.
+    this.avatarGroundTimer=.22;
+   }
+  }
  }
  updatePlayer(dt){
   if(this.avatarMixer)this.avatarMixer.update(dt);
