@@ -539,12 +539,12 @@
      value:material.userData.terrainOffset
     };
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
-     '#include <common>\\nuniform vec2 terrainRepeat;\\nuniform vec2 terrainOffset;');
+     '#include <common>\nuniform vec2 terrainRepeat;\nuniform vec2 terrainOffset;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',
-     '#ifdef USE_MAP\\n'+
-     ' vec2 worldPaintUV = vUv * terrainRepeat + terrainOffset;\\n'+
-     ' vec4 sampledDiffuseColor = texture2D(map,worldPaintUV);\\n'+
-     ' diffuseColor *= sampledDiffuseColor;\\n#endif');
+     '#ifdef USE_MAP\n'+
+     ' vec2 worldPaintUV = vUv * terrainRepeat + terrainOffset;\n'+
+     ' vec4 sampledDiffuseColor = texture2D(map,worldPaintUV);\n'+
+     ' diffuseColor *= sampledDiffuseColor;\n#endif');
    };
    material.customProgramCacheKey=()=> 'phoenix-terrain-splat-uv-v1';
    return material;
