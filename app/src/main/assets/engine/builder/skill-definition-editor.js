@@ -64,7 +64,7 @@
     effect:{preset:'impact',color:'#ffce65',size:1,duration:.5}};
   }
   read(){
-   const get=id=>this.el('skillDef'+id).value;
+   const get=id=>this.el('skillDef'+id)?.value;
    return {
     name:get('Name'),description:get('Description'),icon:get('Icon'),
     iconImage:this.imageDraft,
@@ -72,8 +72,10 @@
     basePower:Number(get('BasePower')),growth:Number(get('Growth')),
     manaCost:Number(get('ManaCost')),cooldown:Number(get('Cooldown')),
     range:Number(get('Range')),animation:get('Animation'),
-    effect:{preset:get('FxPreset'),color:get('FxColor'),
-     size:Number(get('FxSize')),duration:Number(get('FxDuration'))}
+    effect:{
+     preset:get('FxPreset')||(get('Type')==='heal'?'heal':'impact'),
+     color:get('FxColor')||'#ffce65',
+     size:Number(get('FxSize')??1),duration:Number(get('FxDuration')??.5)}
    };
   }
   write(data){
@@ -88,8 +90,10 @@
     FxSize:s.effect?.size??1,
     FxDuration:s.effect?.duration??.5
    };
-   for(const [key,value] of Object.entries(keys))
-    this.el('skillDef'+key).value=String(value);
+   for(const [key,value] of Object.entries(keys)){
+    const field=this.el('skillDef'+key);
+    if(field)field.value=String(value);
+   }
    this.imageRequestToken++;
    this.imageDraft=s.iconImage||'';
    this.previewImage();this.preview();
