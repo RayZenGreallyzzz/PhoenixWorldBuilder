@@ -12,6 +12,8 @@
  const TYPES=['mob','npc'], FACTIONS=['enemy','neutral','ally'];
  const Path=(typeof globalThis!=='undefined'&&globalThis.PhoenixPatrolPath)||
   (typeof require==='function'?require('./phoenix-patrol-path.js'):null);
+ const Progression=(typeof globalThis!=='undefined'&&globalThis.PhoenixProgression)||
+  (typeof require==='function'?require('./phoenix-progression.js'):null);
  function safeText(s,max=120){
   if(typeof s!=='string'||!s.trim()||s.length>max)throw new TypeError('Invalid name');
   return s.trim();
@@ -72,6 +74,9 @@
    attackEffect:typeof value.attackEffect==='string'&&
     ['none','impact','ring','spark','magic','heal'].includes(value.attackEffect)?
     value.attackEffect:'impact',
+   // Optional growth curve is separate from the fixed legacy stats.
+   // An old GLB template without this field always keeps its original combat.
+   progression:value.progression?Progression.normalize(value.progression):null,
    stats:{
     hp:number(stats.hp??100,1,1000000,'hp'),
     level:number(stats.level??1,1,1000,'level'),
