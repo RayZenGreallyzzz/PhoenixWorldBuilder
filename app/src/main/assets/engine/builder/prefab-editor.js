@@ -457,7 +457,10 @@
    if(!runtime||!p)return false;
    for(const slot of Object.keys(runtime.skills)){
     const def=runtime.skills[slot];
-    if(!def)continue;
+    if(!def||runtime.ready.get(slot)>this.aiTime||
+       runtime.mp<def.manaCost)continue;
+    // Raycast collisions only for abilities that can actually cast now;
+    // skip expensive wall checks on all other Android frames.
     const healing=def.type==='heal';
     const hp=this.combat.get(id);
     const allowed=healing?(hp&&!hp.dead&&hp.hp<hp.maxHp):
