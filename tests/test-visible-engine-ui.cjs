@@ -14,7 +14,7 @@ assert(!header[0].includes('id="btnPhoenixPrefabs"'),'Prefab button must not be 
 assert(dock[0].includes('id="btnPhoenixPlay"'));
 assert(dock[0].includes('id="btnPhoenixPrefabs"'));
 assert(dock[0].includes('ENGINE'));
-assert(dock[0].includes('v1.0'));
+assert(dock[0].includes('v1.1'));
 assert(dock[0].includes('id="btnPhoenixSkills"'), 'Skill editor must be visible beside PLAY');
 for(const id of ['btnPhoenixPlay','btnPhoenixPrefabs','btnPhoenixSkills','phoenixEngineDock']){
  const matches=html.match(new RegExp('id="'+id+'"','g'))||[];
@@ -24,16 +24,28 @@ assert(css.includes('#phoenixEngineDock{position:fixed'),
  'Game controls must be independent of oversized UV44 topbar');
 assert(css.includes('body.phoenixPlaying #phoenixEngineDock{display:none!important}'),
  'Editor controls must disappear during PLAY');
-assert(html.includes('<title>Phoenix Engine 1.0 — FPS + RPG Skills</title>'));
+assert(html.includes('<title>Phoenix Engine 1.1 — MOBA HUD + PNG/WebP icons</title>'));
 assert(html.includes('id="phoenixSkillEditor"'));
+for(const id of ['phoenixSkillImageFile','phoenixSkillImagePreview',
+ 'btnSkillImagePick','btnSkillImageRemove','skillDefImageFile',
+ 'skillDefImagePreview','btnSkillDefImagePick','btnSkillDefImageRemove']){
+ assert(html.includes('id="'+id+'"'),'Missing PNG/WebP gallery picker '+id);
+}
+const imageScript=html.indexOf('<script src="engine/core/phoenix-skill-images.js">');
+const skillScript=html.indexOf('<script src="engine/core/phoenix-skills.js">');
+const layoutScript=html.indexOf('<script src="engine/core/phoenix-skill-layout.js">');
+assert(imageScript>0&&imageScript<skillScript&&imageScript<layoutScript,
+ 'PNG/WebP image sanitizer must load before both skill schemas');
+
 assert(html.includes('id="phoenixSkillLayer"'));
 assert(html.includes('id="btnPhoenixHeal"'));
 assert(html.includes('id="phoenixSkillPreset"'));
 assert(html.includes('id="btnSkillApplyPreset"'));
 assert(html.includes('id="btnPhoenixSlot5"'));
 assert(html.includes('id="btnPhoenixUltimate"'));
-assert(html.includes('Mobile Legends'));
-assert(html.includes('Wild Rift'));
+assert(!html.includes('Mobile Legends'));
+assert(!html.includes('Wild Rift'));
+assert(html.includes('value="moba"'));
 assert(html.includes('MMORPG'));
 assert(html.includes('Шутер'));
 assert(dock[0].includes('btnPhoenixSkillDefs'),'Skill definition editor must be in dock');
@@ -54,7 +66,7 @@ assert(css.includes('#phoenixSkillLayer{position:fixed'));
 assert(css.includes('#phoenixSkillEditor{position:fixed'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"),
  'Permanent Android ID must not vary between new engine versions');
-assert(gradle.includes('versionCode 10'));
+assert(gradle.includes('versionCode 11'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"));
-assert(gradle.includes("appLabel: 'Phoenix Engine 1.0'"));
-console.log('PASS: distinct Phoenix Engine 1.0 badge, visible PLAY/Prefabs/Skills dock and stable package ID');
+assert(gradle.includes("appLabel: 'Phoenix Engine 1.1'"));
+console.log('PASS: distinct Phoenix Engine 1.1 badge, visible PLAY/Prefabs/Skills dock and stable package ID');
