@@ -958,6 +958,7 @@
   serialize(){
    return {version:1,catalog:this.registry.serialize(),world:this.world.serialize(),
     hudLayout:this.b.skillEditor?.serialize()||null,
+     playerAttackEffect:this.b.playBridge?.playerAttackEffect||'impact',
     skills:this.b.skillDefinitionEditor?.serialize()||null};
   }
   async loadFromProject(doc){
@@ -980,6 +981,11 @@
    const token=++this.loadGeneration;
    for(const id of [...this.rendered.keys()])this.removeRender(id);
    this.registry=registry;this.world=world;this.b.playBridge.gameWorld=world;
+   const fx=doc?.playerAttackEffect;
+   this.b.playBridge.playerAttackEffect=
+    typeof PhoenixVFX!=='undefined'&&PhoenixVFX.PRESETS.includes(fx)?fx:'impact';
+   const fxInput=this.el('phoenixPlayerAttackEffect');
+   if(fxInput)fxInput.value=this.b.playBridge.playerAttackEffect;
    this.selectedId='';this.refreshModels();this.newDraft();this.refresh();
    let missing=0;
    for(const id of world.entityIds()){
