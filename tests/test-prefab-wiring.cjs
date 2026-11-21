@@ -26,6 +26,7 @@ for(const id of ['btnPhoenixPrefabs','phoenixPrefabPanel','btnPrefabSave',
  'btnPrefabApplyTransform','btnPrefabSnapGround','phoenixEntityAI',
  'phoenixEntityWaypoints','btnPrefabWaypointTap','btnPrefabWaypointAdd',
  'btnPrefabWaypointRemove','btnPrefabPreviewAttack',
+ 'phoenixPrefabAttackClip','avatarAttackClip',
  'phoenixCombatHud','btnPhoenixAttack','phoenixCombatHP','phoenixCombatTarget','phoenixCombatNotice','phoenixPlayerHP','phoenixPlayerHPText','phoenixKills','phoenixDeathNotice','btnPhoenixRespawn']){
  assert(html.includes('id="'+id+'"'),'Prefab UI field missing '+id);
 }
@@ -33,6 +34,10 @@ assert(js.includes('this.prefabEditor=new PhoenixPrefabEditor(this)'));
 assert(js.includes('this.prefabEditor?.update(dt)'), 'Must reuse UV44 frame loop');
 assert(js.includes('phoenixGame:this.prefabEditor?.serialize()'), 'Project JSON must save game');
 assert(js.includes('avatar:this.avatarAssetId?{'), 'Player avatar GLB reference must persist');
+assert(js.includes('attackClip:this.avatarAttackClip||'),
+ 'Player GLB attack clip choice must persist in project');
+assert(js.includes('this.avatarClips.find(c=>c.name===this.avatarAttackClip)'),
+ 'Selected player attack clip must be used by Attack action');
 assert(js.includes('await putAsset(id,await file.arrayBuffer())'),
  'Imported player GLB must be persisted in IndexedDB rather than RAM only');
 assert(js.includes('await this.restoreAvatarFromProject(doc.avatar||null)'),
