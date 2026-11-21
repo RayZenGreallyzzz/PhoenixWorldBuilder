@@ -16,6 +16,11 @@
    this.panel=this.el('phoenixWorldPanel');
    if(!this.panel)throw Error('World settings panel missing');
    this.state=this.schema.plain();this.gridVisible=false;
+   this.splat=globalThis.PhoenixTerrainSplat;
+   if(!this.splat)throw Error('Landscape splat masks module missing');
+   this.painter=new this.splat.Painter(this.state,this.state.paintMasks);
+   this.textureId='';this.textureMaps=new Map();this.texturePromises=new Map();
+   this.textureMeshes=new Map();this.textureGeneration=0;
    this.painting=false;this.paintMode='place';
    this.currentStyle='grass';this.selectedCell='';
    this.terrainRoot=new THREE.Group();this.terrainRoot.name='phoenix:landscape';
@@ -53,6 +58,10 @@
    on('btnWorldApply',()=>this.applySizes());
    on('btnWorldOverview',()=>this.overview());
    on('btnWorldPaint',()=>this.startPainting(false));
+   on('btnWorldOpenTextures',()=>this.openTextureFolder());
+   on('btnWorldImportTexture',()=>this.el('importLandscapeTexture')?.click());
+   on('btnWorldTexturePaint',()=>this.startTexturePaint(false));
+   on('btnWorldTextureErase',()=>this.startTexturePaint(true));
    on('btnWorldErase',()=>this.startPainting(true));
    on('btnWorldStopPaint',()=>this.stopPainting());
    on('btnWorldClear',()=>this.clear());
@@ -84,11 +93,16 @@
     this.currentStyle=e.target.value;
    });
    for(const [id,display] of [['worldBrushRadius','worldBrushRadiusValue'],
-    ['worldBrushPower','worldBrushPowerValue']]){
+    ['worldBrushPower','worldBrushPowerValue'],
+    ['worldTextureSoftness','worldTextureSoftnessValue'],
+    ['worldTextureOpacity','worldTextureOpacityValue'],
+    ['worldTextureScale','worldTextureScaleValue']]){
     this.el(id)?.addEventListener('input',e=>{
      const target=this.el(display);
      if(target)target.textContent=e.target.value+
-      (id==='worldBrushRadius'?' м':' м/с');
+      (id==='worldBrushRadius'?' м':id==='worldBrushPower'?' м/с':
+       ['worldTextureSoftness','worldTextureOpacity'].includes(id)?'%':' м');
+     if(id==='worldTextureScale')this.setTextureScale(Number(e.target.value));
     });
    }
   }
@@ -130,6 +144,13 @@
    const power=this.el('worldBrushPower');
    if(radius)this.el('worldBrushRadiusValue').textContent=radius.value+' м';
    if(power)this.el('worldBrushPowerValue').textContent=power.value+' м/с';
+   for(const [id,display,suffix] of [['worldTextureSoftness','worldTextureSoftnessValue','%'],
+    ['worldTextureOpacity','worldTextureOpacityValue','%'],
+    ['worldTextureScale','worldTextureScaleValue',' м']]){
+    const input=this.el(id),label=this.el(display);
+    if(input&&label)label.textContent=input.value+suffix;
+   }
+   this.updateTextureChosen();
    this.updateStatus();
   }
   chooseCanvasPreset(){
@@ -154,7 +175,9 @@
     };
     const next=this.schema.resize(this.state,draft);
     this.b.recordEdit?.();
-    this.state=next;this.applyScene();this.renderForm();
+    this.state=next;
+    this.painter=new this.splat.Painter(next,next.paintMasks);
+    this.applyScene();this.renderForm();
     this.b.save?.();
     this.notify('🌍 Общий холст '+next.width+'×'+next.depth+
      ' м · сектор '+next.tileSize+'×'+next.tileSize+' м','success');
