@@ -119,7 +119,7 @@ class CleanBuilder{
   this.controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};
   this.ray=new THREE.Raycaster();this.cursor=V();this.pointer=new THREE.Vector2();
   this.gizmo=new BuilderGizmo(this.scene,this.camera,this.canvas,this.ray);
-  this.mode='build';this.tool='place';this.floor=0;this.magnet=true;
+  this.mode='build';this.tool='pick';this.floor=0;this.magnet=true;
   this.gridSnap=localStorage.getItem('phoenix-builder-grid-snap')==='on';
   this.gridStep=PrecisionPlacement.step(
    localStorage.getItem('phoenix-builder-grid-step'),.25);
@@ -194,7 +194,9 @@ class CleanBuilder{
   $('optimizationAutoResolution').checked=this.autoResolution;
   $('avatarInBuild').checked=this.showAvatarInBuild;
   $('enableCollisions').checked=this.collisionsEnabled;
-  this.setMode('build');this.selectKind('wall');
+  // The shared canvas starts neutral: no auto-selected wall or construction ghost.
+  // Building placement starts only after the user explicitly picks a module.
+  this.setMode('build');this.setTool('pick');
   // Engine attaches to existing UV44 player/controls, no extra render loop.
   this.playBridge=new PhoenixPlayBridge(this,window.PhoenixCore);
   this.prefabEditor=new PhoenixPrefabEditor(this);
@@ -405,6 +407,8 @@ class CleanBuilder{
   notify('📷 Камера отдалена для просмотра персонажа в реальном масштабе','success');
  }
  setMode(mode){
+  // Switching to a character camera must also disarm any active wall preview.
+  if(mode==='character'&&this.tool==='place')this.setTool('pick');
   if(mode!=='build'&&this.surfaceSidePick){
    this.surfaceSidePick=false;
    this.syncQuickTextureFaces();
@@ -437,8 +441,9 @@ class CleanBuilder{
   }else if(mode==='character')notify('Персонаж: плавный джойстик слева, второй палец вращает камеру');
   else notify('Строительство: выбери деталь, затем коснись места установки');
   $('inspector').classList.remove('unavailable');
-  this.preview?.root&&(this.preview.root.visible=this.tool==='place');
-  this.controls.update();if(!this.playBridge?.active)this.aimPlacement();
+  this.preview?.root&&(this.preview.root.visible=mode==='build'&&this.tool==='place');
+  if(this.previewOutline)this.previewOutline.visible=mode==='build'&&this.tool==='place';
+  this.controls.update();if(!this.playBridge?.active&&mode==='build')this.aimPlacement();
   this.gizmo.attach(mode==='build'&&this.tool==='pick'&&
    SceneManager.editingAllowed(this.selected)?this.selected:null);
   this.updateGizmoDock();
@@ -2404,8 +2409,8 @@ class CleanBuilder{
   this.gizmo.deactivate();
   $('btnPick').classList.toggle('active',tool==='pick');
   $('btnPlace').classList.toggle('active',tool==='place');
-  if(this.preview)this.preview.root.visible=tool==='place';
-  if(this.previewOutline)this.previewOutline.visible=tool==='place';
+  if(this.preview)this.preview.root.visible=this.mode==='build'&&tool==='place';
+  if(this.previewOutline)this.previewOutline.visible=this.mode==='build'&&tool==='place';
   this.gizmo.attach(this.mode==='build'&&tool==='pick'&&
    SceneManager.editingAllowed(this.selected)?this.selected:null);
   this.updateGizmoDock();
@@ -4635,7 +4640,8 @@ class CleanBuilder{
    }else this.setTool(previousUI.tool==='place'?'place':'pick');
    this.syncInspector();
   }else{
-   this.selected=null;this.setTool('place');this.selectKind('wall');
+   // Loading a project must not arm a construction wall over game objects.
+   this.selected=null;this.disposePreview();this.setTool('pick');this.renderCatalog();
   }
   // Optional extension: old UV44 JSON files have no phoenixGame key.
   // Load game data only after the building geometry has been restored.
@@ -5049,7 +5055,7 @@ class CleanBuilder{
    e.target.value='';
   };
   $('btnPick').onclick=()=>{this.setTextureTab('parts');this.setTool('pick');this.syncInspector()};
-  $('btnPlace').onclick=()=>{this.setTextureTab('parts');this.selected=null;this.setTool('place');this.syncInspector()};
+  $('btnPlace').onclick=()=>{this.setTextureTab('parts');this.setMode('build');this.selected=null;this.setTool('place');this.syncInspector()};
   $('btnConfirm').onclick=()=>{
    if(this.libraryTab==='textures')this.setTextureTab('parts');
    if(this.mode!=='build')this.aimPlacement();
