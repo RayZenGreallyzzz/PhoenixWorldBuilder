@@ -305,8 +305,13 @@ class CleanBuilder{
   const at=this.player.position;
   const near=this.collisionSolver.meshes(this.entries,at,1.3);
   const ground=this.collisionSolver.support(at,near);
-  if(!Number.isFinite(ground)||Math.abs(ground-at.y)>this.collisionSolver.stepHeight+.18)
+  if(!Number.isFinite(ground))return false;
+  const terrain=this.worldEditor?.heightAt(at.x,at.z);
+  const naturalGround=Number.isFinite(terrain)&&Math.abs(ground-terrain)<.002;
+  if(!naturalGround&&Math.abs(ground-at.y)>this.collisionSolver.stepHeight+.18)
    return false; // never teleport a player to an upper storey
+  // Authored hills/valleys are the natural floor: the avatar may spawn
+  // above them after loading or leaving EDIT, even with large elevation.
   this.player.position.y=ground;
   return true;
  }
