@@ -691,3 +691,36 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
  #phoenixSkillEditor .phoenixSkillImageRow button,#phoenixSkillDefinitions .phoenixSkillImageRow button{font-size:10px;min-height:36px}
  #phoenixSkillLayer .phoenixSkillPicture{width:73%;height:73%}
 }
+
+/* Phoenix Engine 1.4 — unified landscape canvas / mobile hill brush.
+ * One panel, opt-in grid; separate terrain editing never blocks HUD in PLAY.
+ */
+#phoenixEngineDock #btnPhoenixWorld{background:#296f49;border-color:#8ee7af;color:#effff2}
+#phoenixEngineDock #btnWorldGrid{background:#294c60;border:1px solid #78acbf;color:#e3f7ff}
+#phoenixEngineDock #btnWorldGrid.active{background:#147b84;border-color:#9cffff}
+#phoenixWorldPanel{position:fixed;right:max(10px,env(safe-area-inset-right));top:max(76px,env(safe-area-inset-top));bottom:max(10px,env(safe-area-inset-bottom));z-index:69;width:min(350px,calc(100vw - 20px));max-height:calc(100dvh - 88px);box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:8px;padding:12px 13px;background:#0d2635f5;border:1px solid #80d1be;border-radius:14px;color:#e6faf4;box-shadow:0 4px 25px #000d}
+#phoenixWorldPanel[hidden]{display:none!important}
+#phoenixWorldPanel .phoenixWorldTitle{display:flex;align-items:center;gap:10px;justify-content:space-between}
+#phoenixWorldPanel .phoenixWorldTitle b{font-size:15px}
+#phoenixWorldPanel h4{font-size:14px;margin:6px 0 2px;color:#9ff6c8}
+#phoenixWorldPanel .phoenixWorldRow{display:flex;gap:8px;align-items:stretch}
+#phoenixWorldPanel .phoenixWorldRow>*{flex:1;min-width:0}
+#phoenixWorldPanel label{display:flex;flex-direction:column;gap:4px;font-size:12px}
+#phoenixWorldPanel label strong{font-size:11px;color:#abf2d3}
+#phoenixWorldPanel select,#phoenixWorldPanel input[type=number]{font:inherit;min-height:38px;box-sizing:border-box;width:100%;padding:6px;border:1px solid #588e97;border-radius:7px;background:#173d4e;color:#f5fffe}
+#phoenixWorldPanel input[type=range]{width:100%;accent-color:#80f6bb}
+#phoenixWorldPanel button{font-size:11px;font-weight:800;padding:8px 6px;min-height:37px;border:1px solid #588d9a;border-radius:8px;background:#174b58;color:#eafffe}
+#phoenixWorldPanel button:active{background:#278371}
+#phoenixWorldPanel button.primary,#phoenixWorldPanel #btnWorldRaise{background:#186a4c;border-color:#69d9a2}
+#phoenixWorldPanel #btnWorldLower{background:#655039;border-color:#c7a077}
+#phoenixWorldPanel #btnWorldSmooth{background:#345d86;border-color:#89bddb}
+#phoenixWorldPanel hr{width:100%;border:0;border-top:1px solid #426b76}
+#phoenixWorldPanel small{font-size:11px;line-height:1.4;color:#c0e2dc}
+#phoenixWorldPanel #worldCanvasInfo{font-weight:800;color:#b8ffe7;border-radius:6px;background:#163e47;padding:7px}
+#phoenixWorldPanel #worldPaintStatus,#phoenixWorldPanel #worldCanvasStatus{border-radius:6px;padding:7px;background:#184a50;color:#f5ffe8}
+@media(max-width:800px){
+ #phoenixEngineDock #btnWorldGrid{padding:5px 7px;font-size:10px}
+ #phoenixWorldPanel{top:max(70px,env(safe-area-inset-top));right:7px;bottom:max(6px,env(safe-area-inset-bottom));width:min(340px,calc(100vw - 14px));max-height:calc(100dvh - 76px);padding:9px;gap:6px}
+ #phoenixWorldPanel button{font-size:10px;min-height:35px}
+ #phoenixWorldPanel small{font-size:10px}
+}
