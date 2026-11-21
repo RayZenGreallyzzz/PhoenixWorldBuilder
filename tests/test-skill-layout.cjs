@@ -29,17 +29,15 @@ assert.throws(()=>S.update(defaultLayout,'attack',{icon:'ABCDEFGHIJK',label:'att
 assert.throws(()=>S.validate({version:999,slots:[]}),/Invalid Phoenix/);
 const invalid=S.defaultLayout();invalid.slots[1].id='attack';
 assert.throws(()=>S.validate(invalid),/duplicate/);
-const mobile=S.presetLayout('mobile-legends');
-const wild=S.presetLayout('wild-rift');
+const moba=S.presetLayout('moba');
 const classic=S.presetLayout('classic');
-assert.equal(mobile.slots.length,13);
-assert.equal(wild.slots.length,13);
-assert.equal(wild.slots[2].label,'Q');
-assert.equal(wild.slots[5].label,'R · УЛЬТА');
-assert(mobile.slots[0].x>mobile.slots[2].x);
+assert.equal(moba.slots.length,13);
+assert.equal(moba.slots[2].label,'УМЕНИЕ 1');
+assert.equal(moba.slots[5].label,'УЛЬТА');
+assert(moba.slots[0].x>moba.slots[2].x);
 assert.equal(classic.slots[2].enabled,false);
 assert.equal(classic.slots[5].enabled,false);
-assert.notDeepEqual(mobile,wild,'Different MOBAs should have distinct templates');
+assert.notDeepEqual(moba,classic);
 assert.throws(()=>S.presetLayout('not-a-real-game'),/Unknown skill HUD preset/);
 const old={version:1,slots:classic.slots.slice(0,4)};
 const migrated=S.validate(old);
@@ -50,14 +48,14 @@ assert.equal(migrated.slots[5].id,'ultimate');
 assert.deepEqual(migrated.slots.slice(0,4),old.slots,
  'Updating the app should retain existing 0.7 player HUD positions');
 assert.deepEqual(S.validate(JSON.parse(JSON.stringify(migrated))),migrated);
-for(const layout of [classic,mobile,wild,S.presetLayout('mmorpg'),S.presetLayout('shooter')]){
+for(const layout of [classic,moba,S.presetLayout('mmorpg'),S.presetLayout('shooter')]){
  const enabled=layout.slots.filter(s=>s.enabled);
  for(let i=0;i<enabled.length;i++)for(let j=i+1;j<enabled.length;j++){
    const a=enabled[i],b=enabled[j];
    const dy=Math.abs(a.y-b.y)*8,dx=Math.abs(a.x-b.x)*12.8;
    const distance=Math.hypot(dx,dy);
    assert(distance>=Math.min(a.size,b.size)*.70,
-    'MOBA buttons overlap excessively: '+a.id+'/'+b.id);
+    'HUD buttons overlap excessively: '+a.id+'/'+b.id);
  }
 }
 const mmo=S.presetLayout('mmorpg');
@@ -72,7 +70,7 @@ for(const id of ['fire','aim','reload','jump','crouch']){
 }
 for(const id of ['slot6','slot7','ultimate'])
  assert.equal(mmo.slots.find(s=>s.id===id).enabled,true,'MMO must show skill '+id);
-const olderV2={version:2,slots:S.presetLayout('wild-rift').slots.slice(0,6)};
+const olderV2={version:2,slots:S.presetLayout('moba').slots.slice(0,6)};
 olderV2.slots[0]={...olderV2.slots[0],x:74,y:68,color:'#112233'};
 const converted=S.validate(olderV2);
 assert.equal(converted.version,3);
@@ -83,4 +81,13 @@ assert.equal(converted.slots.find(s=>s.id==='fire').enabled,false,
  'Shooter placeholder must not pop up in an old MOBA layout');
 assert.equal(S.validate(JSON.parse(JSON.stringify(converted))).version,3);
 assert.notDeepEqual(mmo,shooter);
+const tinyPng='data:image/png;base64,'+
+ Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]).toString('base64');
+const pictured=S.update(moba,'slot3',{image:tinyPng,x:72});
+assert.equal(pictured.slots[2].image,tinyPng);
+assert.equal(S.validate(JSON.parse(JSON.stringify(pictured))).slots[2].image,tinyPng);
+assert.equal(S.presetLayout('moba').slots[2].image,'',
+ 'Individual skill icon must not modify the preset itself');
+assert.throws(()=>S.update(moba,'slot3',{image:'javascript:alert(1)'}),
+ /PNG|WebP|image|embedded/);
 console.log('PASS: MOBA / MMORPG / shooter HUD presets, 0.7/0.8 migration and no overlaps');
