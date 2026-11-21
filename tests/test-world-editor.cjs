@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const path=require('node:path');
 const base=path.resolve(__dirname,'../app/src/main/assets');
 const THREE=global.THREE=require(path.join(base,'js/three.min.js'));
+global.PhoenixTerrainSplat=require(path.join(base,'engine/core/phoenix-terrain-splat.js'));
 global.PhoenixWorldLayout=require(path.join(base,'engine/core/phoenix-world-layout.js'));
 const WorldEditor=require(path.join(base,'engine/builder/phoenix-world-editor.js'));
 const History=require(path.join(base,'js/editor-history.js'));
@@ -25,6 +26,11 @@ const ids=[
  'worldCanvasWidth','worldCanvasDepth','worldTileCustom',
  'worldCanvasInfo','worldPaintStatus','worldCanvasStatus',
  'btnWorldRaise','btnWorldLower','btnWorldSmooth','btnWorldClearHeights',
+ 'worldTextureChosen','btnWorldTexturePaint','btnWorldTextureErase',
+ 'btnWorldOpenTextures','btnWorldImportTexture','worldTextureScale',
+ 'worldTextureScaleValue','worldTextureOpacity','worldTextureOpacityValue',
+ 'worldTextureSoftness','worldTextureSoftnessValue','textureCategoryFilter',
+ 'importLandscapeTexture',
  'worldBrushRadius','worldBrushPower','worldBrushRadiusValue',
  'worldBrushPowerValue','smartCategoryFilter','btnCatalogLandscape'
 ];
@@ -35,10 +41,20 @@ elements.worldCanvasWidth.value='500';
 elements.worldCanvasDepth.value='500';
 elements.worldTileCustom.value='50';
 elements.worldTileStyle.value='grass';
+elements.worldTextureScale.value='4';
+elements.worldTextureOpacity.value='100';
+elements.worldTextureSoftness.value='65';
 const canvas={captured:new Set(),setPointerCapture(id){this.captured.add(id)},
  hasPointerCapture(id){return this.captured.has(id)},
  releasePointerCapture(id){this.captured.delete(id)}};
-const doc={getElementById:id=>elements[id]||null};
+const doc={getElementById:id=>elements[id]||null,createElement(tag){
+ assert.equal(tag,'canvas');
+ const canvas={width:0,height:0};
+ const ctx={createImageData(w,h){return {data:new Uint8ClampedArray(w*h*4)}},
+  putImageData(data){canvas.lastData=data.data}};
+ canvas.getContext=()=>ctx;
+ return canvas;
+}};
 global.window={addEventListener(){},confirm(){return true}};
 const builder={
  canvas,scene:new THREE.Scene(),
@@ -53,6 +69,11 @@ const builder={
  skillEditor:{close(){}},
  skillDefinitionEditor:{close(){}},
  smartCatalogFolder:'all',
+ textureFiles:[{id:'texture:landscape:grass',folder:'landscape-tiles',
+  name:'Трава.png',width:1024,height:1024,bytes:2000000}],
+ textureAsset:async()=>new THREE.Texture(),
+ setTextureTab(){},
+ renderTextureLibrary(){},
  history:new History(20),
  saved:0,
  rayPoint(e){return new THREE.Vector3(e.worldX||0,0,e.worldZ||0)},
@@ -165,6 +186,53 @@ input('pointerup',17,8,10);
 assert.equal(builder.history.undoStack.length,undoBeforePaint+1);
 assert.equal(editor.state.tiles.length,1);
 assert.equal(editor.instanced.has('grass'),true);
+// Round PNG/WebP landscape brush: same file reused, only RLE alpha masks saved.
+const imageId='texture:landscape:grass';
+assert.equal(editor.selectTexture(imageId),true);
+await editor.ensureTexture(imageId);
+assert.equal(editor.paintMode,'texture');
+const beforeTextureHistory=builder.history.undoStack.length;
+input('pointerdown',31,4,8);
+input('pointerup',31,4,8);
+assert.equal(builder.history.undoStack.length,beforeTextureHistory+1,
+ 'One texturing pencil stroke should enter the normal Builder Undo history');
+assert.equal(editor.painter.materials().length,1);
+assert(editor.painter.patches.size>0);
+assert(editor.textureMeshes.size>0,'Image brush must render a real alpha-blended terrain mesh');
+const overlay=[...editor.textureMeshes.values()][0].get(imageId);
+assert(overlay&&overlay.mesh.material.map&&overlay.mesh.material.alphaMap);
+assert(overlay.canvas.lastData.some(value=>value>0),
+ 'Feathered mask must be uploaded to the GPU alpha texture');
+const mockShader={uniforms:{},
+ fragmentShader:'#include <common>\n#include <map_fragment>'};
+overlay.mesh.material.onBeforeCompile(mockShader);
+assert(mockShader.fragmentShader.includes('worldPaintUV'),
+ 'Terrain material must repeat real source image without stretching across a hill');
+assert(mockShader.fragmentShader.includes('terrainRepeat'),
+ 'Tile repeat uniform must use metres independently of alpha mask UV');
+const importedImageOnce=builder.textureFiles.length;
+const paintedSave=builder.project();
+assert.equal(builder.textureFiles.length,importedImageOnce,
+ 'Painting cannot duplicate imported PNG/WebP library entries');
+assert.equal(paintedSave.worldCanvas.paintMasks.some(p=>p.imageId===imageId),true);
+assert(!JSON.stringify(paintedSave.worldCanvas).includes('data:image'),
+ 'Landscape world JSON must keep mask values + image references, not image bytes');
+const sampleBeforeUndo=editor.painter.serialize();
+await builder.history.undo(builder.project(),async doc=>
+ editor.loadFromProject(doc.worldCanvas,{preserveUI:true}));
+assert.equal(editor.painter.patches.size,0,'Shared Undo clears that texture brush stroke');
+await builder.history.redo(builder.project(),async doc=>
+ editor.loadFromProject(doc.worldCanvas,{preserveUI:true}));
+assert.deepEqual(editor.painter.serialize(),sampleBeforeUndo,
+ 'Shared Redo restores the painted hill without new image files');
+elements.worldTextureScale.value='8';
+elements.worldTextureScale.handlers.change({target:elements.worldTextureScale});
+assert.equal(editor.state.textureScale,8);
+assert.equal(editor.serialize().textureScale,8,
+ 'Texture repeat size should persist in portable JSON');
+assert.equal(editor.usesTexture(imageId),true);
+assert.equal(editor.releaseTexture(imageId),false,
+ 'A painting in the project protects its source image from accidental deletion');
 // Old UV44 documents without worldCanvas are migrated to original size.
 editor.loadFromProject(null);
 assert.equal(editor.state.width,128);
