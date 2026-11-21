@@ -4051,6 +4051,14 @@ class CleanBuilder{
   }catch(err){notify('Игровой экспорт: '+err.message,'error')}
  }
  place(){
+  // The bottom "Установить" button is for construction modules only.
+  // While configuring or placing NPCs, never silently spawn a static GLB.
+  // Game entities are placed exclusively through Prefab Editor.
+  if(this.prefabEditor?.pendingPlace||this.prefabEditor?.pendingWaypointId||
+     (this.prefabEditor?.panel&&!this.prefabEditor.panel.hidden)){
+   notify('⚠ Открыты настройки мобов. Для NPC нажми «Поставить моба» в редакторе, а не строительное «Установить».','warn');
+   return false;
+  }
   if(!this.preview)return;
   if(this.wallChainBlocked&&this.preview.category==='wall')
    return notify('🔴 Свободный стык занят. Укажи другое место для новой стены','warn');
