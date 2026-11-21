@@ -46,7 +46,9 @@
    growth:number(raw.growth??10,0,1000000,'growth'),
    manaCost:number(raw.manaCost??15,0,10000,'manaCost'),
    cooldown:number(raw.cooldown??5,.1,120,'cooldown'),
-   range:number(raw.range??8,.5,60,'range'),animation};
+   range:number(raw.range??8,.5,60,'range'),animation,
+   effect:(typeof globalThis!=='undefined'&&globalThis.PhoenixVFX?
+    globalThis.PhoenixVFX:require('../runtime/phoenix-vfx.js')).normalize(raw.effect,type)};
  }
  function power(def){const valid=skill(def);return valid.basePower+(valid.level-1)*valid.growth;}
  function json(v){return JSON.parse(JSON.stringify(v));}
