@@ -103,6 +103,8 @@ jobs:
             node tests/test-skill-definition-editor.cjs
             node tests/test-play-weapon-skills.cjs
             node tests/test-phoenix-player-combat.cjs
+          node tests/test-phoenix-level-talent-tree.cjs
+          node tests/test-play-rpg-wiring.cjs
             node tests/test-editor-mode-isolation.cjs
           node --test server/tests/room.test.mjs
           node tests/test-phoenix-network.cjs
