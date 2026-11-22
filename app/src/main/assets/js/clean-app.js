@@ -4480,6 +4480,7 @@ class CleanBuilder{
    notify('📦 Игровой GLB проверен: '+check.meshes+' сеток, '+
     check.images+' изображений, '+(blob.size/1048576).toFixed(1)+
     ' МБ. Выбери место сохранения.','success');
+   return true;
   }catch(err){console.error('GLB export',err);
    notify('Ошибка GLB: '+(err?.message||err),'error')}
  }
