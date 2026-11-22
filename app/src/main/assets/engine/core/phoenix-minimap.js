@@ -10,7 +10,8 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
  const VERSION=1;
- const SHAPES=['circle','square'],POSITIONS=['top-left','top-right','bottom-left','bottom-right'];
+ const SHAPES=['circle','square','rounded','hex'],
+  POSITIONS=['top-left','top-right','bottom-left','bottom-right'];
  const COLORS=Object.freeze({enemy:'#ff4e51',passive:'#f4fdff',
   npc:'#f4fdff',boss:'#ff1d28',player:'#66faff'});
  const defaults=()=>({version:VERSION,shape:'circle',position:'top-left',
@@ -50,6 +51,28 @@
   const v=hash(tile.style)%4;
   return ['#385a49','#51604d','#435a53','#5b5a43'][v];
  };
+ function outline(ctx,shape,size){
+  const c=size/2,pad=2;
+  ctx.beginPath();
+  if(shape==='circle')ctx.arc(c,c,c-pad,0,Math.PI*2);
+  else if(shape==='hex'){
+   const r=c-pad;
+   for(let i=0;i<6;i++){
+    const angle=-Math.PI/2+i*Math.PI/3;
+    const x=c+Math.cos(angle)*r,y=c+Math.sin(angle)*r;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+   }
+   ctx.closePath();
+  }else if(shape==='rounded'){
+   const r=Math.min(24,size*.16),max=size-pad,min=pad;
+   ctx.moveTo(min+r,min);ctx.lineTo(max-r,min);
+   ctx.quadraticCurveTo(max,min,max,min+r);
+   ctx.lineTo(max,max-r);ctx.quadraticCurveTo(max,max,max-r,max);
+   ctx.lineTo(min+r,max);ctx.quadraticCurveTo(min,max,min,max-r);
+   ctx.lineTo(min,min+r);ctx.quadraticCurveTo(min,min,min+r,min);
+   ctx.closePath();
+  }else ctx.rect(pad,pad,size-pad*2,size-pad*2);
+ }
  function draw(ctx,data,config){
   const opt=normalize(config),size=opt.size,center=size/2;
   const radius=size/2-6,range=opt.range;
@@ -58,10 +81,7 @@
   const v=(wx,wz)=>project(wx,wz,x,z,center,range);
   const state=data.world||{};
   ctx.clearRect(0,0,size,size);
-  ctx.save();ctx.beginPath();
-  if(opt.shape==='circle')ctx.arc(center,center,center-2,0,2*Math.PI);
-  else ctx.rect(1,1,size-2,size-2);
-  ctx.clip();
+  ctx.save();outline(ctx,opt.shape,size);ctx.clip();
   ctx.fillStyle='#112e37';ctx.fillRect(0,0,size,size);
   if(opt.showTerrain){
    const width=Number(state.width)||128,depth=Number(state.depth)||128;
@@ -121,10 +141,7 @@
   ctx.fillStyle=COLORS.player;ctx.fill();ctx.restore();
   ctx.restore();
   ctx.save();ctx.lineWidth=2;ctx.strokeStyle='#91c4bd';
-  ctx.beginPath();
-  if(opt.shape==='circle')ctx.arc(center,center,center-2,0,2*Math.PI);
-  else ctx.rect(1,1,size-2,size-2);
-  ctx.stroke();
+  outline(ctx,opt.shape,size);ctx.stroke();
   if(opt.showCompass){
    ctx.textAlign='center';ctx.font='bold 12px sans-serif';
    for(const [letter,px,py,color] of [
