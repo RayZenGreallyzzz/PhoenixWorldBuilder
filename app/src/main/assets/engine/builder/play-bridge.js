@@ -11,6 +11,8 @@
  'use strict';
  const PlayerProfiles=(typeof globalThis!=='undefined'&&globalThis.PhoenixPlayerCombat)||
   (typeof require==='function'?require('../core/phoenix-player-combat.js'):null);
+ const Progression=(typeof globalThis!=='undefined'&&globalThis.PhoenixProgression)||
+  (typeof require==='function'?require('../core/phoenix-progression.js'):null);
  class PhoenixPlayBridge {
   constructor(builder, core, doc) {
    if (!builder || !core || !core.PhoenixWorld || !core.PhoenixModeController)
@@ -24,6 +26,9 @@
    this.saved = null;
    this.healReadyAt=0;
    this.playerCombat=PlayerProfiles.normalize();
+   this.progressionSession=null;this.progressionSignature='';
+   this.playerRuntimeStats=null;this.playerActiveCombat=null;
+   this.levelLine=this.document.getElementById('phoenixLevelLine');
    this.weapon=typeof PhoenixWeapon!=='undefined'?new PhoenixWeapon.Session():null;
    this.ammoSignature='';
    const playButton = this.document.getElementById('btnPhoenixPlay');
@@ -118,6 +123,68 @@
    }
   }
 
+  // Build effective PLAY stats without ever changing the authored profile.
+  initializeProgression(){
+   const raw=this.builder.progressionEditor?.serializePlayer?.()||null;
+   if(!raw){
+    this.progressionSession=null;this.progressionSignature='';
+    this.playerRuntimeStats=null;this.playerActiveCombat=null;return;
+   }
+   const signature=JSON.stringify(raw);
+   if(!this.progressionSession||this.progressionSignature!==signature){
+    this.progressionSession=new Progression.Session(raw);
+    this.progressionSignature=signature;
+   }
+   this.applyProgressionStats();
+  }
+  applyProgressionStats(){
+   if(!this.progressionSession){
+    this.playerRuntimeStats=null;this.playerActiveCombat=null;return;
+   }
+   const stats=this.progressionSession.stats;
+   this.playerRuntimeStats=stats;
+   this.playerActiveCombat=PlayerProfiles.normalize({
+    ...this.playerCombat,hp:Math.round(stats.hp),damage:stats.damage,
+    cooldown:Math.max(.06,Math.min(10,1/stats.attackSpeed))
+   });
+  }
+  onMobKilled(id,result){
+   if(!this.active||!result?.killed||!this.progressionSession)return;
+   const mob=this.builder.prefabEditor?.mobProfile?.(id);
+   const mobLevel=Math.max(1,Math.min(150,Number(mob?.level)||1));
+   const reward=Math.round(40+mobLevel*12);
+   const before=this.progressionSession.level;
+   const gained=this.progressionSession.grant(reward);
+   if(gained.levels){
+    this.applyProgressionStats();
+    const combat=this.builder.prefabEditor?.combat;
+    if(combat&&this.playerActiveCombat){
+     // Level-up replenishes HP by the extra maximum amount, never changes
+     // any serialized prefab or construction entity.
+     const increase=this.playerActiveCombat.hp-combat.playerMaxHp;
+     combat.playerMaxHp=this.playerActiveCombat.hp;
+     combat.playerHp=Math.max(0,Math.min(combat.playerMaxHp,combat.playerHp+increase));
+     combat.damage=this.playerActiveCombat.damage;
+     combat.cooldown=this.playerActiveCombat.cooldown;
+    }
+    const skill=this.builder.skillDefinitionEditor?.runtime;
+    if(skill){
+     const mp=Math.max(1,Math.round(this.playerRuntimeStats.mp));
+     skill.mp=Math.max(0,Math.min(mp,skill.mp+mp-skill.maxMp));
+     skill.maxMp=mp;
+    }
+    if(this.weapon&&this.playerCombat.mode==='ranged'){
+     this.weapon.damage=this.playerActiveCombat.damage;
+     this.weapon.fireInterval=this.playerActiveCombat.cooldown;
+    }
+   }
+   this.updatePlayerHud();this.updateManaHud();
+   if(this.combatNotice)this.combatNotice.textContent=gained.levels?
+    '🌟 Уровень '+before+' → '+gained.level+
+    ' · +'+gained.gained+' XP · очки навыков: '+gained.skillPoints:
+    '✨ +'+gained.gained+' XP · '+gained.xp+'/'+gained.nextXP;
+  }
+
   message(text, level) {
    const status = this.document.getElementById('status');
    const dot = this.document.getElementById('placementDot');
@@ -168,21 +235,23 @@
     this.document.body.classList.add('phoenixPlaying');
     this.hud.hidden = false;
     this.modeController.setMode('play');
+    this.initializeProgression();
     b.prefabEditor?.setPlaying(true);
     if(typeof PhoenixVFX!=='undefined'&&typeof THREE!=='undefined'&&b.scene)
      this.effects=new PhoenixVFX.SceneFX(b.scene,THREE);
     this.createMobTags();this.selectMob('');
     b.skillEditor?.setPlaying(true);
-    b.skillDefinitionEditor?.startPlay();
+    b.skillDefinitionEditor?.startPlay(this.playerRuntimeStats?.mp);
     if(this.weapon&&typeof PhoenixWeapon!=='undefined'){
      // Preserve older shooter-HUD weapon stats for existing projects.
      // The new profile configures the gun only when ranged style is selected.
+     const combat=this.playerActiveCombat||this.playerCombat;
      this.weapon=new PhoenixWeapon.Session(this.playerCombat.mode==='ranged'?{
-      magazineSize:this.playerCombat.magazineSize,
-      reserveCapacity:this.playerCombat.reserveCapacity,
-      damage:this.playerCombat.damage,range:this.playerCombat.range,
-      fireInterval:this.playerCombat.cooldown,
-      reloadDuration:this.playerCombat.reloadDuration
+      magazineSize:combat.magazineSize,
+      reserveCapacity:combat.reserveCapacity,
+      damage:combat.damage,range:combat.range,
+      fireInterval:combat.cooldown,
+      reloadDuration:combat.reloadDuration
      }:{});
     }
     this.ammoSignature='';
@@ -204,6 +273,7 @@
     this.clearMobTags();this.effects?.dispose();this.effects=null;
     b.skillEditor?.setPlaying(false);
     b.skillDefinitionEditor?.stopPlay();
+    this.playerRuntimeStats=null;this.playerActiveCombat=null;
     this.document.body.classList.remove('phoenixPlaying');
     this.hud.hidden = true;
     if(this.combatHud)this.combatHud.hidden=true;
@@ -265,6 +335,7 @@
     this.clearMobTags();this.effects?.dispose();this.effects=null;
     b.skillEditor?.setPlaying(false);
    b.skillDefinitionEditor?.stopPlay();
+   this.playerRuntimeStats=null;this.playerActiveCombat=null;
    this.document.body.classList.remove('phoenixPlaying');
    this.hud.hidden = true;
    if(this.combatHud)this.combatHud.hidden=true;
@@ -411,6 +482,13 @@
    if(this.playerHPText)this.playerHPText.textContent=
     player.hp+' / '+player.maxHp+' HP';
    if(this.killsLabel)this.killsLabel.textContent='☠ Побеждено: '+player.kills;
+   if(this.levelLine){
+    const s=this.progressionSession?.status();
+    this.levelLine.hidden=!s;
+    if(s)this.levelLine.textContent='🌟 Ур. '+s.level+
+     (s.nextXP?' · XP '+s.xp+'/'+s.nextXP:' · MAX')+
+     ' · Очки навыков: '+s.skillPoints+' (тест PLAY)';
+   }
    if(this.deathNotice)this.deathNotice.hidden=!player.dead;
    if(this.respawnButton)this.respawnButton.hidden=!player.dead;
    if(this.attackButton)this.attackButton.disabled=player.dead;
@@ -448,7 +526,7 @@
    b.avatarAttackUntil=0;b.avatarState='';
    b.prefabEditor.setPlaying(true);
    this.createMobTags();
-   b.skillDefinitionEditor?.resetPlay();
+   b.skillDefinitionEditor?.resetPlay(this.playerRuntimeStats?.mp);
    this.weapon?.reset();this.ammoSignature='';
    this.healReadyAt=0;
    b.setAvatarAnimation?.(false);
