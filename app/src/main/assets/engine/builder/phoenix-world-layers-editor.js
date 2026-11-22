@@ -22,6 +22,7 @@
    listen('btnPhoenixWorldLayers','click',()=>this.toggle());
    listen('btnWorldLayersClose','click',()=>this.close());
    listen('btnExportMapLayer','click',()=>this.exportMap());
+   listen('btnExportExternalWorld','click',()=>this.exportExternalWorld());
    listen('btnExportEntityLayer','click',()=>this.exportEntities());
    listen('btnImportMapLayer','click',()=>this.el('phoenixImportMapLayerFile')?.click());
    listen('btnImportEntityLayer','click',()=>this.el('phoenixImportEntityLayerFile')?.click());
