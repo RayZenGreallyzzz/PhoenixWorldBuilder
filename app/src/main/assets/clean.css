@@ -835,5 +835,6 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
 #phoenixServerPanel #btnPhoenixServerExport{background:#147662;border-color:#74efc5}
 #phoenixServerPanel .phoenixServerActions{display:flex;flex-wrap:wrap;gap:6px}
 #phoenixServerPanel .phoenixServerActions button{flex:1 1 95px}
-#phoenixServerStatus,#phoenixServerPlayers{display:block;border:1px solid #477f96;background:#193947;padding:8px;border-radius:8px}
+#phoenixServerStatus,#phoenixServerPlayers,#phoenixServerCapabilities{display:block;border:1px solid #477f96;background:#193947;padding:8px;border-radius:8px;white-space:pre-line}
+#phoenixServerImportFile[hidden]{display:none!important}
 @media(max-width:600px){#phoenixServerPanel{padding:10px;gap:7px}#phoenixServerPanel input{font-size:12px}}
