@@ -101,6 +101,7 @@ jobs:
             node tests/test-phoenix-weapon.cjs
             node tests/test-phoenix-skills.cjs
           node tests/test-phoenix-character-inventory.cjs
+          node tests/test-phoenix-gallery-ui.cjs
           node tests/test-phoenix-live-minimap.cjs
           node tests/test-skill-clip-menu.cjs
             node tests/test-skill-definition-editor.cjs
