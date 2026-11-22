@@ -4442,7 +4442,9 @@ class CleanBuilder{
     })),created:new Date().toISOString()};
  }
  async exportGLB(){
-  if(!this.entries.some(o=>!o.hidden))return notify('Все детали скрыты. Открой хотя бы одну для GLB','warn');
+  if(!this.entries.some(o=>!o.hidden)){
+   notify('Все детали скрыты. Открой хотя бы одну для GLB','warn');return false;
+  }
   try{
    notify('📦 Подготавливаю GLB со стенами, проёмами, крышами и текстурами...','neutral');
    // Ensure IndexedDB images are loaded and actually assigned to meshes
