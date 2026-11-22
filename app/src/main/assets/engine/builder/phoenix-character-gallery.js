@@ -19,6 +19,7 @@
    this.selection='player';this.modelToken=0;
    this.preview=null;this.previewRoot=null;this.mixer=null;this.rotation=0;
    this.turnSpeed=.31;this.zoom=1;this.lastX=null;
+   this.previewFit=null;
    this.models=new Map();
    this.bind();
   }
@@ -49,6 +50,9 @@
    this.el('btnGalleryProgression')?.addEventListener('click',()=>this.openProgression());
    this.el('btnGalleryPrefab')?.addEventListener('click',()=>this.openPrefab());
    this.el('btnGalleryViewHero')?.addEventListener('click',()=>this.showModel(this.selection));
+   this.el('btnGalleryZoomOut')?.addEventListener('click',()=>this.setPreviewZoom(this.zoom/1.2));
+   this.el('btnGalleryZoomIn')?.addEventListener('click',()=>this.setPreviewZoom(this.zoom*1.2));
+   this.el('btnGalleryFit')?.addEventListener('click',()=>this.fitPreview());
    this.el('btnGalleryAddItem')?.addEventListener('click',()=>this.addItem());
    this.el('btnPhoenixPlayInventory')?.addEventListener('click',()=>{
     this.open('player');
@@ -140,6 +144,7 @@
   close(){
    this.panel.hidden=true;this.modelToken++;
    this.mixer?.stopAllAction?.();this.mixer=null;this.previewRoot=null;
+   this.previewFit=null;this.zoom=1;
    if(this.preview?.subject)this.preview.subject.clear();
    return true;
   }
@@ -284,7 +289,7 @@
    if(!T||!canvas)return null;
    const scene=new T.Scene();scene.background=new T.Color('#142c3e');
    const camera=new T.PerspectiveCamera(36,1.2,.1,100);
-   camera.position.set(3.4,2.35,4.4);camera.lookAt(0,1.25,0);
+   camera.position.set(0,1.5,5.4);camera.lookAt(0,1,0);
    scene.add(new T.HemisphereLight(0xc5e8ff,0x25462e,1.4));
    const light=new T.DirectionalLight(0xffffff,1.55);
    light.position.set(3,6,4);scene.add(light);
@@ -305,6 +310,38 @@
     renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
    }catch(error){console.warn('3D gallery unavailable',error);return null}
    this.preview={scene,camera,renderer,subject};return this.preview;
+  }
+  // Zoom affects ONLY the independent pedestal camera, not model scale,
+  // authored GLB transform or real Builder player.
+  setPreviewZoom(next){
+   if(!Number.isFinite(next)||!this.preview)return false;
+   this.zoom=Math.max(.5,Math.min(2.5,next));
+   this.placePreviewCamera();
+   return true;
+  }
+  fitPreview(){
+   if(!this.preview)return false;
+   this.zoom=1;this.placePreviewCamera();
+   return true;
+  }
+  placePreviewCamera(){
+   const fit=this.previewFit,camera=this.preview?.camera;
+   if(!fit||!camera)return false;
+   const distance=fit.distance/this.zoom;
+   camera.position.set(distance*.16,fit.targetY+distance*.11,distance*.98);
+   camera.lookAt(0,fit.targetY,0);
+   camera.updateProjectionMatrix();
+   return true;
+  }
+  computePreviewFit(width,height,aspect=1){
+   // Perspective framing with generous margins for capes, horns, shields
+   // and the animated idle pose. Width and height are normalized GLB bounds.
+   const halfFov=36*Math.PI/360;
+   const hFov=Math.atan(Math.tan(halfFov)*Math.max(.5,aspect));
+   return {targetY:height*.47,
+    distance:Math.max(3.8,
+     (height+.65)/(2*Math.tan(halfFov)*.73),
+     (width+.3)/(2*Math.tan(hFov)*.72))};
   }
   placeholder(){
    const T=globalThis.THREE;
@@ -360,6 +397,12 @@
    model.position.z-=center.z*scale;
    model.position.y-=bounds.min.y*scale;
    preview.subject.add(model);this.previewRoot=model;
+   this.zoom=1;
+   const shownHeight=height*scale;
+   const shownWidth=width*scale;
+   this.previewFit=this.computePreviewFit(shownWidth,shownHeight,
+    preview.camera.aspect||1);
+   this.placePreviewCamera();
    if(clips.length){
     this.mixer=new T.AnimationMixer(model);
     const selected=clips.find(c=>/idle|stand|rest|покой/i.test(c.name))||clips[0];
