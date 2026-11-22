@@ -54,7 +54,7 @@
     const result=await PhoenixFiles.savePortableProject(made.project,
      this.b.textureFiles,made.models,this.io.readAsset,
      'Phoenix_World_Map.phoenix.json');
-    this.info('✅ Карта экспортирована: '+made.stats.objects.length+
+    this.info('✅ Карта экспортирована: '+made.stats.objects+
      ' объектов. Мобы, NPC и персонаж не удалялись с холста.'+
      ' В файл включены ресурсы карты и рельеф.');
     return result;
