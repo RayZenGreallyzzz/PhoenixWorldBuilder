@@ -99,7 +99,7 @@ assert.equal(merged.placed,2);
 assert.deepEqual(merged.project.objects,map.project.objects);
 assert.deepEqual(merged.project.worldCanvas,map.project.worldCanvas);
 assert.deepEqual(merged.project.phoenixGame.world,project.phoenixGame.world);
-assert.deepEqual(merged.project.phoenixGame.minimap,undefined,
+assert.deepEqual(merged.project.phoenixGame.minimap,null,
  'Unpopulated destination map should not gain old creature map UI');
 const mapWithPlayer=JSON.parse(JSON.stringify(map.project));
 mapWithPlayer.avatar={assetId:'glb:avatar:other',fileName:'NewHero.glb'};
