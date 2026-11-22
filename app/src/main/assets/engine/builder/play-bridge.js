@@ -640,7 +640,10 @@
     if(this.combatNotice)this.combatNotice.textContent=
      result.reason==='mana'?'🔵 Недостаточно MP':
      result.reason==='cooldown'?'⏳ Навык на перезарядке':
-     result.reason==='no-target'?'🎯 Нет доступной цели':'🧙 Навык не назначен';
+     result.reason==='no-target'?'🎯 Нет доступной цели':
+     result.reason==='level'?'🔒 Навык откроется на уровне '+result.requiredLevel:
+     result.reason==='prerequisite'?'🌳 Сначала изучи предыдущий навык (ур. '+result.requiresLevel+')':
+     '🧙 Навык не назначен';
     return false;
    }
    this.builder.playCastAnimation?.();
