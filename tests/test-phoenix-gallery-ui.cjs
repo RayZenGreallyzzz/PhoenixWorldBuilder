@@ -14,7 +14,8 @@ class Element{
  addEventListener(event,fn){this.listeners[event]=fn;}
 }
 const ids=['phoenixGalleryPanel','btnPhoenixGallery','btnGalleryClose',
- 'btnGalleryRefresh','btnGalleryViewHero','btnGallerySkills','btnGalleryProgression',
+ 'btnGalleryRefresh','btnGalleryViewHero','btnGalleryZoomOut','btnGalleryFit',
+ 'btnGalleryZoomIn','btnGalleryMap','btnGallerySkills','btnGalleryProgression',
  'btnGalleryPrefab','btnGalleryAddItem','btnGalleryCreate',
  'btnPhoenixPlayInventory','phoenixGalleryGrid','phoenixGalleryCanvas',
  'phoenixGalleryName','phoenixGalleryStats','phoenixGalleryItems',
