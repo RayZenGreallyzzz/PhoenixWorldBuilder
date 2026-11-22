@@ -197,7 +197,7 @@
    this.close();
   }
   stopPlay(){this.runtime=null;}
-  resetPlay(){this.startPlay();}
+  resetPlay(maxMp=100){this.startPlay(maxMp);}
   cast(slot,time,canApply){
    if(!this.runtime)return {ok:false,reason:'edit'};
    return this.runtime.cast(slot,time,canApply);
