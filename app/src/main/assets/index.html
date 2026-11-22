@@ -230,7 +230,22 @@
  <div class="phoenixSkillRow"><label>Расход MP<input id="skillDefManaCost" type="number" min="0" max="10000" value="15"></label>
  <label>Кулдаун, сек<input id="skillDefCooldown" type="number" min=".1" max="120" step=".1" value="5"></label></div>
  <div class="phoenixSkillRow"><label>Дальность, м<input id="skillDefRange" type="number" min=".5" max="60" step=".5" value="8"></label>
- <label>Анимация GLB<input id="skillDefAnimation" maxlength="80" value="cast"></label></div>
+ </div>
+ <div class="phoenixSkillClipPicker" role="group" aria-label="Анимация выбранного навыка">
+  <b>🎞 Своя анимация для этого скилла</b>
+  <label>Клип из GLB выбранного героя / моба
+   <select id="skillDefAnimationChoice" aria-label="Выбрать клип GLB для навыка">
+    <option value="cast">Автоматически: Cast</option>
+   </select>
+  </label>
+  <div class="phoenixSkillClipActions">
+   <label>Точное название клипа (можно ввести вручную)
+    <input id="skillDefAnimation" maxlength="120" value="cast" placeholder="Cast_Fire_01">
+   </label>
+   <button id="btnSkillDefPreviewAnimation" type="button">▶ Просмотр</button>
+  </div>
+  <small id="skillDefAnimationInfo" aria-live="polite">Выбери персонажа и навык: появятся все анимации внутри его GLB. Каждый слот хранит собственный клип.</small>
+ </div>
  <b>✨ Визуальный эффект навыка · игрок и моб</b>
  <label>Тип эффекта<select id="skillDefFxPreset">
   <option value="none">Без эффекта</option><option value="impact">💥 Удар</option>
