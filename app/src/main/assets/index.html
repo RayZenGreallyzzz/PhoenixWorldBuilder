@@ -60,6 +60,17 @@
  <div class="phoenixGalleryTitle"><b>🧬 Phoenix Character Gallery</b><button id="btnGalleryClose" type="button" aria-label="Закрыть галерею">✕</button></div>
  <p class="phoenixGalleryHint">Герои, мобы, NPC и боссы берутся из сохранённых шаблонов, без дублирования моделей. Нажми ячейку для осмотра персонажа.</p>
  <div class="phoenixGalleryToolbar"><button id="btnGalleryRefresh" type="button">🔄 Обновить библиотеку</button><button id="btnGalleryViewHero" type="button">🧍 Вернуть героя на постамент</button></div>
+ <details id="phoenixGalleryCreate" class="phoenixGallerySection">
+  <summary>＋ Добавить загруженный GLB в галерею</summary>
+  <label>Поиск модели в библиотеке<input id="phoenixGalleryModelSearch" placeholder="Начни вводить имя GLB…" autocomplete="off"></label>
+  <label>Найденные модели<select id="phoenixGalleryModelSelect"><option value="">Сначала найди GLB</option></select></label>
+  <div class="phoenixGalleryFields">
+   <label>Имя карточки<input id="phoenixGalleryCreateName" maxlength="80" placeholder="Лучник, ассасин, маг, волк…"></label>
+   <label>Тип<select id="phoenixGalleryCreateType"><option value="hero">🧍 Герой</option><option value="mob">🐺 Моб</option><option value="npc">🧑 NPC</option><option value="boss">👹 Босс</option></select></label>
+  </div>
+  <button id="btnGalleryCreate" type="button" class="primary">＋ Создать персонажа из GLB</button>
+  <small>Исходный GLB остаётся в библиотеке. Создаётся отдельный шаблон с собственным ID для навыков, экипировки и уровней.</small>
+ </details>
  <div id="phoenixGalleryGrid" class="phoenixGalleryGrid" aria-label="Библиотека персонажей"></div>
  <div class="phoenixGalleryViewer">
   <canvas id="phoenixGalleryCanvas" width="280" height="220" aria-label="Вращающийся 3D-персонаж на постаменте; проведи пальцем для поворота"></canvas>
