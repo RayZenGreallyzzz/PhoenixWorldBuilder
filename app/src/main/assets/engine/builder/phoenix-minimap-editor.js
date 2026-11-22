@@ -116,6 +116,8 @@
     mobs.push({id,x:render.root.position.x,z:render.root.position.z,
      type:preset?.type||c.type||'mob',faction:c.faction||preset?.faction||'enemy',
      engagement:c.ai?.engagement||preset?.ai?.engagement||'auto',
+     mode:c.ai?.mode||preset?.ai?.mode||'idle',
+     provoked:(render.aiState?.provoked||0)>0,
      boss:preset?.type==='boss',dead:!!m?.dead});
    }
    // Avoid sampling outside the original terrain extents.
