@@ -770,6 +770,7 @@
   }
   animateHit(id,result){
    if(!result?.ok)return result;
+   if(result.killed)this.b.playBridge?.onMobKilled?.(id,result);
    const render=this.rendered.get(id);
    if(!render)return result;
    if(result.killed){
