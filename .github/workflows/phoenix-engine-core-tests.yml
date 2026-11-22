@@ -58,6 +58,10 @@ on:
       - 'app/src/main/AndroidManifest.xml'
       - 'tests/test-phoenix-network.cjs'
       - 'tests/test-phoenix-network-foundation.cjs'
+      - 'tests/test-phoenix-level-talent-tree.cjs'
+      - 'tests/test-play-rpg-wiring.cjs'
+      - 'app/src/main/assets/engine/core/phoenix-progression.js'
+      - 'app/src/main/assets/engine/core/phoenix-skills.js'
       - 'app/src/main/assets/engine/core/phoenix-network-foundation.js'
       - 'app/src/main/assets/engine/core/phoenix-player-combat.js'
       - '.github/workflows/phoenix-engine-core-tests.yml'
@@ -144,6 +148,8 @@ jobs:
           node tests/test-skill-definition-editor.cjs
           node tests/test-play-weapon-skills.cjs
           node tests/test-phoenix-player-combat.cjs
+          node tests/test-phoenix-level-talent-tree.cjs
+          node tests/test-play-rpg-wiring.cjs
           node tests/test-editor-mode-isolation.cjs
           node --test server/tests/room.test.mjs
           node tests/test-phoenix-network.cjs
