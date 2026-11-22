@@ -34,7 +34,9 @@ const events=[],context={
  fill(){events.push(['fill',this.fillStyle])},
  fillRect(x,y,w,h){events.push(['fillRect',x,y,w,h,this.fillStyle])},
  stroke(){events.push(['stroke'])},translate(){},rotate(){},
- moveTo(){},lineTo(){},closePath(){},fillText(letter){events.push(['text',letter])},
+ moveTo(){events.push(['move'])},lineTo(){events.push(['line'])},
+ quadraticCurveTo(){events.push(['curve'])},closePath(){events.push(['close'])},
+ fillText(letter){events.push(['text',letter])},
  clearRect(){},set textAlign(v){},set font(v){},set lineWidth(v){},
  set strokeStyle(v){},set fillStyle(v){this._fillStyle=v},
  get fillStyle(){return this._fillStyle}
