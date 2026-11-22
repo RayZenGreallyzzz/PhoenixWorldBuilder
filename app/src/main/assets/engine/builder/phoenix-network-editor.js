@@ -8,38 +8,11 @@
  if(root)root.PhoenixNetworkEditor=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const STORAGE='phoenix-server-profiles-v1',MAX_PROFILES=20;
- const roomPattern=/^[a-z][a-z0-9-]{0,39}$/;
- const defaults=()=>({name:'Мой сервер',url:'ws://127.0.0.1:8787',
-  worldId:'main',nickname:'Разработчик',autoConnect:false});
- const clean=v=>JSON.parse(JSON.stringify(v));
- function serverUrl(input,roomId){
-  if(!roomPattern.test(roomId))throw Error('ID мира: строчные латинские буквы, цифры и тире');
-  let url;try{url=new URL(input)}catch{throw Error('Неверный адрес сервера')}
-  if(!['ws:','wss:'].includes(url.protocol)||!url.hostname||
-    url.username||url.password||url.search||url.hash)
-   throw Error('Нужен адрес ws:// или wss:// без логина и пароля');
-  const host=url.hostname.replace(/^\[|\]$/g,'');
-  const lan=host==='localhost'||host==='127.0.0.1'||host==='::1'||
-   /^192\.168\.\d+\.\d+$/.test(host)||/^10\.\d+\.\d+\.\d+$/.test(host)||
-   /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host);
-  if(url.protocol==='ws:'&&!lan)
-   throw Error('Для публичного сервера используй защищённый адрес wss://');
-  url.pathname='/ws/'+roomId;return url.href;
- }
- function validConfig(raw){
-  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Неверные настройки');
-  const data={
-   name:String(raw.name||'').trim(),url:String(raw.url||'').trim(),
-   worldId:String(raw.worldId||'').trim(),
-   nickname:String(raw.nickname||'').trim(),
-   autoConnect:raw.autoConnect===true
-  };
-  if(!data.name||data.name.length>50)throw Error('Название подключения: до 50 символов');
-  if(!data.nickname||data.nickname.length>32||
-     /[\x00-\x1f<>]/.test(data.nickname))throw Error('Ник: 1–32 символа');
-  serverUrl(data.url,data.worldId);return data;
- }
+ const Foundation=(typeof globalThis!=='undefined'&&globalThis.PhoenixNetworkFoundation)||
+  (typeof require==='function'?require('../core/phoenix-network-foundation.js'):null);
+ const STORAGE='phoenix-server-profiles-v1',MAX_PROFILES=Foundation.MAX_PROFILES;
+ const defaults=Foundation.defaults,serverUrl=Foundation.endpoint;
+ const validConfig=Foundation.normalize;
  class NetworkEditor{
   constructor(builder,doc){
    this.b=builder;this.doc=doc||document;
@@ -47,7 +20,7 @@
    this.profiles=[];this.selected='';
    this.socket=null;this.joined=false;this.playerId='';
    this.remote=new Map();this.moveElapsed=0;
-   this.session=0;this.lastSent=null;
+   this.session=0;this.lastSent=null;this.serverCapabilities=null;
    this.layer=typeof THREE!=='undefined'?new THREE.Group():null;
    if(this.layer){this.layer.name='phoenix:other-online-players';
     this.layer.visible=false;this.b.scene?.add(this.layer)}
@@ -63,11 +36,13 @@
    try{
     const data=JSON.parse(localStorage.getItem(STORAGE)||'null');
     if(!data||!Array.isArray(data.profiles)||data.profiles.length>MAX_PROFILES)return;
-    this.profiles=data.profiles.filter(p=>{
-     try{validConfig(p.data);return typeof p.id==='string'&&p.id.length<70}
+    // Keep the existing v1 local profiles; corrupt items cannot stop startup.
+    const safe=data.profiles.filter(p=>{
+     try{Foundation.portable({selected:'',profiles:[p]});return true}
      catch{return false}
-    }).map(p=>({id:p.id,data:validConfig(p.data)}));
-    this.selected=this.profiles.some(p=>p.id===data.selected)?data.selected:'';
+    });
+    const restored=Foundation.portable({selected:data.selected,profiles:safe});
+    this.profiles=restored.profiles;this.selected=restored.selected;
    }catch{/* No stored profiles, use defaults. */}
   }
   persist(){
@@ -112,6 +87,9 @@
    on('btnPhoenixServerDelete','click',()=>this.remove());
    on('btnPhoenixServerTest','click',()=>this.test());
    on('btnPhoenixServerExport','click',()=>this.exportWorld());
+   on('btnPhoenixServerBackup','click',()=>this.exportProfiles());
+   on('btnPhoenixServerImport','click',()=>this.el('phoenixServerImportFile')?.click());
+   on('phoenixServerImportFile','change',e=>this.importProfiles(e.target));
   }
   readSafe(){try{return this.read()}catch{return null}}
   open(){
@@ -149,6 +127,43 @@
    this.status('Подключение удалено только с телефона; сам сервер не затронут.');
    return true;
   }
+  async exportProfiles(){
+   if(this.b.playBridge?.active)return false;
+   try{
+    const bundle=Foundation.exportBundle({selected:this.selected,profiles:this.profiles});
+    const file=new Blob([JSON.stringify(bundle,null,2)],{type:'application/json'});
+    await PhoenixFiles.saveBlob(file,'Phoenix_Server_Connections.json','application/json');
+    this.status('📦 Адреса серверов сохранены. Секретов и автоподключения в файле нет.');
+    return true;
+   }catch(error){this.status('⚠ Ошибка копии: '+error.message);return false}
+  }
+  async importProfiles(input){
+   if(this.b.playBridge?.active)return false;
+   const file=input?.files?.[0];if(!file)return false;
+   try{
+    if(file.size>Foundation.MAX_BYTES)throw Error('Файл больше 64 КБ');
+    const parsed=Foundation.importBundle(await file.text());
+    const combined=Foundation.merge({selected:this.selected,profiles:this.profiles},parsed);
+    this.profiles=combined.profiles;this.selected=combined.selected;
+    this.persist();this.renderProfiles();
+    this.status('✅ Импортировано подключений: '+parsed.profiles.length+
+     '. Автоподключение не включалось.');
+    return true;
+   }catch(error){this.status('⚠ Ошибка импорта: '+error.message);return false}
+   finally{input.value=''}
+  }
+  showCapabilities(info){
+   const label=this.el('phoenixServerCapabilities');
+   if(!label)return;
+   if(!info?.compatible){
+    label.textContent='⚠ Сервер несовместим: требуется протокол Phoenix v1.';
+    return;
+   }
+   label.textContent='✅ Phoenix v'+info.protocol+' · '+info.world+
+    ' · Мест: '+(info.maxPlayers||'?')+
+    '\\nРаботает: гости, комнаты, позиции, чат, публикация карты.'+
+    '\\nВ разработке: регистрация, сохранённые герои, серверный бой, навыки, инвентарь.';
+  }
   async test(){
    let cfg;try{cfg=this.read()}catch(e){this.status('⚠ '+e.message);return false}
    const target=serverUrl(cfg.url,cfg.worldId);
@@ -167,7 +182,12 @@
      ws.onmessage=e=>{
       try{
        const data=JSON.parse(e.data);
-       if(data.type==='pong'&&data.v===1)
+       if(data.type==='hello'){
+        const info=Foundation.evaluateHello(data);
+        this.serverCapabilities=info;this.showCapabilities(info);
+        if(!info.compatible)return done(false,info.message);
+       }
+       if(data.type==='pong'&&data.v===Foundation.PROTOCOL)
         done(true,'✅ Сервер отвечает! Игроков: '+data.players+
          '. Мир: '+data.world?.name);
        if(data.type==='error')done(false,'Ошибка сервера: '+data.code);
@@ -235,7 +255,13 @@
   message(m){
    if(m?.v!==1||typeof m.type!=='string')return;
    if(m.type==='hello'){
-    this.status('🟢 Сервер отвечает: '+(m.world?.name||'Phoenix World'));
+    const info=Foundation.evaluateHello(m);
+    this.serverCapabilities=info;this.showCapabilities(info);
+    if(!info.compatible){
+     this.status('⚠ '+info.message);this.disconnect();return;
+    }
+    this.status('🟢 Сервер отвечает: '+info.world+
+     ' · Phoenix v'+info.protocol+' · Гостевой режим');
     return;
    }
    if(m.type==='joined'){
