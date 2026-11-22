@@ -123,8 +123,9 @@
    throw new TypeError('Повреждены размеры карты существ');
   for(const id of world.entityIds()){
    const link=world.getComponent(id,'prefab'),tr=world.getComponent(id,'transform');
-   if(!link||!registry.get(link.id)||!Array.isArray(tr?.position)||
-      tr.position.length!==3||
+   if(!link||!registry.get(link.id))
+    throw new TypeError('Размещённое существо без шаблона: '+id);
+   if(!Array.isArray(tr?.position)||tr.position.length!==3||
       !tr.position.every(n=>Number.isFinite(n)&&Math.abs(n)<=100000))
     throw new TypeError('Некорректная точка появления: '+id);
   }
