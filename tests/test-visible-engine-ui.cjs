@@ -118,7 +118,7 @@ assert(css.includes('#phoenixSkillLayer{position:fixed'));
 assert(css.includes('#phoenixSkillEditor{position:fixed'));
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"),
  'Permanent Android ID must not vary between new engine versions');
-assert(gradle.includes('versionCode 27'), 'New APK must update above 2.0.6');
+assert(gradle.includes('versionCode 28'), 'New APK must update above 2.0.7');
 assert(gradle.includes("applicationIdSuffix '.engine.stable'"));
 assert(gradle.includes("appLabel: 'Phoenix Engine 2.0'"));
 console.log('PASS: distinct Phoenix Engine 2.0 badge, visible PLAY/Prefabs/Skills dock and stable package ID');
