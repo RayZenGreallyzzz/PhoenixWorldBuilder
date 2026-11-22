@@ -4776,7 +4776,8 @@ class CleanBuilder{
    hit:/hit|hurt|damage|react|боль/i,
    cast:/cast|spell|magic|заклин/i
   };
-  const explicit=this.avatarBindings?.[state]||
+  const explicit=(requestedClip&&requestedClip!=='cast'?requestedClip:'')||
+   this.avatarBindings?.[state]||
    (state==='attack'?this.avatarAttackClip:'');
   const clip=this.avatarClips.find(c=>c.name===explicit)||
    this.avatarClips.find(c=>patterns[state]?.test(c.name));
