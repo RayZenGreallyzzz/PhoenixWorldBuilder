@@ -554,8 +554,14 @@
     if(!allowed)continue;
     const used=runtime.cast(slot,this.aiTime,()=>true);
     if(!used.ok)continue;
+    const caster=this.playStats.get(id);
+    const heroDefense=this.b.playBridge?.playerRuntimeStats?.magicDefense||0;
+    const power=Math.min(1000000,used.power+
+     (healing?0:Math.round((caster?.magicPower||0)*.35)));
+    const dealt=!healing&&this.b.playBridge?.playerRuntimeStats?
+     Math.max(0,Math.round(power*100/(100+heroDefense))):power;
     const result=healing?this.combat.healMob(id,used.power):
-     this.combat.damagePlayer(id,used.power);
+     this.combat.damagePlayer(id,dealt);
     if(!result?.ok)continue;
     if(!healing)this.b.playBridge?.onPlayerHit(result,
      this.world.getComponent(id,'character')?.nickname||p.name);
@@ -803,12 +809,15 @@
    }
    return result;
   }
-  damageEnemy(id,amount){
+  damageEnemy(id,amount,{magic=false}={}){
    if(!this.playing)return {ok:false,reason:'edit'};
    const prefab=this.registry.get(this.world.getComponent(id,'prefab')?.id);
-   const defense=Math.max(0,(this.playStats.get(id)||prefab?.stats)?.defense||0);
+   const stats=this.playStats.get(id)||prefab?.stats||{};
+   const defense=Math.max(0,magic?(stats.magicDefense??stats.defense??0):
+    (stats.defense||0));
    const reduced=Math.max(0,Math.round(amount*100/(100+defense)));
-   return this.animateHit(id,this.combat.damageMob(id,reduced));
+   return this.animateHit(id,this.combat.damageMob(id,
+    Math.min(1000000,reduced)));
   }
   attackNearest(now,preferredId=''){
    if(!this.playing)return {ok:false,reason:'edit'};
