@@ -128,24 +128,39 @@
    const raw=this.builder.progressionEditor?.serializePlayer?.()||null;
    if(!raw){
     this.progressionSession=null;this.progressionSignature='';
-    this.playerRuntimeStats=null;this.playerActiveCombat=null;return;
-   }
-   const signature=JSON.stringify(raw);
-   if(!this.progressionSession||this.progressionSignature!==signature){
-    this.progressionSession=new Progression.Session(raw);
-    this.progressionSignature=signature;
+   }else{
+    const signature=JSON.stringify(raw);
+    if(!this.progressionSession||this.progressionSignature!==signature){
+     this.progressionSession=new Progression.Session(raw);
+     this.progressionSignature=signature;
+    }
    }
    this.applyProgressionStats();
   }
   applyProgressionStats(){
-   if(!this.progressionSession){
+   const gear=this.builder.galleryEditor?.inventory?.bonuses('player')||{};
+   const anyGear=Object.values(gear).some(v=>v>0);
+   const base=this.progressionSession?.stats||null;
+   if(!base&&!anyGear){
     this.playerRuntimeStats=null;this.playerActiveCombat=null;return;
    }
-   const stats=this.progressionSession.stats;
-   this.playerRuntimeStats=stats;
+   // No authored RPG profile? Keep legacy hero combat unchanged unless the
+   // developer explicitly equipped bonuses in the gallery.
+   const stats=base||{level:1,hp:this.playerCombat.hp,
+    mp:100,damage:this.playerCombat.damage,defense:0,magicDefense:0,
+    magicPower:0,speed:3,attackSpeed:1/this.playerCombat.cooldown};
+   const effective={...stats};
+   for(const key of ['hp','mp','damage','defense','magicDefense','magicPower','speed'])
+    effective[key]=Math.max(0,Math.min(key==='speed'?100:1000000,
+     (Number(stats[key])||0)+(Number(gear[key])||0)));
+   effective.hp=Math.max(1,effective.hp);
+   effective.mp=Math.max(1,effective.mp);
+   this.playerRuntimeStats=effective;
    this.playerActiveCombat=PlayerProfiles.normalize({
-    ...this.playerCombat,hp:Math.round(stats.hp),damage:stats.damage,
-    cooldown:Math.max(.06,Math.min(10,1/stats.attackSpeed))
+    ...this.playerCombat,hp:Math.round(effective.hp),
+    damage:effective.damage,cooldown:base?
+     Math.max(.06,Math.min(10,1/effective.attackSpeed)):
+     this.playerCombat.cooldown
    });
   }
   onMobKilled(id,result){
