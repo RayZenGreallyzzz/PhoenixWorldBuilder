@@ -70,7 +70,7 @@ assert.deepEqual(map.models,['glb:scene:oak'],'No mob or hero GLBs in map resour
 assert.deepEqual(map.project.catalogLibrary.map(m=>m.id),['glb:scene:oak']);
 assert.deepEqual(map.project.mapSettings,{version:1,shape:'circle',range:160});
 Layers.validateMap(map.project);
-assert.deepEqual(project,initial,'Export does not delete or change anything in Builder');
+assert.equal(JSON.stringify(project),JSON.stringify(initial),'Export does not delete or change anything in Builder');
 const things=Layers.entitiesProject(project);
 assert.equal(things.project.layer.format,Layers.ENTITIES);
 assert.equal(things.project.objects.length,0,'Creature pack has no buildings');
@@ -166,6 +166,6 @@ const bytes=new Map([
   'Imported layer changes must require explicit top-level Save');
  assert(!ui.includes('this.b.save()'),
   'Layer imports must not auto-save or overwrite entire project');
- assert.deepEqual(project,initial);
+ assert.equal(JSON.stringify(project),JSON.stringify(initial));
  console.log('PASS: separate portable map/buildings/terrain and NPC placement JSON; independent GLB bytes, no hero leakage, exact coordinates, safe merges');
 })().catch(error=>{console.error(error);process.exitCode=1});
