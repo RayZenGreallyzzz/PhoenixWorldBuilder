@@ -26,11 +26,13 @@
     ambient:builder.scene.children.find(x=>x.isHemisphereLight)||null,
     ground:builder.ground?.material?.color?.clone?.()||null};
    this.sunIntensity=this.initial.sunlight?.intensity??1;
+   this.sunColor=this.initial.sunlight?.color?.clone?.()||null;
    this.sunPosition=this.initial.sunlight?.position?.clone?.()||null;
    this.ambientIntensity=this.initial.ambient?.intensity??1;
    this.clouds=[];this.fogWisps=[];this.effectRoot=null;
    this.rain=null;this.snow=null;this.sky=null;this.flashLight=null;
-   this.stars=null;this.windMaterials=new Map();this.windSync=0;
+   this.stars=null;this.windMaterials=new Map();
+   this.windUniforms=[];this.windSync=0;
    this.time=0;this.last=null;this.audio=null;
    this.cameraColor=new THREE.Color();
   }
@@ -115,6 +117,9 @@
    this.sky.name='phoenix:weather:sky';
    this.sky.renderOrder=-120;this.sky.frustumCulled=false;
    root.add(this.sky);
+   this.cloudRoot=new T.Group();
+   this.cloudRoot.name='phoenix:weather:clouds';
+   root.add(this.cloudRoot);
    const cloudMap=this.cloudTexture();
    this.cloudMap=cloudMap;
    const cloudMaterial=new T.SpriteMaterial({map:cloudMap||null,
@@ -125,7 +130,8 @@
      (Math.random()-.5)*150);
     const sx=22+Math.random()*26;
     sprite.scale.set(sx,sx*.44,1);
-    root.add(sprite);this.clouds.push({sprite,speed:.65+Math.random()*1.8});
+    this.cloudRoot.add(sprite);
+    this.clouds.push({sprite,speed:.65+Math.random()*1.8});
    }
    const fogMap=this.particleTexture(true);this.fogMap=fogMap;
    for(let i=0;i<COUNTS.ultra.fog;i++){
@@ -170,6 +176,7 @@
    if(this.initial.sunlight){
     this.initial.sunlight.intensity=this.sunIntensity;
     if(this.sunPosition)this.initial.sunlight.position.copy(this.sunPosition);
+    if(this.sunColor)this.initial.sunlight.color.copy(this.sunColor);
    }
    if(this.initial.ambient)this.initial.ambient.intensity=this.ambientIntensity;
    if(this.initial.ground&&b.ground?.material?.color)
@@ -332,6 +339,7 @@
    this.sky.scale.setScalar(clamp(cam.far*.74,60,1800));
    this.stars.position.copy(cam.position);
    const cloudsCap=COUNTS[state.quality].cloud;
+   this.cloudRoot.position.copy(cam.position);
    for(let i=0;i<this.clouds.length;i++){
     const {sprite,speed}=this.clouds[i];
     sprite.visible=i<cloudsCap&&state.cloud>.025;
@@ -341,14 +349,7 @@
     if(Math.abs(sprite.position.x)>88)sprite.position.x*=-.93;
     if(Math.abs(sprite.position.z)>88)sprite.position.z*=-.93;
     sprite.material.opacity=state.cloud*.52;
-    sprite.position.y=cam.position.y+45+(i%4)*9;
-   }
-   this.cloudAnchor=this.cloudAnchor||new this.T.Group();
-   // Individual cloud positions are already relative to camera horizontal
-   // offset; place cloud field around the camera without altering terrain.
-   for(const {sprite} of this.clouds){
-    sprite.position.x=clamp(sprite.position.x,cam.position.x-88,cam.position.x+88);
-    sprite.position.z=clamp(sprite.position.z,cam.position.z-88,cam.position.z+88);
+    sprite.position.y=45+(i%4)*9;
    }
    const fogCap=COUNTS[state.quality].fog;
    for(let i=0;i<this.fogWisps.length;i++){
