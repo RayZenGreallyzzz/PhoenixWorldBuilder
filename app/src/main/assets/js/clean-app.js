@@ -4482,7 +4482,7 @@ class CleanBuilder{
     ' МБ. Выбери место сохранения.','success');
    return true;
   }catch(err){console.error('GLB export',err);
-   notify('Ошибка GLB: '+(err?.message||err),'error')}
+   notify('Ошибка GLB: '+(err?.message||err),'error');return false}
  }
  async exportBackup(){
   if(!this.entries.length&&!this.textureFiles.length&&
