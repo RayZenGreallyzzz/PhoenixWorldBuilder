@@ -838,3 +838,14 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
 #phoenixServerStatus,#phoenixServerPlayers,#phoenixServerCapabilities{display:block;border:1px solid #477f96;background:#193947;padding:8px;border-radius:8px;white-space:pre-line}
 #phoenixServerImportFile[hidden]{display:none!important}
 @media(max-width:600px){#phoenixServerPanel{padding:10px;gap:7px}#phoenixServerPanel input{font-size:12px}}
+
+/* RPG PLAY progression and six-node talent dependencies (no map objects). */
+#phoenixPlayHud #phoenixLevelLine{display:inline-flex;align-items:center;font-size:11px;max-width:min(64vw,370px);padding:4px 7px;border:1px solid #62cba9;border-radius:8px;color:#d3ffe9;background:#124735}
+#phoenixPlayHud #phoenixLevelLine[hidden]{display:none!important}
+#phoenixTalentTreeFold{margin:8px 0;border:1px solid #6bc4a5;border-radius:9px;padding:7px;background:#143540}
+#phoenixTalentTreeFold summary{color:#aaffdf;font-size:12px;font-weight:800;cursor:pointer}
+#phoenixTalentTreeFold small{font-size:11px;color:#d9f4e8;line-height:1.4}
+#phoenixTalentTreeFold input,#phoenixTalentTreeFold select{width:100%;min-height:36px;box-sizing:border-box;background:#153b49;color:#fff;border:1px solid #619f98;border-radius:6px}
+.phoenixTalentTreePreview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0}
+.phoenixTalentTreeNode{font-size:11px;padding:7px;border-radius:8px;background:#1a4a52;border:1px solid #5baba1;overflow-wrap:anywhere;line-height:1.5}
+@media(max-width:600px){.phoenixTalentTreePreview{grid-template-columns:1fr}#phoenixPlayHud #phoenixLevelLine{font-size:9px}}
