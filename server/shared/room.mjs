@@ -23,7 +23,8 @@ export class PhoenixRoom{
  broadcast(msg,except){for(const peer of this.players.keys())
   if(peer!==except)this.send(peer,msg)}
  welcome(peer){this.send(peer,{type:'hello',protocol:VERSION,
-  world:this.worldInfo(),maxPlayers:this.maxPlayers,guestOnly:true})}
+  world:this.worldInfo(),maxPlayers:this.maxPlayers,guestOnly:true,
+  capabilities:CAPABILITIES})}
  get(peer){return this.players.get(peer)||null}
  attachRestored(peer,metadata){
   if(!metadata||typeof metadata.id!=='string'||metadata.id.length>70||
