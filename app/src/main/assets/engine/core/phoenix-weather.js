@@ -75,7 +75,8 @@
    this.settings=normalize(settings);
    this.seed=seed>>>0||1337;this.elapsed=0;this.clock=this.settings.timeOfDay;
    this.dayIndex=0;this.period=0;this.flash=0;this.flashDelay=7;
-   this.target=this.settings.preset;this.blend=1;
+   this.target=this.settings.mode==='season'?this.pick():this.settings.preset;
+   this.blend=1;
    this.from=forPreset('clear',this.settings.intensity);
    this.values=forPreset(this.target,this.settings.intensity);
    this.windOffset=0;
@@ -105,7 +106,8 @@
     this.settings.timeMode===next.timeMode;
    this.settings=next;
    if(!same){
-    this.elapsed=0;this.period=0;this.target=next.preset;
+    this.elapsed=0;this.period=0;
+    this.target=next.mode==='season'?this.pick():next.preset;
     this.from={...this.values};this.blend=0;
     this.clock=next.timeOfDay;this.dayIndex=0;
    }
