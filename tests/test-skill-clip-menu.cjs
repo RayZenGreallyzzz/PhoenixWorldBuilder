@@ -1,4 +1,5 @@
 'use strict';
+(async function testSkillClipMenu(){
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -104,3 +105,5 @@ assert.equal(second.save(),true);
 assert.equal(second.catalog.get('prefab-1','slot4').animation,'Cast_Magic');
 second.close();assert.equal(panel.hidden,true);
 console.log('PASS: skills menu visibly opens; per-hero/per-mob GLB clips list, preview and survive JSON per slot');
+
+})().catch(err=>{console.error(err);process.exitCode=1});
