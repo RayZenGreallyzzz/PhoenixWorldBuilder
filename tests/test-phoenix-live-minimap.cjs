@@ -65,7 +65,8 @@ events.length=0;Map.draw(context,scene,Map.normalize({shape:'hex'}));
 assert(events.filter(x=>x[0]==='line').length>=5,'Hexagon uses six real edges');
 events.length=0;Map.draw(context,scene,Map.normalize({shape:'rounded'}));
 assert(events.some(x=>x[0]==='curve'),'Rounded map uses curved corners');
-for(const id of ['btnPhoenixGallery','btnPhoenixMinimap','phoenixGalleryPanel',
+for(const id of ['btnGalleryZoomIn','btnGalleryZoomOut','btnGalleryFit',
+ 'btnGalleryMap','phoenixMapPresets','btnPhoenixGallery','btnPhoenixMinimap','phoenixGalleryPanel',
  'phoenixGalleryGrid','phoenixGalleryCanvas','phoenixGalleryItems',
  'phoenixGallerySkills','phoenixMinimapSettings','phoenixMinimapHud',
  'phoenixMinimapCanvas','phoenixMapShape','phoenixMapPosition',
