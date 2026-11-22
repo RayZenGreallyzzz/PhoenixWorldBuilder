@@ -52,6 +52,9 @@ on:
       - 'tests/test-phoenix-character-inventory.cjs'
       - 'tests/test-phoenix-gallery-ui.cjs'
       - 'tests/test-phoenix-live-minimap.cjs'
+      - 'tests/test-phoenix-world-layers.cjs'
+      - 'app/src/main/assets/engine/core/phoenix-world-layers.js'
+      - 'app/src/main/assets/engine/builder/phoenix-world-layers-editor.js'
       - 'app/src/main/assets/engine/core/phoenix-inventory.js'
       - 'app/src/main/assets/engine/core/phoenix-minimap.js'
       - 'tests/test-skill-definition-editor.cjs'
@@ -101,6 +104,8 @@ jobs:
           node --check app/src/main/assets/engine/core/phoenix-skills.js
           node --check app/src/main/assets/engine/core/phoenix-inventory.js
           node --check app/src/main/assets/engine/core/phoenix-minimap.js
+          node --check app/src/main/assets/engine/core/phoenix-world-layers.js
+          node --check app/src/main/assets/engine/builder/phoenix-world-layers-editor.js
           node --check app/src/main/assets/engine/builder/phoenix-character-gallery.js
           node --check app/src/main/assets/engine/builder/phoenix-minimap-editor.js
           node --check app/src/main/assets/engine/builder/skill-definition-editor.js
@@ -158,6 +163,7 @@ jobs:
           node tests/test-phoenix-character-inventory.cjs
           node tests/test-phoenix-gallery-ui.cjs
           node tests/test-phoenix-live-minimap.cjs
+          node tests/test-phoenix-world-layers.cjs
           node tests/test-skill-clip-menu.cjs
           node tests/test-skill-definition-editor.cjs
           node tests/test-play-weapon-skills.cjs
