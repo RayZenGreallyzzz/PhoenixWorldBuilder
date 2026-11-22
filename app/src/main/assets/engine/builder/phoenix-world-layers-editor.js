@@ -45,6 +45,31 @@
    }
    return false;
   }
+  async exportExternalWorld(){
+   if(this.blocked())return false;
+   try{
+    const hasGeometry=this.b.entries?.some(row=>!row.hidden);
+    if(hasGeometry){
+     this.info('🎮 Шаг 1/2: сохраняю геометрию построек и деревьев в GLB...');
+     const result=await this.b.exportGLB();
+     if(result!==true){
+      this.info('⚠ GLB не сохранён. Экспорт для внешнего движка отменён.');
+      return false;
+     }
+    }
+    // The portable JSON is a separate save dialog because Android SAF writes
+    // files individually. Do not delete or rewrite any prefab, live world,
+    // authoring asset, or current manual save when preparing this export.
+    this.info('🎮 Шаг 2/2: сохраняю карту, горы и исходные GLB/текстуры...');
+    const map=await this.exportMap();
+    if(map)this.info('✅ Экспорт для Unity / Unreal готов: '+
+     (hasGeometry?'PhoenixBuilder_Scene.glb + ':'')+
+     'Phoenix_World_Map.phoenix.json. Храни файлы вместе. '+
+     'На ПК запусти tools/phoenix-portability/convert.py для создания пакета '+
+     'с рельефом и импортерами.');
+    return map;
+   }catch(error){this.info('⚠ Экспорт Unity / Unreal: '+error.message);return false}
+  }
   async exportMap(){
    if(this.blocked())return false;this.working=true;
    try{
