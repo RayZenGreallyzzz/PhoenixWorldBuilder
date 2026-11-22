@@ -445,15 +445,26 @@
    const p=prefab||this.registry.get(this.world.getComponent(id,'prefab')?.id);
    const authored=this.world.getComponent(id,'stats')||{};
    const fixed={...(p?.stats||{}),...authored};
-   if(!p?.progression)return fixed;
-   // Keep per-instance level as an editable choice. Never overwrite world JSON
-   // with PLAY-only level calculations, even for very high-level monsters.
-   const chosenLevel=Number.isFinite(authored.level)&&authored.level!==p.stats.level?
-    authored.level:(p.stats.level===1?p.progression.level:p.stats.level);
-   const level=Math.max(1,Math.min(p.progression.maxLevel,
-    Math.round(chosenLevel)));
-   const scaled=PhoenixProgression.atLevel(p.progression,level);
-   return {...fixed,...scaled,level,hp:Math.round(scaled.hp)};
+   let result=fixed;
+   if(p?.progression){
+    // Keep instance level independent from its saved GLB template.
+    const chosenLevel=Number.isFinite(authored.level)&&authored.level!==p.stats.level?
+     authored.level:(p.stats.level===1?p.progression.level:p.stats.level);
+    const level=Math.max(1,Math.min(p.progression.maxLevel,
+     Math.round(chosenLevel)));
+    const scaled=PhoenixProgression.atLevel(p.progression,level);
+    result={...fixed,...scaled,level,hp:Math.round(scaled.hp)};
+   }
+   // Authored gear is per prefab, not per reused GLB asset. An old project
+   // with an empty inventory gets exactly the same stats as before.
+   const gear=this.b.galleryEditor?.inventory?.bonuses(p?.id)||null;
+   if(gear&&Object.values(gear).some(v=>v>0)){
+    result={...result};
+    for(const key of ['hp','mp','damage','defense','magicPower','magicDefense','speed'])
+     if(gear[key]>0)result[key]=Math.min(key==='speed'?100:1000000,
+      (Number(result[key])||0)+gear[key]);
+   }
+   return result;
   }
   setPlaying(yes){
    if(yes)this.cancelPlacement();
