@@ -151,6 +151,50 @@
   const p=normalize(input),ordered=[...new Set(levels.map(l=>Math.min(l,p.maxLevel)))];
   return ordered.map(level=>({...atLevel(p,level),xpToNext:xpToNext(p,level)}));
  }
- return Object.freeze({VERSION,MAX_LEVEL,KEYS,STATS,TAGS,ARCHETYPES,
-  preset,normalize,atLevel,xpToNext,damage,compare,clone});
+ // Temporary PLAY progression is intentionally separate from editable world JSON.
+ // It can later be serialized into an authenticated GAME save on the server.
+ class Session{
+  constructor(profile,snapshot=null){
+   this.profile=normalize(profile);
+   this.level=this.profile.level;
+   this.xp=0;this.skillPoints=0;
+   if(snapshot!==null)this.load(snapshot);
+  }
+  get stats(){return atLevel(this.profile,this.level);}
+  get nextXP(){return xpToNext(this.profile,this.level);}
+  grant(amount){
+   if(typeof amount!=='number'||!Number.isSafeInteger(amount)||
+      amount<0||amount>1000000)
+    throw new TypeError('Invalid XP reward');
+   const before=this.level;
+   if(this.level===this.profile.maxLevel)return {gained:0,levels:0,...this.status()};
+   this.xp+=amount;
+   while(this.level<this.profile.maxLevel&&this.xp>=this.nextXP){
+    this.xp-=this.nextXP;this.level++;this.skillPoints++;
+   }
+   if(this.level===this.profile.maxLevel)this.xp=0;
+   return {gained:amount,levels:this.level-before,...this.status()};
+  }
+  status(){
+   return {level:this.level,xp:this.xp,nextXP:this.nextXP,
+    skillPoints:this.skillPoints,stats:this.stats};
+  }
+  serialize(){
+   return {version:VERSION,level:this.level,xp:this.xp,
+    skillPoints:this.skillPoints};
+  }
+  load(raw){
+   if(!raw||raw.version!==VERSION||!Number.isInteger(raw.level)||
+      raw.level<this.profile.level||raw.level>this.profile.maxLevel||
+      !Number.isSafeInteger(raw.xp)||raw.xp<0||
+      raw.xp>=(raw.level===this.profile.maxLevel?1:xpToNext(this.profile,raw.level))||
+      !Number.isSafeInteger(raw.skillPoints)||raw.skillPoints<0||
+      raw.skillPoints>this.profile.maxLevel-this.profile.level)
+    throw new TypeError('Invalid progression runtime save');
+   this.level=raw.level;this.xp=raw.xp;this.skillPoints=raw.skillPoints;
+   return this;
+  }
+ }
+  return Object.freeze({VERSION,MAX_LEVEL,KEYS,STATS,TAGS,ARCHETYPES,
+  preset,normalize,atLevel,xpToNext,damage,compare,clone,Session});
 });
