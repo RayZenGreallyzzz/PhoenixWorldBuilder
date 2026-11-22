@@ -248,8 +248,11 @@
    const T=globalThis.THREE;
    const group=new T.Group();
    const mat=new T.MeshStandardMaterial({color:0x7f91a7});
-   const body=new T.Mesh(new T.CapsuleGeometry(.42,1.1,6,12),mat);
-   body.position.y=1;group.add(body);
+   // Three.js r140 has no guaranteed CapsuleGeometry in the offline APK.
+   const torso=new T.Mesh(new T.CylinderGeometry(.33,.43,1.2,12),mat);
+   torso.position.y=.8;group.add(torso);
+   const head=new T.Mesh(new T.SphereGeometry(.35,12,8),mat);
+   head.position.y=1.64;group.add(head);
    return group;
   }
   async showItem(item){
