@@ -652,7 +652,7 @@ body.phoenixPlaying #phoenixCombatHud{top:max(78px,env(safe-area-inset-top));bot
 }
 
 /* Engine 1.0: MMO editor and FPS aim feedback; no per-frame layout churn. */
-#phoenixSkillDefinitions{left:max(10px,env(safe-area-inset-left));top:max(66px,env(safe-area-inset-top));z-index:65}
+#phoenixSkillDefinitions{position:fixed;left:max(10px,env(safe-area-inset-left));top:max(66px,env(safe-area-inset-top));bottom:max(8px,env(safe-area-inset-bottom));z-index:75;width:min(360px,calc(100vw - 20px));max-height:calc(100dvh - 78px);overflow-y:auto;overscroll-behavior:contain;pointer-events:auto;box-shadow:0 9px 28px #000b}
 #phoenixSkillDefinitions[hidden]{display:none!important}
 #phoenixSkillDefinitions textarea{width:100%;min-height:65px;resize:vertical;
  box-sizing:border-box;background:#244158;color:#e8fbff;border:1px solid #638dba;border-radius:7px;padding:7px}
@@ -849,3 +849,12 @@ body.phoenixPlaying #phoenixSkillDefinitions{display:none!important}
 .phoenixTalentTreePreview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0}
 .phoenixTalentTreeNode{font-size:11px;padding:7px;border-radius:8px;background:#1a4a52;border:1px solid #5baba1;overflow-wrap:anywhere;line-height:1.5}
 @media(max-width:600px){.phoenixTalentTreePreview{grid-template-columns:1fr}#phoenixPlayHud #phoenixLevelLine{font-size:9px}}
+
+/* One GLB clip per skill, with a non-destructive preview. */
+#phoenixSkillDefinitions .phoenixSkillClipPicker{display:flex;flex-direction:column;gap:5px;border:1px solid #609dba;border-radius:9px;padding:8px;background:#142e42}
+#phoenixSkillDefinitions .phoenixSkillClipPicker select{max-width:100%;min-height:40px}
+#phoenixSkillDefinitions .phoenixSkillClipPicker .phoenixSkillClipActions{display:flex;gap:7px;align-items:stretch}
+#phoenixSkillDefinitions .phoenixSkillClipPicker .phoenixSkillClipActions button{flex:0 0 auto;min-width:90px}
+#phoenixSkillDefinitions .phoenixSkillClipPicker small{color:#bcefdc;font-size:11px;line-height:1.35}
+#phoenixSkillDefinitions #skillDefAnimation{font-size:11px}
+@media(max-width:700px){#phoenixSkillDefinitions{top:max(65px,env(safe-area-inset-top));width:min(345px,calc(100vw - 12px));bottom:max(5px,env(safe-area-inset-bottom));max-height:calc(100dvh - 70px);padding:9px}}
