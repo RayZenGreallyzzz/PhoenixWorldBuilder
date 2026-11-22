@@ -202,7 +202,12 @@
      ['idle','walk','run','attack','hit','death','cast'].map(name=>[
       name,this.el('phoenixPrefab'+name[0].toUpperCase()+name.slice(1)).value.trim()
      ])),
-    ai:{mode:this.el('phoenixPrefabAI').value,
+    // Preserve the existing curve and patrol stops when saving GLB or animations.
+    // Editing the prefab form must never silently delete authored RPG data.
+    progression:this.selectedId?
+     this.registry.get(this.selectedId)?.progression||null:null,
+    ai:{...(this.selectedId?this.registry.get(this.selectedId)?.ai:{}),
+     mode:this.el('phoenixPrefabAI').value,
      engagement:this.el('phoenixPrefabEngagement')?.value||'auto',
      patrolRadius:Number(this.el('phoenixPrefabPatrolRadius').value),
      aggroRadius:Number(this.el('phoenixPrefabAggroRadius').value),
@@ -443,8 +448,10 @@
    if(!p?.progression)return fixed;
    // Keep per-instance level as an editable choice. Never overwrite world JSON
    // with PLAY-only level calculations, even for very high-level monsters.
+   const chosenLevel=Number.isFinite(authored.level)&&authored.level!==p.stats.level?
+    authored.level:(p.stats.level===1?p.progression.level:p.stats.level);
    const level=Math.max(1,Math.min(p.progression.maxLevel,
-    Number.isFinite(fixed.level)?Math.round(fixed.level):p.progression.level));
+    Math.round(chosenLevel)));
    const scaled=PhoenixProgression.atLevel(p.progression,level);
    return {...fixed,...scaled,level,hp:Math.round(scaled.hp)};
   }
