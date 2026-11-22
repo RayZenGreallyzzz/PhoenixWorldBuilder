@@ -4797,6 +4797,7 @@ class CleanBuilder{
  }
  playAttackAnimation(){return this.playAvatarAction('attack')}
  playCastAnimation(){return this.playAvatarAction('cast')}
+ playSkillAnimation(clip='cast'){return this.playAvatarAction('cast',clip)}
  playHitAnimation(){return this.playAvatarAction('hit')}
  playDeathAnimation(){
   if(this.playAvatarAction('death'))return true;
