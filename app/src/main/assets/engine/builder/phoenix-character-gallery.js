@@ -19,6 +19,7 @@
    this.selection='player';this.modelToken=0;
    this.preview=null;this.previewRoot=null;this.mixer=null;this.rotation=0;
    this.turnSpeed=.31;this.zoom=1;this.lastX=null;
+   this.models=new Map();
    this.bind();
   }
   el(id){return this.doc.getElementById(id)}
@@ -34,7 +35,16 @@
   bind(){
    this.el('btnPhoenixGallery')?.addEventListener('click',()=>this.toggle());
    this.el('btnGalleryClose')?.addEventListener('click',()=>this.close());
-   this.el('btnGalleryRefresh')?.addEventListener('click',()=>this.refresh());
+   this.el('btnGalleryRefresh')?.addEventListener('click',()=>{
+    this.renderModelSearch();this.refresh();
+   });
+   this.el('phoenixGalleryModelSearch')?.addEventListener('input',()=>this.renderModelSearch());
+   this.el('phoenixGalleryModelSelect')?.addEventListener('change',()=>{
+    const id=this.el('phoenixGalleryModelSelect')?.value;
+    const name=this.models.get(id);
+    if(id&&name)this.el('phoenixGalleryCreateName').value=name.slice(0,80);
+   });
+   this.el('btnGalleryCreate')?.addEventListener('click',()=>this.createCharacter());
    this.el('btnGallerySkills')?.addEventListener('click',()=>this.openSkillEditor());
    this.el('btnGalleryProgression')?.addEventListener('click',()=>this.openProgression());
    this.el('btnGalleryPrefab')?.addEventListener('click',()=>this.openPrefab());
@@ -54,6 +64,53 @@
    for(const event of ['pointerup','pointercancel','lostpointercapture'])
     canvas?.addEventListener(event,()=>{this.lastX=null});
   }
+  renderModelSearch(){
+   const select=this.el('phoenixGalleryModelSelect');if(!select)return;
+   const chosen=select.value,query=(this.el('phoenixGalleryModelSearch')?.value||'')
+    .trim().toLocaleLowerCase();
+   const models=new Map();
+   for(const [id,meta] of this.b.catalogMeta||[])
+    if(id.startsWith('glb:'))models.set(id,String(meta?.name||id));
+   for(const [id,asset] of this.b.assets||[])
+    if(id.startsWith('glb:'))models.set(id,String(asset?.name||models.get(id)||id));
+   for(const p of this.b.prefabEditor?.registry.list()||[])
+    if(p.assetId&&!models.has(p.assetId))models.set(p.assetId,p.name);
+   if(this.b.avatarAssetId&&!models.has(this.b.avatarAssetId))
+    models.set(this.b.avatarAssetId,this.b.avatarFileName||'Герой');
+   this.models=models;
+   select.replaceChildren(this.option('','— Выбери загруженный GLB —'));
+   let shown=0;
+   for(const [id,name] of models){
+    if(query&&!((name+' '+id).toLocaleLowerCase().includes(query)))continue;
+    select.appendChild(this.option(id,name+' · '+id));
+    if(++shown>=100)break;
+   }
+   if(models.has(chosen)&&[...select.options].some(o=>o.value===chosen))
+    select.value=chosen;
+   this.setInfo('🔎 '+shown+' моделей в списке'+
+    (models.size>shown?' · уточни поиск по названию GLB':''));
+  }
+  createCharacter(){
+   if(this.b.playBridge?.active)return false;
+   const assetId=this.el('phoenixGalleryModelSelect')?.value||'';
+   const name=this.el('phoenixGalleryCreateName')?.value?.trim()||'';
+   const type=this.el('phoenixGalleryCreateType')?.value||'hero';
+   if(!assetId||!this.models.has(assetId)){
+    this.setInfo('⚠ Сначала найди и выбери GLB из библиотеки');return false;
+   }
+   try{
+    const faction=type==='hero'?'ally':type==='npc'?'neutral':'enemy';
+    const id=this.b.prefabEditor.registry.create({name,type,faction,assetId});
+    this.b.prefabEditor.refresh?.();
+    this.b.skillDefinitionEditor?.refreshCharacters?.();
+    this.b.progressionEditor?.refreshTargets?.();
+    this.b.markProjectDirty?.();
+    this.select(id);
+    this.el('phoenixGalleryCreate').open=false;
+    this.setInfo('✅ '+name+' добавлен в галерею. Можно задать навыки, уровни и инвентарь. Нажми верхнюю 💾 Сохранить.');
+    return id;
+   }catch(error){this.setInfo('⚠ '+error.message);return false}
+  }
   listCharacters(){
    const list=[{id:'player',name:this.b.avatarFileName||'Мой герой',
     type:'hero',faction:'ally',assetId:this.b.avatarAssetId||''}];
@@ -72,10 +129,12 @@
    this.b.skillEditor?.close?.();this.b.skillDefinitionEditor?.close?.();
    this.b.progressionEditor?.close?.();
    this.b.prefabEditor?.close?.();this.b.worldEditor?.close?.();
-   this.panel.hidden=false;this.select(this.find(id)?id:'player');
+   this.panel.hidden=false;this.renderModelSearch();
+   this.select(this.find(id)?id:'player');
    this.el('btnGalleryAddItem').disabled=!!this.b.playBridge?.active;
    this.el('phoenixGalleryItemEditor').hidden=!!this.b.playBridge?.active;
    this.el('phoenixGalleryEditingTools').hidden=!!this.b.playBridge?.active;
+   this.el('phoenixGalleryCreate').hidden=!!this.b.playBridge?.active;
    return true;
   }
   close(){
