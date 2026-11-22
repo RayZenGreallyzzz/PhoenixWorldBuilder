@@ -47,7 +47,7 @@ assert(app.includes("animationBindings:{...this.avatarBindings}"),
  'Player animations must persist alongside existing avatar in project JSON');
 assert(app.includes("this.avatarBindings=doc.animationBindings"),
  'Project reload must rebind every GLB action');
-assert(app.includes("playAvatarAction(state)"),
+assert(app.includes("playAvatarAction(state,requestedClip='')"),
  'Player attack, death, hit, cast should share one correct animation action flow');
 for(const id of ['avatarPreviewClip','btnAvatarPreviewClip',
  'btnAvatarAutoAnimations'])assert(html.includes('id="'+id+'"'));
@@ -56,8 +56,9 @@ for(const state of ['idle','walk','run','attack','hit','death','cast'])
   'Missing real GLB clip binding for '+state);
 assert(bridge.includes("if(!result){this.builder.playAttackAnimation?.();return false;}"),
  'Pressing Attack without a mob target must still animate the hero');
-assert(bridge.includes('this.builder.playCastAnimation?.()'),
- 'Casting a skill must play the chosen Cast animation');
+assert(bridge.includes('this.builder.playSkillAnimation?.(result.skill.animation)')&&
+ app.includes("playSkillAnimation(clip='cast')"),
+ 'Casting a skill must play the individually selected GLB clip');
 assert(bridge.includes('this.builder.playHitAnimation?.()'),
  'Taking damage must play the chosen Hit animation');
 console.log('PASS: every avatar GLB clip selectable, explicit Idle/Walk, saved Attack/Hit/Death/Cast and no-target sword swing');
