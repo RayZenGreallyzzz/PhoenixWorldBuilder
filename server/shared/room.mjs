@@ -2,7 +2,7 @@
  * Provider-independent: WebSockets are passed as peer objects with send().
  * No trust in client-reported XP, combat damage, stats or item ownership.
  */
-import {VERSION,encode,parseMessage,checkWorldPosition} from './protocol.mjs';
+import {VERSION,CAPABILITIES,encode,parseMessage,checkWorldPosition} from './protocol.mjs';
 import {validateWorld,blankWorld} from './world.mjs';
 export class PhoenixRoom{
  constructor({world=blankWorld(),maxPlayers=16,now=()=>Date.now(),
