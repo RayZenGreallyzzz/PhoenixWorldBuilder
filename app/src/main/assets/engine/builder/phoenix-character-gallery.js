@@ -244,7 +244,10 @@
     const item={name:get('Name').trim(),kind:get('Kind'),
      slot:get('Slot'),assetId:get('Glb'),
      stats:{damage:Number(get('Damage')||0),defense:Number(get('Defense')||0),
-      hp:Number(get('Hp')||0),mp:0,magicPower:0,magicDefense:0,speed:0}};
+      hp:Number(get('Hp')||0),mp:Number(get('Mp')||0),
+      magicPower:Number(get('MagicPower')||0),
+      magicDefense:Number(get('MagicDefense')||0),
+      speed:Number(get('Speed')||0)}};
     this.inventory.add(this.selection,item);
     this.b.markProjectDirty?.();this.renderItems();
     this.setInfo('✅ Предмет добавлен для '+this.find(this.selection)?.name+
