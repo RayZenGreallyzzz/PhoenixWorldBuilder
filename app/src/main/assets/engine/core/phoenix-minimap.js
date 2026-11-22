@@ -37,7 +37,10 @@
  function entityClass(mob){
   if(mob.boss||mob.type==='boss')return 'boss';
   if(mob.type==='npc'||mob.type==='hero'||mob.faction!=='enemy'||
-     mob.engagement==='passive')return 'passive';
+     mob.engagement==='passive'||
+     (mob.engagement==='defensive'&&!mob.provoked)||
+     ((!mob.engagement||mob.engagement==='auto')&&
+      ['idle','patrol'].includes(mob.mode)))return 'passive';
   return 'enemy';
  }
  const hash=str=>{let h=2166136261;for(const ch of String(str||'')){
