@@ -64,7 +64,7 @@
    const previous=select.value||'player';
    select.replaceChildren(this.option('player','🧍 Игрок / мой герой'));
    for(const p of this.b.prefabEditor?.registry.list()||[])
-    select.appendChild(this.option(p.id,(p.type==='npc'?'🧑 ':'🐺 ')+p.name));
+    select.appendChild(this.option(p.id,({npc:'🧑 ',hero:'🧍 ',boss:'👹 ',mob:'🐺 '}[p.type]||'🧬 ')+p.name));
    select.value=[...select.options].some(o=>o.value===previous)?previous:'player';
   }
   selected(){return {character:this.el('skillDefCharacter').value||'player',
