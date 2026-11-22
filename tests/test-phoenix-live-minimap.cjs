@@ -21,6 +21,12 @@ assert.equal(Map.entityClass({type:'boss',faction:'enemy'}),'boss');
 assert.equal(Map.entityClass({type:'npc',faction:'enemy'}),'passive');
 assert.equal(Map.entityClass({type:'mob',faction:'enemy',engagement:'passive'}),'passive');
 assert.equal(Map.entityClass({type:'mob',faction:'enemy'}),'enemy');
+assert.equal(Map.entityClass({type:'mob',faction:'enemy',mode:'idle',
+ engagement:'auto'}),'passive','Peaceful idle mob is white');
+assert.equal(Map.entityClass({type:'mob',faction:'enemy',mode:'patrol',
+ engagement:'auto'}),'passive','Non-aggressive patrolling mob is white');
+assert.equal(Map.entityClass({type:'mob',faction:'enemy',mode:'guard',
+ engagement:'aggressive'}),'enemy');
 const events=[],context={
  save(){events.push(['save'])},restore(){events.push(['restore'])},
  beginPath(){events.push(['begin'])},clip(){events.push(['clip'])},
