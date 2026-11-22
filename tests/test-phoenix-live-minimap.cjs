@@ -14,7 +14,7 @@ assert.equal(Map.normalize(null).shape,'circle');
 const sq=Map.normalize({shape:'square',range:60,size:190,position:'bottom-right'});
 assert.equal(sq.shape,'square');
 assert.equal(sq.range,60);
-assert.throws(()=>Map.normalize({shape:'hex'}),/minimap/);
+assert.throws(()=>Map.normalize({shape:'octagon'}),/minimap/);
 assert.throws(()=>Map.normalize({range:0}),/minimap/);
 assert.deepEqual(Map.project(10,-10,0,0,80,20),{x:120,y:40});
 assert.equal(Map.entityClass({type:'boss',faction:'enemy'}),'boss');
