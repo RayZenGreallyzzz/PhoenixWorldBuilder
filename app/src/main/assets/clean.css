@@ -1018,3 +1018,41 @@ body.phoenixPlaying #phoenixGalleryItemEditor{display:none!important}
  #phoenixMinimapSettings .phoenixMapPresets .phoenixMapPreset{min-height:102px}
  #phoenixGalleryPanel .phoenixGalleryZoom button{font-size:18px}
 }
+
+/* v2.1.2 — non-destructive world/creature layer manager. */
+#phoenixEngineDock #btnPhoenixWorldLayers{border-color:#8febc3;background:#245b51;
+ color:#f1fffa;white-space:nowrap}
+#phoenixWorldLayersPanel{
+ position:fixed;z-index:98;top:max(62px,env(safe-area-inset-top));
+ bottom:max(8px,env(safe-area-inset-bottom));right:max(8px,env(safe-area-inset-right));
+ width:min(430px,calc(100vw - 16px));max-height:calc(100dvh - 73px);
+ box-sizing:border-box;display:flex;flex-direction:column;gap:10px;
+ overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+ pointer-events:auto;touch-action:pan-y;padding:12px;border-radius:14px;
+ border:1px solid #75ccb6;background:#102936fb;color:#e8fff9;
+ box-shadow:0 15px 40px #000c}
+#phoenixWorldLayersPanel[hidden]{display:none!important}
+#phoenixWorldLayersPanel .phoenixGalleryTitle{display:flex;align-items:center;
+ justify-content:space-between;gap:12px;font-size:16px}
+#phoenixWorldLayersPanel p{font-size:12px;line-height:1.5;margin:1px 0}
+#phoenixWorldLayersPanel small{display:block;font-size:11px;color:#c1e7e7;line-height:1.5}
+#phoenixWorldLayersPanel .phoenixLayerCard{
+ display:flex;flex-direction:column;gap:9px;padding:12px;
+ border:1px solid #61949d;border-radius:11px;background:#173b49}
+#phoenixWorldLayersPanel .phoenixLayerCard>b{font-size:15px;color:#9cffe0}
+#phoenixWorldLayersPanel .phoenixGalleryToolbar{display:flex;gap:8px}
+#phoenixWorldLayersPanel button{min-height:41px;border:1px solid #74b4bf;
+ color:#eafff9;background:#215267;border-radius:9px;padding:8px;
+ font-size:12px;font-weight:800}
+#phoenixWorldLayersPanel .phoenixGalleryToolbar>button{flex:1;min-width:0}
+#phoenixWorldLayersPanel button[id^="btnExport"]{background:#166a55;border-color:#6bdec1}
+#phoenixWorldLayersPanel .phoenixLayerHelp{border-left:3px solid #63daaf;
+ padding:8px;background:#153d3e;border-radius:5px}
+#phoenixWorldLayersStatus{padding:10px;border:1px solid #629e98;
+ border-radius:8px;background:#173d40;white-space:pre-wrap;font-weight:650}
+#phoenixWorldLayersPanel input[hidden]{display:none!important}
+@media(max-width:560px){
+ #phoenixWorldLayersPanel{top:max(60px,env(safe-area-inset-top));
+ left:5px;right:5px;bottom:5px;width:auto;max-height:calc(100dvh - 65px);padding:10px}
+ #phoenixWorldLayersPanel .phoenixLayerCard{padding:9px}
+}
