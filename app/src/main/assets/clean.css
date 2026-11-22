@@ -1056,3 +1056,68 @@ body.phoenixPlaying #phoenixGalleryItemEditor{display:none!important}
  left:5px;right:5px;bottom:5px;width:auto;max-height:calc(100dvh - 65px);padding:10px}
  #phoenixWorldLayersPanel .phoenixLayerCard{padding:9px}
 }
+
+/* Phoenix Weather 1.0 — one-canvas animated weather editor (Android). */
+#phoenixEngineDock #btnPhoenixWeather{border-color:#f3d19a;
+ background:#445b78;color:#e8f7ff;white-space:nowrap}
+#phoenixWeatherPanel{position:fixed;z-index:104;top:max(62px,env(safe-area-inset-top));
+ bottom:max(7px,env(safe-area-inset-bottom));right:max(7px,env(safe-area-inset-right));
+ width:min(440px,calc(100vw - 14px));max-height:calc(100dvh - 72px);
+ box-sizing:border-box;display:flex;flex-direction:column;gap:10px;
+ overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+ touch-action:pan-y;pointer-events:auto;background:#102939f8;
+ border:1px solid #77cbd5;border-radius:14px;padding:12px;
+ box-shadow:0 9px 29px #000d;color:#ebfffb}
+#phoenixWeatherPanel[hidden],body.phoenixPlaying #phoenixWeatherPanel{
+ display:none!important}
+#phoenixWeatherPanel .phoenixWeatherHeader{display:flex;align-items:center;
+ justify-content:space-between;gap:8px;position:sticky;top:-12px;
+ z-index:2;background:#102939;padding:7px 0}
+#phoenixWeatherPanel .phoenixWeatherHeader b{font-size:16px;color:#aef9df}
+#phoenixWeatherPanel small{display:block;font-size:11px;line-height:1.5;
+ color:#c8e4e6}
+#phoenixWeatherPanel button{font-size:12px;font-weight:800;color:#f4fffa;
+ background:#234e69;border:1px solid #7aa7c5;border-radius:9px;
+ padding:8px;min-height:40px;touch-action:manipulation}
+#phoenixWeatherPanel button.primary{background:#157761;border-color:#86efc5}
+#phoenixWeatherPanel label{display:flex;flex-direction:column;gap:5px;
+ min-width:0;font-size:12px;flex:1;color:#e6f5f5}
+#phoenixWeatherPanel input:not([type=checkbox]),#phoenixWeatherPanel select{
+ min-height:39px;box-sizing:border-box;width:100%;background:#153949;color:#fff;
+ border:1px solid #6cabb5;border-radius:8px;padding:6px}
+#phoenixWeatherPanel input[type=range]{padding:4px;accent-color:#78f6ce}
+#phoenixWeatherPanel label.phoenixWeatherCheckbox{flex-direction:row;
+ align-items:center;flex:0 0 auto;gap:9px;padding:6px 7px;
+ background:#1a4654;border-radius:8px}
+#phoenixWeatherPanel input[type=checkbox]{width:20px;height:20px;flex:0 0 20px;
+ margin:2px;accent-color:#53dfbb}
+.phoenixWeatherPresets{display:grid;
+ grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+#phoenixWeatherPanel .phoenixWeatherPresets button{
+ min-height:78px;display:flex;flex-direction:column;align-items:center;
+ justify-content:center;gap:4px;font-size:24px;
+ background:linear-gradient(130deg,#22516a,#1a4558)}
+#phoenixWeatherPanel .phoenixWeatherPresets button span{font-size:11px}
+#phoenixWeatherPanel .phoenixWeatherPresets button.selected,
+#phoenixWeatherPanel .phoenixWeatherPresets button[aria-pressed="true"]{
+ outline:2px solid #63edc7;border-color:#5bf4c0;background:#1e7867}
+.phoenixWeatherRow{display:flex;gap:8px;align-items:flex-end}
+.phoenixWeatherSection{border:1px solid #547e9a;border-radius:10px;
+ padding:8px;background:#153847;display:flex;flex-direction:column;gap:8px}
+.phoenixWeatherSection summary{font-size:13px;font-weight:800;
+ color:#8dffdf;cursor:pointer;margin-bottom:7px}
+.phoenixWeatherSection label.phoenixWeatherCheckbox{margin-top:7px}
+.phoenixWeatherReadout{color:#cdfbe9;border:1px solid #75b3a6;
+ padding:9px;border-radius:8px;background:#164539;font-size:12px}
+.phoenixWeatherActions{display:flex;gap:7px}
+.phoenixWeatherActions>*{flex:1}
+#phoenixWeatherStatus{padding:8px;border-radius:8px;background:#173a46;
+ border:1px solid #608fa2}
+#weatherLightState{font-weight:800;color:#d3eafa}
+@media(max-width:610px){
+ #phoenixWeatherPanel{top:max(60px,env(safe-area-inset-top));
+ width:min(375px,calc(100vw - 10px));right:5px;bottom:4px;
+ max-height:calc(100dvh - 64px);padding:10px}
+ #phoenixWeatherPanel .phoenixWeatherPresets button{min-height:70px;font-size:22px}
+ #phoenixWeatherPanel .phoenixWeatherRow{gap:6px}
+}
