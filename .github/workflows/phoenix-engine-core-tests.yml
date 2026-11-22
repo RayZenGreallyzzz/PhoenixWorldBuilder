@@ -53,6 +53,7 @@ on:
       - 'tests/test-phoenix-gallery-ui.cjs'
       - 'tests/test-phoenix-live-minimap.cjs'
       - 'tests/test-phoenix-world-layers.cjs'
+      - 'tests/test-phoenix-unity-unreal-export.cjs'
       - 'app/src/main/assets/engine/core/phoenix-world-layers.js'
       - 'app/src/main/assets/engine/builder/phoenix-world-layers-editor.js'
       - 'app/src/main/assets/engine/core/phoenix-inventory.js'
@@ -164,6 +165,7 @@ jobs:
           node tests/test-phoenix-gallery-ui.cjs
           node tests/test-phoenix-live-minimap.cjs
           node tests/test-phoenix-world-layers.cjs
+          node tests/test-phoenix-unity-unreal-export.cjs
           node tests/test-skill-clip-menu.cjs
           node tests/test-skill-definition-editor.cjs
           node tests/test-play-weapon-skills.cjs
