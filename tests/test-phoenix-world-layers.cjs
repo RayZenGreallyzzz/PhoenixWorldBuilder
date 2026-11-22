@@ -78,7 +78,7 @@ assert.equal(things.project.worldCanvas,null,'Creature pack has no terrain');
 assert.equal(things.project.avatar,null,'Creature pack has no player avatar');
 assert.equal(things.stats.entities,2);
 assert.equal(things.stats.prefabs,2,'Unplaced template excluded from placed NPC set');
-assert.deepEqual(things.project.phoenixGame.world,project.phoenixGame.world);
+assert.equal(JSON.stringify(things.project.phoenixGame.world),JSON.stringify(project.phoenixGame.world));
 assert.deepEqual(things.project.phoenixGame.catalog.prefabs.map(m=>m.id),[wolf,merchant]);
 assert.equal(things.project.phoenixGame.skills.characters.length,1,
  'Player skills must not leak into creature layer');
@@ -98,7 +98,7 @@ assert.equal(merged.outside,0);
 assert.equal(merged.placed,2);
 assert.deepEqual(merged.project.objects,map.project.objects);
 assert.deepEqual(merged.project.worldCanvas,map.project.worldCanvas);
-assert.deepEqual(merged.project.phoenixGame.world,project.phoenixGame.world);
+assert.equal(JSON.stringify(merged.project.phoenixGame.world),JSON.stringify(project.phoenixGame.world));
 assert.deepEqual(merged.project.phoenixGame.minimap,null,
  'Unpopulated destination map should not gain old creature map UI');
 const mapWithPlayer=JSON.parse(JSON.stringify(map.project));
