@@ -15,6 +15,7 @@
    this.catalog=new PhoenixSkills.Catalog();
    this.runtime=null;
    this.imageDraft='';this.imageRequestToken=0;
+   this.clipRequestToken=0;this.availableClips=[];
    this.panel=this.el('phoenixSkillDefinitions');
    if(!this.panel)throw new Error('Skill definition UI missing');
    this.bind();this.refreshCharacters();this.loadForm();
@@ -47,6 +48,15 @@
     'skillDefUnlockLevel','skillDefRequiresLevel'])
     this.el(id)?.addEventListener('input',()=>this.preview());
    this.el('skillDefRequiresSlot')?.addEventListener('change',()=>this.preview());
+   this.el('skillDefAnimationChoice')?.addEventListener('change',e=>{
+    this.el('skillDefAnimation').value=e.target.value;
+    this.animationNotice('🎞 Выбрана анимация «'+e.target.value+'». Для записи нажми «Сохранить навык».');
+   });
+   this.el('skillDefAnimation')?.addEventListener('input',()=>{
+    this.selectAnimationChoice(this.el('skillDefAnimation').value);
+   });
+   this.el('btnSkillDefPreviewAnimation')?.addEventListener('click',()=>
+    this.previewSkillAnimation());
   }
   refreshCharacters(){
    const select=this.el('skillDefCharacter');
@@ -105,6 +115,7 @@
    this.imageRequestToken++;
    this.imageDraft=s.iconImage||'';
    this.previewImage();this.preview();this.renderTree();
+   this.selectAnimationChoice(s.animation||'cast');
   }
   previewImage(){
    const preview=this.el('skillDefImagePreview');
@@ -131,9 +142,80 @@
    const saved=this.catalog.get(character,slot);
    this.write(saved);
    this.renderTree();
+   this.refreshClipChoices().catch(error=>this.animationNotice(
+    '⚠ Не удалось загрузить GLB: '+error.message));
    this.status(saved?
     '✅ Навык этого персонажа и слота загружен.':
     'Создай навык, затем сохрани. В PLAY скиллы работают у игрока и мобов с эффектами.');
+  }
+  // Each character/slot stores its own GLB clip. Never modify the
+  // global idle/walk/cast bindings just to preview a skill.
+  selectAnimationChoice(name){
+   const list=this.el('skillDefAnimationChoice');if(!list)return;
+   const exact=typeof name==='string'?name:'cast';
+   const items=[...list.options];
+   if(items.some(o=>o.value===exact)){list.value=exact;return;}
+   for(const item of items)
+    if(item.dataset?.custom==='true')item.remove?.();
+   const other=this.option(exact,'✏ Точное имя: '+exact);
+   other.dataset.custom='true';list.appendChild(other);list.value=exact;
+  }
+  animationNotice(message){
+   const info=this.el('skillDefAnimationInfo');
+   if(info)info.textContent=message;
+  }
+  async refreshClipChoices(){
+   const request=++this.clipRequestToken;
+   const character=this.selected().character;
+   const chosen=this.el('skillDefAnimation')?.value||'cast';
+   let clips=[],assetId='';
+   if(character==='player'){
+    clips=this.b.avatarClips||[];
+    assetId=this.b.avatarAssetId||'';
+   }else{
+    const prefab=this.b.prefabEditor?.registry.get(character);
+    assetId=prefab?.assetId||'';
+    if(assetId&&!this.b.assets?.get(assetId)){
+     try{await this.b.ensureTemplate(assetId,'prop')}
+     catch(error){console.warn('Skill GLB discovery:',error)}
+    }
+    clips=this.b.assets?.get(assetId)?.animations||[];
+   }
+   if(request!==this.clipRequestToken||character!==this.selected().character)return false;
+   const list=this.el('skillDefAnimationChoice');
+   this.availableClips=clips.filter(c=>c&&typeof c.name==='string'&&c.name);
+   if(!list)return false;
+   list.replaceChildren(this.option('cast','🎞 Автоматически: Cast'));
+   const seen=new Set(['cast']);
+   for(const clip of this.availableClips){
+    if(seen.has(clip.name))continue;
+    seen.add(clip.name);
+    list.appendChild(this.option(clip.name,clip.name+
+     (Number.isFinite(clip.duration)?' · '+clip.duration.toFixed(1)+' с':'')));
+   }
+   this.selectAnimationChoice(chosen);
+   this.animationNotice(this.availableClips.length?
+    '🎞 Анимаций GLB: '+this.availableClips.length+
+     '. Каждому навыку назначается свой клип.':
+    assetId?'⚠ GLB выбран, но клипы не найдены. Можно ввести имя вручную.':
+    '⚠ Нет GLB персонажа. Загрузи анимированную модель во вкладке «Персонаж».');
+   return true;
+  }
+  previewSkillAnimation(){
+   if(this.b.playBridge?.active)return false;
+   const character=this.selected().character;
+   const name=this.el('skillDefAnimation')?.value?.trim()||'cast';
+   const matched=this.availableClips.find(c=>c.name===name)||
+    (name==='cast'?this.availableClips.find(c=>
+     /cast|spell|magic|заклин/i.test(c.name)):null);
+   const resolved=matched?.name||name;
+   const ok=character==='player'?this.b.previewAvatarClip?.(resolved):
+    this.b.prefabEditor?.previewSkillClip?.(character,resolved);
+   this.animationNotice(ok?'▶ Просмотр: '+resolved+
+    ' · сохранится только у '+this.selected().slot:
+    '⚠ Клип «'+resolved+'» не найден у выбранного GLB'+
+    (character==='player'?'.':' или моб не размещён на сцене.'));
+   return !!ok;
   }
   preview(){
    const el=this.el('skillDefPreview');
@@ -189,6 +271,7 @@
      ui.render();
     }
     this.write(validated);this.renderTree();
+    this.selectAnimationChoice(validated.animation);
     this.b.markProjectDirty?.();
     this.status('✅ Навык настроен: '+validated.name+
      '. Сила: '+PhoenixSkills.power(validated)+
