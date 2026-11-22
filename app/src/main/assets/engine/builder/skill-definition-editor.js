@@ -43,8 +43,10 @@
    this.el('btnSkillDefImageRemove')?.addEventListener('click',()=>this.removeImage());
    this.el('skillDefCharacter')?.addEventListener('change',()=>this.loadForm());
    this.el('skillDefSlot')?.addEventListener('change',()=>this.loadForm());
-   for(const id of ['skillDefLevel','skillDefBasePower','skillDefGrowth'])
+   for(const id of ['skillDefLevel','skillDefBasePower','skillDefGrowth',
+    'skillDefUnlockLevel','skillDefRequiresLevel'])
     this.el(id)?.addEventListener('input',()=>this.preview());
+   this.el('skillDefRequiresSlot')?.addEventListener('change',()=>this.preview());
   }
   refreshCharacters(){
    const select=this.el('skillDefCharacter');
@@ -59,7 +61,8 @@
    slot:this.el('skillDefSlot').value||'slot3'};}
   blank(){
    return {name:'Новый навык',description:'',icon:'✨',iconImage:'',type:'damage',
-    basePower:30,growth:10,level:1,maxLevel:5,manaCost:15,
+    basePower:30,growth:10,level:1,maxLevel:5,
+    unlockLevel:1,requiresSlot:'',requiresLevel:1,manaCost:15,
     cooldown:5,range:8,animation:'cast',
     effect:{preset:'impact',color:'#ffce65',size:1,duration:.5}};
   }
@@ -70,6 +73,9 @@
     iconImage:this.imageDraft,
     type:get('Type'),level:Number(get('Level')),maxLevel:Number(get('MaxLevel')),
     basePower:Number(get('BasePower')),growth:Number(get('Growth')),
+    unlockLevel:Number(get('UnlockLevel')||1),
+    requiresSlot:get('RequiresSlot')||'',
+    requiresLevel:Number(get('RequiresLevel')||1),
     manaCost:Number(get('ManaCost')),cooldown:Number(get('Cooldown')),
     range:Number(get('Range')),animation:get('Animation'),
     effect:{
@@ -82,7 +88,9 @@
    const s=data||this.blank();
    const keys={
     Name:s.name,Description:s.description,Icon:s.icon,Type:s.type,
-    Level:s.level,MaxLevel:s.maxLevel,BasePower:s.basePower,
+    Level:s.level,MaxLevel:s.maxLevel,
+    UnlockLevel:s.unlockLevel??1,RequiresSlot:s.requiresSlot||'',
+    RequiresLevel:s.requiresLevel??1,BasePower:s.basePower,
     Growth:s.growth,ManaCost:s.manaCost,Cooldown:s.cooldown,
     Range:s.range,Animation:s.animation,
     FxPreset:s.effect?.preset||(s.type==='heal'?'heal':'impact'),
@@ -96,7 +104,7 @@
    }
    this.imageRequestToken++;
    this.imageDraft=s.iconImage||'';
-   this.previewImage();this.preview();
+   this.previewImage();this.preview();this.renderTree();
   }
   previewImage(){
    const preview=this.el('skillDefImagePreview');
@@ -122,6 +130,7 @@
    const {character,slot}=this.selected();
    const saved=this.catalog.get(character,slot);
    this.write(saved);
+   this.renderTree();
    this.status(saved?
     '✅ Навык этого персонажа и слота загружен.':
     'Создай навык, затем сохрани. В PLAY скиллы работают у игрока и мобов с эффектами.');
@@ -134,6 +143,25 @@
    const level=Number(this.el('skillDefLevel')?.value)||1;
    el.textContent='Сила на уровне '+level+': '+
     Math.max(0,base+Math.max(0,level-1)*growth);
+  }
+  renderTree(){
+   const root=this.el('phoenixTalentTreePreview');
+   if(!root?.replaceChildren)return;
+   root.replaceChildren();
+   const rows=this.catalog.entries(this.el('skillDefCharacter')?.value||'player');
+   const labels={slot3:'①',slot4:'②',slot5:'③',
+    slot6:'④',slot7:'⑤',ultimate:'★'};
+   for(const slot of PhoenixSkills.SLOTS){
+    const row=this.doc.createElement('div');
+    row.className='phoenixTalentTreeNode';
+    const item=rows[slot],parent=item?.requiresSlot?rows[item.requiresSlot]:null;
+    row.textContent=(labels[slot]||'◈')+' '+
+     (item?.name||'Пустой слот')+
+     (item?' · ур. '+item.level+' · открывается с '+item.unlockLevel:'')+
+     (item?.requiresSlot?' · ← '+(parent?.name||'нет навыка')+
+      ' ('+item.requiresLevel+' ур.)':'');
+    root.appendChild(row);
+   }
   }
   open(){
    if(this.b.playBridge?.active)return false;
@@ -160,7 +188,7 @@
      });
      ui.render();
     }
-    this.write(validated);
+    this.write(validated);this.renderTree();
     this.b.markProjectDirty?.();
     this.status('✅ Навык настроен: '+validated.name+
      '. Сила: '+PhoenixSkills.power(validated)+
@@ -172,7 +200,7 @@
    if(this.b.playBridge?.active)return false;
    const {character,slot}=this.selected();
    const result=this.catalog.remove(character,slot);
-   if(result){this.write(null);this.b.markProjectDirty?.();}
+   if(result){this.write(null);this.renderTree();this.b.markProjectDirty?.();}
    this.status(result?'Навык удалён из слота.':'Слот пуст.');return result;
   }
   levelUp(){
@@ -190,14 +218,17 @@
    if(raw!==undefined&&raw!==null)next.load(raw);
    this.catalog=next;this.refreshCharacters();this.loadForm();
   }
-  startPlay(maxMp=100){
+  startPlay(maxMp=100,characterLevel=1){
    const mana=Number.isFinite(maxMp)?
     Math.max(1,Math.min(1000000,Math.round(maxMp))):100;
-   this.runtime=new PhoenixSkills.Runtime(this.catalog,'player',mana);
+   this.runtime=new PhoenixSkills.Runtime(this.catalog,'player',mana,
+    Number.isInteger(characterLevel)?characterLevel:1);
    this.close();
   }
   stopPlay(){this.runtime=null;}
-  resetPlay(maxMp=100){this.startPlay(maxMp);}
+  resetPlay(maxMp=100,characterLevel=1){
+   this.startPlay(maxMp,characterLevel);
+  }
   cast(slot,time,canApply){
    if(!this.runtime)return {ok:false,reason:'edit'};
    return this.runtime.cast(slot,time,canApply);
