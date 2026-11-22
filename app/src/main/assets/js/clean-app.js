@@ -208,6 +208,10 @@ class CleanBuilder{
   this.progressionEditor=new PhoenixProgressionEditor(this);
   this.galleryEditor=new PhoenixCharacterGallery(this);
   this.minimapEditor=new PhoenixMinimapEditor(this);
+  this.worldLayersEditor=new PhoenixWorldLayersEditor(this,{
+   readAsset:getAsset,writeAsset:putAsset,
+   confirm:message=>window.confirm(message)
+  });
   if(typeof PhoenixNetworkEditor!=='undefined')
    this.networkEditor=new PhoenixNetworkEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
