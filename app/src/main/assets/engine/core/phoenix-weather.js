@@ -37,6 +37,8 @@
  function normalize(raw){
   if(raw==null)return defaults();
   if(!raw||Array.isArray(raw)||typeof raw!=='object')throw new TypeError('Invalid weather');
+  if(raw.version!==undefined&&raw.version!==VERSION)
+   throw new TypeError('Unknown weather version');
   const d=defaults(),o={};
   for(const key of ['enabled','sound','swayTrees','autoSeasons']){
    const v=has(raw,key)?raw[key]:d[key];
@@ -120,7 +122,7 @@
    const time=Math.min(dt,120),oldClock=this.clock;
    if(cfg.timeMode==='cycle'){
     this.clock=(this.clock+time/(cfg.dayLengthMinutes*60)*24)%24;
-    if(Math.floor((oldClock+time/(cfg.dayLengthMinutes*60)*24)/24)>0)this.dayIndex++;
+    this.dayIndex+=Math.floor((oldClock+time/(cfg.dayLengthMinutes*60)*24)/24);
    }
    this.elapsed+=time;
    if(cfg.mode!=='manual'&&this.elapsed>=cfg.intervalSeconds){
