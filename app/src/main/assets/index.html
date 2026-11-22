@@ -55,8 +55,61 @@
  <button id="btnPhoenixProgression" type="button" class="phoenixHudEntry" aria-label="Математический баланс и уровни персонажей">📈 УРОВНИ</button>
  <button id="btnPhoenixServer" type="button" class="phoenixHudEntry" aria-label="Управление собственными игровыми серверами">🌐 СЕРВЕРЫ</button>
  <button id="btnPhoenixWorld" type="button" class="phoenixHudEntry" aria-label="Настройки общего мира и ландшафта">🌍 МИР</button>
+ <button id="btnPhoenixWeather" type="button" class="phoenixHudEntry" aria-label="Управление погодой, небом, ветром, временем суток и сезонами">🌦 ПОГОДА</button>
  <button id="btnWorldGrid" type="button" class="phoenixGridEntry" aria-pressed="false" aria-label="Показать или скрыть сетку секторов">▦ СЕТКА: ВЫКЛ</button>
 </div>
+<section id="phoenixWeatherPanel" hidden role="region" aria-label="Phoenix Weather — динамическая погода, небо и времена года">
+ <div class="phoenixWeatherHeader"><b>🌦 Phoenix Weather 1.0</b><button id="btnWeatherClose" type="button" aria-label="Закрыть редактор погоды">✕</button></div>
+ <small>Живая погода прямо на общем 3D-холсте: облака движутся, дождь и снег падают, туман медленно плывёт, ветер качает подходящие GLB-деревья, а молнии освещают сцену. Один рендер, без новых карт или персонажей.</small>
+ <label class="phoenixWeatherCheckbox"><input id="weatherEnabled" type="checkbox"> ✅ Включить эффекты погоды на карте</label>
+ <div class="phoenixWeatherPresets" role="group" aria-label="Быстрый выбор погоды">
+  <button id="weatherPreset_clear" type="button">☀️<span>Ясно</span></button>
+  <button id="weatherPreset_cloudy" type="button">☁️<span>Облака</span></button>
+  <button id="weatherPreset_rain" type="button">🌧️<span>Дождь</span></button>
+  <button id="weatherPreset_storm" type="button">⛈️<span>Гроза</span></button>
+  <button id="weatherPreset_snow" type="button">❄️<span>Снег</span></button>
+  <button id="weatherPreset_fog" type="button">🌫️<span>Туман</span></button>
+ </div>
+ <div class="phoenixWeatherRow">
+  <label>Режим смены погоды<select id="weatherMode"><option value="manual">🎮 Ручной</option><option value="auto">🔄 Автоматический</option><option value="season">🍂 По сезону</option></select></label>
+  <label>Текущая погода<select id="weatherPreset"><option value="clear">☀️ Ясно</option><option value="cloudy">☁️ Облачно</option><option value="rain">🌧️ Дождь</option><option value="storm">⛈️ Гроза</option><option value="snow">❄️ Снег</option><option value="fog">🌫️ Туман</option></select></label>
+ </div>
+ <div class="phoenixWeatherRow">
+  <label>Время года<select id="weatherSeason"><option value="spring">🌸 Весна</option><option value="summer">☀️ Лето</option><option value="autumn">🍁 Осень</option><option value="winter">❄️ Зима</option></select></label>
+  <label>Качество Android<select id="weatherQuality"><option value="lite">🟢 Lite — слабый телефон</option><option value="balanced">🔵 Balanced</option><option value="ultra">🔴 Ultra — мощное устройство</option></select></label>
+ </div>
+ <details open class="phoenixWeatherSection"><summary>🌤 Солнце, небо, ночь и календарь</summary>
+  <div class="phoenixWeatherRow">
+   <label>Смена дня/ночи<select id="weatherTimeMode"><option value="fixed">🕒 Фиксированное время</option><option value="cycle">🔄 День и ночь по кругу</option></select></label>
+   <label>Время суток (0–24)<input id="weatherTimeOfDay" type="number" min="0" max="24" step=".5" value="12"></label>
+  </div>
+  <div class="phoenixWeatherRow">
+   <label>Длительность дня (мин)<input id="weatherDayLengthMinutes" type="number" min="1" max="240" value="20"></label>
+   <label>Дней на сезон<input id="weatherSeasonLengthDays" type="number" min="1" max="365" value="30"></label>
+  </div>
+  <label class="phoenixWeatherCheckbox"><input id="weatherAutoSeasons" type="checkbox"> 📅 Автоматическая смена весны, лета, осени и зимы по игровому календарю</label>
+ </details>
+ <details open class="phoenixWeatherSection"><summary>🌧 Осадки, ветер и плавные переходы</summary>
+  <div class="phoenixWeatherRow">
+   <label>Интенсивность эффектов (0–1)<input id="weatherIntensity" type="range" min="0" max="1" step=".05" value=".8"></label>
+   <label>Сила ветра (0–1)<input id="weatherWindSpeed" type="range" min="0" max="1" step=".05" value=".35"></label>
+  </div>
+  <div class="phoenixWeatherRow">
+   <label>Направление ветра (°)<input id="weatherWindDirection" type="number" min="0" max="360" step="10" value="40"></label>
+   <label>Плавный переход (сек)<input id="weatherTransitionSeconds" type="number" min="0" max="120" value="9"></label>
+  </div>
+  <label>Автосмена погоды (каждые, сек)<input id="weatherIntervalSeconds" type="number" min="5" max="3600" step="5" value="150"></label>
+  <label class="phoenixWeatherCheckbox"><input id="weatherSwayTrees" type="checkbox" checked> 🌳 Анимировать листву и ветки подходящих GLB-деревьев (без изменения коллизий)</label>
+  <label class="phoenixWeatherCheckbox"><input id="weatherSound" type="checkbox"> 🔊 Гром во время грозы (после разрешённого касания)</label>
+ </details>
+ <small id="weatherLightState">☀️ Погода выключена</small>
+ <div id="weatherLiveReadout" class="phoenixWeatherReadout">🌍 Выбери погоду для предпросмотра.</div>
+ <div class="phoenixWeatherActions">
+  <button id="btnWeatherReset" type="button">↺ Сбросить настройки</button>
+  <button id="btnWeatherSave" type="button" class="primary">💾 Сохранить погоду</button>
+ </div>
+ <small id="phoenixWeatherStatus" aria-live="polite">Сначала включи эффекты, выбери режим, а затем сохрани. Данные войдут в общий JSON и отдельный экспорт карты.</small>
+</section>
 <section id="phoenixWorldLayersPanel" hidden role="region" aria-label="Карта и расстановка существ — раздельные файлы">
  <div class="phoenixGalleryTitle"><b>🗂 Слои игрового мира</b><button type="button" id="btnWorldLayersClose" aria-label="Закрыть слои мира">✕</button></div>
  <p>Строй карту с домами, деревьями, горами и текстурами. Сохраняй её отдельно от живых существ, даже если мобы уже расставлены на сцене.</p>
@@ -1234,8 +1287,10 @@
 <script src="engine/core/phoenix-prefabs.js"></script>
  <script src="engine/core/phoenix-inventory.js"></script>
 <script src="engine/core/phoenix-world-layers.js"></script>
+<script src="engine/core/phoenix-weather.js"></script>
  <script src="engine/core/phoenix-minimap.js"></script>
 <script src="engine/runtime/phoenix-animations.js"></script>
+<script src="engine/runtime/phoenix-weather-runtime.js"></script>
 <script src="engine/builder/play-bridge.js"></script>
 <script src="engine/builder/prefab-editor.js"></script>
 <script src="engine/builder/phoenix-world-editor.js"></script>
@@ -1245,6 +1300,7 @@
  <script src="engine/builder/phoenix-character-gallery.js"></script>
  <script src="engine/builder/phoenix-minimap-editor.js"></script>
 <script src="engine/builder/phoenix-world-layers-editor.js"></script>
+<script src="engine/builder/phoenix-weather-editor.js"></script>
 <script src="engine/core/phoenix-network-foundation.js"></script>
 <script src="engine/builder/phoenix-network-editor.js"></script>
 <script src="js/clean-app.js"></script>
