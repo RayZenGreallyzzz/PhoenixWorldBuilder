@@ -280,6 +280,7 @@
     this.world.getComponent(id,'prefab')?.id===this.selectedId);
    if(used)return this.status('Сначала удали экземпляры этого шаблона со сцены.');
    this.b.skillDefinitionEditor?.catalog.removeCharacter(this.selectedId);
+   this.b.galleryEditor?.inventory.removeCharacter(this.selectedId);
    this.registry.remove(this.selectedId);this.newDraft();this.refresh();
    this.b.skillDefinitionEditor?.refreshCharacters();
    this.b.progressionEditor?.refreshTargets?.();this.b.markProjectDirty?.();
