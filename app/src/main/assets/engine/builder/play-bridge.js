@@ -169,6 +169,7 @@
     }
     const skill=this.builder.skillDefinitionEditor?.runtime;
     if(skill){
+     skill.setLevel?.(this.progressionSession.level);
      const mp=Math.max(1,Math.round(this.playerRuntimeStats.mp));
      skill.mp=Math.max(0,Math.min(mp,skill.mp+mp-skill.maxMp));
      skill.maxMp=mp;
