@@ -222,6 +222,14 @@
   serializePlayer(){return this.player?PhoenixProgression.normalize(this.player):null;}
   loadPlayer(raw){
    this.player=raw?PhoenixProgression.normalize(raw):null;
+   // A different world can share the same class formula but must never
+   // inherit the previous world's temporary PLAY experience.
+   if(this.b.playBridge){
+    this.b.playBridge.progressionSession=null;
+    this.b.playBridge.progressionSignature='';
+    this.b.playBridge.playerRuntimeStats=null;
+    this.b.playBridge.playerActiveCombat=null;
+   }
    if(this.panel){this.refreshTargets();this.loadTarget()}
   }
   playerStats(){
