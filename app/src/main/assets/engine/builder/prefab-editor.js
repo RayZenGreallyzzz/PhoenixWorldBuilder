@@ -1374,6 +1374,8 @@
    !!this.b.skillDefinitionEditor?.catalog.characters().length;}
   serialize(){
    return {version:1,catalog:this.registry.serialize(),world:this.world.serialize(),
+    inventory:this.b.galleryEditor?.serialize()||null,
+    minimap:this.b.minimapEditor?.serialize()||null,
     hudLayout:this.b.skillEditor?.serialize()||null,
     playerProgression:this.b.progressionEditor?.serializePlayer()||null,
      playerAttackEffect:this.b.playBridge?.playerAttackEffect||'impact',
@@ -1400,6 +1402,9 @@
    const token=++this.loadGeneration;
    for(const id of [...this.rendered.keys()])this.removeRender(id);
    this.registry=registry;this.world=world;this.b.playBridge.gameWorld=world;
+   // Optional v2.1 modules: old saved worlds omit both members.
+   this.b.galleryEditor?.loadFromProject?.(doc?.inventory||null);
+   this.b.minimapEditor?.loadFromProject?.(doc?.minimap||null);
    try{this.b.progressionEditor?.loadPlayer?.(doc?.playerProgression||null)}
    catch(error){
     console.warn('Invalid RPG growth profile ignored:',error);
