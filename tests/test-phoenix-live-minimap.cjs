@@ -61,6 +61,10 @@ assert(events.some(x=>x[0]==='text'&&x[1]==='N'));
 assert(events.some(x=>x[0]==='text'&&x[1]==='W'));
 events.length=0;Map.draw(context,scene,sq);
 assert(events.some(x=>x[0]==='rect'),'Square map should clip as a rectangle');
+events.length=0;Map.draw(context,scene,Map.normalize({shape:'hex'}));
+assert(events.filter(x=>x[0]==='line').length>=5,'Hexagon uses six real edges');
+events.length=0;Map.draw(context,scene,Map.normalize({shape:'rounded'}));
+assert(events.some(x=>x[0]==='curve'),'Rounded map uses curved corners');
 for(const id of ['btnPhoenixGallery','btnPhoenixMinimap','phoenixGalleryPanel',
  'phoenixGalleryGrid','phoenixGalleryCanvas','phoenixGalleryItems',
  'phoenixGallerySkills','phoenixMinimapSettings','phoenixMinimapHud',
