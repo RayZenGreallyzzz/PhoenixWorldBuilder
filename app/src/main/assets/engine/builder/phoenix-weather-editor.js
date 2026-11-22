@@ -170,7 +170,7 @@
    }catch(error){console.warn('Thunder audio unavailable',error)}
   }
   lightning(state){
-   if(!this.settings.sound||!this.audio||this.audio.state!=='running')return;
+   if(!this.runtime.settings.sound||!this.audio||this.audio.state!=='running')return;
    try{
     // Short filtered noise burst. Created only on lightning events; no
     // microphone permissions, external sounds, network or background audio.
