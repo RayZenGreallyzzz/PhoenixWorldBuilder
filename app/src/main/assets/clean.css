@@ -948,3 +948,73 @@ body.phoenixPlaying #phoenixGalleryItemEditor{display:none!important}
  #phoenixGalleryCanvas{min-height:170px;width:54%}
  .phoenixGalleryViewerDetails strong{font-size:13px}
 }
+
+/* v2.1.1 — RPG levels panel must be in front of the WebGL canvas. */
+#phoenixProgressionEditor{
+ position:fixed;z-index:95;left:max(8px,env(safe-area-inset-left));
+ top:max(64px,env(safe-area-inset-top));bottom:max(7px,env(safe-area-inset-bottom));
+ width:min(740px,calc(100vw - 16px));max-width:min(740px,calc(100vw - 16px));
+ max-height:calc(100dvh - 72px);box-sizing:border-box;overflow-y:auto;
+ display:flex;flex-direction:column;gap:8px;overscroll-behavior:contain;
+ -webkit-overflow-scrolling:touch;touch-action:pan-y;pointer-events:auto;
+ padding:12px;background:#112c3af9;color:#e8fbff;
+ border:1px solid #78d1c6;border-radius:14px;box-shadow:0 12px 36px #000d
+}
+#phoenixProgressionEditor[hidden],body.phoenixPlaying #phoenixProgressionEditor{display:none!important}
+#phoenixProgressionEditor .phoenixSkillTitle{display:flex;align-items:center;
+ justify-content:space-between;gap:8px;position:sticky;top:-12px;z-index:2;
+ background:#112c3a;padding:8px 0}
+#phoenixProgressionEditor .phoenixSkillTitle button{
+ flex:0 0 42px;min-height:40px;font-size:18px}
+#phoenixProgressionEditor label{display:flex;flex-direction:column;flex:1;
+ gap:4px;min-width:0;font-size:12px}
+#phoenixProgressionEditor .phoenixSkillRow{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+#phoenixProgressionEditor input,#phoenixProgressionEditor select{
+ width:100%;min-height:38px;box-sizing:border-box;padding:5px 7px;
+ border-radius:7px;border:1px solid #67a5ba;background:#203f50;color:#fff}
+#phoenixProgressionEditor button{min-height:39px;padding:6px 8px;
+ border:1px solid #6aaeb5;border-radius:8px;background:#235569;
+ color:#f2ffff;font-weight:800}
+#phoenixProgressionEditor button.primary,#phoenixProgressionEditor #btnProgressionSave{
+ background:#177a61;border-color:#5ae0ba}
+#phoenixProgressionEditor small{font-size:11px;color:#b8e6e1;line-height:1.45}
+/* The gallery's 3D pedestal can now be zoomed with +/- on touch screens. */
+#phoenixGalleryPanel .phoenixGalleryMapShortcut{flex:0 0 auto;
+ background:#155b52;border-color:#57dbad;color:#d8fff2;text-align:center;white-space:normal}
+.phoenixGalleryZoom{display:flex;align-items:center;gap:5px;margin-top:5px}
+#phoenixGalleryPanel .phoenixGalleryZoom button{flex:1 1 0;
+ padding:4px;min-height:34px;font-size:17px;line-height:1.1}
+/* Fully clickable minimap templates: circle, square, hexagon, rounded. */
+#phoenixMinimapSettings .phoenixMapPresetHeading{font-size:13px;color:#aaffdd}
+#phoenixMinimapSettings .phoenixMapPresetHint{color:#8decc9}
+.phoenixMapPresets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+#phoenixMinimapSettings .phoenixMapPresets .phoenixMapPreset{
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:3px;padding:8px 4px;min-height:111px;background:#193b4e;
+ border:1px solid #507d97;white-space:normal}
+#phoenixMinimapSettings .phoenixMapPreset.selected,
+#phoenixMinimapSettings .phoenixMapPreset[aria-pressed="true"]{
+ border-color:#75ffcf;background:#1a6656;outline:2px solid #82e7cc}
+.phoenixMapPreset strong{font-size:11px}
+.phoenixMapPreset small{font-size:10px!important;text-align:center}
+.phoenixMapPresetShape{
+ width:56px;height:56px;display:flex;flex-direction:column;
+ justify-content:center;align-items:center;gap:0;border:2px solid #8bdfc6;
+ background:#24665a;color:#defaff;font-size:17px;box-sizing:border-box}
+.phoenixMapPresetShape i{font-style:normal;color:#ff6c75;font-size:9px}
+.phoenixMapPresetShape.circle{border-radius:50%}
+.phoenixMapPresetShape.square{border-radius:2px}
+.phoenixMapPresetShape.rounded{border-radius:15px}
+.phoenixMapPresetShape.hex{clip-path:polygon(50% 0,93.3% 25%,93.3% 75%,
+ 50% 100%,6.7% 75%,6.7% 25%);border:0}
+#phoenixMinimapHud[data-shape="rounded"]{border-radius:20%}
+#phoenixMinimapHud[data-shape="hex"]{
+ border:0;clip-path:polygon(50% 0,93.3% 25%,93.3% 75%,50% 100%,6.7% 75%,6.7% 25%)}
+@media(max-width:580px){
+ #phoenixProgressionEditor{top:max(61px,env(safe-area-inset-top));
+ width:calc(100vw - 10px);left:5px;bottom:4px;max-height:calc(100dvh - 65px);
+ padding:9px}
+ #phoenixMinimapSettings .phoenixMapPresets{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #phoenixMinimapSettings .phoenixMapPresets .phoenixMapPreset{min-height:102px}
+ #phoenixGalleryPanel .phoenixGalleryZoom button{font-size:18px}
+}
