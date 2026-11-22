@@ -64,6 +64,8 @@
   <b>🗺️ Карта без персонажей</b>
   <small>Холст, ландшафт, горы, дороги, дома, двери, деревья, материалы, текстуры и статичные GLB. Правила физических столкновений остаются частью объектов. <strong>Главный герой, мобы и NPC не включаются.</strong></small>
   <div class="phoenixGalleryToolbar"><button id="btnExportMapLayer" type="button">📤 Сохранить карту</button><button id="btnImportMapLayer" type="button">📥 Загрузить карту</button></div>
+  <button id="btnExportExternalWorld" type="button" class="primary">🎮 Экспорт для Unity / Unreal (GLB + JSON)</button>
+  <small>Откроются два последовательных окна сохранения: сначала <b>PhoenixBuilder_Scene.glb</b> с геометрией домов, деревьев и текстурами, затем <b>Phoenix_World_Map.phoenix.json</b> с холстом, горами, размещением объектов, рельефом и исходными ресурсами. Сохрани оба файла в одной папке и запусти Phoenix Bridge на ПК. Коллизии строятся импортерами; игровые существа в экспорт не входят.</small>
   <input id="phoenixImportMapLayerFile" type="file" accept=".json,.phoenix.json,application/json" hidden>
  </div>
  <div class="phoenixLayerCard">
