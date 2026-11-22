@@ -4767,7 +4767,7 @@ class CleanBuilder{
    }
   }
  }
- playAvatarAction(state){
+ playAvatarAction(state,requestedClip=''){
   // One bound GLB clip per authored action. No duplicate mixers or retargeting.
   if(!this.avatarMixer||!this.avatarClips.length)return false;
   const patterns={
