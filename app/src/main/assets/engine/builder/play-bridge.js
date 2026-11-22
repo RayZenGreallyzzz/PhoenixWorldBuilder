@@ -241,7 +241,8 @@
      this.effects=new PhoenixVFX.SceneFX(b.scene,THREE);
     this.createMobTags();this.selectMob('');
     b.skillEditor?.setPlaying(true);
-    b.skillDefinitionEditor?.startPlay(this.playerRuntimeStats?.mp);
+    b.skillDefinitionEditor?.startPlay(this.playerRuntimeStats?.mp,
+     this.progressionSession?.level||1);
     if(this.weapon&&typeof PhoenixWeapon!=='undefined'){
      // Preserve older shooter-HUD weapon stats for existing projects.
      // The new profile configures the gun only when ranged style is selected.
