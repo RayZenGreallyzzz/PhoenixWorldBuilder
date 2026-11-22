@@ -74,6 +74,13 @@ for(const id of ['btnGalleryZoomIn','btnGalleryZoomOut','btnGalleryFit',
  assert(html.includes('id="'+id+'"'),'Missing gallery/minimap HTML: '+id);
 assert(css.includes('#phoenixGalleryPanel,#phoenixMinimapSettings{\n position:fixed'),
  'Gallery must float above the 3D canvas');
+assert(css.includes('#phoenixProgressionEditor{\n position:fixed;z-index:95;'),
+ 'RPG levels panel must open above the 3D canvas');
+assert(css.includes('#phoenixMinimapHud[data-shape="hex"]'),
+ 'Hexagonal gameplay map must have its own CSS clip');
+for(const preset of ['rpg','mmo','cyber','shooter'])
+ assert(html.includes('data-map-preset="'+preset+'"'),
+  'Missing visual template '+preset);
 assert(gallery.includes('b.prefabEditor?.rendered'), 'Map actors come from real gameplay scene');
 assert(gallery.includes('b.worldEditor?.state'), 'Map terrain comes from authored world state');
 assert(gallery.includes('b.entries'), 'Map buildings come from actual scene entries');
