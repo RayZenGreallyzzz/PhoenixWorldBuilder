@@ -60,6 +60,7 @@
  <div class="phoenixGalleryTitle"><b>🧬 Phoenix Character Gallery</b><button id="btnGalleryClose" type="button" aria-label="Закрыть галерею">✕</button></div>
  <p class="phoenixGalleryHint">Герои, мобы, NPC и боссы берутся из сохранённых шаблонов, без дублирования моделей. Нажми ячейку для осмотра персонажа.</p>
  <div class="phoenixGalleryToolbar"><button id="btnGalleryRefresh" type="button">🔄 Обновить библиотеку</button><button id="btnGalleryViewHero" type="button">🧍 Вернуть героя на постамент</button></div>
+ <button id="btnGalleryMap" type="button" class="phoenixGalleryMapShortcut">🗺 Настроить мини-карту — формы и готовые шаблоны</button>
  <details id="phoenixGalleryCreate" class="phoenixGallerySection">
   <summary>＋ Добавить загруженный GLB в галерею</summary>
   <label>Поиск модели в библиотеке<input id="phoenixGalleryModelSearch" placeholder="Начни вводить имя GLB…" autocomplete="off"></label>
@@ -77,6 +78,11 @@
   <div class="phoenixGalleryViewerDetails"><strong id="phoenixGalleryName">Герой</strong>
    <small id="phoenixGalleryStats">HP · Урон · Защита · Уровень</small>
    <small>👆 Проведи пальцем по постаменту, чтобы повернуть персонажа. Автовращение включено.</small>
+   <div class="phoenixGalleryZoom" aria-label="Масштаб модели на постаменте">
+    <button id="btnGalleryZoomOut" type="button" aria-label="Отдалить модель">−</button>
+    <button id="btnGalleryFit" type="button" aria-label="Показать модель целиком">⤢</button>
+    <button id="btnGalleryZoomIn" type="button" aria-label="Приблизить модель">＋</button>
+   </div>
   </div>
  </div>
  <div id="phoenixGalleryEditingTools" class="phoenixGalleryToolbar">
@@ -117,8 +123,16 @@
 <section id="phoenixMinimapSettings" hidden role="region" aria-label="Настройка мини-карты игрового мира">
  <div class="phoenixGalleryTitle"><b>🗺 Phoenix Minimap · реальный мир</b><button id="btnMinimapClose" type="button">✕</button></div>
  <p>Мини-карта упрощённо рисует существующий холст, ландшафт, постройки и игровые объекты без второй 3D-сцены.</p>
+ <b class="phoenixMapPresetHeading">🎨 Выбери готовую форму мини-карты</b>
+ <div class="phoenixMapPresets" id="phoenixMapPresets" role="group" aria-label="Готовые шаблоны формы мини-карты">
+  <button type="button" data-map-preset="rpg" class="phoenixMapPreset"><span class="phoenixMapPresetShape circle">▲<i>● ●</i></span><strong>⭕ RPG</strong><small>Круглая · 160 м</small></button>
+  <button type="button" data-map-preset="mmo" class="phoenixMapPreset"><span class="phoenixMapPresetShape square">▲<i>● ●</i></span><strong>▣ MMO</strong><small>Квадрат · 250 м</small></button>
+  <button type="button" data-map-preset="cyber" class="phoenixMapPreset"><span class="phoenixMapPresetShape hex">▲<i>● ●</i></span><strong>⬡ Киберпанк</strong><small>Шестигранная · 130 м</small></button>
+  <button type="button" data-map-preset="shooter" class="phoenixMapPreset"><span class="phoenixMapPresetShape rounded">▲<i>● ●</i></span><strong>▢ Шутер</strong><small>Скруглённая · 80 м</small></button>
+ </div>
+ <small class="phoenixMapPresetHint">👆 Нажми на карточку: форма и масштаб изменятся в предпросмотре слева. Затем нажми «💾 Сохранить карту».</small>
  <div class="phoenixGalleryFields">
-  <label>Форма<select id="phoenixMapShape"><option value="circle">⭕ Круглая</option><option value="square">▣ Квадратная</option></select></label>
+  <label>Форма<select id="phoenixMapShape"><option value="circle">⭕ Круглая</option><option value="square">▣ Квадратная</option><option value="rounded">▢ Скруглённая</option><option value="hex">⬡ Шестигранная</option></select></label>
   <label>Положение<select id="phoenixMapPosition"><option value="top-left">Сверху слева</option><option value="top-right">Сверху справа</option><option value="bottom-left">Снизу слева</option><option value="bottom-right">Снизу справа</option></select></label>
  </div>
  <div class="phoenixGalleryFields">
