@@ -2,6 +2,13 @@
  * Never accepts arbitrary client damage, XP, inventories or world edits.
  */
 export const VERSION=1;
+// Capability manifest is informational: the wire protocol stays v1.
+// Neither the app nor the server may infer gameplay authority from a UI flag.
+export const CAPABILITIES=Object.freeze({
+ guest:true,sharedPositions:true,chat:true,worldJson:true,
+ accountRegistration:false,persistentCharacters:false,
+ serverCombat:false,inventory:false,skillSync:false
+});
 export const WORLD_ID=/^[a-z][a-z0-9-]{0,39}$/;
 export const MAX_MESSAGE_BYTES=2048;
 const okNum=n=>typeof n==='number'&&Number.isFinite(n);
