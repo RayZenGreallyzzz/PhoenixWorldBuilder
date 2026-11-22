@@ -57,6 +57,8 @@ on:
       - 'app/src/main/assets/engine/builder/phoenix-network-editor.js'
       - 'app/src/main/AndroidManifest.xml'
       - 'tests/test-phoenix-network.cjs'
+      - 'tests/test-phoenix-network-foundation.cjs'
+      - 'app/src/main/assets/engine/core/phoenix-network-foundation.js'
       - 'app/src/main/assets/engine/core/phoenix-player-combat.js'
       - '.github/workflows/phoenix-engine-core-tests.yml'
 
@@ -92,6 +94,7 @@ jobs:
           node --check app/src/main/assets/engine/runtime/phoenix-animations.js
           node --check app/src/main/assets/engine/builder/prefab-editor.js
           node --check app/src/main/assets/engine/builder/phoenix-network-editor.js
+          node --check app/src/main/assets/engine/core/phoenix-network-foundation.js
           node --check app/src/main/assets/engine/core/phoenix-server-export.js
           node --check server/shared/protocol.mjs
           node --check server/shared/world.mjs
@@ -144,3 +147,4 @@ jobs:
           node tests/test-editor-mode-isolation.cjs
           node --test server/tests/room.test.mjs
           node tests/test-phoenix-network.cjs
+          node tests/test-phoenix-network-foundation.cjs
