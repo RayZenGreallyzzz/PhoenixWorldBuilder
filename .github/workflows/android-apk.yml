@@ -104,6 +104,7 @@ jobs:
           node tests/test-phoenix-gallery-ui.cjs
           node tests/test-phoenix-live-minimap.cjs
           node tests/test-phoenix-world-layers.cjs
+          node tests/test-phoenix-unity-unreal-export.cjs
           node tests/test-skill-clip-menu.cjs
             node tests/test-skill-definition-editor.cjs
             node tests/test-play-weapon-skills.cjs
