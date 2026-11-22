@@ -212,6 +212,19 @@
  <label>Описание<textarea id="skillDefDescription" rows="2" maxlength="400" placeholder="Что делает навык?"></textarea></label>
  <div class="phoenixSkillRow"><label>Уровень<input id="skillDefLevel" type="number" min="1" max="20" value="1"></label>
  <label>Макс. уровень<input id="skillDefMaxLevel" type="number" min="1" max="20" value="5"></label></div>
+ <details class="rowSection" id="phoenixTalentTreeFold">
+  <summary>🌳 Древо навыков · условия открытия</summary>
+  <small>Задай требуемый уровень героя и навык-предшественник. В PLAY связи проверяются, циклы запрещены.</small>
+  <div class="phoenixSkillRow"><label>Уровень героя для открытия<input id="skillDefUnlockLevel" type="number" min="1" max="150" step="1" value="1"></label>
+   <label>Предыдущий навык<select id="skillDefRequiresSlot"><option value="">Нет (корень)</option>
+    <option value="slot3">Умение 1</option><option value="slot4">Умение 2</option>
+    <option value="slot5">Умение 3</option><option value="slot6">Умение 4</option>
+    <option value="slot7">Умение 5</option><option value="ultimate">Ульта</option>
+   </select></label></div>
+  <label>Уровень предыдущего навыка<input id="skillDefRequiresLevel" type="number" min="1" max="20" step="1" value="1"></label>
+  <div id="phoenixTalentTreePreview" class="phoenixTalentTreePreview" role="group" aria-label="Узлы и связи дерева навыков"></div>
+  <small>Каждый слот — узел. Удаление предыдущего навыка блокирует зависимые, но не удаляет их.</small>
+ </details>
  <div class="phoenixSkillRow"><label>База урона/лечения<input id="skillDefBasePower" type="number" min="0" max="1000000" value="30"></label>
  <label>Прирост за уровень<input id="skillDefGrowth" type="number" min="0" max="1000000" value="10"></label></div>
  <div class="phoenixSkillRow"><label>Расход MP<input id="skillDefManaCost" type="number" min="0" max="10000" value="15"></label>
