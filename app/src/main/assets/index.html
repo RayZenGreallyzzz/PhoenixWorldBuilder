@@ -49,6 +49,7 @@
  <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 МОБЫ / NPC</button>
  <button id="btnPhoenixGallery" type="button" class="phoenixHudEntry" aria-label="Галерея и инвентарь сохранённых персонажей">🧍 ГАЛЕРЕЯ</button>
  <button id="btnPhoenixMinimap" type="button" class="phoenixHudEntry" aria-label="Настроить мини-карту реального игрового мира">🗺 КАРТА</button>
+ <button id="btnPhoenixWorldLayers" type="button" class="phoenixHudEntry" aria-label="Раздельное сохранение карты и расстановки мобов">🗂 СЛОИ МИРА</button>
  <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить расположение игровых кнопок">🎮 HUD</button>
  <button id="btnPhoenixSkillDefs" type="button" class="phoenixHudEntry" aria-label="Создать способности и настроить уровни персонажей">🧙 НАВЫКИ</button>
  <button id="btnPhoenixProgression" type="button" class="phoenixHudEntry" aria-label="Математический баланс и уровни персонажей">📈 УРОВНИ</button>
@@ -56,6 +57,24 @@
  <button id="btnPhoenixWorld" type="button" class="phoenixHudEntry" aria-label="Настройки общего мира и ландшафта">🌍 МИР</button>
  <button id="btnWorldGrid" type="button" class="phoenixGridEntry" aria-pressed="false" aria-label="Показать или скрыть сетку секторов">▦ СЕТКА: ВЫКЛ</button>
 </div>
+<section id="phoenixWorldLayersPanel" hidden role="region" aria-label="Карта и расстановка существ — раздельные файлы">
+ <div class="phoenixGalleryTitle"><b>🗂 Слои игрового мира</b><button type="button" id="btnWorldLayersClose" aria-label="Закрыть слои мира">✕</button></div>
+ <p>Строй карту с домами, деревьями, горами и текстурами. Сохраняй её отдельно от живых существ, даже если мобы уже расставлены на сцене.</p>
+ <div class="phoenixLayerCard">
+  <b>🗺️ Карта без персонажей</b>
+  <small>Холст, ландшафт, горы, дороги, дома, двери, деревья, материалы, текстуры и статичные GLB. Правила физических столкновений остаются частью объектов. <strong>Главный герой, мобы и NPC не включаются.</strong></small>
+  <div class="phoenixGalleryToolbar"><button id="btnExportMapLayer" type="button">📤 Сохранить карту</button><button id="btnImportMapLayer" type="button">📥 Загрузить карту</button></div>
+  <input id="phoenixImportMapLayerFile" type="file" accept=".json,.phoenix.json,application/json" hidden>
+ </div>
+ <div class="phoenixLayerCard">
+  <b>🐺 Расстановка мобов, NPC и боссов</b>
+  <small>Точные X/Y/Z, поворот, уровень, патрульные маршруты, индивидуальные настройки, шаблоны, навыки и связанные GLB. <strong>Без холста и домов.</strong> Можно сохранить несколько вариантов заселения одной карты.</small>
+  <div class="phoenixGalleryToolbar"><button id="btnExportEntityLayer" type="button">📤 Сохранить существ</button><button id="btnImportEntityLayer" type="button">📥 Загрузить существ</button></div>
+  <input id="phoenixImportEntityLayerFile" type="file" accept=".json,.phoenix.json,application/json" hidden>
+ </div>
+ <p class="phoenixLayerHelp">💾 Обычный «Сохранить проект» по-прежнему хранит ВСЁ вместе. Раздельный экспорт не удаляет ничего с холста. Импорт карты заменяет текущий мир после подтверждения; импорт существ заменяет только их расстановку и шаблоны, оставляя дома и землю.</p>
+ <small id="phoenixWorldLayersStatus" aria-live="polite">Выбери «Сохранить карту» или «Сохранить существ». Будет создан переносимый JSON со встроенными ресурсами соответствующего слоя.</small>
+</section>
 <section id="phoenixGalleryPanel" hidden role="region" aria-label="Галерея персонажей и инвентарь">
  <div class="phoenixGalleryTitle"><b>🧬 Phoenix Character Gallery</b><button id="btnGalleryClose" type="button" aria-label="Закрыть галерею">✕</button></div>
  <p class="phoenixGalleryHint">Герои, мобы, NPC и боссы берутся из сохранённых шаблонов, без дублирования моделей. Нажми ячейку для осмотра персонажа.</p>
@@ -1211,6 +1230,7 @@
 <script src="engine/core/phoenix-skills.js"></script>
 <script src="engine/core/phoenix-skill-layout.js"></script>
 <script src="engine/core/phoenix-prefabs.js"></script>
+<script src="engine/core/phoenix-world-layers.js"></script>
  <script src="engine/core/phoenix-inventory.js"></script>
  <script src="engine/core/phoenix-minimap.js"></script>
 <script src="engine/runtime/phoenix-animations.js"></script>
@@ -1222,6 +1242,7 @@
 <script src="engine/builder/phoenix-progression-editor.js"></script>
  <script src="engine/builder/phoenix-character-gallery.js"></script>
  <script src="engine/builder/phoenix-minimap-editor.js"></script>
+<script src="engine/builder/phoenix-world-layers-editor.js"></script>
 <script src="engine/core/phoenix-network-foundation.js"></script>
 <script src="engine/builder/phoenix-network-editor.js"></script>
 <script src="js/clean-app.js"></script>
