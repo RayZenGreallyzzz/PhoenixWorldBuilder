@@ -38,6 +38,9 @@ test('two guests join shared world, move, and never modify Builder construction'
   now:()=>clock,nextId:()=>String(++n),maxPlayers:2});
  const a=new Peer(),b=new Peer(),c=new Peer();
  room.welcome(a);assert.equal(a.last('hello').protocol,1);
+ assert.equal(a.last('hello').capabilities.guest,true);
+ assert.equal(a.last('hello').capabilities.persistentCharacters,false);
+ assert.equal(a.last('hello').capabilities.serverCombat,false);
  assert(room.handle(a,JSON.stringify({type:'join',name:'Archer'})));
  clock+=100;
  assert(room.handle(b,JSON.stringify({type:'join',name:'Mage'})));
