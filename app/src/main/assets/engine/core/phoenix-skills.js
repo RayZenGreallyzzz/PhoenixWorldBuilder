@@ -47,7 +47,7 @@
      (requiresSlot&&!SLOTS.includes(requiresSlot)))
    throw new TypeError('Invalid skill tree prerequisite');
   const animation=raw.animation||'cast';
-  if(typeof animation!=='string'||[...animation].length>80)
+  if(typeof animation!=='string'||[...animation].length>120)
    throw new TypeError('Invalid animation');
   return {name,description,icon,iconImage,type,level,maxLevel,
    unlockLevel,requiresSlot,requiresLevel,
