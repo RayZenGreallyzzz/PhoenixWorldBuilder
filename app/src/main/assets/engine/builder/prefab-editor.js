@@ -565,8 +565,14 @@
     if(!result?.ok)continue;
     if(!healing)this.b.playBridge?.onPlayerHit(result,
      this.world.getComponent(id,'character')?.nickname||p.name);
-    render.animation?.setState('cast',.15);
-    render.hitHold=Math.max(render.hitHold||0,.4);
+    const clip=def.animation==='cast'?'':def.animation;
+    const played=clip&&render.animation?.playClip(clip,
+     {state:'skill:'+slot,once:true,fade:.12});
+    if(!played)render.animation?.setState('cast',.15);
+    const duration=played?render.animation?.clips?.find(c=>c.name===clip)?.duration:
+     render.animation?.resolve('cast')?.duration;
+    render.hitHold=Math.max(render.hitHold||0,
+     Math.max(.4,Math.min(8,(duration||.4)+.04)));
     this.faceMob(render,player,.06);
     this.b.playBridge?.effects?.spawn(def.effect,
      healing?render.root.position:player,def.type);
@@ -1306,6 +1312,27 @@
     dot.position.set(p[0],p[1]+.55,p[2]);
     dot.renderOrder=860;this.routeHelper.add(dot);
    }
+  }
+  previewSkillClip(prefabId,name){
+   if(this.playing||!prefabId||!name)return false;
+   const pair=[...this.rendered.entries()].find(([id,render])=>
+    this.world.getComponent(id,'prefab')?.id===prefabId&&
+    render.clips?.length);
+   if(!pair)return false;
+   const [id,render]=pair;
+   const p=this.registry.get(prefabId);
+   const clips=render.clips||[];
+   const selected=clips.find(c=>c.name===name)||
+    (name==='cast'?PhoenixAnimations.findClip(clips,p?.animations||{},'cast'):null);
+   if(!selected)return false;
+   const controller=new PhoenixAnimations.Controller(render.visual||render.root,
+    clips,p?.animations||{},THREE);
+   render.animation?.stop();render.animation=controller;
+   if(!controller.playClip(selected.name,{once:true,state:'skill-preview',fade:0}))
+    return false;
+   this.previewAttackTime=Math.max(.2,Math.min(12,selected.duration||.6));
+   this.previewAttackEntity=id;
+   return true;
   }
   previewAttack(){
    if(this.playing)return false;
