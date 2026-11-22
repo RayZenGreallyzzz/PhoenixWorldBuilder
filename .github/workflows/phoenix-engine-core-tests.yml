@@ -49,6 +49,10 @@ on:
       - 'tests/test-phoenix-weapon.cjs'
       - 'tests/test-phoenix-skills.cjs'
       - 'tests/test-skill-clip-menu.cjs'
+      - 'tests/test-phoenix-character-inventory.cjs'
+      - 'tests/test-phoenix-live-minimap.cjs'
+      - 'app/src/main/assets/engine/core/phoenix-inventory.js'
+      - 'app/src/main/assets/engine/core/phoenix-minimap.js'
       - 'tests/test-skill-definition-editor.cjs'
       - 'tests/test-play-weapon-skills.cjs'
       - 'tests/test-phoenix-player-combat.cjs'
@@ -94,6 +98,10 @@ jobs:
           node --check app/src/main/assets/engine/core/phoenix-skill-images.js
           node --check app/src/main/assets/engine/core/phoenix-weapon.js
           node --check app/src/main/assets/engine/core/phoenix-skills.js
+          node --check app/src/main/assets/engine/core/phoenix-inventory.js
+          node --check app/src/main/assets/engine/core/phoenix-minimap.js
+          node --check app/src/main/assets/engine/builder/phoenix-character-gallery.js
+          node --check app/src/main/assets/engine/builder/phoenix-minimap-editor.js
           node --check app/src/main/assets/engine/builder/skill-definition-editor.js
           node --check app/src/main/assets/engine/builder/skill-hud-editor.js
           node --check app/src/main/assets/engine/runtime/phoenix-animations.js
@@ -146,6 +154,8 @@ jobs:
           node tests/test-skill-images.cjs
           node tests/test-phoenix-weapon.cjs
           node tests/test-phoenix-skills.cjs
+          node tests/test-phoenix-character-inventory.cjs
+          node tests/test-phoenix-live-minimap.cjs
           node tests/test-skill-clip-menu.cjs
           node tests/test-skill-definition-editor.cjs
           node tests/test-play-weapon-skills.cjs
