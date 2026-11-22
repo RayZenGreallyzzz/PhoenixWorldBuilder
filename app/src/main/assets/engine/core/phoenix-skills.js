@@ -38,10 +38,19 @@
   const level=number(raw.level??1,1,maxLevel,'skill level');
   if(!Number.isInteger(maxLevel)||!Number.isInteger(level))
    throw new TypeError('Skill levels must be integers');
+  // Optional skill-tree edges: an earlier skill may unlock this slot.
+  // Empty fields preserve every existing saved ability unchanged.
+  const unlockLevel=number(raw.unlockLevel??1,1,150,'unlock level');
+  const requiresSlot=raw.requiresSlot||'';
+  const requiresLevel=number(raw.requiresLevel??1,1,20,'prerequisite skill level');
+  if(!Number.isInteger(unlockLevel)||!Number.isInteger(requiresLevel)||
+     (requiresSlot&&!SLOTS.includes(requiresSlot)))
+   throw new TypeError('Invalid skill tree prerequisite');
   const animation=raw.animation||'cast';
   if(typeof animation!=='string'||[...animation].length>80)
    throw new TypeError('Invalid animation');
   return {name,description,icon,iconImage,type,level,maxLevel,
+   unlockLevel,requiresSlot,requiresLevel,
    basePower:number(raw.basePower??30,0,1000000,'basePower'),
    growth:number(raw.growth??10,0,1000000,'growth'),
    manaCost:number(raw.manaCost??15,0,10000,'manaCost'),
@@ -58,6 +67,20 @@
    for(const ability of Object.values(row))total+=(ability.iconImage||'').length;
   return total;
  }
+ function validateTree(row){
+  for(const [slot,ability] of Object.entries(row)){
+   if(ability.requiresSlot===slot)
+    throw new TypeError('A skill cannot depend on itself');
+   let cursor=slot;
+   const seen=new Set();
+   while(cursor&&row[cursor]){
+    if(seen.has(cursor))throw new TypeError('Circular skill tree');
+    seen.add(cursor);
+    cursor=row[cursor].requiresSlot||'';
+   }
+  }
+  return row;
+ }
  class Catalog{
   constructor(){this._entries=new Map();}
   get(character,slot){
@@ -69,7 +92,7 @@
    if(!CHARACTER.test(character)||!SLOTS.includes(slot))
     throw new TypeError('Invalid character or skill slot');
    const validated=skill(definition);
-   const row={...(this._entries.get(character)||{}),[slot]:validated};
+   const row=validateTree({...(this._entries.get(character)||{}),[slot]:validated});
    const next=new Map(this._entries);next.set(character,row);
    if(totalImageSize(next)>4000000)throw new RangeError('Too many embedded skill images');
    this._entries=next;return validated;
@@ -95,6 +118,7 @@
      if(!SLOTS.includes(slot))throw new TypeError('Invalid skill slot');
      row[slot]=skill(entry.slots[slot]);
     }
+    validateTree(row);
     next.set(entry.id,row);
    }
    if(totalImageSize(next)>4000000)throw new RangeError('Too many embedded skill images');
@@ -102,10 +126,12 @@
   }
  }
  class Runtime{
-  constructor(catalog,character='player',maxMp=100){
+  constructor(catalog,character='player',maxMp=100,characterLevel=1){
    if(!(catalog instanceof Catalog)||!CHARACTER.test(character))
     throw new TypeError('Invalid skills runtime');
    this.skills=catalog.entries(character);
+   this.level=number(characterLevel,1,150,'character level');
+   if(!Number.isInteger(this.level))throw new TypeError('Invalid character level');
    this.maxMp=number(maxMp,1,1000000,'max MP');
    this.mp=this.maxMp;this.ready=new Map();
   }
@@ -114,10 +140,35 @@
    return {mp:this.mp,maxMp:this.maxMp,
     cooldowns:Object.fromEntries([...this.ready].map(([id,end])=>[id,Math.max(0,end-now)]))};
   }
+  setLevel(level){
+   this.level=number(level,1,150,'character level');
+   if(!Number.isInteger(this.level))throw new TypeError('Invalid character level');
+   return this.level;
+  }
+  unlocked(slot){
+   const def=this.skills[slot];
+   if(!def)return false;
+   if(this.level<def.unlockLevel)return false;
+   if(!def.requiresSlot)return true;
+   const parent=this.skills[def.requiresSlot];
+   return !!parent&&parent.level>=def.requiresLevel&&this.unlockedParent(def.requiresSlot,new Set([slot]));
+  }
+  unlockedParent(slot,seen){
+   if(seen.has(slot))return false;
+   seen.add(slot);
+   const node=this.skills[slot];
+   return !!node&&this.level>=node.unlockLevel&&
+    (!node.requiresSlot||(this.skills[node.requiresSlot]?.level>=node.requiresLevel&&
+     this.unlockedParent(node.requiresSlot,seen)));
+  }
   cast(slot,now,canApply=()=>true){
    number(now,0,Number.MAX_SAFE_INTEGER,'time');
    if(!SLOTS.includes(slot))return {ok:false,reason:'unknown-slot'};
    const def=this.skills[slot];if(!def)return {ok:false,reason:'unassigned'};
+   if(this.level<def.unlockLevel)return {ok:false,reason:'level',
+    requiredLevel:def.unlockLevel};
+   if(!this.unlocked(slot))return {ok:false,reason:'prerequisite',
+    requiresSlot:def.requiresSlot,requiresLevel:def.requiresLevel};
    if(this.ready.get(slot)>now)return {ok:false,reason:'cooldown',
     remaining:this.ready.get(slot)-now};
    if(this.mp<def.manaCost)return {ok:false,reason:'mana'};
