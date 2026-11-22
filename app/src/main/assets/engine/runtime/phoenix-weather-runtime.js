@@ -70,28 +70,36 @@
   }
   createParticles(count,kind){
    const T=this.T;
-   const arr=new Float32Array(count*3);
+   const isRain=kind==='rain',stride=isRain?6:3;
+   const arr=new Float32Array(count*stride);
    const velocities=new Float32Array(count);
    for(let i=0;i<count;i++){
-    arr[i*3]=(Math.random()-.5)*36;
-    arr[i*3+1]=Math.random()*34-18;
-    arr[i*3+2]=(Math.random()-.5)*36;
-    velocities[i]=kind==='snow'?(.65+Math.random()*1.2):(13+Math.random()*13);
+    const index=i*stride;
+    arr[index]=(Math.random()-.5)*36;
+    arr[index+1]=Math.random()*34-18;
+    arr[index+2]=(Math.random()-.5)*36;
+    if(isRain){
+     // Two vertices per raindrop make a real moving vertical streak.
+     arr[index+3]=arr[index];
+     arr[index+4]=arr[index+1]+.65;
+     arr[index+5]=arr[index+2];
+    }
+    velocities[i]=isRain?(13+Math.random()*13):(.65+Math.random()*1.2);
    }
    const geo=new T.BufferGeometry();
    const attr=new T.BufferAttribute(arr,3);if(attr.setUsage)attr.setUsage(T.DynamicDrawUsage);
    geo.setAttribute('position',attr);
-   const texture=this.particleTexture(kind==='snow');
-   const mat=new T.PointsMaterial({
-    color:kind==='snow'?0xf4faff:0xc3dbf1,
-    size:kind==='snow'?.33:.13,transparent:true,opacity:.87,
-    depthWrite:false,depthTest:true,alphaTest:.03,
-    map:texture||null,blending:T.NormalBlending
-   });
-   const points=new T.Points(geo,mat);
+   const texture=isRain?null:this.particleTexture(true);
+   const mat=isRain?
+    new T.LineBasicMaterial({color:0xc3dff6,transparent:true,opacity:.78,
+     depthWrite:false,depthTest:true}):
+    new T.PointsMaterial({color:0xf4faff,size:.33,
+     transparent:true,opacity:.87,depthWrite:false,depthTest:true,
+     alphaTest:.03,map:texture||null,blending:T.NormalBlending});
+   const points=isRain?new T.LineSegments(geo,mat):new T.Points(geo,mat);
    points.frustumCulled=false;points.visible=false;
    this.effectRoot.add(points);
-   return {points,arr,velocities,texture,kind};
+   return {points,arr,velocities,texture,kind,stride};
   }
   ensure(){
    if(this.effectRoot)return;
@@ -257,15 +265,15 @@
    obj.visible=visible>.03;
    if(!obj.visible)return;
    const count=Math.min(cap,pack.velocities.length);
-   obj.geometry.setDrawRange(0,count);
-   obj.material.opacity=clamp(visible,0,1);
+   obj.geometry.setDrawRange(0,count*(pack.kind==='rain'?2:1));
+   obj.material.opacity=clamp(visible,0,1)*.88;
    obj.position.copy(this.b.camera.position);
    const direction=state.windDirection*Math.PI/180;
    const dx=Math.cos(direction)*state.windSpeed*dt;
    const dz=Math.sin(direction)*state.windSpeed*dt;
    const a=pack.arr;
    for(let i=0;i<count;i++){
-    const off=i*3,rate=pack.velocities[i];
+    const off=i*pack.stride,rate=pack.velocities[i];
     a[off]+=dx*(pack.kind==='snow'?2.5:4);
     a[off+2]+=dz*(pack.kind==='snow'?2.5:4);
     a[off+1]-=rate*dt;
@@ -275,6 +283,12 @@
      a[off+2]=(Math.random()-.5)*36;
     }
     if(pack.kind==='snow')a[off]+=.015*Math.sin(this.time*1.7+i)*dt*60;
+    else{
+     // Long raindrops lean in the wind; snowflakes remain round and drift.
+     a[off+3]=a[off]-Math.cos(direction)*state.windSpeed*.22;
+     a[off+4]=a[off+1]+.66;
+     a[off+5]=a[off+2]-Math.sin(direction)*state.windSpeed*.22;
+    }
    }
    obj.geometry.attributes.position.needsUpdate=true;
   }
