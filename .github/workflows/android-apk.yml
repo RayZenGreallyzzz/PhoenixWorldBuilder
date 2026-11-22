@@ -106,6 +106,8 @@ jobs:
             node tests/test-editor-mode-isolation.cjs
           node --test server/tests/room.test.mjs
           node tests/test-phoenix-network.cjs
+          node tests/test-phoenix-network-foundation.cjs
+          node --check app/src/main/assets/engine/core/phoenix-network-foundation.js
           fi
 
       - name: Configure Java 17
