@@ -527,7 +527,8 @@
    b.avatarAttackUntil=0;b.avatarState='';
    b.prefabEditor.setPlaying(true);
    this.createMobTags();
-   b.skillDefinitionEditor?.resetPlay(this.playerRuntimeStats?.mp);
+   b.skillDefinitionEditor?.resetPlay(this.playerRuntimeStats?.mp,
+    this.progressionSession?.level||1);
    this.weapon?.reset();this.ammoSignature='';
    this.healReadyAt=0;
    b.setAvatarAnimation?.(false);
