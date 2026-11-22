@@ -47,12 +47,77 @@
  <span class="phoenixEngineVersion" aria-label="Версия Phoenix Engine 2.0">🔥 ENGINE <strong>v2.0</strong><small>UV44</small></span>
  <button id="btnPhoenixPlay" type="button" class="phoenixPlayEntry" aria-label="Запустить игровой режим">▶ PLAY</button>
  <button id="btnPhoenixPrefabs" type="button" class="phoenixPrefabEntry" aria-label="Открыть редактор мобов и NPC">🧬 МОБЫ / NPC</button>
+ <button id="btnPhoenixGallery" type="button" class="phoenixHudEntry" aria-label="Галерея и инвентарь сохранённых персонажей">🧍 ГАЛЕРЕЯ</button>
+ <button id="btnPhoenixMinimap" type="button" class="phoenixHudEntry" aria-label="Настроить мини-карту реального игрового мира">🗺 КАРТА</button>
  <button id="btnPhoenixSkills" type="button" class="phoenixHudEntry" aria-label="Настроить расположение игровых кнопок">🎮 HUD</button>
  <button id="btnPhoenixSkillDefs" type="button" class="phoenixHudEntry" aria-label="Создать способности и настроить уровни персонажей">🧙 НАВЫКИ</button>
  <button id="btnPhoenixProgression" type="button" class="phoenixHudEntry" aria-label="Математический баланс и уровни персонажей">📈 УРОВНИ</button>
  <button id="btnPhoenixServer" type="button" class="phoenixHudEntry" aria-label="Управление собственными игровыми серверами">🌐 СЕРВЕРЫ</button>
  <button id="btnPhoenixWorld" type="button" class="phoenixHudEntry" aria-label="Настройки общего мира и ландшафта">🌍 МИР</button>
  <button id="btnWorldGrid" type="button" class="phoenixGridEntry" aria-pressed="false" aria-label="Показать или скрыть сетку секторов">▦ СЕТКА: ВЫКЛ</button>
+</div>
+<section id="phoenixGalleryPanel" hidden role="region" aria-label="Галерея персонажей и инвентарь">
+ <div class="phoenixGalleryTitle"><b>🧬 Phoenix Character Gallery</b><button id="btnGalleryClose" type="button" aria-label="Закрыть галерею">✕</button></div>
+ <p class="phoenixGalleryHint">Герои, мобы, NPC и боссы берутся из сохранённых шаблонов, без дублирования моделей. Нажми ячейку для осмотра персонажа.</p>
+ <div class="phoenixGalleryToolbar"><button id="btnGalleryRefresh" type="button">🔄 Обновить библиотеку</button><button id="btnGalleryViewHero" type="button">🧍 Вернуть героя на постамент</button></div>
+ <div id="phoenixGalleryGrid" class="phoenixGalleryGrid" aria-label="Библиотека персонажей"></div>
+ <div class="phoenixGalleryViewer">
+  <canvas id="phoenixGalleryCanvas" width="280" height="220" aria-label="Вращающийся 3D-персонаж на постаменте; проведи пальцем для поворота"></canvas>
+  <div class="phoenixGalleryViewerDetails"><strong id="phoenixGalleryName">Герой</strong>
+   <small id="phoenixGalleryStats">HP · Урон · Защита · Уровень</small>
+   <small>👆 Проведи пальцем по постаменту, чтобы повернуть персонажа. Автовращение включено.</small>
+  </div>
+ </div>
+ <div id="phoenixGalleryEditingTools" class="phoenixGalleryToolbar">
+  <button id="btnGalleryPrefab" type="button">🧬 Шаблон / GLB</button>
+  <button id="btnGallerySkills" type="button">🌳 Навыки</button>
+  <button id="btnGalleryProgression" type="button">📈 Уровни</button>
+ </div>
+ <details open class="phoenixGallerySection"><summary>✨ Навыки персонажа</summary>
+  <div id="phoenixGallerySkills"></div>
+ </details>
+ <details open class="phoenixGallerySection"><summary>🎒 Инвентарь и экипировка</summary>
+  <small id="phoenixGalleryGearStats"></small>
+  <div id="phoenixGalleryItems"></div>
+  <div id="phoenixGalleryItemEditor">
+   <strong>＋ Добавить предмет этому персонажу</strong>
+   <label>Название предмета<input id="phoenixGalleryItemName" maxlength="80" placeholder="Меч, винтовка, шлем, броня…"></label>
+   <div class="phoenixGalleryFields">
+    <label>Тип<select id="phoenixGalleryItemKind"><option value="weapon">⚔ Оружие</option><option value="armor">🛡 Броня</option><option value="accessory">💍 Аксессуар</option><option value="consumable">🧪 Расходник</option><option value="material">📦 Материал</option></select></label>
+    <label>Слот экипировки<select id="phoenixGalleryItemSlot"><option value="">В рюкзак</option><option value="weapon">⚔ Оружие</option><option value="offhand">🛡 Левая рука</option><option value="head">🪖 Голова</option><option value="chest">🦺 Торс</option><option value="legs">👖 Ноги</option><option value="feet">🥾 Обувь</option><option value="ring">💍 Кольцо</option><option value="amulet">📿 Амулет</option></select></label>
+   </div>
+   <div class="phoenixGalleryFields">
+    <label>⚔ Урон<input id="phoenixGalleryItemDamage" type="number" min="0" max="1000000" value="0"></label>
+    <label>🛡 Защита<input id="phoenixGalleryItemDefense" type="number" min="0" max="1000000" value="0"></label>
+    <label>❤️ HP<input id="phoenixGalleryItemHp" type="number" min="0" max="1000000" value="0"></label>
+   </div>
+   <label>GLB предмета (необязательно; ID из библиотеки)<input id="phoenixGalleryItemGlb" placeholder="glb:…"></label>
+   <button id="btnGalleryAddItem" type="button" class="primary">＋ Добавить в инвентарь</button>
+  </div>
+ </details>
+ <small id="phoenixGalleryInfo" aria-live="polite">Выбери ячейку персонажа. Инвентарь, навыки и экипировка записываются только при верхней 💾 Сохранить проект.</small>
+</section>
+<section id="phoenixMinimapSettings" hidden role="region" aria-label="Настройка мини-карты игрового мира">
+ <div class="phoenixGalleryTitle"><b>🗺 Phoenix Minimap · реальный мир</b><button id="btnMinimapClose" type="button">✕</button></div>
+ <p>Мини-карта упрощённо рисует существующий холст, ландшафт, постройки и игровые объекты без второй 3D-сцены.</p>
+ <div class="phoenixGalleryFields">
+  <label>Форма<select id="phoenixMapShape"><option value="circle">⭕ Круглая</option><option value="square">▣ Квадратная</option></select></label>
+  <label>Положение<select id="phoenixMapPosition"><option value="top-left">Сверху слева</option><option value="top-right">Сверху справа</option><option value="bottom-left">Снизу слева</option><option value="bottom-right">Снизу справа</option></select></label>
+ </div>
+ <div class="phoenixGalleryFields">
+  <label>Размер, px<input id="phoenixMapSize" type="number" min="110" max="300" step="10" value="170"></label>
+  <label>Дальность от игрока, м<input id="phoenixMapRange" type="number" min="20" max="2500" step="10" value="120"></label>
+ </div>
+ <label><input id="phoenixMapShowTerrain" type="checkbox" checked> 🌄 Сектора и рельеф</label>
+ <label><input id="phoenixMapShowBuildings" type="checkbox" checked> 🏘 Реальные постройки</label>
+ <label><input id="phoenixMapShowCompass" type="checkbox" checked> 🧭 Компас (север вверху)</label>
+ <p class="phoenixGalleryHint">🔴 Агрессивные мобы · 🔴 крупная точка — босс · ⚪ NPC и мирные · 🔷 Игрок. Точки обновляются по настоящим позициям в PLAY.</p>
+ <div class="phoenixGalleryToolbar"><button id="btnMinimapPreview" type="button">👁 Показать / скрыть</button>
+ <button id="btnMinimapApply" type="button" class="primary">💾 Сохранить карту</button></div>
+ <small id="phoenixMinimapStatus" aria-live="polite">Измени форму и дальность. Настройки будут сохранены в JSON проекта.</small>
+</section>
+<div id="phoenixMinimapHud" hidden role="img" aria-label="Живая мини-карта: строения, мобы, NPC, боссы и компас">
+ <canvas id="phoenixMinimapCanvas" width="170" height="170"></canvas>
 </div>
 <section id="phoenixServerPanel" hidden role="region" aria-label="Собственный сервер Phoenix Engine">
  <div class="phoenixSkillTitle"><b>🌐 Phoenix Server · свой сервер, свой мир</b><button type="button" id="btnPhoenixServerClose">✕</button></div>
@@ -341,7 +406,7 @@
  <label>Шаблоны<select id="phoenixPrefabSaved"><option value="">— Новый шаблон —</option></select></label>
  <div class="phoenixPrefabRow"><button type="button" id="btnPrefabNew">＋ Новый</button><button type="button" id="btnPrefabDelete">🗑 Шаблон</button></div>
  <label>Имя шаблона (показывается в PLAY)<input type="text" id="phoenixPrefabName" maxlength="120" value="Новый моб" autocomplete="off"></label>
- <div class="phoenixPrefabRow"><label>Тип<select id="phoenixPrefabType"><option value="mob">🐺 Моб</option><option value="npc">🧑 NPC</option></select></label>
+ <div class="phoenixPrefabRow"><label>Тип<select id="phoenixPrefabType"><option value="mob">🐺 Моб</option><option value="npc">🧑 NPC</option><option value="hero">🧍 Герой</option><option value="boss">👹 Босс</option></select></label>
  <label>Сторона<select id="phoenixPrefabFaction"><option value="enemy">Враг</option><option value="neutral">Нейтрал</option><option value="ally">Союзник</option></select></label></div>
  <label>Цвет имени шаблона <input id="phoenixPrefabNameColor" type="color" value="#ffffff" aria-label="Цвет имени шаблона моба"></label>
  <label>3D-модель GLB<select id="phoenixPrefabAsset"><option value="">Капсула-заглушка</option></select></label>
@@ -986,6 +1051,8 @@
 <section id="hud" aria-live="polite"><span id="placementDot" class="dot neutral"></span><span id="status">Выбери деталь для строительства</span></section>
 <div id="phoenixPlayHud" hidden role="group" aria-label="Phoenix Engine игровой режим">
  <span>🔥 PHOENIX · PLAY</span><span id="phoenixLevelLine" hidden aria-live="polite"></span>
+ <button id="btnPhoenixPlayInventory" type="button" aria-label="Инвентарь персонажа">🎒</button>
+ <button id="btnPhoenixPlayMap" type="button" aria-label="Показать или скрыть мини-карту">🗺</button>
  <button type="button" id="btnPhoenixEdit">⏹ EDIT</button>
 </div>
 <section id="phoenixMobCard" hidden role="region" aria-label="Характеристики выбранного моба">
@@ -1113,6 +1180,8 @@
 <script src="engine/core/phoenix-skills.js"></script>
 <script src="engine/core/phoenix-skill-layout.js"></script>
 <script src="engine/core/phoenix-prefabs.js"></script>
+ <script src="engine/core/phoenix-inventory.js"></script>
+ <script src="engine/core/phoenix-minimap.js"></script>
 <script src="engine/runtime/phoenix-animations.js"></script>
 <script src="engine/builder/play-bridge.js"></script>
 <script src="engine/builder/prefab-editor.js"></script>
@@ -1120,6 +1189,8 @@
 <script src="engine/builder/skill-hud-editor.js"></script>
 <script src="engine/builder/skill-definition-editor.js"></script>
 <script src="engine/builder/phoenix-progression-editor.js"></script>
+ <script src="engine/builder/phoenix-character-gallery.js"></script>
+ <script src="engine/builder/phoenix-minimap-editor.js"></script>
 <script src="engine/core/phoenix-network-foundation.js"></script>
 <script src="engine/builder/phoenix-network-editor.js"></script>
 <script src="js/clean-app.js"></script>
