@@ -44,6 +44,24 @@ const builder={
 };
 const gallery=new Gallery(builder,doc);
 builder.galleryEditor=gallery;
+// Simulate independent pedestal camera: + and - must not mutate actual GLB.
+const camera={position:{x:0,y:0,z:0,set(x,y,z){this.x=x;this.y=y;this.z=z}},
+ lookAt(){},updateProjectionMatrix(){}};
+gallery.preview={camera,subject:{clear(){}}};
+gallery.previewFit=gallery.computePreviewFit(1.5,2,1.2);
+const base=gallery.previewFit.distance;
+assert(gallery.fitPreview());
+assert.equal(gallery.zoom,1);
+const beforeZ=camera.position.z;
+el.get('btnGalleryZoomIn').listeners.click();
+assert(gallery.zoom>1);
+assert(camera.position.z<beforeZ,'+ must zoom in on the pedestal');
+el.get('btnGalleryZoomOut').listeners.click();
+assert(Math.abs(gallery.zoom-1)<1e-8,'- reverses a + tap');
+el.get('btnGalleryFit').listeners.click();
+assert.equal(gallery.zoom,1,'Fit displays the whole character again');
+assert(base>3.8,'Tall/caped avatar must have camera fit clearance');
+gallery.preview=null;gallery.previewFit=null;
 assert.equal(gallery.open(),true);
 assert.equal(el.get('phoenixGalleryPanel').hidden,false);
 assert.equal(el.get('phoenixGalleryGrid').children.length,1,'Player character card must exist');
