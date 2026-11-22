@@ -104,6 +104,10 @@ jobs:
           node tests/test-phoenix-gallery-ui.cjs
           node tests/test-phoenix-live-minimap.cjs
           node tests/test-phoenix-world-layers.cjs
+          node --check app/src/main/assets/engine/core/phoenix-weather.js
+          node --check app/src/main/assets/engine/runtime/phoenix-weather-runtime.js
+          node --check app/src/main/assets/engine/builder/phoenix-weather-editor.js
+          node tests/test-phoenix-weather.cjs
           node tests/test-phoenix-unity-unreal-export.cjs
           node tests/test-skill-clip-menu.cjs
             node tests/test-skill-definition-editor.cjs
