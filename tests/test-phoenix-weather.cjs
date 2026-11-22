@@ -40,6 +40,12 @@ assert(Math.abs(rain.clock-23)<.00001);
 rain.setSettings({...rain.settings,mode:'season',season:'winter',
  autoSeasons:true,seasonLengthDays:1});
 rain.dayIndex=0;
+const seasonal=new Weather.Simulator({...d,enabled:true,mode:'season',season:'winter'});
+assert(Weather.SEASON_WEATHER.winter.includes(seasonal.snapshot().preset),
+ 'Seasonal mode must choose a winter preset immediately, not after 150 seconds');
+seasonal.setSettings({...seasonal.settings,season:'summer'});
+assert(Weather.SEASON_WEATHER.summer.includes(seasonal.snapshot().preset),
+ 'Switching seasons changes the immediate weather palette');
 const winterPicks=new Set();
 for(let i=0;i<18;i++)winterPicks.add(rain.pick());
 assert([...winterPicks].every(p=>Weather.SEASON_WEATHER.winter.includes(p)),
