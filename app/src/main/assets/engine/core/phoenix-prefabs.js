@@ -9,7 +9,7 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
  const VERSION=1, MAX_PREFABS=300;
- const TYPES=['mob','npc'], FACTIONS=['enemy','neutral','ally'];
+ const TYPES=['mob','npc','hero','boss'], FACTIONS=['enemy','neutral','ally'];
  const Path=(typeof globalThis!=='undefined'&&globalThis.PhoenixPatrolPath)||
   (typeof require==='function'?require('./phoenix-patrol-path.js'):null);
  const Progression=(typeof globalThis!=='undefined'&&globalThis.PhoenixProgression)||
