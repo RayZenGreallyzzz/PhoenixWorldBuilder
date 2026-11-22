@@ -212,6 +212,7 @@ class CleanBuilder{
    readAsset:getAsset,writeAsset:putAsset,
    confirm:message=>window.confirm(message)
   });
+  this.weatherEditor=new PhoenixWeatherEditor(this);
   if(typeof PhoenixNetworkEditor!=='undefined')
    this.networkEditor=new PhoenixNetworkEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
@@ -220,6 +221,7 @@ class CleanBuilder{
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
    this.updatePlayer(dt);this.prefabEditor?.update(dt);this.playBridge?.update(dt);
    this.galleryEditor?.update(dt);this.minimapEditor?.update(dt);
+   this.weatherEditor?.update(dt);
    this.networkEditor?.update(dt);this.controls.update();
    if(!this.playBridge?.active)this.gizmo.update();
    if(this.previewOutline&&this.previewOutline.visible)this.previewOutline.update();
@@ -4430,6 +4432,7 @@ class CleanBuilder{
      animationBindings:{...this.avatarBindings}
     }:null,
     worldCanvas:this.worldEditor?.serialize()||null,
+    weather:this.weatherEditor?.serialize()||null,
     decals:SurfaceDecals.normalize(this.decals),
     textureLibrary:this.textureFiles.map(t=>({
      id:t.id,name:t.name,type:t.type,width:t.width,height:t.height,
@@ -4766,6 +4769,9 @@ class CleanBuilder{
   // World and brush edits use the SAME Builder project history as
   // construction; legacy UV44 JSON stays on its original 128m canvas.
   this.worldEditor?.loadFromProject(doc.worldCanvas||null,{preserveUI});
+  // Weather is a STATIC map layer, separate from prefabs and their positions.
+  // Old projects without weather load with effects disabled and no GPU cost.
+  this.weatherEditor?.loadFromProject(doc.weather||null);
   // Skill layout is optional; old UV44 JSON projects keep device preferences.
   this.skillEditor?.loadFromProject(doc.phoenixGame?.hudLayout||null);
   if(this.skillDefinitionEditor){
