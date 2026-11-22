@@ -190,8 +190,10 @@
    if(raw!==undefined&&raw!==null)next.load(raw);
    this.catalog=next;this.refreshCharacters();this.loadForm();
   }
-  startPlay(){
-   this.runtime=new PhoenixSkills.Runtime(this.catalog,'player',100);
+  startPlay(maxMp=100){
+   const mana=Number.isFinite(maxMp)?
+    Math.max(1,Math.min(1000000,Math.round(maxMp))):100;
+   this.runtime=new PhoenixSkills.Runtime(this.catalog,'player',mana);
    this.close();
   }
   stopPlay(){this.runtime=null;}
