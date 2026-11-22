@@ -647,8 +647,11 @@
     return false;
    }
    this.builder.playCastAnimation?.();
+   const spellPower=Math.min(1000000,result.power+
+    (this.playerRuntimeStats&&def.type==='damage'?
+     Math.round(this.playerRuntimeStats.magicPower*.35):0));
    const effect=def.type==='heal'?combat.healPlayer(result.power):
-     this.builder.prefabEditor.damageEnemy(target.id,result.power);
+     this.builder.prefabEditor.damageEnemy(target.id,spellPower,{magic:true});
    if(effect?.ok)this.effects?.spawn(def.effect,
     def.type==='heal'?this.builder.player.position:target?.position,def.type);
    this.updateManaHud();this.updatePlayerHud();
