@@ -206,6 +206,8 @@ class CleanBuilder{
   this.skillDefinitionEditor=new PhoenixSkillDefinitionEditor(this);
   this.worldEditor=new PhoenixWorldEditor(this);
   this.progressionEditor=new PhoenixProgressionEditor(this);
+  this.galleryEditor=new PhoenixCharacterGallery(this);
+  this.minimapEditor=new PhoenixMinimapEditor(this);
   if(typeof PhoenixNetworkEditor!=='undefined')
    this.networkEditor=new PhoenixNetworkEditor(this);
   this.resize();window.addEventListener('resize',()=>this.resize());
@@ -213,6 +215,7 @@ class CleanBuilder{
    if(now-this.lastFrame<30)return;
    const dt=Math.min(this.clock.getDelta(),.075);this.lastFrame=now;
    this.updatePlayer(dt);this.prefabEditor?.update(dt);this.playBridge?.update(dt);
+   this.galleryEditor?.update(dt);this.minimapEditor?.update(dt);
    this.networkEditor?.update(dt);this.controls.update();
    if(!this.playBridge?.active)this.gizmo.update();
    if(this.previewOutline&&this.previewOutline.visible)this.previewOutline.update();
