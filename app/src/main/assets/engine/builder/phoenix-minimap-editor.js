@@ -16,6 +16,12 @@
    this.canvas=this.el('phoenixMinimapCanvas');
    this.context=this.canvas?.getContext('2d')||null;
    this.active=false;this.elapsed=0;this.manualVisible=true;
+   this.presets=Object.freeze({
+    rpg:{shape:'circle',position:'top-left',size:175,range:160},
+    mmo:{shape:'square',position:'top-right',size:190,range:250},
+    cyber:{shape:'hex',position:'bottom-right',size:180,range:130},
+    shooter:{shape:'rounded',position:'top-left',size:165,range:80}
+   });
    this.bind();this.updateLayout();this.syncForm();
   }
   el(id){return this.doc.getElementById(id)}
@@ -23,6 +29,8 @@
    this.el('btnPhoenixMinimap')?.addEventListener('click',()=>this.toggle());
    this.el('btnMinimapClose')?.addEventListener('click',()=>this.close());
    this.el('btnMinimapApply')?.addEventListener('click',()=>this.save());
+   for(const btn of this.doc.querySelectorAll?.('[data-map-preset]')||[])
+    btn.addEventListener('click',()=>this.applyPreset(btn.dataset.mapPreset));
    this.el('btnMinimapPreview')?.addEventListener('click',()=>{
     this.manualVisible=!this.manualVisible;this.updateLayout();
    });
@@ -38,9 +46,34 @@
      try{
       const proposed=this.readForm();
       this.updateLayout(proposed);this.render(proposed);
+      this.selectPreset(null);
      }catch(error){this.status(error.message)}
     });
    }
+  }
+  selectPreset(id){
+   for(const btn of this.doc.querySelectorAll?.('[data-map-preset]')||[]){
+    const active=!!id&&btn.dataset.mapPreset===id;
+    btn.setAttribute('aria-pressed',active?'true':'false');
+    btn.classList.toggle('selected',active);
+   }
+  }
+  applyPreset(id){
+   if(this.b.playBridge?.active)return false;
+   const preset=this.presets[id];if(!preset)return false;
+   for(const [key,val] of Object.entries(preset)){
+    const selector='phoenixMap'+key[0].toUpperCase()+key.slice(1);
+    const input=this.el(selector);if(input)input.value=String(val);
+   }
+   try{
+    const p=this.readForm();
+    this.manualVisible=true;this.updateLayout(p);this.render(p);
+    this.selectPreset(id);
+    this.status('✅ Шаблон '+id.toUpperCase()+
+     ' выбран: '+p.shape+', '+p.range+
+     ' м. Нажми «💾 Сохранить карту», чтобы записать в проект.');
+    return true;
+   }catch(error){this.status('⚠ '+error.message);return false}
   }
   status(message){const e=this.el('phoenixMinimapStatus');if(e)e.textContent=message}
   open(){
@@ -48,7 +81,8 @@
    this.b.prefabEditor?.close?.();this.b.skillDefinitionEditor?.close?.();
    this.b.progressionEditor?.close?.();this.b.galleryEditor?.close?.();
    this.b.worldEditor?.close?.();
-   this.panel.hidden=false;this.syncForm();this.updateLayout();this.render();
+   this.panel.hidden=false;this.manualVisible=true;
+   this.syncForm();this.updateLayout();this.render();
    return true;
   }
   close(){this.panel.hidden=true;this.updateLayout();return true}
@@ -70,12 +104,15 @@
     ShowTerrain:p.showTerrain,ShowBuildings:p.showBuildings,
     ShowCompass:p.showCompass
    })){const e=this.el('phoenixMap'+k);if(e)e.checked=value}
+   const matching=Object.entries(this.presets).find(([,v])=>
+    Object.entries(v).every(([k,value])=>p[k]===value));
+   this.selectPreset(matching?.[0]||null);
   }
   save(){
    if(this.b.playBridge?.active)return false;
    try{
     this.settings=this.readForm();this.b.markProjectDirty?.();
-    this.updateLayout();this.render();
+    this.syncForm();this.updateLayout();this.render();
     this.status('✅ Мини-карта сохранена в проект. Нажми верхнюю 💾 Сохранить.');
     return true;
    }catch(error){this.status('⚠ '+error.message);return false}
