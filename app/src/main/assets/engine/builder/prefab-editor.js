@@ -246,7 +246,7 @@
    const selected=this.el('phoenixPrefabSaved');selected.replaceChildren(
     this.option('','— Новый шаблон —'));
    for(const p of this.registry.list())selected.appendChild(
-    this.option(p.id,(p.type==='npc'?'🧑 ':'🐺 ')+p.name));
+    this.option(p.id,({npc:'🧑 ',hero:'🧍 ',boss:'👹 ',mob:'🐺 '}[p.type]||'🧬 ')+p.name));
    selected.value=this.selectedId||'';
    const placed=this.el('phoenixPrefabEntities'),previous=placed.value;
    placed.replaceChildren(this.option('','— Выбери моба на сцене —'));
