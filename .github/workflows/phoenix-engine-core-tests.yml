@@ -48,6 +48,7 @@ on:
       - 'tests/test-skill-images.cjs'
       - 'tests/test-phoenix-weapon.cjs'
       - 'tests/test-phoenix-skills.cjs'
+      - 'tests/test-skill-clip-menu.cjs'
       - 'tests/test-skill-definition-editor.cjs'
       - 'tests/test-play-weapon-skills.cjs'
       - 'tests/test-phoenix-player-combat.cjs'
@@ -145,6 +146,7 @@ jobs:
           node tests/test-skill-images.cjs
           node tests/test-phoenix-weapon.cjs
           node tests/test-phoenix-skills.cjs
+          node tests/test-skill-clip-menu.cjs
           node tests/test-skill-definition-editor.cjs
           node tests/test-play-weapon-skills.cjs
           node tests/test-phoenix-player-combat.cjs
