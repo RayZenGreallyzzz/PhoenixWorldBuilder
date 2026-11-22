@@ -78,7 +78,7 @@
    select.replaceChildren(this.option('player','🧍 Игрок / мой герой'));
    for(const prefab of this.b.prefabEditor?.registry.list()||[])
     select.appendChild(this.option(prefab.id,
-     (prefab.type==='npc'?'🧑 ':'🐺 ')+prefab.name));
+     ({npc:'🧑 ',hero:'🧍 ',boss:'👹 ',mob:'🐺 '}[prefab.type]||'🧬 ')+prefab.name));
    select.value=[...select.options].some(o=>o.value===previous)?previous:'player';
   }
   currentTarget(){return this.el('progressionTarget')?.value||'player';}
