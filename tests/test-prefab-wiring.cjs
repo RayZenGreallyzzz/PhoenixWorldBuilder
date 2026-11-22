@@ -57,9 +57,11 @@ assert(js.includes('this.prefabEditor=new PhoenixPrefabEditor(this)'));
 assert(js.includes('this.prefabEditor?.update(dt)'), 'Must reuse UV44 frame loop');
 assert(js.includes('phoenixGame:this.prefabEditor?.serialize()'), 'Project JSON must save game');
 assert(js.includes('avatar:this.avatarAssetId?{'), 'Player avatar GLB reference must persist');
-assert(js.includes('attackClip:this.avatarAttackClip||'),
- 'Player GLB attack clip choice must persist in project');
-assert(js.includes('this.avatarClips.find(c=>c.name===this.avatarAttackClip)'),
+assert(js.includes('attackClip:this.avatarBindings.attack||this.avatarAttackClip||')&&
+ js.includes('animationBindings:{...this.avatarBindings}'),
+ 'Player GLB attack and seven authored animation bindings must persist in project');
+assert(js.includes('this.avatarClips.find(c=>c.name===explicit)')&&
+ js.includes("(state==='attack'?this.avatarAttackClip:'')"),
  'Selected player attack clip must be used by Attack action');
 assert(js.includes('await putAsset(id,await file.arrayBuffer())'),
  'Imported player GLB must be persisted in IndexedDB rather than RAM only');
