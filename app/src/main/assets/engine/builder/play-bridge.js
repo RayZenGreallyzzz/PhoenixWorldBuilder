@@ -646,7 +646,7 @@
      '🧙 Навык не назначен';
     return false;
    }
-   this.builder.playCastAnimation?.();
+   this.builder.playSkillAnimation?.(result.skill.animation);
    const spellPower=Math.min(1000000,result.power+
     (this.playerRuntimeStats&&def.type==='damage'?
      Math.round(this.playerRuntimeStats.magicPower*.35):0));
