@@ -469,9 +469,12 @@
      render.aiState=PhoenixAI.initial(saved.position);
     }
     render.accum=0;render.hitHold=0;
+    const levelStats=this.calculatedStats(id);
     render.skillRuntime=this.playing&&this.b.skillDefinitionEditor?.catalog?
      new PhoenixSkills.Runtime(this.b.skillDefinitionEditor.catalog,
-      this.world.getComponent(id,'prefab')?.id||'player',100):null;
+      this.world.getComponent(id,'prefab')?.id||'player',
+      Number.isFinite(levelStats.mp)?Math.max(1,Math.round(levelStats.mp)):100,
+      Math.max(1,Math.min(150,Math.round(levelStats.level||1)))):null;
     render.hiddenDead=false;render.root.visible=true;
     render.root.userData.phoenixDead=false;
     if(this.playing)this.startAnimation(id,render);
@@ -522,9 +525,12 @@
    render.accum=0;render.hitHold=0;render.deadElapsed=0;
    render.root.userData.phoenixDead=false;
    render.hiddenDead=false;render.root.visible=true;render.facingYaw=null;
+   const levelStats=this.playStats.get(id)||this.calculatedStats(id);
    render.skillRuntime=this.b.skillDefinitionEditor?.catalog?
     new PhoenixSkills.Runtime(this.b.skillDefinitionEditor.catalog,
-     this.world.getComponent(id,'prefab')?.id||'player',100):null;
+     this.world.getComponent(id,'prefab')?.id||'player',
+     Number.isFinite(levelStats.mp)?Math.max(1,Math.round(levelStats.mp)):100,
+     Math.max(1,Math.min(150,Math.round(levelStats.level||1)))):null;
    this.startAnimation(id,render);
    this.groundVisual(render,0,true);
    this.b.playBridge?.refreshMobCard?.();
