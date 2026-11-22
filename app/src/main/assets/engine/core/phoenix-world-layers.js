@@ -52,7 +52,7 @@
   const settings=project.phoenixGame?.minimap||null;
   project.phoenixGame=null;project.avatar=null;
   project.catalogLibrary=(project.catalogLibrary||[]).filter(row=>
-   kinds.has(row?.id)&&!(row?.role==='mob'));
+   kinds.has(row?.id));
   project.layer={format:MAP,version:VERSION,key:worldKey(project),
    bounds:extent(project)};
   project.mapSettings=settings;
