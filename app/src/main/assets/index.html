@@ -67,12 +67,17 @@
  <div class="phoenixServerActions"><button id="btnPhoenixServerSave" type="button">💾 Сохранить подключение</button>
  <button id="btnPhoenixServerDelete" type="button">🗑 Удалить</button>
  <button id="btnPhoenixServerTest" type="button">🧪 Проверить сервер</button></div>
+ <div class="phoenixServerActions"><button id="btnPhoenixServerBackup" type="button">📤 Копия серверов</button>
+ <button id="btnPhoenixServerImport" type="button">📥 Восстановить</button>
+ <input id="phoenixServerImportFile" type="file" accept=".json,application/json" hidden aria-label="Выбрать JSON настроек сервера"></div>
+ <small>📦 Копия сохраняет только публичные адреса и миры. Админ-пароли, ключи и автоматическое подключение не экспортируются. Переносить можно между телефонами, ПК и облаком.</small>
  <div class="phoenixSkillRow"><label>Название публикуемого мира<input id="phoenixServerWorldName" maxlength="80" value="Phoenix World"></label>
  <label>Ревизия карты<input id="phoenixServerRevision" type="number" min="1" max="100000000" value="1"></label></div>
  <button id="btnPhoenixServerExport" type="button" class="primary">📦 Экспортировать мир для сервера (.json)</button>
  <small>Экспорт содержит геометрию размещения, NPC, характеристики и навыки, но НЕ GLB-файлы и текстуры. Их публикуют вместе с игровым клиентом. Для импорта на сервер нужен административный ключ, который задаётся только на сервере.</small>
  <small id="phoenixServerStatus" aria-live="polite">🟡 Гостевой тестовый протокол. Регистрацию аккаунтов и постоянный прогресс добавим следующим этапом.</small>
  <small id="phoenixServerPlayers" aria-live="polite">Игроков в комнате: —</small>
+ <small id="phoenixServerCapabilities" aria-live="polite">🟡 Совместимость ещё не проверена. Нажми «Проверить сервер».<br>Сейчас: гостевой онлайн-тест. Регистрация, герои, навыки и серверный бой пока в разработке.</small>
 </section>
 <!-- Phoenix Engine 1.4: one continuous plane, on-demand sector grid and landscape tiles. -->
 <section id="phoenixWorldPanel" class="phoenixWorldPanel" hidden role="region" aria-label="Общий холст и ландшафт">
@@ -1086,6 +1091,7 @@
 <script src="engine/builder/skill-hud-editor.js"></script>
 <script src="engine/builder/skill-definition-editor.js"></script>
 <script src="engine/builder/phoenix-progression-editor.js"></script>
+<script src="engine/core/phoenix-network-foundation.js"></script>
 <script src="engine/builder/phoenix-network-editor.js"></script>
 <script src="js/clean-app.js"></script>
 </body></html>
