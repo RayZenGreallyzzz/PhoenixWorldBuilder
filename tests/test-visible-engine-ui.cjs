@@ -43,7 +43,7 @@ assert(css.includes('#phoenixEngineDock{position:fixed'),
  'Game controls must be independent of oversized UV44 topbar');
 assert(css.includes('body.phoenixPlaying #phoenixEngineDock{display:none!important}'),
  'Editor controls must disappear during PLAY');
-assert(html.includes('<title>Phoenix Engine 2.0 — Респаун, навыки, карточка моба</title>'));
+assert(html.includes('<title>Phoenix Engine 2.1.4 — Phoenix Weather</title>'));
 assert(html.includes('id="phoenixSkillEditor"'));
 for(const id of ['btnPhoenixWorld','btnWorldGrid','phoenixWorldPanel',
  'worldCanvasPreset','worldCanvasWidth','worldCanvasDepth',
