@@ -53,6 +53,10 @@
    this.el('btnGalleryZoomOut')?.addEventListener('click',()=>this.setPreviewZoom(this.zoom/1.2));
    this.el('btnGalleryZoomIn')?.addEventListener('click',()=>this.setPreviewZoom(this.zoom*1.2));
    this.el('btnGalleryFit')?.addEventListener('click',()=>this.fitPreview());
+   this.el('btnGalleryMap')?.addEventListener('click',()=>{
+    if(this.b.playBridge?.active)return;
+    this.close();this.b.minimapEditor?.open?.();
+   });
    this.el('btnGalleryAddItem')?.addEventListener('click',()=>this.addItem());
    this.el('btnPhoenixPlayInventory')?.addEventListener('click',()=>{
     this.open('player');
@@ -391,11 +395,16 @@
    const height=Number.isFinite(size.y)&&size.y>.005?size.y:1.7;
    const width=Math.max(size.x||0,size.z||0,.1);
    const scale=Math.min(2.5/height,1.85/width,3);
-   const center=bounds.getCenter(new T.Vector3());
    model.scale.multiplyScalar(scale);
-   model.position.x-=center.x*scale;
-   model.position.z-=center.z*scale;
-   model.position.y-=bounds.min.y*scale;
+   model.updateMatrixWorld?.(true);
+   // Original GLBs may have non-zero root offsets and nested scales. Fit
+   // the transformed bounds instead of assuming their pivot is (0,0,0).
+   const actual=new T.Box3().setFromObject(model);
+   const centre=actual.getCenter(new T.Vector3());
+   model.position.x-=centre.x;
+   model.position.z-=centre.z;
+   model.position.y-=actual.min.y;
+   model.updateMatrixWorld?.(true);
    preview.subject.add(model);this.previewRoot=model;
    this.zoom=1;
    const shownHeight=height*scale;
