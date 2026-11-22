@@ -471,7 +471,8 @@
     this.groundVisual(render,0,true);
    }
    if(this.playing){
-    const hero=this.b.playBridge?.playerCombat;
+    const hero=this.b.playBridge?.playerActiveCombat||
+     this.b.playBridge?.playerCombat;
     if(hero){
      this.combat.damage=hero.damage;
      this.combat.range=hero.range;
