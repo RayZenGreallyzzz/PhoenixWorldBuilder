@@ -1,0 +1,92 @@
+name: Phoenix Engine 2.1.26 stable APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [phoenix-engine-0.1]
+    paths:
+      - 'updates/2.1.26/**'
+      - 'updates/base/2.1.24/**'
+      - '.github/workflows/engine-stable-update.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APK: Phoenix_Engine_2.1.26_STABLE.apk
+      BASE: Phoenix_Engine_2.1.24.apk
+      CERT: 75e51a5e0b660dfe361c27162c50209c3b49f7cf9d66762ece17f3b118a55dbd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebuild the update from the pinned original shell and offline signature
+        run: |
+          set -euo pipefail
+          cat updates/base/2.1.24/part-* > "$BASE"
+          node --check updates/2.1.26/phoenix-audio.js
+          node updates/2.1.26/test-audio.cjs
+          python3 updates/2.1.26/build.py "$BASE" "$APK"
+      - name: Check Android signature, package, version and resource alignment
+        run: |
+          set -euo pipefail
+          sdk="$ANDROID_HOME/build-tools/35.0.0"
+          for file in "$BASE" "$APK"; do
+            "$sdk/apksigner" verify --verbose --print-certs "$file" > "$RUNNER_TEMP/signature"
+            cat "$RUNNER_TEMP/signature"
+            grep -Fx "Signer #1 certificate SHA-256 digest: $CERT" "$RUNNER_TEMP/signature"
+          done
+          "$sdk/zipalign" -c 4 "$APK"
+          "$sdk/aapt" dump badging "$APK" > "$RUNNER_TEMP/badging"
+          grep -F "package: name='com.phoenix.worldbuilder.engine.stable' versionCode='56' versionName='2.1.26'" "$RUNNER_TEMP/badging"
+          sha256sum "$APK" > "$APK.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix-Engine-2.1.26-stable
+          path: |
+            Phoenix_Engine_2.1.26_STABLE.apk
+            Phoenix_Engine_2.1.26_STABLE.apk.sha256
+          if-no-files-found: error
+      - name: Enable KVM for the Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Upgrade 2.1.24 and open the empty editor on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash updates/2.1.26/smoke-android.sh "$BASE" "$APK"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Phoenix-Engine-2.1.26-stable
+      - name: Publish the verified update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=phoenix-engine-v2.1.26
+          if gh release view "$tag" >/dev/null 2>&1; then
+            mkdir published
+            gh release download "$tag" --dir published --pattern 'Phoenix_Engine_2.1.26_STABLE.apk'
+            cmp Phoenix_Engine_2.1.26_STABLE.apk published/Phoenix_Engine_2.1.26_STABLE.apk
+          else
+            gh release create "$tag" Phoenix_Engine_2.1.26_STABLE.apk Phoenix_Engine_2.1.26_STABLE.apk.sha256 \
+              --target "$GITHUB_SHA" --latest=false --title 'Phoenix Engine 2.1.26' \
+              --notes 'Обновление поверх стабильной 2.1.24/2.1.25. Чистый холст открывается без аудиоконтекста. Сохранены боевая анимация и 1832 модели версии 2.1.24.'
+          fi
