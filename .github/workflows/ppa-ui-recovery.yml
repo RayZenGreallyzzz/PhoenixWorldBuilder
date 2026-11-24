@@ -1,0 +1,108 @@
+name: Recover PPA menu sources (no game deployment)
+on:
+  push:
+    branches: [ppa-ui-recovery]
+    paths: ['.github/workflows/ppa-ui-recovery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: recovery
+      - uses: actions/checkout@v4
+        with:
+          repository: RayZenGreallyzzz/ppa-phoenixpixarena
+          ref: fa1ee948cb1e1c511db59b35100e839c1f7f1dc5
+          path: ppa-source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify and recover original packed web source
+        run: |
+          mkdir -p "$RUNNER_TEMP/ppa-recovered"
+          python3 - <<'PY'
+          import gzip, hashlib, os
+          from pathlib import Path
+          src=Path('ppa-source')
+          data=gzip.decompress(b''.join((src/f'PPA{i:02}.bin').read_bytes() for i in range(1,13)))
+          assert hashlib.sha256(data).hexdigest()=='a23969659df17d6f303e688c296f4a2de67b4be8b702693a1760afb4971e43b7'
+          (Path(os.environ['RUNNER_TEMP'])/'ppa-recovered'/'original.html').write_bytes(data)
+          PY
+      - name: Generate latest local web UI, without deploying
+        continue-on-error: true
+        working-directory: ppa-source
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Extract only menu frames and referenced UI image files
+        run: |
+          python3 - <<'PY'
+          import os, re, json, zipfile, hashlib, shutil
+          from pathlib import Path
+          from html.parser import HTMLParser
+          root=Path(os.environ['RUNNER_TEMP'])/'ppa-recovered'
+          dest=root/'bundle'
+          dest.mkdir()
+          with zipfile.ZipFile('recovery/PPA_UI_REFERENCE.zip') as z:
+              z.extractall(dest)
+          class Frames(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.frames=[]
+              def handle_starttag(self,tag,attrs):
+                  a=dict(attrs)
+                  if tag=='iframe' and a.get('srcdoc'):
+                      self.frames.append((a.get('id') or a.get('title') or 'unnamed',a.get('title',''),a['srcdoc']))
+          results=[]
+          inputs=[('original',root/'original.html'),('built',Path('ppa-source/public/index.html'))]
+          for kind,source in inputs:
+              if not source.is_file(): continue
+              parser=Frames()
+              parser.feed(source.read_text(encoding='utf-8'))
+              for index,(name,title,html) in enumerate(parser.frames):
+                  # All srcdoc frames are inventoried; omit explicit world-render/map/arena scene frames.
+                  excluded=bool(re.search(r'(?:worldRender|gameRender|mapFrame|arenaScene|dungeonScene)',name,re.I))
+                  item={'variant':kind,'id':name,'title':title,'bytes':len(html.encode()),'excluded_scene':excluded}
+                  if not excluded:
+                      safe=re.sub(r'[^a-zA-Z0-9_-]','_',name)[:100]
+                      path=dest/'web-menu-frames'/kind/f'{index:02}_{safe}.html'
+                      path.parent.mkdir(parents=True,exist_ok=True)
+                      path.write_text(html,encoding='utf-8')
+                      item['path']=str(path.relative_to(dest))
+                      item['sha256']=hashlib.sha256(html.encode()).hexdigest()
+                      refs=set(re.findall(r'(?:/assets/|assets/)([a-zA-Z0-9_.-]+\.(?:png|webp|jpg|jpeg|svg|gif|woff2))',html,re.I))
+                      for ref in refs:
+                          if re.search(r'(map|sprite|dungeon|landscape|mob)',ref,re.I): continue
+                          file=Path('ppa-source/public/assets')/ref
+                          if file.is_file():
+                              out=dest/'web-menu-frames'/'assets'/ref
+                              out.parent.mkdir(parents=True,exist_ok=True)
+                              shutil.copyfile(file,out)
+                      item['asset_references']=sorted(refs)
+                  results.append(item)
+          assert any(x['id']=='charFrame' and not x['excluded_scene'] for x in results), 'charFrame not found'
+          (dest/'MENU_MANIFEST.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
+          (dest/'WEB_RECOVERY_README.txt').write_text(
+              'Original and, if build succeeded, locally built iframe srcdoc UI. Unmodified archival HTML; not standalone or wired to Engine. '
+              'No full game HTML, world scenes, GLBs or separate mob sprites included. Embedded artwork retained in original frames; inspect before reuse. '
+              'Some images, host event handlers and external dependencies may be missing. Do not run payment or server integrations. '
+              'MENU_MANIFEST.json lists all frames and referenced assets. No live game was modified or deployed.',encoding='utf-8')
+          with zipfile.ZipFile('PPA_UI_RECOVERED.zip','w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for p in sorted(dest.rglob('*')):
+                  if p.is_file(): z.write(p,p.relative_to(dest))
+          with zipfile.ZipFile('PPA_UI_RECOVERED.zip') as z:
+              assert z.testzip() is None
+          print('Extracted frames:',len(results),'archive bytes:',Path('PPA_UI_RECOVERED.zip').stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PPA-UI-RECOVERED
+          path: PPA_UI_RECOVERED.zip
+          if-no-files-found: error
