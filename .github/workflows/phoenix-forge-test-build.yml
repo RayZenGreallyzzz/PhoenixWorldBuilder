@@ -1,0 +1,66 @@
+name: Phoenix Engine 2.1.41 Forge TEST (unsigned)
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag holding Phoenix_2.1.41_FORGE_BUILD_INPUT.zip
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f3052d7c593965400d09fd29904187b23b8b1026
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Download and verify integration input
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/forge-kit"
+          cd "$RUNNER_TEMP/forge-kit"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern Phoenix_2.1.41_FORGE_BUILD_INPUT.zip
+          echo '57bdedf26f74e95ae2432465b97cf20523b679e43a145e26bd02a29524bf6011  Phoenix_2.1.41_FORGE_BUILD_INPUT.zip' | sha256sum -c -
+          unzip -q Phoenix_2.1.41_FORGE_BUILD_INPUT.zip
+          python3 prepare.py "$GITHUB_WORKSPACE"
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compile candidate
+        run: gradle --no-daemon --stacktrace assembleRelease
+      - name: Verify assets and application identity
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-release-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep -F "package: name='com.phoenix.worldbuilder.engine.stable' versionCode='71' versionName='2.1.41'"
+          python3 - <<'PY'
+          import os,zipfile
+          from pathlib import Path
+          base=Path(os.environ['RUNNER_TEMP'])/'forge-kit/assets.zip'
+          with zipfile.ZipFile(base) as a, zipfile.ZipFile('app/build/outputs/apk/release/app-release-unsigned.apk') as b:
+              assert b.testzip() is None
+              for n in a.namelist():
+                  assert a.getinfo(n).CRC == b.getinfo('assets/'+n).CRC,n
+          PY
+          sha256sum "$apk" > "$apk.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix-Engine-2.1.41-Forge-TEST-unsigned
+          path: |
+            app/build/outputs/apk/release/app-release-unsigned.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk.sha256
+          if-no-files-found: error
