@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   candidate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,24 @@ jobs:
       - name: Install Android build tools and apktool
         run: |
           set -euo pipefail
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          SDK_MANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDK_MANAGER" ]; then
+            SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+          fi
+          if [ -z "$SDK_MANAGER" ]; then
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            curl --fail --location --retry 3 -o "$RUNNER_TEMP/android-tools.zip" https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q "$RUNNER_TEMP/android-tools.zip" -d "$RUNNER_TEMP/android-tools"
+            mv "$RUNNER_TEMP/android-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/phoenix"
+            SDK_MANAGER="$ANDROID_HOME/cmdline-tools/phoenix/bin/sdkmanager"
+          fi
+          set +o pipefail
+          yes | "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
+          set -o pipefail
+          "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" 'platforms;android-35' 'build-tools;35.0.0'
+          test -x "$ANDROID_HOME/build-tools/35.0.0/d8"
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/native-ui/apktool.jar" https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
       - name: Verify original signature and recover exact DEX
         run: |
