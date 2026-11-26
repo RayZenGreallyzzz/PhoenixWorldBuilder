@@ -1,0 +1,74 @@
+name: Phoenix Engine 2.1.83 Native UI candidate
+on:
+  push:
+    branches: [phoenix-engine-dev]
+    paths: ['.github/workflows/phoenix-native-ui-283.yml', 'ci/prepare_native_ui_283.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Fetch pinned release inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/native-ui"
+          cd "$RUNNER_TEMP/native-ui"
+          gh release download v2.1.82 --repo "$GITHUB_REPOSITORY" --pattern Phoenix_Engine_2.1.82_UI_JS_RUNTIME_PREVIEW_SIGNED.apk --output base.apk
+          echo '4d051c76d1255fb0b9a08b7dd15aba371b255855b2621b2ea33b94acb0ba5306  base.apk' | sha256sum -c -
+          if ! gh release download v2.1.82 --repo "$GITHUB_REPOSITORY" --pattern Phoenix_Engine_2.1.83_UI_NATIVE_WEBVIEW_SOURCE_DRAFT.zip --output draft.zip; then
+            echo "::error::Attach Phoenix_Engine_2.1.83_UI_NATIVE_WEBVIEW_SOURCE_DRAFT.zip to release v2.1.82, then re-run this failed job."
+            exit 1
+          fi
+          python3 "$GITHUB_WORKSPACE/ci/prepare_native_ui_283.py" prepare "$PWD"
+      - name: Install Android build tools and apktool
+        run: |
+          set -euo pipefail
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/native-ui/apktool.jar" https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
+      - name: Verify original signature and recover exact DEX
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/native-ui"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs base.apk
+          java -jar apktool.jar d -r -f base.apk -o decoded
+          python3 "$GITHUB_WORKSPACE/ci/prepare_native_ui_283.py" patch-smali "$PWD"
+          java -jar apktool.jar b decoded -o rebuilt.apk
+      - name: Compile isolated UI module
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/native-ui"
+          mkdir -p native-classes native-dex
+          android_jar="$ANDROID_HOME/platforms/android-35/android.jar"
+          javac --release 8 -cp "$android_jar" -d native-classes native/com/phoenix/worldbuilder/UiRuntime.java
+          jar cf native.jar -C native-classes .
+          "$ANDROID_HOME/build-tools/35.0.0/d8" --min-api 26 --lib "$android_jar" --output native-dex native.jar
+          node --check assets/engine/builder/phoenix-ui-studio.js
+      - name: Repackage and verify unsigned candidate
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/native-ui"
+          python3 "$GITHUB_WORKSPACE/ci/prepare_native_ui_283.py" package "$PWD"
+          apk=Phoenix_Engine_2.1.83_UI_NATIVE_WEBVIEW_UNSIGNED_TEST.apk
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/zipalign" -f 4 candidate-unaligned.apk "$apk"
+          "$tools/zipalign" -c 4 "$apk"
+          "$tools/aapt" dump badging "$apk" | grep -F "package: name='com.phoenix.worldbuilder.engine.stable' versionCode='113' versionName='2.1.83'"
+          unzip -tq "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix-Engine-2.1.83-unsigned-test
+          path: |
+            ${{ runner.temp }}/native-ui/Phoenix_Engine_2.1.83_UI_NATIVE_WEBVIEW_UNSIGNED_TEST.apk
+            ${{ runner.temp }}/native-ui/Phoenix_Engine_2.1.83_UI_NATIVE_WEBVIEW_UNSIGNED_TEST.apk.sha256
+          if-no-files-found: error
