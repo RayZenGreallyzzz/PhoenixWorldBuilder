@@ -29,7 +29,7 @@ def patch_smali():
     marker=".field private webView:Landroid/webkit/WebView;"
     a=a.replace(marker,marker+"\n.field private uiRuntime:"+U,1)
     a+=f"""
-.method final synchronized getUiRuntime(){U}
+.method final getUiRuntime(){U}
     .locals 2
     iget-object v0, p0, {P}->uiRuntime:{U}
     if-nez v0, :done
